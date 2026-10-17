@@ -649,6 +649,23 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun repeatedDueAtClearsLogTheClearOnlyOnce() {
+        controller.create()
+        startService()
+        val set = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
+        set.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() + 30_000L)
+        service.onStartCommand(set, 0, 1)
+        ShadowLooper.shadowMainLooper().idle()
+        ShadowLog.clear()
+
+        repeat(3) { service.onStartCommand(Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT), 0, 1) }
+        ShadowLooper.shadowMainLooper().idle()
+
+        val cleared = ShadowLog.getLogs().count { it.msg.contains("Cleared dueAtMs watchdog") }
+        assertEquals("Only the set-to-cleared transition may be logged", 1, cleared)
+    }
+
+    @Test
     fun updateDueAtInternalFiresBroadcastWhenDueIsInPast() {
         controller.create()
         startService()

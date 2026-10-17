@@ -56,6 +56,8 @@ export interface GuidanceState {
   readonly hasCurrent: boolean;
   /** Classification of the current item (group / control type). */
   readonly currentKind: FocusKind;
+  /** The current control's own OK-key verb ({@link CENTER_VERB_ATTR}), which wins over its kind's label. */
+  readonly centerVerb?: string | null;
   /** Root→current scope labels, e.g. `["Audio Mixer", "Volume"]`. */
   readonly breadcrumb: readonly string[];
   /** True when the ring is at the top level (no parent scope to ascend to). */
@@ -107,6 +109,9 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   status: "",
   none: "",
 };
+
+/** Set on a control whose OK-key label is a verb of its own, such as a seek bar that Left/Right moves. */
+export const CENTER_VERB_ATTR = "data-key-nav-verb";
 
 /** The compact 480×640 profile only has room for the last few breadcrumb segments. */
 export const MAX_BREADCRUMB_SEGMENTS = 3;
@@ -186,7 +191,7 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   if (state.layerOpen) center = "Select";
   else if (state.fieldEngaged) center = "Done";
   else if (!state.hasCurrent || state.currentKind === "status") center = null;
-  else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
+  else center = state.centerVerb || CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
   let right: string | null = null;
   if (state.fieldDeletes) right = words.deleteWord;

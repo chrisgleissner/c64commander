@@ -31,6 +31,35 @@ const setup = (
 const deviceFolderShown = () => waitFor(() => expect(screen.getByTestId("new-disk-folder")).not.toHaveValue(""));
 
 describe("NewDiskDialog", () => {
+  it("shows a neutral placeholder, not a guessed /USB0, until the device folder is known", async () => {
+    let resolveRoots: (roots: string[]) => void = () => undefined;
+    setup(
+      undefined,
+      vi.fn(() => new Promise<string[]>((resolve) => (resolveRoots = resolve))),
+    );
+    const folder = screen.getByTestId("new-disk-folder");
+    expect(folder).toHaveAttribute("placeholder", "Looking up device storage…");
+    await act(async () => resolveRoots(["Temp", "USB2"]));
+    expect(folder).toHaveValue("/USB2");
+  });
+
+  it("falls back to the /USB0 example when the device folders cannot be listed", async () => {
+    setup(
+      undefined,
+      vi.fn(async () => Promise.reject(new Error("offline"))),
+    );
+    await waitFor(() => expect(screen.getByTestId("new-disk-folder")).toHaveAttribute("placeholder", "/USB0"));
+  });
+
+  it("scrolls the fields above a footer that always holds Cancel and Create", async () => {
+    setup();
+    await deviceFolderShown();
+    const footer = screen.getByTestId("new-disk-create").closest('[data-modal-footer="true"]');
+    expect(footer).toHaveClass("shrink-0");
+    expect(screen.getByTestId("new-disk-body")).toHaveClass("overflow-y-auto", "min-h-0");
+    expect(screen.getByTestId("new-disk-body")).not.toContainElement(screen.getByTestId("new-disk-create"));
+  });
+
   it("clears the entered name when Cancel closes the dialog, as closing by Back or outside tap does", async () => {
     const { onOpenChange } = setup();
     await deviceFolderShown();
@@ -95,7 +124,7 @@ describe("NewDiskDialog", () => {
     const listStorageRoots = vi.fn(() => new Promise<string[]>((resolve) => (resolveRoots = resolve)));
     setup(undefined, listStorageRoots);
     fireEvent.change(screen.getByTestId("new-disk-folder"), { target: { value: "/USB2/games" } });
-    resolveRoots(["SD", "USB2"]);
+    resolveRoots(["Temp", "USB2"]);
     await waitFor(() => expect(listStorageRoots).toHaveBeenCalled());
     await Promise.resolve();
     expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB2/games");

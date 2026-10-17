@@ -1716,6 +1716,7 @@ export default function PlayFilesPage() {
       : !sidRadio.active && currentSeedMd548 && currentItem?.category === "sid"
         ? (currentItem.label ?? "this tune")
         : null;
+  const sidRadioSeedIsHvscTune = Boolean(currentItem?.path && md548ForVirtualPath(currentItem.path));
   const startSidRadioSongMood = (styleBit: number | null) => {
     // Re-aim rather than restart while a Song station is running, so the seed survives the change of
     // mood; the hook holds the seed, which is also what makes this work for a resumed station.
@@ -2580,6 +2581,7 @@ export default function PlayFilesPage() {
                 })}
                 isScrubbing={isScrubbing}
                 timeline={timeline}
+                seekDurationMs={currentDurationMs}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
                 volumeControls={
@@ -3004,6 +3006,7 @@ export default function PlayFilesPage() {
             onStartCollection={(id) => void sidRadio.startCollectionRadio(id)}
             songSeedLabel={sidRadioSongSeedLabel}
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
+            songSeedInHvsc={sidRadio.station?.seedKind === "song" || sidRadioSeedIsHvscTune}
             onStartSong={startSidRadioSongMood}
             hvscMissing={!hvsc.hvscInstalled}
             onInstallHvsc={

@@ -92,6 +92,7 @@ describe("SidRadioLauncherSheet Song moods", () => {
       songSeedLabel: string | null;
       songStyleBit: number | null;
       stylePopulations: SidRadioStylePopulations | null;
+      songSeedInHvsc: boolean;
     }> = {},
   ) => {
     const onStartSong = vi.fn();
@@ -107,6 +108,7 @@ describe("SidRadioLauncherSheet Song moods", () => {
         onSurprise={vi.fn()}
         songSeedLabel={"songSeedLabel" in overrides ? overrides.songSeedLabel : "Bouncy_Balls.sid"}
         songStyleBit={overrides.songStyleBit ?? null}
+        songSeedInHvsc={overrides.songSeedInHvsc}
         onStartSong={onStartSong}
       />,
     );
@@ -143,6 +145,16 @@ describe("SidRadioLauncherSheet Song moods", () => {
     expect(empty).toBeDisabled();
     fireEvent.click(empty);
     expect(onStartSong).not.toHaveBeenCalled();
+  });
+
+  it("disables every Similar to mood and says why when the tune is not in HVSC", () => {
+    const { onStartSong } = setupSong({ songSeedInHvsc: false });
+    expect(screen.getByTestId("sid-radio-song-hint")).toHaveTextContent("not in HVSC");
+    const all = screen.getByTestId("sid-radio-song-mood-all");
+    expect(all).toBeDisabled();
+    fireEvent.click(all);
+    expect(onStartSong).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Similar to Bouncy Balls" })).toBeInTheDocument();
   });
 
   it("hides the section when there is no tune to seed a Song station from", () => {
