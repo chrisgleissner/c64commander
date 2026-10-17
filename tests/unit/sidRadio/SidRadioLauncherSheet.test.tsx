@@ -43,6 +43,13 @@ describe("SidRadioLauncherSheet", () => {
     }
   });
 
+  it("top-aligns the content of every style tile so titles line up across a row", () => {
+    setup(0);
+    for (let bit = 0; bit < 9; bit += 1) {
+      expect(screen.getByTestId(`sid-radio-style-${bit}`)).toHaveClass("justify-start");
+    }
+  });
+
   it("starts a broad style station and closes the sheet", () => {
     const { onStartStyle, onOpenChange } = setup(0);
     fireEvent.click(screen.getByTestId("sid-radio-style-0"));

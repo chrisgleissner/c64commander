@@ -217,7 +217,7 @@ export const SidRadioLauncherSheet = ({
                     // `px-2` rather than the button default `px-4`: two columns at 320px leave each
                     // tile a 108px content box, and "Experimental" is 113px, so the global
                     // `overflow-wrap: anywhere` in `index.css` split it after "Experiment".
-                    className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
+                    className="h-auto flex-col items-start justify-start gap-0.5 whitespace-normal px-2 py-2 text-left"
                     data-testid={`sid-radio-style-${tile.bit}`}
                     disabled={hvscMissing || !populated}
                     onClick={() => {
@@ -258,7 +258,7 @@ export const SidRadioLauncherSheet = ({
                         key={collection.id}
                         type="button"
                         variant="outline"
-                        className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
+                        className="h-auto flex-col items-start justify-start gap-0.5 whitespace-normal px-2 py-2 text-left"
                         data-testid={`sid-radio-collection-${collection.id}`}
                         disabled={hvscMissing || empty}
                         onClick={() => {
