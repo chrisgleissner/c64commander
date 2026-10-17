@@ -1660,4 +1660,33 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("evidence-row-action-health-check")).toBeNull();
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("No matching activity.");
   });
+
+  it("titles an activity row without effects by what was tapped and keeps the raw name in its details", () => {
+    setViewportWidth(600);
+    const now = Date.now();
+
+    renderDialog({
+      errorLogs: [],
+      logs: [],
+      traceEvents: [],
+      actionSummaries: [
+        {
+          correlationId: "toggle-action",
+          actionName: "click settings-section-toggle-diagnostics",
+          origin: "user" as const,
+          originalOrigin: "user" as const,
+          startTimestamp: new Date(now).toISOString(),
+          endTimestamp: new Date(now + 5).toISOString(),
+          durationMs: 5,
+          outcome: "success" as const,
+          startRelativeMs: 0,
+          effects: [],
+        },
+      ],
+    });
+
+    const row = screen.getByTestId("evidence-row-action-toggle-action");
+    expect(row).toHaveTextContent("Tapped settings section diagnostics");
+    expect(row).toHaveTextContent("click settings-section-toggle-diagnostics");
+  });
 });

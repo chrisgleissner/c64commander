@@ -182,7 +182,9 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
         </div>
 
         {history.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
+          <div className="flex flex-1 items-center justify-center text-sm px-4 text-center text-muted-foreground">
+            No health checks recorded yet. Only checks you run from Diagnostics are kept here.
+          </div>
         ) : (
           <>
             <div

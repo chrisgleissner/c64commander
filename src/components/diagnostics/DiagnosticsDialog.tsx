@@ -62,6 +62,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useOnOpen } from "@/hooks/useOnOpen";
 import { DEMO_MODE_CONNECTION_LABEL } from "@/lib/connection/demoModeLabels";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
+import { humanizeActionName } from "@/lib/diagnostics/actionTitle";
 import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -297,7 +298,7 @@ const getActionPrimaryEffect = (summary: ActionSummary) => {
 
 const buildActionTitle = (summary: ActionSummary) => {
   const primary = getActionPrimaryEffect(summary);
-  if (!primary) return summary.actionName;
+  if (!primary) return humanizeActionName(summary.actionName);
   if (primary.type === "TELNET") {
     return primary.menuPath
       ? `${primary.actionLabel} · ${primary.menuPath[0]} → ${primary.menuPath[1]}`
