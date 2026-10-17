@@ -6,10 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, Joystick, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { fitJoystickControls } from "@/lib/remoteInput/joystickFit";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { VirtualDPad } from "@/components/remoteInput/VirtualDPad";
@@ -74,6 +76,10 @@ const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: t
 /** Base geometry (px) at scale 1.0; the user's size preference multiplies these. */
 const BASE_CONTROL_PX = 132;
 const BASE_FIRE_PX = 92;
+const ACTION_ZONE_GAP_PX = 16;
+const ACTION_ZONE_PADDING_PX = 8;
+const PORT_CHOICE_HEIGHT_PX = 44;
+const PORT_GROUP_MIN_WIDTH_PX = 144;
 const IMMERSIVE_ACTION_TOP_GAP_PX = 16;
 // Game mode anchors the movement control and FIRE near the bottom edge. Kept low so that with
 // Live View ("Watching") on, the controls sit below the picture instead of overlapping it.
@@ -114,10 +120,46 @@ export const VirtualJoystick = ({
   const [stickOffset, setStickOffset] = useState({ x: 0, y: 0 });
   const [movementStyle, setMovementStyle] = useState<MovementStyle>("stick");
 
+  const { profile } = useDisplayProfile();
+  const portBesideFire = profile === "compact" && !immersive;
+  const actionZoneRef = useRef<HTMLDivElement | null>(null);
+  const [room, setRoom] = useState({ widthPx: 0, heightPx: 0 });
+  useLayoutEffect(() => {
+    const zone = actionZoneRef.current;
+    const body = zone?.closest<HTMLElement>('[data-surface-body="true"]');
+    if (immersive || !zone || !body) return;
+    const measure = () => {
+      const zoneTop = zone.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+      const next = {
+        widthPx: Math.floor(zone.clientWidth - 2 * ACTION_ZONE_PADDING_PX),
+        heightPx: Math.floor(body.clientHeight - zoneTop - ACTION_ZONE_PADDING_PX),
+      };
+      setRoom((current) => (current.widthPx === next.widthPx && current.heightPx === next.heightPx ? current : next));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    if (zone.parentElement) observer.observe(zone.parentElement);
+    return () => observer.disconnect();
+  }, [immersive, movementStyle, showMovementStyle]);
+
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  const controlPx = Math.round(BASE_CONTROL_PX * safeScale);
+  const preferredControlPx = Math.round(BASE_CONTROL_PX * safeScale);
+  const preferredFirePx = Math.round(BASE_FIRE_PX * safeScale);
+  const fitted = immersive
+    ? { controlPx: preferredControlPx, firePx: preferredFirePx }
+    : fitJoystickControls({
+        controlPx: preferredControlPx,
+        firePx: preferredFirePx,
+        gapPx: ACTION_ZONE_GAP_PX,
+        sideMinPx: portBesideFire ? PORT_GROUP_MIN_WIDTH_PX : 0,
+        availableWidthPx: room.widthPx,
+        availableHeightPx: room.heightPx,
+      });
+  const controlPx = fitted.controlPx;
   const thumbPx = Math.round(Math.max(40, controlPx * 0.36));
-  const firePx = Math.round(BASE_FIRE_PX * safeScale);
+  const firePx = portBesideFire ? Math.min(fitted.firePx, controlPx - PORT_CHOICE_HEIGHT_PX - 4) : fitted.firePx;
   // Game mode: the action controls are absolute (edge-anchored) so they don't size their container.
   // Reserve exactly their height here — the zone is shrink-0 at this height — so the controls are
   // fully contained and the Live View picture (a flex sibling above) fits ABOVE them, never hidden
@@ -327,15 +369,29 @@ export const VirtualJoystick = ({
   );
 
   const portToggle = (
-    <label className="flex min-h-11 items-center gap-2 text-sm" data-testid="remote-input-port-toggle">
-      <Switch
-        checked={port === 2}
-        onCheckedChange={(checked) => onSetPort(checked ? 2 : 1)}
-        disabled={disabled}
-        data-testid="remote-input-port-switch"
-      />
-      Port {port}
-    </label>
+    <div
+      role="group"
+      aria-label="Joystick port"
+      className="flex shrink-0 items-center gap-1 text-sm"
+      data-testid="remote-input-port-toggle"
+    >
+      <span className="mr-1 whitespace-nowrap font-semibold">Port</span>
+      {([1, 2] as const).map((choice) => (
+        <Button
+          key={choice}
+          size="sm"
+          variant={port === choice ? "default" : "secondary"}
+          className="w-11 px-0"
+          disabled={disabled}
+          aria-pressed={port === choice}
+          aria-label={`Port ${choice}`}
+          data-testid={`remote-input-port-${choice}`}
+          onClick={() => onSetPort(choice)}
+        >
+          {choice}
+        </Button>
+      ))}
+    </div>
   );
 
   return (
@@ -359,9 +415,9 @@ export const VirtualJoystick = ({
           Game mode has no such row: it hides the movement-style selector and puts the port
           swap in the corner above FIRE. HARD16-008: this chrome row gets the standard gutter;
           the action zone below stays edge-to-edge. */}
-      {immersive ? null : (
+      {immersive || (portBesideFire && !showMovementStyle) ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2 px-4">
-          {portToggle}
+          {portBesideFire ? null : portToggle}
           {showMovementStyle ? (
             <div className="flex items-center gap-1.5" data-testid="remote-input-movement-style-toggle">
               {MOVEMENT_STYLES.map(({ id, label, icon: Icon }) => (
@@ -385,9 +441,10 @@ export const VirtualJoystick = ({
           controls stay edge-anchored for no-look thumb reach with extra vertical
           clearance from both the top controls and the footer. */}
       <div
+        ref={actionZoneRef}
         data-testid="remote-input-joystick-action-zone"
         data-immersive-min-height={immersive ? immersiveActionZonePx : undefined}
-        className={cn("flex items-end justify-between gap-4", immersive && "relative min-h-0 flex-1")}
+        className={cn("flex items-end justify-between gap-4", immersive ? "relative min-h-0 flex-1" : "px-2")}
         style={
           immersive
             ? {
@@ -419,9 +476,12 @@ export const VirtualJoystick = ({
               rather than above — stops the control stack from growing up into the Live View
               picture in game mode. Autofire is hidden by default, so this is usually just FIRE. */}
           <div
-            className="flex flex-col items-center"
-            style={{ gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : ACTION_CONTROL_STACK_GAP_PX }}
+            className={cn("flex flex-col items-center", portBesideFire && "justify-between self-stretch")}
+            style={{
+              gap: immersive ? IMMERSIVE_ACTION_CONTROL_STACK_GAP_PX : portBesideFire ? 4 : ACTION_CONTROL_STACK_GAP_PX,
+            }}
           >
+            {portBesideFire ? portToggle : null}
             {fireButton}
             {showAutofire ? autofireToggle : null}
           </div>
