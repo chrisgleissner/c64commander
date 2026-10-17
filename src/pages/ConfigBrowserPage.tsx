@@ -11,7 +11,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
-import { Search, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { Search, Loader2, FolderOpen } from "lucide-react";
+import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import {
   useC64Categories,
   useC64Category,
@@ -829,21 +830,7 @@ const CategorySection = memo(function CategorySection({
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
-      actions={
-        isOpen ? (
-          <Button
-            ref={refreshFocusRef}
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            className="size-11 shrink-0"
-            aria-label={`Refresh ${displayTitle ?? categoryName}`}
-            data-testid={`config-refresh-${categorySlug}`}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        ) : undefined
-      }
+      actions={configRefreshAction(isOpen, refreshFocusRef, displayTitle ?? categoryName, categorySlug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
       {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}

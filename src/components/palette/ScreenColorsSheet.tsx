@@ -214,9 +214,7 @@ export function ScreenColorsSheet({ open, onOpenChange }: { open: boolean; onOpe
 
           {devicePalettesLoading || devicePalettes.length > 0 ? (
             <div className="space-y-2" data-testid="screen-colors-device-palettes">
-              <p className="text-xs font-semibold text-muted-foreground">
-                Already on this C64
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">Already on this C64</p>
               {devicePalettesLoading ? (
                 <p className="text-xs text-muted-foreground">Reading…</p>
               ) : (

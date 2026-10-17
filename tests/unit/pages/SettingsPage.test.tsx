@@ -1955,6 +1955,9 @@ describe("SettingsPage", () => {
     const stableSection = screen.getByTestId("settings-feature-group-stable");
     const experimentalSection = screen.getByTestId("settings-feature-group-experimental");
     expect(within(stableSection).getByTestId("feature-flag-hvsc_enabled")).toBeInTheDocument();
+    const hvscRow = screen.getByTestId("feature-flag-hvsc_enabled").closest("label");
+    expect(hvscRow?.className).toContain("items-center");
+    expect(hvscRow?.querySelector(".flex-col")).not.toBeNull();
     expect(within(stableSection).getByTestId("feature-flag-commoserve_enabled")).toBeInTheDocument();
     expect(
       within(experimentalSection).getByTestId("feature-flag-home_telnet_config_actions_enabled"),

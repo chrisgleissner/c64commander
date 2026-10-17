@@ -2621,10 +2621,10 @@ export default function SettingsPage() {
                   // Label because a label may not nest inside another label.
                   <label
                     key={feature.id}
-                    className="flex min-h-11 cursor-pointer items-start justify-between gap-3 min-w-0"
+                    className="flex min-h-11 cursor-pointer items-center justify-between gap-3 min-w-0"
                   >
                     <div className="space-y-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col items-start gap-1">
                         <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
                           <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">

@@ -59,9 +59,7 @@ export const ItemSelectionSearch = ({
         <Input
           className="min-w-0 flex-1"
           placeholder={
-            browser.searchScope === "source"
-              ? `Search all of ${selectedSourceLabel ?? "this source"}…`
-              : "Filter files"
+            browser.searchScope === "source" ? `Search all of ${selectedSourceLabel ?? "this source"}…` : "Filter files"
           }
           value={searchText}
           onChange={(event) => onSearchTextChange(event.target.value)}

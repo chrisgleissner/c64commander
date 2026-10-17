@@ -8,10 +8,10 @@
 
 import { useMemo, useState, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen } from "lucide-react";
+import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import { configCategorySectionId } from "@/lib/search/configDeepLink";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
-import { Button } from "@/components/ui/button";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import type { AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
@@ -125,21 +125,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       toggleTestId={`config-menu-page-${slug}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
-      actions={
-        isOpen ? (
-          <Button
-            ref={refreshFocusRef}
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            className="size-11 shrink-0"
-            aria-label={`Refresh ${page.label}`}
-            data-testid={`config-refresh-${slug}`}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        ) : undefined
-      }
+      actions={configRefreshAction(isOpen, refreshFocusRef, page.label, slug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: page.label }, "ConfigHeader")}
     >
       {blocks.map((block) => (

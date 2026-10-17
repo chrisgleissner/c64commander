@@ -465,7 +465,7 @@ describe("DiagnosticsDialog", () => {
     });
 
     fireEvent.click(screen.getByTestId("open-filters-editor"));
-    expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "TELNET" })).toBeVisible();
+    expect(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "Telnet" })).toBeVisible();
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Save Debug Log");
     expect(screen.getByTestId("diagnostics-last-check-line")).toHaveTextContent(/ago/i);
   });
@@ -1623,7 +1623,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"requestPayload"');
     expect(screen.getByTestId("evidence-detail-trace-trace-ftp-list")).toHaveTextContent('"responsePayload"');
 
-    fireEvent.click(within(contributorSection).getByRole("button", { name: "TELNET" }));
+    fireEvent.click(within(contributorSection).getByRole("button", { name: "Telnet" }));
 
     expect(screen.getByTestId("evidence-list")).toHaveTextContent("Health check TELNET probe");
     expect(screen.getByTestId("evidence-list")).not.toHaveTextContent("FTP LIST /");
