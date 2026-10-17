@@ -51,6 +51,7 @@ import type { AppStyle, AppStyleColors, AppStyleMode } from "@/generated/appStyl
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { ArchiveOverrideField } from "@/pages/settings/ArchiveOverrideField";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -2727,65 +2728,42 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 <HelperText>Host and header overrides below are independent settings.</HelperText>
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-host-override" className="text-sm font-medium">
-                    Host override
-                  </Label>
-                  <Input
-                    id="archive-host-override"
-                    value={archiveHostOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveHostOverride(next);
-                      setArchiveHostError(validateArchiveHost(next));
-                      saveArchiveHostOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.host}
-                    aria-describedby={archiveHostError ? "archive-host-override-error" : undefined}
-                    aria-invalid={archiveHostError ? true : undefined}
-                    data-testid="archive-host-override"
-                  />
-                  {archiveHostError ? (
-                    <p id="archive-host-override-error" className="text-xs text-destructive" role="alert">
-                      {archiveHostError}
-                    </p>
-                  ) : null}
+                <ArchiveOverrideField
+                  id="archive-host-override"
+                  label="Host override"
+                  value={archiveHostOverride}
+                  onChange={(next) => {
+                    setArchiveHostOverride(next);
+                    setArchiveHostError(validateArchiveHost(next));
+                    saveArchiveHostOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.host}
+                  error={archiveHostError}
+                >
                   <HelperText>Hostname only — an invalid value falls back to the default immediately.</HelperText>
-                </div>
+                </ArchiveOverrideField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
-                    Archive client ID
-                  </Label>
-                  <Input
-                    id="archive-client-id-override"
-                    value={archiveClientIdOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveClientIdOverride(next);
-                      saveArchiveClientIdOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.clientId}
-                    data-testid="archive-client-id-override"
-                  />
-                </div>
+                <ArchiveOverrideField
+                  id="archive-client-id-override"
+                  label="Archive client ID"
+                  value={archiveClientIdOverride}
+                  onChange={(next) => {
+                    setArchiveClientIdOverride(next);
+                    saveArchiveClientIdOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.clientId}
+                />
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
-                    Archive user agent
-                  </Label>
-                  <Input
-                    id="archive-user-agent-override"
-                    value={archiveUserAgentOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveUserAgentOverride(next);
-                      saveArchiveUserAgentOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.userAgent}
-                    data-testid="archive-user-agent-override"
-                  />
-                </div>
+                <ArchiveOverrideField
+                  id="archive-user-agent-override"
+                  label="Archive user agent"
+                  value={archiveUserAgentOverride}
+                  onChange={(next) => {
+                    setArchiveUserAgentOverride(next);
+                    saveArchiveUserAgentOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.userAgent}
+                />
 
                 <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
                   <div>
