@@ -75,15 +75,16 @@ export const resolveUltimateSidDurationByMd5 = async (path: string, songNr?: num
  * Only the opening — a few seconds is all that is needed to cover the gap before the buffer is
  * ahead of the speaker, and caching whole tunes costs 192 KB per second.
  *
- * Skipped for tracks whose bytes are not already to hand. Resolving those means going to the
- * network or the Ultimate, and doing that speculatively for tracks nobody has asked for would
- * spend the listener's bandwidth and the device's attention on a guess.
+ * Skipped for tracks whose bytes are not already to hand, except those `prefetchedBytes` holds:
+ * the prefetcher reads those from the Ultimate under its own limits (one request, background
+ * priority, only while the device is idle), so warming them costs the device nothing more.
  */
 export const warmNeighbouringLeadIns = async (
   playlist: PlaylistItem[],
   index: number,
   resolveHvscRuntimeRequest: (item: PlaylistItem) => Promise<{ request: PlayRequest } | null>,
   controller: LocalSidPlaybackController,
+  prefetchedBytes?: (item: PlaylistItem) => Blob | null,
 ) => {
   for (const offset of [1, -1]) {
     const neighbour = playlist[index + offset];
@@ -104,7 +105,8 @@ export const warmNeighbouringLeadIns = async (
             return null;
           })
         )?.request ?? neighbour.request);
-    const file = resolved.file;
+    const file: { arrayBuffer: () => Promise<ArrayBuffer> } | undefined =
+      resolved.file ?? prefetchedBytes?.(neighbour) ?? undefined;
     if (!file) continue;
     try {
       const bytes = await file.arrayBuffer();

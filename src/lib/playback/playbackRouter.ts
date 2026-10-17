@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { InteractionIntent } from "@/lib/deviceInteraction/interactionScheduler";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import type { C64API } from "@/lib/c64api";
@@ -353,13 +354,20 @@ export const getRememberedUltimateSidBlob = (path: string, origin?: DeviceBoundC
 
 export const clearRememberedUltimateSidBlobsForTests = () => rememberedSidBlobs.clear();
 
-const readSelectedDeviceSidBlob = async (normalizedPath: string): Promise<Blob | null> => {
+export type SidBlobFetchOptions = { intent?: InteractionIntent; signal?: AbortSignal };
+
+const readSelectedDeviceSidBlob = async (
+  normalizedPath: string,
+  options: SidBlobFetchOptions = {},
+): Promise<Blob | null> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const response = await readFtpFile({
     host: normalizeFtpHost(rawHost),
     port: getStoredFtpPort(),
     password,
     path: normalizedPath,
+    signal: options.signal,
+    ...(options.intent ? { __c64uIntent: options.intent } : {}),
   });
   const bytes = base64ToUint8(response.data);
   if (typeof response.sizeBytes === "number" && response.sizeBytes !== bytes.length) {
@@ -373,7 +381,11 @@ const readSelectedDeviceSidBlob = async (normalizedPath: string): Promise<Blob |
   return new Blob([bytes], { type: "application/octet-stream" });
 };
 
-export const tryFetchUltimateSidBlob = async (path: string, origin?: DeviceBoundContentOrigin | null) => {
+export const tryFetchUltimateSidBlob = async (
+  path: string,
+  origin?: DeviceBoundContentOrigin | null,
+  options?: SidBlobFetchOptions,
+) => {
   const normalizedPath = normalizeUltimatePath(path);
   // Offline means the device cannot be read from — except in Demo Mode, where "the device" is this
   // process answering on loopback and the radios are irrelevant.
@@ -381,7 +393,7 @@ export const tryFetchUltimateSidBlob = async (path: string, origin?: DeviceBound
   try {
     const blob = isOnAnotherDevice(origin)
       ? await fetchUltimateOriginBlob(origin)
-      : await readSelectedDeviceSidBlob(normalizedPath);
+      : await readSelectedDeviceSidBlob(normalizedPath, options);
     if (!blob) return null;
     const key = sidBlobKey(path, origin);
     rememberedSidBlobs.delete(key);

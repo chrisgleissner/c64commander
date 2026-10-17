@@ -94,4 +94,28 @@ describe("reading SID bytes ahead", () => {
 
     expect(warmLeadIn).toHaveBeenCalledWith(expect.stringContaining("next"), bytes, 0, LEAD_IN_SECONDS);
   });
+
+  it("warms an Ultimate-hosted neighbour from prefetched bytes, and leaves it alone when none were prefetched", async () => {
+    const warmLeadIn = vi.fn();
+    const controller = { warmLeadIn } as unknown as LocalSidPlaybackController;
+    const next = {
+      id: "next",
+      label: "next.sid",
+      request: { source: "ultimate", path: "/Usb0/next.sid", songNr: 1 },
+    } as unknown as PlaylistItem;
+    const playlist = [item("current", { arrayBuffer: async () => new ArrayBuffer(1) }), next];
+    const resolve = vi.fn(async () => null);
+
+    await warmNeighbouringLeadIns(playlist, 0, resolve, controller, () => null);
+    expect(warmLeadIn).not.toHaveBeenCalled();
+
+    await warmNeighbouringLeadIns(playlist, 0, resolve, controller, () => new Blob([new Uint8Array([1, 2, 3])]));
+    expect(warmLeadIn).toHaveBeenCalledTimes(1);
+    expect(warmLeadIn).toHaveBeenCalledWith(
+      expect.stringContaining("next"),
+      expect.any(ArrayBuffer),
+      0,
+      LEAD_IN_SECONDS,
+    );
+  });
 });

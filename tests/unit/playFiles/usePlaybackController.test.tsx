@@ -3469,6 +3469,52 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
+    it("starts the next Ultimate-hosted tune from the bytes read ahead instead of reading them again", async () => {
+      enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
+      const deviceState = await import("@/lib/deviceInteraction/deviceStateStore");
+      deviceState.updateDeviceConnectionState("REAL_CONNECTED");
+      deviceState.markDeviceRequestStart();
+      deviceState.markDeviceRequestEnd({ success: true });
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const controller = fakeController();
+        vi.mocked(tryFetchUltimateSidBlob).mockClear();
+        vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(new Blob([psid()]) as never);
+        const next = createPlaylistItem({
+          id: "sid-2",
+          category: "sid",
+          label: "next.sid",
+          path: "/Usb0/Demos/next.sid",
+          durationMs: 120_000,
+          subsongCount: 1,
+          request: { source: "ultimate", path: "/Usb0/Demos/next.sid", songNr: 1 },
+        });
+        const playlist = [sidItem(psid, 1, "sid-1"), next];
+        const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        expect(tryFetchUltimateSidBlob).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(80_000);
+
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledTimes(1);
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledWith(
+          "/Usb0/Demos/next.sid",
+          undefined,
+          expect.objectContaining({ intent: "background" }),
+        );
+        expect(controller.warmLeadIn.mock.calls.some((call) => String(call[0]).startsWith("sid-2#"))).toBe(true);
+
+        await result.current.playItem(next, { playlistIndex: 1 });
+
+        expect(controller.play).toHaveBeenCalledTimes(2);
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+        connectionStateOverride.current = null;
+      }
+    });
+
     it("says so when a tune set to play on this device cannot be read off the Ultimate", async () => {
       enableLocal();
       const controller = fakeController();
