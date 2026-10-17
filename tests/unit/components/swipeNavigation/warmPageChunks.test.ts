@@ -125,13 +125,14 @@ describe("warmPageChunks", () => {
 
   it("keeps warming on a native build while navigator.onLine is false", async () => {
     const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+    const native = vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
     const warmPageChunks = await importWarm();
     warmPageChunks();
 
     await vi.advanceTimersByTimeAsync(20_000);
     expect(loaded[0]).toBe("play");
     online.mockRestore();
+    native.mockRestore();
   });
 
   it("waits for two quiet seconds after a key press or touch, so a parse never lands inside an interaction", async () => {
