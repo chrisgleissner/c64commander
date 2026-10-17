@@ -842,7 +842,9 @@ Opened by three doors — the Home field, the Quick Menu's top entry
   (`data-key-nav-skip` on the root and on the list): Up/Down move
   `aria-activedescendant` while DOM focus STAYS in the field, Enter activates the active
   row, Escape and Back close. The ring's own Up/Down inside a dialog move real DOM focus,
-  which would take the user out of the field on the first press.
+  which would take the user out of the field on the first press. The guidance bar shows
+  while the field has focus (`data-key-nav-search-overlay`): Back "Close", OK "Open". On a
+  handset with a soft keyboard up, the system consumes the first Back to hide it.
 - Close — button — `search-close` — R✅ I✅
 - Result row — `search-result-<entry id>` — R✅ I✅ — `role="option"`, at least 44 px, with
   the group folded into its accessible name. A row whose requirements are unmet is
@@ -1045,7 +1047,8 @@ throughout.
   — `remote-input-size-decrease`, `remote-input-size-increase`,
   `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
   joystick action controls, not the Type-tab keyboard, which sizes itself from
-  measured space) _(compact: behind Joystick options)_
+  measured space; 44 px buttons; "Larger" is disabled once the available height
+  already caps the joystick) _(compact: behind Joystick options)_
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
   `remote-input-immersive-toggle` — R✅ I✅ — ENTERING starts the remembered
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
@@ -1083,7 +1086,9 @@ throughout.
 - **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
   A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
   `video_mirror_enabled` is on and the device advertises streaming — on the compact
-  profile outside Game mode it sits below the joystick and scrolls with it; shares the
+  profile outside Game mode it sits below the joystick and scrolls with it; in Keys
+  mode on the compact profile it moves into the toolbar row as two icon-only 44 px
+  buttons, so the keyboard keeps at least three complete key rows; shares the
   single app-wide session with Home's Live View)_
   - Audio toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`)_
   - Video toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`)_

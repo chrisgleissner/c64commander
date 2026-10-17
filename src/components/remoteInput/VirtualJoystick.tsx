@@ -11,7 +11,7 @@ import { AlertTriangle, Joystick, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { fitJoystickControls } from "@/lib/remoteInput/joystickFit";
+import { canGrowJoystickControls, fitJoystickControls } from "@/lib/remoteInput/joystickFit";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { VirtualDPad } from "@/components/remoteInput/VirtualDPad";
@@ -43,6 +43,9 @@ export type VirtualJoystickProps = {
   disabledHint?: string;
   /** Control-size multiplier (from the user's size preference). */
   scale?: number;
+  /** The multiplier of the next larger size; with `onCanGrowChange` it reports whether that step would change anything. */
+  nextScale?: number;
+  onCanGrowChange?: (canGrow: boolean) => void;
   /** Immersive/gaming layout: edge-anchored, maximized, no-look thumb reach. */
   immersive?: boolean;
   /** Whether the Stick / D-Pad / Swipe choice is shown. Game mode never shows it. */
@@ -104,6 +107,8 @@ export const VirtualJoystick = ({
   disabled = false,
   disabledHint,
   scale = 1,
+  nextScale,
+  onCanGrowChange,
   immersive = false,
   showMovementStyle = true,
   fillHeight,
@@ -148,16 +153,25 @@ export const VirtualJoystick = ({
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   const preferredControlPx = Math.round(BASE_CONTROL_PX * safeScale);
   const preferredFirePx = Math.round(BASE_FIRE_PX * safeScale);
-  const fitted = immersive
-    ? { controlPx: preferredControlPx, firePx: preferredFirePx }
-    : fitJoystickControls({
-        controlPx: preferredControlPx,
-        firePx: preferredFirePx,
-        gapPx: ACTION_ZONE_GAP_PX,
-        sideMinPx: portBesideFire ? PORT_GROUP_MIN_WIDTH_PX : 0,
-        availableWidthPx: room.widthPx,
-        availableHeightPx: room.heightPx,
-      });
+  const fitInput = {
+    controlPx: preferredControlPx,
+    firePx: preferredFirePx,
+    gapPx: ACTION_ZONE_GAP_PX,
+    sideMinPx: portBesideFire ? PORT_GROUP_MIN_WIDTH_PX : 0,
+    availableWidthPx: room.widthPx,
+    availableHeightPx: room.heightPx,
+  };
+  const fitted = immersive ? { controlPx: preferredControlPx, firePx: preferredFirePx } : fitJoystickControls(fitInput);
+  const canGrow =
+    immersive || nextScale === undefined
+      ? true
+      : canGrowJoystickControls(fitInput, {
+          controlPx: Math.round(BASE_CONTROL_PX * nextScale),
+          firePx: Math.round(BASE_FIRE_PX * nextScale),
+        });
+  useEffect(() => {
+    onCanGrowChange?.(canGrow);
+  }, [canGrow, onCanGrowChange]);
   const controlPx = fitted.controlPx;
   const thumbPx = Math.round(Math.max(40, controlPx * 0.36));
   const firePx = portBesideFire

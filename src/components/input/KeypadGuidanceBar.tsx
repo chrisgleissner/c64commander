@@ -42,6 +42,8 @@ import {
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
+  resolveSearchOverlayLabels,
+  SEARCH_OVERLAY_ATTR,
   resolveSoftKeyMenuOverlayLabels,
   resolveSoftKeyMenuPanelLabels,
   SKIP_ATTR,
@@ -141,6 +143,7 @@ const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
     const entry = focused !== panel ? accessibleLabelFor(focused) : null;
     return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel), entry);
   }
+  if (focused?.closest(`[role="dialog"][${SEARCH_OVERLAY_ATTR}]`)) return resolveSearchOverlayLabels(visible);
   const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
   if (!overlay) return null;
   const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";

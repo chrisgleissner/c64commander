@@ -90,8 +90,10 @@ export {
   findContextMenuTrigger,
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
+  resolveSearchOverlayLabels,
   resolveSoftKeyMenuOverlayLabels,
   resolveSoftKeyMenuPanelLabels,
+  SEARCH_OVERLAY_ATTR,
   SOFT_KEY_MENU_ATTR,
   SOFT_KEY_MENU_PANEL_ATTR,
 } from "./guidance";

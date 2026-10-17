@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
+import { findContextMenuTrigger } from "@/lib/input/guidance";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { DisplayProfile } from "@/lib/displayProfiles";
 
@@ -536,5 +537,35 @@ describe("SelectableActionList", () => {
 
     expect(screen.getByTestId("row")).toHaveClass("flex", "flex-wrap");
     expect(screen.getByTestId("row")).not.toHaveClass("grid");
+  });
+
+  it.each([
+    ["compact", 360],
+    ["expanded", 1200],
+  ])("lets the Menu key on a %s row title reach that row's item actions button", (_profile, width) => {
+    localStorage.clear();
+    setViewportWidth(width);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          rowTestId="row"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const secondRow = screen.getAllByTestId("row")[1];
+    const title = secondRow.querySelector<HTMLElement>("[data-row-title]");
+    const trigger = findContextMenuTrigger(title, false);
+
+    expect(trigger).not.toBeNull();
+    expect(secondRow.contains(trigger)).toBe(true);
+    expect(trigger).toHaveAttribute("aria-label", "Item actions");
   });
 });

@@ -107,6 +107,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { profile } = useDisplayProfile();
   const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
+  const [joystickCanGrow, setJoystickCanGrow] = useState(true);
   const [joystickOptionsOpen, setJoystickOptionsOpen] = useState(false);
   const [showAutofire, setShowAutofire] = useState(loadShowAutofireButton);
   const [joystickBinding, setJoystickBinding] = useState(() =>
@@ -155,6 +156,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const foldJoystickOptions = isCompactDisplay && !gameMode;
   const iconOnlyToolbar = foldJoystickOptions;
   const compactPreviewStrip = foldJoystickOptions && showMirrorScreen;
+  // With the footer row below the keyboard, Keys mode on the compact profile showed under two
+  // complete key rows (#515), so Listen and Watch ride the toolbar there instead.
+  const mirrorInToolbar = mirrorEnabled && foldJoystickOptions && session.outputMode === "type";
   // Longer than the mirror's own floating cluster: this is a whole toolbar the user asked
   // for, with Watch, Listen, the orientation control and the way out on it, and it is
   // re-armed by every interaction — so it stays while it is being used.
@@ -308,7 +312,6 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       <Button
         size="icon"
         variant="secondary"
-        className="h-8 w-8"
         aria-label="Smaller controls"
         data-testid="remote-input-size-decrease"
         disabled={controlSize === "M"}
@@ -322,10 +325,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       <Button
         size="icon"
         variant="secondary"
-        className="h-8 w-8"
         aria-label="Larger controls"
         data-testid="remote-input-size-increase"
-        disabled={controlSize === "XXL"}
+        disabled={controlSize === "XXL" || !joystickCanGrow}
         onClick={() => changeSize(1)}
       >
         <Plus className="h-4 w-4" />
@@ -665,6 +667,16 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               )}
               {showFooterActions ? (
                 <div className="flex shrink-0 items-center gap-1">
+                  {mirrorInToolbar ? (
+                    <div data-testid="remote-input-mirror-controls">
+                      <AvMirrorControls
+                        iconOnly
+                        className="flex-nowrap gap-1"
+                        showAudio={audioMirrorEnabled}
+                        showVideo={videoMirrorEnabled}
+                      />
+                    </div>
+                  ) : null}
                   {iconOnlyToolbar && session.outputMode === "joystick" ? (
                     <>
                       {joystickOptionsToggle}
@@ -780,6 +792,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 disabled={!joystickAvailable}
                 disabledHint={joystickUnavailableHint}
                 scale={gameModePictureScale}
+                nextScale={remoteInputControlScale(stepRemoteInputControlSize(controlSize, 1))}
+                onCanGrowChange={setJoystickCanGrow}
                 immersive={gameMode}
                 showMovementStyle={!foldJoystickOptions || joystickOptionsOpen}
                 fillHeight={!showMirrorScreen}
@@ -827,7 +841,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             />
           )}
 
-          {mirrorEnabled && foldJoystickOptions ? <div className="px-4">{mirrorControlsRow}</div> : null}
+          {mirrorEnabled && foldJoystickOptions && !mirrorInToolbar ? (
+            <div className="px-4">{mirrorControlsRow}</div>
+          ) : null}
 
           {/* The quick-keys bar rides alongside the JOYSTICK for one-tap
               SPACE/RETURN/cursor without leaving game control; in Type mode the

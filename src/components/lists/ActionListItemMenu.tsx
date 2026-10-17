@@ -222,6 +222,7 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
           size="icon"
           className={triggerClassName}
           aria-label="Item actions"
+          data-key-nav-menu=""
           aria-haspopup="dialog"
           aria-expanded={open}
           disabled={item.disableActions}

@@ -73,8 +73,13 @@ import {
 } from "@/lib/input/eventTargets";
 import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { holdsRingOnLoadingPage } from "@/lib/input/pageLoadingStop";
 import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
-import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import {
+  dispatchDeviceBackKey,
+  installDeviceBackButton,
+  runBackWhenOverlaysSettled,
+} from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
@@ -438,7 +443,7 @@ export const FocusNavigationProvider = ({
       // does. Once per press: a held key must not close a select, then its dialog, then walk on.
       if (action === "softLeft" && isAnyOverlayOpen()) {
         event.preventDefault();
-        if (!event.repeat) dispatchDeviceBackKey(document.activeElement ?? document);
+        if (!event.repeat) runBackWhenOverlaysSettled(() => dispatchDeviceBackKey(document.activeElement ?? document));
         return;
       }
       const shortcuts = shortcutsRef.current;
@@ -735,6 +740,12 @@ export const FocusNavigationProvider = ({
         activeElement !== ringElementFor(controller.focus.current()?.id ?? "") &&
         !(getInputModality() === "key-navigation" && engineRef.current?.isRingStop(activeElement))
       ) {
+        return;
+      }
+      if (holdsRingOnLoadingPage(controller.focus.current()?.id, action)) {
+        setInputModality("key-navigation");
+        notifyRing();
+        event.preventDefault();
         return;
       }
       // Seamless pointer → key hand-off: start the move from where the user is.
