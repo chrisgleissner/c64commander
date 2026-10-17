@@ -208,7 +208,7 @@ describe("PlaylistPanel", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByTestId("playlist-remove-selected-label")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("playlist-remove-selected-label")).toHaveTextContent("Remove selected items");
     expect(screen.getByRole("button", { name: "Add items to playlist" })).toHaveTextContent("Add");
     expect(screen.queryByRole("button", { name: "Clear playlist" })).not.toBeInTheDocument();
   });

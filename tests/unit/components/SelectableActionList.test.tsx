@@ -783,6 +783,36 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(onRemoveSelected).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the remove-selected button laid out but hidden and disabled while nothing is selected", () => {
+    const onRemoveSelected = vi.fn();
+    const renderList = (selectedCount: number) => (
+      <SelectableActionList
+        title="Playlist"
+        items={[
+          { id: "track-1", title: "Track One", selected: selectedCount > 0, actionLabel: "Play", onAction: vi.fn() },
+        ]}
+        emptyLabel="Empty"
+        selectedCount={selectedCount}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+        removeSelectedLabel="Remove selected"
+        onRemoveSelected={onRemoveSelected}
+        listTestId="list"
+      />
+    );
+    const { rerender } = render(renderList(0));
+    const removeBtn = screen.getByTestId("list-remove-selected");
+    expect(removeBtn).toBeDisabled();
+    expect(removeBtn).toHaveAttribute("aria-hidden", "true");
+    expect(removeBtn).toHaveClass("invisible");
+    rerender(renderList(1));
+    expect(screen.getByTestId("list-remove-selected")).toBe(removeBtn);
+    expect(removeBtn).toBeEnabled();
+    expect(removeBtn).not.toHaveAttribute("aria-hidden");
+    expect(removeBtn).not.toHaveClass("invisible");
+  });
+
   it("renders headerActions slot", () => {
     const items: ActionListItem[] = [
       {

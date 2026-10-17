@@ -82,6 +82,25 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "items-shown-unfiltered");
   });
 
+  layoutTest(
+    "selecting the first playlist item does not move the list @layout",
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.goto("/play");
+      await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+      const rows = page.getByTestId("playlist-item");
+      await expect(rows).toHaveCount(2);
+      const remove = page.getByTestId("playlist-list-remove-selected");
+      await expect(remove, "the action keeps its place while nothing is selected").toBeHidden();
+
+      const listTop = async () => (await page.getByTestId("playlist-list").boundingBox())!.y;
+      const before = await listTop();
+      await rows.first().getByRole("checkbox").click();
+      await expect(remove).toBeVisible();
+      expect(await listTop(), "the list stays where it was when the action appears").toBeCloseTo(before, 0);
+      await snap(page, testInfo, "first-item-selected");
+    },
+  );
+
   test("shuffle mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");

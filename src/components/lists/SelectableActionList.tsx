@@ -636,12 +636,19 @@ export const SelectableActionList = ({
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
           </div>
-          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+          {removeSelectedLabel && onRemoveSelected ? (
+            // Always laid out, and hidden while nothing is selected: it used to appear on the first
+            // selection, wrap onto a row of its own, and move the whole list down by that row.
             <Button
               variant="outline"
               size="sm"
               onClick={onRemoveSelected}
-              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              disabled={selectedCount === 0}
+              aria-hidden={selectedCount === 0 ? true : undefined}
+              className={cn(
+                "text-destructive hover:text-destructive max-w-full whitespace-normal",
+                selectedCount === 0 && "invisible",
+              )}
               id={removeSelectedId}
               data-testid={removeSelectedId}
             >
