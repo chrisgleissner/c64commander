@@ -14,6 +14,7 @@ import {
   Maximize2,
   Minimize2,
   Minus,
+  OctagonX,
   Plus,
   Wifi,
   WifiOff,
@@ -152,6 +153,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // rather than a stripped header with no control on it.
   const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
   const foldJoystickOptions = isCompactDisplay && !gameMode;
+  const iconOnlyToolbar = foldJoystickOptions;
   // Longer than the mirror's own floating cluster: this is a whole toolbar the user asked
   // for, with Watch, Listen, the orientation control and the way out on it, and it is
   // re-armed by every interaction — so it stays while it is being used.
@@ -337,14 +339,16 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
    */
   const joystickOptionsToggle = (
     <Button
-      size="sm"
+      size={iconOnlyToolbar ? "icon" : "sm"}
       variant={joystickOptionsOpen ? "default" : "secondary"}
       aria-expanded={joystickOptionsOpen}
+      aria-label="Options"
+      title={iconOnlyToolbar ? "Options" : undefined}
       data-testid="remote-input-joystick-options"
       onClick={() => setJoystickOptionsOpen((open) => !open)}
     >
-      <Settings2 className="mr-1.5 h-4 w-4" />
-      Options
+      <Settings2 className={iconOnlyToolbar ? "h-5 w-5" : "mr-1.5 h-4 w-4"} />
+      {iconOnlyToolbar ? null : "Options"}
     </Button>
   );
 
@@ -437,14 +441,16 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
    */
   const enterGameModeToggle = gameModeAvailable && !immersive && (
     <Button
-      size="sm"
+      size={iconOnlyToolbar ? "icon" : "sm"}
       variant="secondary"
       data-testid="remote-input-immersive-toggle"
       aria-pressed={false}
+      aria-label="Game Mode"
+      title={iconOnlyToolbar ? "Game Mode" : undefined}
       onClick={() => void startGameMode()}
     >
-      <Maximize2 className="mr-1.5 h-4 w-4" />
-      {gameModeLabel}
+      <Maximize2 className={iconOnlyToolbar ? "h-5 w-5" : "mr-1.5 h-4 w-4"} />
+      {iconOnlyToolbar ? null : gameModeLabel}
     </Button>
   );
 
@@ -581,7 +587,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             screen readers. */}
         {chromeHidden ? <AppSheetTitle className="sr-only">Remote Input</AppSheetTitle> : null}
         {chromeHidden ? null : (
-          <AppSheetHeader>
+          <AppSheetHeader style={isCompactDisplay ? { paddingTop: 0, paddingBottom: 0 } : undefined}>
             <AppSheetTitle className="flex items-center gap-2">
               Remote Input
               <span
@@ -607,7 +613,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             the joystick zone and keyboard grid below stay edge-to-edge. */}
         {chromeHidden ? null : (
           <div
-            className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2"
+            className={cn(
+              "flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2",
+              iconOnlyToolbar && "gap-1 px-2 py-1",
+            )}
             {...(gameMode ? chrome.keepAliveProps : {})}
           >
             <div className="flex items-center justify-between gap-2">
@@ -619,10 +628,17 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   {gameModeLabel}
                 </span>
               ) : (
-                <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
+                <div
+                  className={cn(
+                    "flex min-w-0 items-center gap-2",
+                    iconOnlyToolbar && "gap-0 overflow-hidden rounded-md border border-border",
+                  )}
+                  data-testid="remote-input-output-mode-toggle"
+                >
                   <Button
                     size="sm"
                     variant={session.outputMode === "joystick" ? "default" : "secondary"}
+                    className={iconOnlyToolbar ? "rounded-none px-2" : undefined}
                     data-testid="remote-input-mode-joystick"
                     disabled={!joystickAvailable}
                     title={!joystickAvailable ? joystickUnavailableHint : undefined}
@@ -635,6 +651,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   <Button
                     size="sm"
                     variant={session.outputMode === "type" ? "default" : "secondary"}
+                    className={iconOnlyToolbar ? "rounded-none px-2" : undefined}
                     data-testid="remote-input-mode-type"
                     onClick={() => handleOutputModeChange("type")}
                   >
@@ -644,15 +661,25 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 </div>
               )}
               {showFooterActions ? (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="shrink-0"
-                  data-testid="remote-input-panic-button"
-                  onClick={() => session.releaseAll()}
-                >
-                  Release all
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {iconOnlyToolbar && session.outputMode === "joystick" ? (
+                    <>
+                      {joystickOptionsToggle}
+                      {enterGameModeToggle}
+                    </>
+                  ) : null}
+                  <Button
+                    size={iconOnlyToolbar ? "icon" : "sm"}
+                    variant="destructive"
+                    className="shrink-0"
+                    aria-label="Release all"
+                    title={iconOnlyToolbar ? "Release all" : undefined}
+                    data-testid="remote-input-panic-button"
+                    onClick={() => session.releaseAll()}
+                  >
+                    {iconOnlyToolbar ? <OctagonX className="h-5 w-5" /> : "Release all"}
+                  </Button>
+                </div>
               ) : null}
               {/* The way out of Game Mode, right-aligned beside the heading. Release All
                   is deliberately absent in Game Mode, so this row has the space. */}
@@ -673,10 +700,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               // wrapping the stepper was squeezed until "Size" was set one or two
               // letters to a line.
               <>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  {foldJoystickOptions ? joystickOptionsToggle : sizeStepper}
-                  {enterGameModeToggle}
-                </div>
+                {iconOnlyToolbar ? null : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    {foldJoystickOptions ? joystickOptionsToggle : sizeStepper}
+                    {enterGameModeToggle}
+                  </div>
+                )}
                 {foldJoystickOptions && joystickOptionsOpen ? sizeStepper : null}
               </>
             ) : null}
@@ -696,6 +725,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         <AppSheetBody
           className={cn(
             "flex flex-col gap-4",
+            iconOnlyToolbar && "gap-2",
             // The sheet itself clears the navigation bar in normal mode (see its className).
             showFooterActions && "pb-3",
           )}

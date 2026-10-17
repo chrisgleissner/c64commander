@@ -979,7 +979,10 @@ throughout.
   sheet's first control after Close), `remote-input-menu-release-all` (not in Game
   Mode, where the sheet shows no Release all), `remote-input-menu-close`
 
-- Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
+- Joystick port — group of two toggle buttons (Port 1 | 2) — `remote-input-port-toggle`
+  (the group), `remote-input-port-1`, `remote-input-port-2` — R✅ I✅ — the pressed
+  button (`aria-pressed`) is the port in use. On the compact profile the group sits
+  above FIRE in the action zone instead of on its own row
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
   `remote-input-mode-type` — R✅ I✅ ; Joystick disabled on devices/firmware
   without `machine:input` (kernal-fallback tier), with the reason shown as text
@@ -987,7 +990,11 @@ throughout.
   not interactive, also the Joystick button's accessible description); hidden in
   Game mode. Pinned in a non-scrolling chrome region at the top of the sheet
   (outside the scrollable body) so it is always visible, with Release All
-  right-aligned on the same row (see below)
+  right-aligned on the same row (see below). On the compact profile the mode choice
+  is one bordered segmented control and the whole toolbar is a single row:
+  mode choice, then Options, Game Mode and Release all as icon-only buttons (the
+  accessible names stay "Options", "Game Mode", "Release all"). Focus order is
+  unchanged
 - Connection indicator — status text — `remote-input-connection-indicator` —
   not interactive
 - Held joystick inputs — `data-held-joystick` on the sheet root — not interactive
@@ -1076,10 +1083,12 @@ throughout.
   - The picture itself — pinch to zoom, drag to pan, double-tap to zoom-to-point
     (touch on the mirror is always view-control, never relayed)
 - **Joystick mode:**
-  - Port swap — switch (one-tap toggle, same directness as Autofire) —
-    `remote-input-port-switch` — R✅ I✅ (default Port 2; label shows the
-    current port; on the row above the stick outside Game mode, and in the corner above FIRE in
-    Game mode)
+  - Port choice — Port 1 | 2 buttons (one tap each) —
+    `remote-input-port-1`, `remote-input-port-2` in the group `remote-input-port-toggle` —
+    R✅ I✅ (default Port 2; on the row above the stick outside Game mode, except on the
+    compact profile where it sits above FIRE; in the corner above FIRE in Game mode). The
+    stick and FIRE are sized to the room the sheet leaves them, so on compact both are
+    fully visible without scrolling
   - Movement style toggle: Stick / D-Pad / Swipe — buttons —
     `remote-input-movement-style-{stick,dpad,swipe}` — R✅ I✅ (default Stick;
     switching style never itself releases a held direction; compact: behind Joystick options)
@@ -1179,7 +1188,8 @@ the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
   - Safety — Release All (panic button) — button (destructive) —
     `remote-input-panic-button` — R✅ I✅ — releases every held input regardless
     of tracked state; right-aligned in the pinned chrome row, to the right of
-    the Joystick/Keys toggle (moved here from the old footer)
+    the Joystick/Keys toggle (moved here from the old footer); icon-only on the
+    compact profile
 - **Close**: the sheet's top-right X (`remote-input-close`) is the sole Close
   affordance (the duplicate footer Close was removed). Closing — via the X or
   Android Back — releases all held inputs
