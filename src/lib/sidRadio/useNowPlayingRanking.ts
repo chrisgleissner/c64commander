@@ -31,7 +31,7 @@ export interface NowPlayingRankingState {
 /**
  * Reactive ranking state for the currently-playing tune (spec §5.1), keyed by
  * its full MD5. Subscribes to `rankingStore` so the affordance stays in sync
- * across surfaces (e.g. Liked Tunes un-like). A null md5 (tune not yet resolved
+ * across surfaces (e.g. Liked tunes un-like). A null md5 (tune not yet resolved
  * / non-SID) yields an inert, unranked state.
  */
 export const useNowPlayingRanking = (md5: string | null): NowPlayingRankingState => {

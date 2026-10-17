@@ -339,7 +339,7 @@ export function MachineControls({
         scope="home"
         id="quick-actions"
         forceClosed={forceClosed}
-        title="Quick Actions"
+        title="Quick actions"
         icon={Zap}
         defaultOpen
         testId="home-quick-actions"

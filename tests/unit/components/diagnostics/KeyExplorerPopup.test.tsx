@@ -56,7 +56,7 @@ import { loadKeymapOverrides } from "@/lib/input/keymapOverrideFiles";
 
 const press = (init: KeyboardEventInit) => fireEvent.keyDown(window, init);
 
-describe("Key Explorer", () => {
+describe("Key explorer", () => {
   beforeEach(() => {
     localStorage.clear();
     emitKeyInputDiagnostics.mockClear();

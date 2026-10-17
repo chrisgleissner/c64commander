@@ -415,7 +415,7 @@ const measurePlaySurfaces = async (page: Page): Promise<string[]> => {
 
   await activeMain(page).getByTestId("sid-radio-liked-tunes-open").click();
   const liked = page.getByTestId("liked-tunes-sheet");
-  problems.push(...(await measureOpenSurface(page, "Liked Tunes", liked)));
+  problems.push(...(await measureOpenSurface(page, "Liked tunes", liked)));
   await closeSurface(page, liked);
 
   await activeMain(page)

@@ -74,7 +74,7 @@ export function FallbackCategoryBlock({
   return (
     <div data-testid={`config-fallback-category-${category.toLowerCase().replace(/\s+/g, "-")}`}>
       {hideHeading ? null : (
-        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold text-muted-foreground">
           {category}
         </h4>
       )}

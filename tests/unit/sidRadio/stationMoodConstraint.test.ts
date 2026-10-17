@@ -72,7 +72,7 @@ describe("mood-constrained Song station — the fixture itself", () => {
     for (let ordinal = CONNECTED_COUNT; ordinal < TRACK_COUNT; ordinal += 1) {
       expect(reachable.has(ordinal)).toBe(false);
     }
-    // 35 is Experimental like 7 and 23; 32–39 are all Deep Cuts. Without that overlap a station
+    // 35 is Experimental like 7 and 23; 32–39 are all Deep cuts. Without that overlap a station
     // could pass these tests by being a mood-only station and nobody would notice.
     expect(everyTrackWithMood(bundle, MOOD.experimental)).toEqual([7, 23, 35]);
     expect(everyTrackWithMood(bundle, MOOD.deepDiscovery)).toEqual([0, 32, 33, 34, 35, 36, 37, 38, 39]);

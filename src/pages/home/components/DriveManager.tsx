@@ -79,14 +79,14 @@ const buildDriveTelnetActions = (
     case "PHYSICAL_DRIVE_B":
       return enabled
         ? []
-        : [{ actionId: "driveBTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-drive-b-turn-on" }];
+        : [{ actionId: "driveBTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-drive-b-turn-on" }];
     case "SOFT_IEC_DRIVE":
       return enabled
         ? [
             { actionId: "iecReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-softiec-reset" },
             { actionId: "iecSetDir", label: "Set Dir", loadingLabel: "Setting…", testId: "home-softiec-setdir" },
           ]
-        : [{ actionId: "iecTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-softiec-turn-on" }];
+        : [{ actionId: "iecTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-softiec-turn-on" }];
     default:
       return [];
   }

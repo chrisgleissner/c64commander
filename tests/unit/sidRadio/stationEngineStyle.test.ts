@@ -38,7 +38,7 @@ describe("stationEngine — Style & Taste (M3)", () => {
     expect(result.candidates[0].reason).toBe("style");
   });
 
-  it("'Fast-Paced from my Likes' composes: a style filter over a Likes seed (D10)", () => {
+  it("'Fast-paced from my Likes' composes: a style filter over a Likes seed (D10)", () => {
     const likes = [full(md5For(0)), full(md5For(2)), full(md5For(4))]; // even ordinals = FAST
     const result = computeStation({ bundle: b, seed: { kind: "taste" }, styleFilter: 0, likes, shuffleSeed: 3 });
     expect(result.candidates.length).toBeGreaterThan(0);

@@ -77,7 +77,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "HVSC downloads",
-    description: "Show the HVSC source in Add Items.",
+    description: "Show the HVSC source in Add items.",
   },
   {
     id: "commoserve_enabled",
@@ -86,7 +86,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "CommoServe",
-    description: "Show the CommoServe source in Add Items.",
+    description: "Show the CommoServe source in Add items.",
   },
   {
     id: "demo_mode_enabled",
@@ -103,7 +103,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     visible_to_user: false,
     developer_only: true,
     group: "experimental",
-    title: "Background Execution",
+    title: "Background execution",
     description: "Allow native background playback timing and auto-advance scheduling.",
   },
   {

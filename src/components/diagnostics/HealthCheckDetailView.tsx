@@ -11,6 +11,7 @@ import type {
   HealthCheckProbeType,
   HealthCheckProbeRecord,
 } from "@/lib/diagnostics/healthCheckEngine";
+import { probeDisplayName } from "@/lib/diagnostics/skippedProbeExplanation";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -166,7 +167,7 @@ export function HealthCheckDetailView({
                       skipped ? "items-center" : "items-start",
                     )}
                   >
-                    <span className="col-start-1 row-start-1 font-medium">{probeName}</span>
+                    <span className="col-start-1 row-start-1 font-medium">{probeDisplayName(probeName)}</span>
                     <div className={cn("col-start-2 row-start-1 min-w-0", skipped && "sm:col-end-4")}>
                       {statusContent}
                     </div>

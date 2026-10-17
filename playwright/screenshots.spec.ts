@@ -2669,11 +2669,11 @@ test.describe("App screenshots", () => {
         await page.keyboard.press("Escape");
       }
 
-      // --- Settings: launch safety + in-image search (Play and Disk card) ---
+      // --- Settings: launch safety + in-image search (Play and disk card) ---
       await page.goto("/settings");
       const bootMenuAnswer = getActiveMain(page).getByTestId("settings-boot-menu-answer");
       await expect(bootMenuAnswer).toBeVisible();
-      // The launch-safety controls live in their own bordered block inside the Play and Disk
+      // The launch-safety controls live in their own bordered block inside the Play and disk
       // chapter. Shooting that block rather than the whole chapter keeps the image about
       // launch safety, which is what the manual section around it is explaining.
       const playAndDiskCard = getActiveMain(page).getByTestId("settings-launch-safety");
@@ -2805,7 +2805,7 @@ test.describe("App screenshots", () => {
       // medium ones what a 393x727 screen fits.
       await applyDisplayProfileViewport(page, "compact");
       // One card is open at a time on this profile, and the step above opened Live View — which
-      // closed Quick Actions, where Remote Input lives.
+      // closed Quick actions, where Remote Input lives.
       await openAllCards(getActiveMain(page).getByTestId("home-quick-actions"));
       await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
       const sheet = page.getByTestId("remote-input-sheet");

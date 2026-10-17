@@ -227,7 +227,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
 
   /*
    * A bottom sheet stood on the bottom of the viewport while the keypad guidance bar covered its
-   * last 32 px. On a 427 px screen that hid the last line of the empty Liked Tunes text, which no
+   * last 32 px. On a 427 px screen that hid the last line of the empty Liked tunes text, which no
    * key could reveal because the sheet's only stop is Close, and half of the selected Recent row.
    */
   test("a bottom sheet keeps its text above the keypad guidance bar @layout", async ({ page }) => {
@@ -236,7 +236,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await page.keyboard.press("ArrowDown");
 
     const opener = page.locator('[data-slot-active="true"]').getByTestId("sid-radio-liked-tunes-open");
-    expect(await ringFocus(page, opener), "the ring could not reach Liked Tunes").toBe(true);
+    expect(await ringFocus(page, opener), "the ring could not reach Liked tunes").toBe(true);
     await page.keyboard.press("Enter");
     const sheet = page.getByTestId("liked-tunes-sheet");
     await expect(sheet).toBeVisible();
@@ -249,7 +249,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       .getByTestId("liked-tunes")
       .evaluate((element) => element.getBoundingClientRect().bottom);
     expect(sheetBottom, "the sheet runs under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
-    expect(textBottom, "the empty Liked Tunes text is under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
+    expect(textBottom, "the empty Liked tunes text is under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
   });
 
   /*

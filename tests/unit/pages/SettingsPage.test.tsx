@@ -1288,7 +1288,7 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-device-row-saved-wired")).toHaveTextContent("Same device as Desk wifi");
   });
 
-  it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
+  it("offers Friendly SID names in Play and disk, reflecting the stored preference and writing it back", () => {
     renderSettingsPage();
 
     const toggle = screen.getByTestId("settings-friendly-sid-names");

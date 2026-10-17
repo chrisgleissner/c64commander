@@ -50,7 +50,7 @@ const c64uRemoteDocsExternalResourceLinks: readonly ExternalResourceLink[] = [
 
 const defaultSettingsDocumentationLink: ExternalResourceLink = {
   id: "rest-api",
-  label: "Ultimate REST API Documentation",
+  label: "Ultimate REST API documentation",
   href: "https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html",
   testId: "settings-about-rest-api-docs",
 };

@@ -86,7 +86,7 @@ function MasterVolumeControl({
   return (
     <div className="rounded-panel border border-border bg-card p-3 space-y-2" data-testid="home-sid-master-volume">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">Master Vol</p>
+        <p className="text-xs font-semibold text-primary">Master Vol</p>
         <span className="text-xs text-muted-foreground" data-testid="home-sid-master-volume-value">
           {formatValue(slider.sliderValue)}
         </span>

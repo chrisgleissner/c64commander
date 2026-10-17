@@ -893,7 +893,7 @@ const CategorySection = memo(function CategorySection({
               <div className="flex items-center gap-3">
                 {isMutedBySolo && <span className="text-xs font-medium text-muted-foreground">Muted</span>}
                 <div className="flex items-center gap-2">
-                  <Label htmlFor={`solo-${item.name}`} className="text-xs uppercase tracking-wide">
+                  <Label htmlFor={`solo-${item.name}`} className="text-xs">
                     Solo
                   </Label>
                   <Switch
@@ -1058,7 +1058,7 @@ export default function ConfigBrowserPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search categories..."
+            placeholder="Search categories"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

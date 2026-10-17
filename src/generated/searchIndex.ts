@@ -190,7 +190,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
   {
     id: "action.key-explorer",
     titleKey: "search.action.keyExplorer",
-    titleDefault: "Key Explorer",
+    titleDefault: "Key explorer",
     subtitleKey: "search.action.keyExplorer.subtitle",
     subtitleDefault: "See what code a key on this device emits",
     keywords: ["keypad", "keyboard", "keycode", "binding", "remote key"],
@@ -288,7 +288,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
   {
     id: "home.section.quick-actions",
     titleKey: "search.home.quickActions",
-    titleDefault: "Quick Actions",
+    titleDefault: "Quick actions",
     subtitleKey: "search.home.quickActions.subtitle",
     subtitleDefault: "Reset, pause, menu, backup and restore, power",
     keywords: [
@@ -482,7 +482,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
   {
     id: "settings.section.play-and-disk",
     titleKey: "search.settings.playAndDisk",
-    titleDefault: "Play and Disk",
+    titleDefault: "Play and disk",
     subtitleKey: "search.settings.playAndDisk.subtitle",
     subtitleDefault: "Autostart, boot menu, stream ports and buffers",
     keywords: ["autostart", "boot", "launch", "stream port", "buffer", "latency", "subfolder"],

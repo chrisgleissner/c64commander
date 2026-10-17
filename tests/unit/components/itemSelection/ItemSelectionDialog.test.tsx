@@ -331,7 +331,7 @@ describe("ItemSelectionDialog display profiles", () => {
     // is left with the list instead of a pinned filter, scope buttons and footer and no room for results.
     expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).not.toBeNull();
 
-    const filterInput = screen.getByPlaceholderText("Filter files…");
+    const filterInput = screen.getByPlaceholderText("Filter files");
     fireEvent.change(filterInput, { target: { value: "Alpha" } });
     fireEvent.click(screen.getByLabelText("Select Alpha.sid"));
 
@@ -339,7 +339,7 @@ describe("ItemSelectionDialog display profiles", () => {
       fireEvent.click(screen.getByText("Expanded override"));
     });
 
-    expect(screen.getByPlaceholderText("Filter files…")).toHaveValue("Alpha");
+    expect(screen.getByPlaceholderText("Filter files")).toHaveValue("Alpha");
     expect(screen.getByLabelText("Select Alpha.sid")).toHaveAttribute("data-state", "checked");
     expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "sheet");
   });

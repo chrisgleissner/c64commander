@@ -83,7 +83,7 @@ export const subscribeQuickMenuOpen = (handler: (source: QuickMenuSource) => voi
 /**
  * The two machine controls a keypad user reaches for most, on their own keys.
  *
- * They were eight and ten presses away through Home's Quick Actions grid — three Down to the card,
+ * They were eight and ten presses away through Home's Quick actions grid — three Down to the card,
  * OK into it, then along the tiles, and Reset's confirmation on top. The grid is where they belong
  * on screen and it is not moving; these are a way to the same actions that does not walk there.
  */

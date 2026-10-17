@@ -187,7 +187,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     render(<HomeDiskManager />);
 
     const toggleBtn = screen.getByTestId("drive-power-toggle-a");
-    expect(toggleBtn).toHaveTextContent("Turn Off");
+    expect(toggleBtn).toHaveTextContent("Turn off");
 
     // Mock error
     mockApi.driveOff.mockRejectedValueOnce(new Error("Power error"));
@@ -202,7 +202,7 @@ describe("HomeDiskManager UI & Interactions", () => {
           title: "Drive power toggle failed",
         }),
       );
-      // Should revert to 'Turn Off' visually after error?
+      // Should revert to 'Turn off' visually after error?
       // The state optimistic update happens, then catch block reverts it.
       expect(toggleBtn).not.toBeDisabled();
     });
@@ -637,12 +637,12 @@ describe("HomeDiskManager UI & Interactions", () => {
     });
 
     render(<HomeDiskManager />);
-    expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn On");
+    expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn on");
     fireEvent.click(screen.getByRole("button", { name: "Mount" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Drive A/i }));
 
-    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn off"));
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
   });
@@ -661,14 +661,14 @@ describe("HomeDiskManager UI & Interactions", () => {
     const view = render(<HomeDiskManager />);
     fireEvent.click(screen.getByRole("button", { name: "Mount" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /Drive A/i }));
-    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off"));
+    await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn off"));
 
     routingEpochRef.current = 1;
     drivesResult = { data: undefined, dataUpdatedAt: 0 };
     view.rerender(<HomeDiskManager />);
 
     await waitFor(() => expect(screen.getByTestId("drive-power-toggle-a")).toBeDisabled());
-    expect(screen.getByTestId("drive-power-toggle-a")).not.toHaveTextContent("Turn Off");
+    expect(screen.getByTestId("drive-power-toggle-a")).not.toHaveTextContent("Turn off");
     routingEpochRef.current = 0;
     mockApi.driveOn.mockReset();
     (mountDiskToDrive as any).mockReset();
@@ -689,7 +689,7 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     await waitFor(() => {
       expect(mockApi.driveOff).toHaveBeenCalledWith("a");
-      expect(toggleBtn).toHaveTextContent("Turn On");
+      expect(toggleBtn).toHaveTextContent("Turn on");
     });
 
     drivesResult = {
@@ -699,7 +699,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     view.rerender(<HomeDiskManager />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn Off");
+      expect(screen.getByTestId("drive-power-toggle-a")).toHaveTextContent("Turn off");
     });
   });
 

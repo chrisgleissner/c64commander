@@ -24,12 +24,12 @@ export type LikedTunesSheetProps = {
   onPlay: (items: PlaylistItem[], startIndex: number) => void;
 };
 
-/** The Liked Tunes collection in a bottom sheet (spec §5.5). */
+/** The Liked tunes collection in a bottom sheet (spec §5.5). */
 export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetProps) => (
   <AppSheet open={open} onOpenChange={onOpenChange}>
     <AppSheetContent className="overflow-hidden p-0" data-testid="liked-tunes-sheet">
       <AppSheetHeader>
-        <AppSheetTitle>Liked Tunes</AppSheetTitle>
+        <AppSheetTitle>Liked tunes</AppSheetTitle>
         <AppSheetDescription>
           Everything you have ♥-liked. Plays as a normal list — Shuffle and Repeat apply.
         </AppSheetDescription>

@@ -1381,7 +1381,7 @@ export default function SettingsPage() {
                             /* text-[11px] is the smallest size the compact profile compensates
                                (to 0.9rem); anything smaller falls below the 14px legibility floor
                                on a 320px screen. */
-                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                               Dark only
                             </span>
                           ) : null}
@@ -2206,10 +2206,10 @@ export default function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* 4. Play and Disk */}
+            {/* 4. Play and disk */}
             <SettingsSection
               id="play-and-disk"
-              title="Play and Disk"
+              title="Play and disk"
               summary="Launching, Live View streaming, Remote Input"
               icon={Play}
             >

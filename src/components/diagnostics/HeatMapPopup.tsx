@@ -230,7 +230,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
         </div>
 
         <div className="mb-3 shrink-0 rounded-panel border border-border/70 bg-muted/20 px-3 py-2">
-          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <span>Low signal</span>
             <span>High signal</span>
           </div>

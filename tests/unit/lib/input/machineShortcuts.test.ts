@@ -4,7 +4,7 @@ import { requestMachineCommand, subscribeMachineCommand, type MachineCommand } f
 
 /*
  * What these keys are for. Measured on the handset before they existed: Pause was ten presses from
- * a cold arrival (Down x3, OK, Left x5, OK) and Reset eight, both through Home's Quick Actions
+ * a cold arrival (Down x3, OK, Left x5, OK) and Reset eight, both through Home's Quick actions
  * grid. The grid stays where it is; these are a second way in that costs one press, or two for the
  * reset that still asks first.
  */

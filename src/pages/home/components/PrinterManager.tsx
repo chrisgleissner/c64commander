@@ -43,7 +43,7 @@ const buildPrinterTelnetActions = (enabled: boolean) => {
         { actionId: "printerFlush", label: "Flush/Eject", loadingLabel: "Flushing…", testId: "home-printer-flush" },
         { actionId: "printerReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-printer-telnet-reset" },
       ]
-    : [{ actionId: "printerTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
+    : [{ actionId: "printerTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
 };
 
 interface PrinterManagerProps {
@@ -216,7 +216,7 @@ export function PrinterManager({
       <div className="space-y-2" data-testid="home-printer-group">
         <div className="bg-card border border-border rounded-panel p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
+            <p className="text-xs font-semibold text-primary">Printer</p>
             <Button
               ref={printerToggleFocusRef}
               variant="outline"

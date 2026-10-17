@@ -224,7 +224,7 @@ describe("PlaybackControlsCard", () => {
   // assertions with it: the metadata line now names one SID model per chip, which states the chip
   // count and says which chips they are, so a badge repeating the count would be the same fact twice
   // on the one line that was specified to carry the title and the ranking actions and nothing else.
-  // The badge is untouched on the playlist rows and in Liked Tunes, where there is no metadata line.
+  // The badge is untouched on the playlist rows and in Liked tunes, where there is no metadata line.
   it("gives the title a row to itself, with nothing beside it", () => {
     render(
       <PlaybackControlsCard

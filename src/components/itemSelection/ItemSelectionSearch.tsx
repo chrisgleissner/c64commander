@@ -61,7 +61,7 @@ export const ItemSelectionSearch = ({
           placeholder={
             browser.searchScope === "source"
               ? `Search all of ${selectedSourceLabel ?? "this source"}…`
-              : "Filter files…"
+              : "Filter files"
           }
           value={searchText}
           onChange={(event) => onSearchTextChange(event.target.value)}

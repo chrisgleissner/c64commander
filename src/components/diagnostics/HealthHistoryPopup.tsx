@@ -41,10 +41,10 @@ const ZOOM_LABELS: Record<number, string> = {
 const PROBE_PRESENTATION = [
   { key: "rest", label: "REST" },
   { key: "ftp", label: "FTP" },
-  { key: "telnet", label: "TELNET" },
-  { key: "config", label: "CONFIG" },
-  { key: "raster", label: "RASTER" },
-  { key: "jiffy", label: "JIFFY" },
+  { key: "telnet", label: "Telnet" },
+  { key: "config", label: "Config" },
+  { key: "raster", label: "Raster" },
+  { key: "jiffy", label: "Jiffy" },
 ] as const satisfies ReadonlyArray<{
   key: keyof HealthHistoryEntry["probes"];
   label: string;

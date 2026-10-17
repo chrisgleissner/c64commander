@@ -405,7 +405,7 @@ describe("DriveManager", () => {
       expect(screen.getByText("Reset: Reset is not available on Ultimate 64 Elite 3.14e.")).toBeInTheDocument();
     });
 
-    it("shows Soft IEC Turn On when the device is disabled", () => {
+    it("shows Soft IEC Turn on when the device is disabled", () => {
       resolveConfigValueSpy.mockImplementation(
         (_payload: unknown, category: string, itemName: string, fallback: string | number) => {
           if (category === "SoftIEC Drive Settings" && itemName === "IEC Drive") return "Disabled";

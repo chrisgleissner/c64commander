@@ -320,10 +320,10 @@ test.describe("Disk management", () => {
 
     const disksFilter = page.getByTestId("list-filter-input");
     await expect(disksFilter).toBeVisible();
-    await expect(disksFilter).toHaveAttribute("placeholder", "Filter disks...");
+    await expect(disksFilter).toHaveAttribute("placeholder", "Filter disks");
 
     const appBar = page.locator("header");
-    await expect(appBar.locator('input[placeholder="Filter disks..."]')).toHaveCount(0);
+    await expect(appBar.locator('input[placeholder="Filter disks"]')).toHaveCount(0);
 
     const listHeader = page.getByText("Disk list", { exact: true });
     const [headerBox, filterBox] = await Promise.all([listHeader.boundingBox(), disksFilter.boundingBox()]);
@@ -373,7 +373,7 @@ test.describe("Disk management", () => {
     const powerButton = page.getByTestId("drive-power-toggle-a");
 
     await expect(powerButton).toBeVisible();
-    await expect(powerButton).toHaveText("Turn Off");
+    await expect(powerButton).toHaveText("Turn off");
 
     /*
      * Check each control against its own container, not against the other control.
@@ -381,7 +381,7 @@ test.describe("Disk management", () => {
      * The claim worth holding is that both controls sit at the right-hand end of their row: the
      * mount toggle at the end of the card header's action row, the power toggle at the end of the
      * drive's control row. Comparing the two to each other measured something else. Their left
-     * edges are 31 px apart simply because the mount toggle is a 63 px icon button and "Turn Off"
+     * edges are 31 px apart simply because the mount toggle is a 63 px icon button and "Turn off"
      * is 90 px wide, and their right edges sit in containers with different padding, which differed
      * by 4.5 px locally and by 53.6 px on CI. Neither number says anything about whether the
      * controls are where they should be.
@@ -407,7 +407,7 @@ test.describe("Disk management", () => {
 
     await clearTraces(page);
     await powerButton.click();
-    await expect(powerButton).toHaveText("Turn On");
+    await expect(powerButton).toHaveText("Turn on");
     await expect(page.getByTestId("drive-status-toggle-a")).toHaveText("OFF");
     await snap(page, testInfo, "drive-power-off");
 

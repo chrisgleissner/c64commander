@@ -259,7 +259,7 @@ export function KeypadQuickMenu() {
                 </Button>
               ))
             : null}
-          {/* The machine controls carry their own keys too. They live in Home's Quick Actions grid,
+          {/* The machine controls carry their own keys too. They live in Home's Quick actions grid,
               which is where they read best, but that is ten presses from a cold arrival; naming the
               key here is how a keypad user finds the short way without reading the manual. */}
           {fromKeypad ? (

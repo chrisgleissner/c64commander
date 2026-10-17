@@ -704,7 +704,7 @@ const FilterEditorSurface = ({
           <div className="space-y-3">
             {showDeviceFilter ? (
               <section className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
+                <p className="text-xs font-semibold text-muted-foreground">Device</p>
                 <div className="flex flex-wrap gap-1.5">
                   <FilterToggleChip
                     label="All devices"
@@ -730,7 +730,7 @@ const FilterEditorSurface = ({
             ) : null}
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <p className="text-xs font-semibold text-muted-foreground">Activity types</p>
               <div className="flex flex-wrap gap-1.5">
                 {EVIDENCE_ORDER.map((type) => (
                   <FilterToggleChip
@@ -744,12 +744,12 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <p className="text-xs font-semibold text-muted-foreground">Contributor</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
                   <FilterToggleChip
                     key={option}
-                    label={option}
+                    label={option === "TELNET" ? "Telnet" : option}
                     checked={contributor === option}
                     onChange={(checked) => {
                       if (!checked) return;
@@ -761,7 +761,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <p className="text-xs font-semibold text-muted-foreground">Severity</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
                   <FilterToggleChip
@@ -778,7 +778,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5 border-t border-border/70 pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <p className="text-xs font-semibold text-muted-foreground">Quick filters</p>
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   type="button"
@@ -1515,7 +1515,7 @@ export function DiagnosticsDialog({
 
   const overflowPanelContent = (
     <>
-      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
+      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-muted-foreground">Views</p>
       <button
         type="button"
         className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
@@ -1581,7 +1581,7 @@ export function DiagnosticsDialog({
         }}
         data-testid="open-key-explorer-screen"
       >
-        Key Explorer
+        Key explorer
       </button>
       <button
         type="button"

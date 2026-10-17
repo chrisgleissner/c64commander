@@ -298,7 +298,7 @@ export function SnapshotManagerDialog({
             }
           >
             <Input
-              placeholder="Filter snapshots…"
+              placeholder="Filter snapshots"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               data-testid="snapshot-filter-input"

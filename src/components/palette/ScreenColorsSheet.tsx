@@ -198,7 +198,7 @@ export function ScreenColorsSheet({ open, onOpenChange }: { open: boolean; onOpe
           </button>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Palettes</p>
+            <p className="text-xs font-semibold text-muted-foreground">Palettes</p>
             {builtInPalettes.map((palette) => (
               <PaletteRow
                 key={palette.id}
@@ -214,7 +214,7 @@ export function ScreenColorsSheet({ open, onOpenChange }: { open: boolean; onOpe
 
           {devicePalettesLoading || devicePalettes.length > 0 ? (
             <div className="space-y-2" data-testid="screen-colors-device-palettes">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs font-semibold text-muted-foreground">
                 Already on this C64
               </p>
               {devicePalettesLoading ? (

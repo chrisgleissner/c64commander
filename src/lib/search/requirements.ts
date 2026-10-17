@@ -71,7 +71,7 @@ const CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {
  *
  * `CAPABILITY_REASONS` reads correctly in a full-width search row and is what that row keeps. In a
  * tile the shortest of them wrapped to six lines of one word each, and because a grid row is as
- * tall as its tallest tile, the whole top row of Quick Actions grew from 91 px to 204 px on an
+ * tall as its tallest tile, the whole top row of Quick actions grew from 91 px to 204 px on an
  * Ultimate II+L — the only device on which any of these is ever unmet.
  */
 const SHORT_CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {

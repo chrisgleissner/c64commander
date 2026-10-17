@@ -248,7 +248,7 @@ export const HvscSearchSheet = ({
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <Input
               autoFocus
-              placeholder="Title or composer…"
+              placeholder="Title or composer"
               value={search.query}
               onChange={(event) => search.setQuery(event.target.value, msUntilT9LetterSettles(event.target))}
               data-testid="hvsc-search-input"

@@ -363,7 +363,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     }
   });
 
-  /* Session A1 — the machine controls on Home, which all live in the Quick Actions card. */
+  /* Session A1 — the machine controls on Home, which all live in the Quick actions card. */
   test("Home machine dialogs fit the panel", async ({ page }) => {
     await seedSnapshots(page);
     await openCompact(page, "/");
@@ -633,7 +633,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
 
     await main.getByTestId("sid-radio-liked-tunes-open").click();
     const liked = page.getByTestId("liked-tunes-sheet");
-    await audit.check(page, "Play / Liked Tunes", liked, "list");
+    await audit.check(page, "Play / Liked tunes", liked, "list");
     await dismiss(page, liked);
 
     await main.getByTestId("sid-radio-launcher").click();

@@ -321,7 +321,7 @@ test.describe("Settings connection management", () => {
       "Appearance",
       "Connection",
       "Diagnostics",
-      "Play and Disk",
+      "Play and disk",
       "Stable Features",
       "Experimental Features",
       "SID Radio",

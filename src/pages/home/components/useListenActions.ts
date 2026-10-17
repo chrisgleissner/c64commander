@@ -192,7 +192,7 @@ export const useListenActions = (): ListenAction[] => {
    * This app is a remote control first and a standalone player second — it is what it is named
    * for — so a banner headed "Needs no C64 attached" over-weighted the second and, with Live View
    * among the four, was not even true: Live View requires a connected machine and streaming
-   * support. They are now four tiles in Quick Actions, keeping the ids the tour spotlights and the
+   * support. They are now four tiles in Quick actions, keeping the ids the tour spotlights and the
    * screenshot corpus names.
    */
   return useMemo(
@@ -223,7 +223,7 @@ export const useListenActions = (): ListenAction[] => {
                 : // The tile is about 68 CSS px wide and its grid row is as tall as its tallest
                   // tile, so the short form is taken wherever there is one. "This model cannot
                   // stream picture or sound" under the greyed Live tile wrapped to six lines and
-                  // took the whole top row of Quick Actions from 91 px to 204 px on a cartridge.
+                  // took the whole top row of Quick actions from 91 px to 204 px on a cartridge.
                   disabledTileReason(entry.shortDisabledReason ?? entry.disabledReason ?? null),
             disabled: !enabled,
             onSelect: () => void activate(entry),

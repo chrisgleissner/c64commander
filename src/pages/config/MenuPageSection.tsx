@@ -144,7 +144,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       ))}
       {advancedCategories.length > 0 ? (
         <div data-testid={`config-page-advanced-${slug}`}>
-          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold text-muted-foreground/70">
             Advanced
           </h4>
           {advancedCategories.map((category) => (
