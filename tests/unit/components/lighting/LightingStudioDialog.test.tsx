@@ -185,7 +185,7 @@ describe("LightingStudioDialog", () => {
     renderDialog();
 
     const footer = screen.getByTestId("lighting-apply-draft").parentElement!;
-    expect(footer).toHaveClass("flex-nowrap");
+    expect(footer).toHaveClass("flex", "flex-nowrap");
     expect(footer.querySelectorAll("button")).toHaveLength(3);
   });
 

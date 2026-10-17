@@ -966,7 +966,9 @@ export function LightingStudioDialog() {
   const activeProfileChip = resolved.activeProfile ? (
     <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">
       {resolved.activeProfile.name}
-      {isActiveProfileModified ? <span className="font-normal text-muted-foreground"> (edited)</span> : null}
+      {isActiveProfileModified ? (
+        <span className="whitespace-pre font-normal text-muted-foreground"> (edited)</span>
+      ) : null}
     </Badge>
   ) : (
     <Badge variant="outline" className="text-xs" data-testid="lighting-active-profile-chip">
@@ -1566,7 +1568,7 @@ export function LightingStudioDialog() {
 
           <AppSheetFooter
             className={cn(
-              "shrink-0 flex-row flex-nowrap gap-1.5 border-t border-border/60",
+              "flex shrink-0 flex-row flex-nowrap gap-1.5 border-t border-border/60",
               compact ? "p-3" : "p-5 pt-4",
             )}
           >
