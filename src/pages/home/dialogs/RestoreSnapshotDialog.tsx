@@ -51,7 +51,7 @@ export function RestoreSnapshotDialog({
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent data-testid="restore-snapshot-dialog">
-        <AppDialogHeader>
+        <AppDialogHeader hideClose>
           <AppDialogTitle>{isReuSnapshot ? "Restore REU snapshot" : "Restore snapshot"}</AppDialogTitle>
           <AppDialogDescription>
             {isReuSnapshot

@@ -183,7 +183,7 @@ export function NewDiskDialog({
       }}
     >
       <DialogContent surface="confirmation">
-        <DialogHeader>
+        <DialogHeader hideClose>
           <DialogTitle className="flex items-center gap-2">
             <HardDriveDownload className="h-5 w-5" aria-hidden />
             New disk

@@ -847,6 +847,8 @@ its controls are discovered the same way (Up/Down within, OK activates, Back/Esc
 closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open source licenses page.
+Confirmation and small form dialogs that have their own Cancel button (secondary action on the left,
+primary action on the right) show no header close control; Back and Esc still close them.
 
 **Diagnostics dialog — connection card** (opened from the connectivity badge on any page):
 Run health check — button — `run-health-check` — R✅ I✅ ; Use the simulated device — button —

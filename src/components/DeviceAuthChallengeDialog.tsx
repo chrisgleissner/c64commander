@@ -65,7 +65,7 @@ export function DeviceAuthChallengeDialog() {
       }}
     >
       <DialogContent closeTestId="device-auth-challenge-close" surface="confirmation">
-        <DialogHeader>
+        <DialogHeader hideClose>
           <DialogTitle>Network password required</DialogTitle>
           <DialogDescription>
             {challenge.deviceLabel} refused the request because it needs its network password. The saved password is

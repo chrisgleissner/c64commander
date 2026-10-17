@@ -2034,7 +2034,7 @@ export default function SettingsPage() {
                   }}
                 >
                   <AlertDialogContent>
-                    <AlertDialogHeader>
+                    <AlertDialogHeader hideClose>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
                       <AlertDialogDescription className={deleteReferenceCount > 0 ? undefined : "not-sr-only"}>
@@ -3472,7 +3472,7 @@ export default function SettingsPage() {
       <ScreenActivityWatch onChange={rereadFullScreenSettingsOnReturn} />
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Enable relaxed safety mode?</DialogTitle>
             <DialogDescription>
               Relaxed mode increases FTP concurrency and reduces protection. This can overload or destabilize real

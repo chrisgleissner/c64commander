@@ -1669,7 +1669,7 @@ export function DiagnosticsDialog({
             </button>
           </AlertDialogTrigger>
           <AlertDialogContent surface="confirmation">
-            <AlertDialogHeader>
+            <AlertDialogHeader hideClose>
               <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
               <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
             </AlertDialogHeader>

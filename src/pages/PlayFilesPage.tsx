@@ -3046,7 +3046,7 @@ export default function PlayFilesPage() {
             }}
           >
             <AlertDialogContent>
-              <AlertDialogHeader>
+              <AlertDialogHeader hideClose>
                 <AlertDialogTitle>Clear custom edits?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Changing the config file will clear this item&apos;s custom value edits. Continue only if you want to
@@ -3082,7 +3082,7 @@ export default function PlayFilesPage() {
             }}
           >
             <AlertDialogContent>
-              <AlertDialogHeader>
+              <AlertDialogHeader hideClose>
                 <AlertDialogTitle>Config unavailable</AlertDialogTitle>
                 <AlertDialogDescription>
                   {unavailableConfigPrompt
