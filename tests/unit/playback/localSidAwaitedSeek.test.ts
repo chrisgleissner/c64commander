@@ -530,6 +530,28 @@ describe("a seek waiting for the pre-render to reach it", () => {
 
       expect(engine.isSeeking()).toBe(false);
     });
+
+    it("stays true past twenty seconds when the seek is deep enough that the worker needs longer", async () => {
+      vi.useFakeTimers();
+      try {
+        const engine = makeEngine();
+        const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+        worker.emit({ type: "ready", moduleLoadMs: 1 });
+        await Promise.resolve();
+        worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+        await play;
+
+        void engine.seekTo(1163);
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(21_000);
+        expect(engine.isSeeking()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(1163 * 600 + 1_000);
+        expect(engine.isSeeking()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

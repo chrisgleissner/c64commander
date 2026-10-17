@@ -189,6 +189,9 @@ const STARVED_BUFFER_SECONDS = 0.05;
  */
 const SEEK_ACK_TIMEOUT_MS = 20_000;
 
+/** Upper bound on the wait for a seek reply, however deep the target. */
+const SEEK_ACK_TIMEOUT_MAX_MS = 15 * 60_000;
+
 /** A worker seek's cost per second of tune replayed, until measured: 115 s took 42 s on a busy Pixel 4. */
 const SEEK_COST_FLOOR_MS_PER_SECOND = 400;
 const HANDOFF_MARGIN_SECONDS = 5;
@@ -1436,6 +1439,17 @@ export class LocalSidEngine {
   }
 
   /**
+   * How long a worker seek to `targetSeconds` may take before its reply is given up on. The worker
+   * replays the tune from its start, so the work grows with the target: 20 s is generous for a seek
+   * into the opening and far too short for 19:23 of a 20-minute tune, where giving up reopened the
+   * gate on a renderer that had not arrived and the tune was then ended with nothing played.
+   */
+  private seekAckTimeoutMs(targetSeconds: number): number {
+    const costMsPerSecond = Math.max(this.renderRateP99(), SEEK_COST_FLOOR_MS_PER_SECOND);
+    return Math.min(SEEK_ACK_TIMEOUT_MAX_MS, Math.max(SEEK_ACK_TIMEOUT_MS, targetSeconds * costMsPerSecond * 1.5));
+  }
+
+  /**
    * Seek by asking the worker's live renderer to go there, which re-renders the tune from its start
    * with the audio gated. Used when no render of the tune covers the target and none is on its way
    * there.
@@ -1461,7 +1475,7 @@ export class LocalSidEngine {
         });
         resolve();
         this.pump();
-      }, SEEK_ACK_TIMEOUT_MS);
+      }, this.seekAckTimeoutMs(target));
       this.seekPending = {
         id,
         resolve: () => {
@@ -1957,7 +1971,7 @@ export class LocalSidEngine {
         seconds,
       });
       this.pump();
-    }, SEEK_ACK_TIMEOUT_MS);
+    }, this.seekAckTimeoutMs(seconds));
     this.seekPending = {
       id,
       resolve: () => {
