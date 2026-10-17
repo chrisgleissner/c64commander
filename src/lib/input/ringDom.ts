@@ -8,6 +8,7 @@
 
 /** DOM moves the keypad ring makes: focusing its item, and walking focus inside an overlay. */
 
+import { keepPlatformInputMethodAway } from "@/lib/input/hardwareKeypadInputMethod";
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
@@ -88,6 +89,7 @@ export const stepFocusWithinOverlay = (overlay: Element, fromElement: Element, f
     const leavesBody = leavesScrollContainer(from, next);
     if ((wraps || leavesBody) && scrollOverlayTowardUnreachableContent(overlay, from, forward ? 1 : -1)) return true;
   }
+  keepPlatformInputMethodAway(next);
   next.focus();
   next.scrollIntoView({ block: "nearest" });
   return true;

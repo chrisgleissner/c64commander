@@ -7,6 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import { noteHardwareKeypadKey, resetHardwareKeypadUseForTests } from "@/lib/input/hardwareKeypadInputMethod";
 import { FIELD_FRAME_ATTR, fieldOfFrame, frameOfField, stepFocusWithinOverlay } from "@/lib/input/ringDom";
 
 const framedField = (name: string) => {
@@ -75,5 +76,30 @@ describe("field frames in an overlay", () => {
     expect(fieldOfFrame(http.frame)).toBe(http.input);
     expect(frameOfField(http.input)).toBe(http.frame);
     expect(frameOfField(http.frame)).toBeNull();
+  });
+});
+
+describe("a bare text field in an overlay on a hardware keypad", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    resetHardwareKeypadUseForTests();
+  });
+
+  it("asks for no input method before it takes focus, so the platform keyboard does not open on arrival", () => {
+    noteHardwareKeypadKey(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    const before = document.createElement("button");
+    const label = document.createElement("input");
+    label.type = "text";
+    const dialog = dialogWith(before, label);
+    let inputModeAtFocus: string | null = null;
+    label.addEventListener("focus", () => {
+      inputModeAtFocus = label.getAttribute("inputmode");
+    });
+    before.focus();
+
+    stepFocusWithinOverlay(dialog, before, true);
+
+    expect(document.activeElement).toBe(label);
+    expect(inputModeAtFocus).toBe("none");
   });
 });
