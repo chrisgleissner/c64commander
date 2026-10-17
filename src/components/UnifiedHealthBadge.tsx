@@ -482,7 +482,7 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const glyph = HEALTH_GLYPHS[state];
   const mirror = useAvMirror();
-  const LiveMarkIcon = mirror.videoLive ? Tv : Volume2;
+  const LiveMarkIcon = mirror.videoLive || mirror.videoReconnecting ? Tv : Volume2;
   const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product, connectedDeviceLabel);
   const guidanceLabel = getBadgeGuidanceLabel(
     state,
@@ -657,13 +657,13 @@ export function UnifiedHealthBadge({ className }: Props) {
 
   const statusTail = (
     <>
-      {mirror.anyLive ? (
+      {mirror.anyLive || mirror.videoReconnecting ? (
         <>
           <LiveMarkIcon
-            className="h-3.5 w-3.5 shrink-0 text-success"
+            className={cn("h-3.5 w-3.5 shrink-0", mirror.videoReconnecting ? "text-warning" : "text-success")}
             aria-hidden
             data-testid="unified-health-badge-live"
-            data-live-stream={mirror.videoLive ? "video" : "audio"}
+            data-live-stream={mirror.videoReconnecting ? "video-reconnecting" : mirror.videoLive ? "video" : "audio"}
           />
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
@@ -718,7 +718,13 @@ export function UnifiedHealthBadge({ className }: Props) {
         ref={badgeRef}
         type="button"
         role="button"
-        aria-label={mirror.anyLive ? `${ariaLabel}, Live View on` : ariaLabel}
+        aria-label={
+          mirror.videoReconnecting
+            ? `${ariaLabel}, video lost, reconnecting`
+            : mirror.anyLive
+              ? `${ariaLabel}, Live View on`
+              : ariaLabel
+        }
         data-guidance-label={guidanceLabel}
         data-testid="unified-health-badge"
         data-diagnostics-open-trigger="true"

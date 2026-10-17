@@ -316,6 +316,18 @@ describe("UnifiedHealthBadge", () => {
       expect(badge.getAttribute("aria-label")).toMatch(/, Live View on$/);
     });
 
+    it("keeps the picture mark, in the warning color, while a lost video stream is being restarted", () => {
+      mirrorState.current = { anyLive: false, videoLive: false, videoReconnecting: true };
+      render(<UnifiedHealthBadge />);
+
+      const mark = screen.getByTestId("unified-health-badge-live");
+      expect(mark).toHaveAttribute("data-live-stream", "video-reconnecting");
+      expect(mark).toHaveClass("text-warning");
+      expect(screen.getByTestId("unified-health-badge").getAttribute("aria-label")).toMatch(
+        /, video lost, reconnecting$/,
+      );
+    });
+
     it("carries a sound mark while only the sound streams", () => {
       mirrorState.current = { anyLive: true, videoLive: false };
       render(<UnifiedHealthBadge />);

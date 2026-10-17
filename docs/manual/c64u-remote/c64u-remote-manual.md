@@ -679,6 +679,8 @@ While either is playing, the header badge carries a small mark, a screen for the
 
 If the stream stops reaching your phone, because the network drops out or the machine is switched off, Live View tells you so. You never sit in front of a frozen picture wondering.
 
+If only the picture stops while your C64 still answers, the header badge keeps its screen mark in a warning color and the card says **Video lost, reconnecting…**. The app then starts the picture again, up to twice, a few seconds apart. If it stops again and again, press **Watch** to try once more.
+
 Live View needs no setting up. Nothing crosses the network until you press **Watch** or **Listen**.
 
 The device sends to two network ports, 11000 for the picture and 11001 for the sound. If those are already taken on your network, change them in **Settings → Play and disk**.

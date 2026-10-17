@@ -47,6 +47,7 @@ import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTr
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import { onInputActivity } from "./inputActivitySignal";
 import { claimPhoneAudio, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { VideoLossRestarter } from "./videoLossRecovery";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
@@ -69,6 +70,8 @@ export interface AvMirrorSnapshot {
     error: string | null;
     /** The stream is arriving from an address the native sender filter refuses. */
     senderMismatch: SenderMismatch | null;
+    /** The stream was lost and is being restarted. */
+    reconnecting?: boolean;
   };
 }
 
@@ -135,6 +138,8 @@ const INITIAL: AvMirrorSnapshot = {
     senderMismatch: null,
   },
 };
+
+const VIDEO_RESTART_PROBE_TIMEOUT_MS = 3000;
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
 
@@ -282,6 +287,32 @@ export class AvMirrorSession {
   private opChain: Promise<unknown> = Promise.resolve();
   /** The host a queued `stopAll` was requested for; set only while that stop runs. */
   private stopAllHost: string | null = null;
+  /** Watch was started and not stopped since, so a lost video stream is worth restarting. */
+  private videoWanted = false;
+  private readonly videoLossRestarter = new VideoLossRestarter({
+    isWanted: () => this.videoWanted,
+    isLost: () => this.snapshot.video.state === "error",
+    deviceAnswers: async () => {
+      try {
+        await getC64API().getInfo({ timeoutMs: VIDEO_RESTART_PROBE_TIMEOUT_MS });
+        return true;
+      } catch (error) {
+        addLog("debug", "Live View: the device did not answer the check before a video restart", {
+          service: "streams",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    },
+    restart: () =>
+      this.serialize(async () => {
+        if (!this.videoWanted || this.snapshot.video.state !== "error") return;
+        this.beginSessionIfIdle();
+        await this.video.start();
+      }),
+    giveUp: () => this.video.abandonReconnect(),
+    isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
+  });
 
   constructor(deps: AvMirrorSessionDeps = {}) {
     // Record which machine is streaming to this phone across the two default transports, so a
@@ -362,8 +393,10 @@ export class AvMirrorSession {
             standard: s.standard,
             error: s.error,
             senderMismatch: s.senderMismatch,
+            reconnecting: s.reconnecting,
           },
         }),
+      onStreamLost: (info) => this.videoLossRestarter.onLost(info.liveForMs),
       expectedSenderHost: () => this.expectedSender(),
       createReceiver:
         deps.createVideoReceiver ??
@@ -792,6 +825,8 @@ export class AvMirrorSession {
   }
 
   startVideo(): Promise<void> {
+    this.videoWanted = true;
+    this.videoLossRestarter.cancel();
     return this.serialize(async () => {
       this.beginSessionIfIdle();
       await this.video.start();
@@ -799,6 +834,8 @@ export class AvMirrorSession {
   }
 
   stopVideo(): Promise<void> {
+    this.videoWanted = false;
+    this.videoLossRestarter.cancel();
     return this.serialize(() => this.stopVideoNow());
   }
 
@@ -830,6 +867,8 @@ export class AvMirrorSession {
   }
 
   async stopAll(): Promise<void> {
+    this.videoWanted = false;
+    this.videoLossRestarter.cancel();
     // Both stops go out together in one serialized step. A device switch waits only a bounded time
     // for this; a video stop queued behind a slow audio stop would reach the next device instead.
     // allSettled so one failing stop cannot orphan the other; each rejection is logged below.
