@@ -38,6 +38,7 @@ export type FocusKind =
   | "expand"
   | "collapse"
   | "link"
+  | "menu"
   | "field"
   | "select"
   | "switch"
@@ -86,7 +87,7 @@ export interface GuidanceLabels {
   readonly breadcrumb: readonly string[];
   /** Left soft key — Back / Exit / Close / Done depending on the back chain. */
   readonly left: string;
-  /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Activate, or null. */
+  /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Press, or null. */
   readonly center: string | null;
   /** Right soft key — "Delete" in a T9 field with text, "Menu" when a context menu exists, else hidden (null). */
   readonly right: string | null;
@@ -97,18 +98,35 @@ export interface GuidanceLabels {
 /** OK-key label per control kind (CONFIRMED DECISION 3). */
 const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   group: "Open",
-  button: "Activate",
+  button: "Press",
   expand: "Expand",
   collapse: "Collapse",
   link: "Open",
+  menu: "Open menu",
   field: "Edit",
   select: "Select",
   switch: "Toggle",
   slider: "Adjust",
-  tab: "Switch",
+  tab: "Open",
   status: "",
   none: "",
 };
+
+/** Every word the OK key can read on a control, in the order the guides list them. */
+export const OK_KEY_WORDS: readonly string[] = [
+  "Open",
+  "Press",
+  "Edit",
+  "Select",
+  "Toggle",
+  "Adjust",
+  "Expand",
+  "Collapse",
+  "Open menu",
+];
+
+/** What OK reads on a control of no kind the table above names, so the key never shows without a word. */
+const GENERIC_CENTER_LABEL = "Press";
 
 /** Set on a control whose OK-key label is a verb of its own, such as a seek bar that Left/Right moves. */
 export const CENTER_VERB_ATTR = "data-key-nav-verb";
@@ -191,7 +209,7 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   if (state.layerOpen) center = "Select";
   else if (state.fieldEngaged) center = "Done";
   else if (!state.hasCurrent || state.currentKind === "status") center = null;
-  else center = state.centerVerb || CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
+  else center = state.centerVerb || CENTER_LABEL_BY_KIND[state.currentKind] || GENERIC_CENTER_LABEL;
 
   let right: string | null = null;
   if (state.fieldDeletes) right = words.deleteWord;
@@ -225,6 +243,10 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   )
     return "switch";
   if (role === "combobox" || element.getAttribute("aria-haspopup") === "listbox") return "select";
+  const popup = element.getAttribute("aria-haspopup");
+  if (popup === "menu" || popup === "true") return "menu";
+  if (popup === "dialog") return "link";
+  if (element.getAttribute("aria-pressed") !== null) return "switch";
   if (tag === "SELECT") return "select";
   if (tag === "INPUT") {
     const type = (element as HTMLInputElement).type;

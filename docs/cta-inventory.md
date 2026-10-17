@@ -439,7 +439,7 @@ not-connected / empty / single-device).
   **Details** and **Config** blocks (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then
   Attached, Status, Origin, Candidates, Overrides, and Location when a config is attached). Each detail row
   (`action-list-item-sheet-detail-row`) is one keypad stop, so a block taller than the sheet is read row by row.
-  The sheet opens on its first action. Back closes the sheet and returns focus and the selection to ⋮. In the menu
+  The sheet opens on the play button, or on its first action when play is unavailable. Back closes the sheet and returns focus and the selection to ⋮. In the menu
   the actions come first and the detail rows follow as menu items the arrow keys stop on; OK on one does nothing and
   leaves the menu open.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
@@ -969,7 +969,7 @@ reports it as Back.
 Touch and the on-screen keyboard/quick-keys buttons remain ordinary tap targets
 throughout.
 
-- Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the right
+- Keypad menu — dialog — `remote-input-controls-menu` — R✅ I✅ _(opened by the menu key, the right
   soft key, or by Back while typing; opens with its first item selected; Up/Down
   move, OK activates, Back or the right soft key closes it; the guidance bar shows
   **Back Close** and **OK Select** while it is open)_ — buttons
@@ -978,7 +978,7 @@ throughout.
   in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
   where the options fold behind the Options button; opens them and moves the keypad
   to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
-  available), `remote-input-menu-controls` (Other controls: moves the keypad to the
+  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-controls` (Other controls: moves the keypad to the
   sheet's first control after Close), `remote-input-menu-release-all` (not in Game
   Mode, where the sheet shows no Release all), `remote-input-menu-close`
 

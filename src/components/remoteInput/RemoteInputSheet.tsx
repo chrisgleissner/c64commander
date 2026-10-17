@@ -417,6 +417,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     gameModeAvailable,
     immersive,
     optionsFolded: foldJoystickOptions,
+    viewAdjustable: showMirrorScreen,
+    onAdjustView: () => mirrorRef.current?.toggleMode(),
     onOutputModeChange: (mode) => {
       keypadTyping.reset();
       handleOutputModeChange(mode);

@@ -595,4 +595,23 @@ describe("useStationPlaylistHandover", () => {
 
     expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
   });
+  it("treats playing a row of the station queue as no edit, so Stop plays that tune out and then restores the playlist", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    act(() => {
+      harness.result.current.setPlaylist((prev) => mergeStartedPlaylist(prev, [...prev]));
+      harness.result.current.setCurrentIndex(2);
+    });
+
+    act(() => harness.result.current.handover.requestStop());
+    expect(harness.result.current.handover.editedPrompt.open).toBe(false);
+    expect(stationStop).toHaveBeenCalledTimes(1);
+
+    harness.rerender({ stationActive: false, isPlaying: true });
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:3"]);
+    expect(repo.playlists.get(savedPlaylistRepositoryId(SHARED_PLAYLIST_STORAGE_KEY))?.length).toBe(3);
+
+    harness.rerender({ stationActive: false, isPlaying: true, playlistEnded: true });
+    expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
 });

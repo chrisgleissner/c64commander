@@ -580,7 +580,7 @@ Open and close the card from its header. While it is closed, or you are on anoth
 
 Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:
 
-- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game Themes. Each draws on tens of thousands of tunes.
+- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game themes. Each draws on tens of thousands of tunes.
 - **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.
 - **From tunes you like.** Once five tunes carry a heart, this builds a station from them.
 - **Surprise me.** Anything at all.
@@ -807,7 +807,7 @@ Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap a
 
 **Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.
 
-With a keyboard or D-pad, **F2** (the Menu soft key) opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. While the joystick is in use, the arrow keys steer and OK fires, so this menu is the way to the other controls. **Back** then gives the keys back to your C64. In **Keys**, the arrow keys move between the keys on the screen and OK presses the selected one.
+With a keyboard or D-pad, **F2** (the Menu soft key) opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, **Adjust view** when the picture is on, move to the other controls, **Release all**, or close Remote Input. While the joystick is in use, the arrow keys steer and OK fires, so this menu is the way to the other controls. **Back** then gives the keys back to your C64. In **Keys**, the arrow keys move between the keys on the screen and OK presses the selected one.
 
 ![Remote Input keyboard mode](../../img/app/home/remote-input/04-keyboard-medium.png)
 
@@ -839,7 +839,7 @@ Nothing else moves it, and opening Game Mode with the `0` key does not count as 
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/medium/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` shows or hides RETURN, SPACE, the other quick keys and the **Watch** and **Listen** switches over the bottom of the picture. `*`, or the menu key, switches between driving the C64 and adjusting the view. **Back** leaves.
+With the controls out of the way, three keys still reach everything. `#` shows or hides RETURN, SPACE, the other quick keys and the **Watch** and **Listen** switches over the bottom of the picture. `*` switches between driving the C64 and adjusting the view, which the menu also offers as **Adjust view**. **Back** leaves.
 
 The floating **Show controls** button, marked with two small sliders at the top of the picture, brings the toolbar back.
 
@@ -1168,7 +1168,7 @@ The best place to look is listed first, in bold.
 
 On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
-While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
+While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 
 #### Directional Pad
 

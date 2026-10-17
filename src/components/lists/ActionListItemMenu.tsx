@@ -110,6 +110,7 @@ const ItemDetailsSheet = ({
     ...grouped.filter((block) => block.kind === "details"),
   ];
   const unavailable = Boolean(item.isDimmed || item.disableActions);
+  const opensOnPrimary = Boolean(item.onAction) && !unavailable;
   const run = (action: () => void) => {
     action();
     onOpenChange(false);
@@ -137,6 +138,7 @@ const ItemDetailsSheet = ({
                 onClick={() => run(() => item.onAction?.())}
                 aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
                 data-testid="action-list-item-sheet-primary"
+                {...(opensOnPrimary ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
               >
                 {item.actionIcon ?? <Play aria-hidden="true" />}
                 {item.actionLabel}
@@ -158,7 +160,10 @@ const ItemDetailsSheet = ({
                       <div
                         key={`${row.label}-${rowIndex}`}
                         tabIndex={0}
-                        {...(index === 0 && rowIndex === 0 && !blocks.some((entry) => entry.kind === "actions")
+                        {...(index === 0 &&
+                        rowIndex === 0 &&
+                        !opensOnPrimary &&
+                        !blocks.some((entry) => entry.kind === "actions")
                           ? { [OPEN_FOCUS_ATTR]: "true" }
                           : {})}
                         className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] content-center gap-x-3 rounded-sm py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -177,7 +182,7 @@ const ItemDetailsSheet = ({
                   {block.entries.map((entry, entryIndex) => (
                     <Button
                       key={entry.label}
-                      {...(index === 0 && entryIndex === 0 ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
+                      {...(index === 0 && entryIndex === 0 && !opensOnPrimary ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
                       variant="outline"
                       className={cn(
                         "w-full justify-start whitespace-normal text-left",

@@ -84,9 +84,9 @@ describe("KeypadGuidanceBar", () => {
     expect(breadcrumb()).toHaveTextContent("Settings");
     // A plain button → OK activates it; at the page root the left soft key is Back;
     // no context menu → the Menu slot is hidden.
-    expect(actionText("keypad-guidance-center")).toBe("Activate");
+    expect(actionText("keypad-guidance-center")).toBe("Press");
     // The left cap already reads "Back", so the word beside it is dropped rather than repeated —
-    // on a 320 px screen "Back Back" pushed the row past the viewport and truncated "Activate".
+    // on a 320 px screen "Back Back" pushed the row past the viewport and truncated the next word.
     expect(screen.getByTestId("keypad-guidance-left")).toHaveTextContent("Back");
     expect(actionText("keypad-guidance-left")).toBe("");
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
@@ -138,7 +138,7 @@ describe("KeypadGuidanceBar", () => {
     expect(actionText("keypad-guidance-center")).toBe("Open");
   });
 
-  it("names a control by its short guidance label, and drops 'Activate' on the compact screen only", () => {
+  it("names a control by its short guidance label, and keeps the OK word on the compact screen", () => {
     render(
       <FocusNavigationProvider enabled>
         <button>Home</button>
@@ -149,13 +149,13 @@ describe("KeypadGuidanceBar", () => {
     );
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(breadcrumb()).toHaveTextContent("c64u: healthy");
-    expect(actionText("keypad-guidance-center")).toBe("Activate");
+    expect(actionText("keypad-guidance-center")).toBe("Press");
 
     document.documentElement.dataset.displayProfile = "compact";
     try {
       fireEvent.keyDown(document.body, { code: "ArrowUp" });
       fireEvent.keyDown(document.body, { code: "ArrowDown" });
-      expect(actionText("keypad-guidance-center")).toBe("");
+      expect(actionText("keypad-guidance-center")).toBe("Press");
       expect(screen.getByTestId("keypad-guidance-center")).not.toHaveAttribute("hidden");
     } finally {
       delete document.documentElement.dataset.displayProfile;

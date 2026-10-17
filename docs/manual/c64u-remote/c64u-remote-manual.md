@@ -578,7 +578,7 @@ Open and close the card from its header. While it is closed, or you are on anoth
 
 Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:
 
-- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game Themes. Each draws on tens of thousands of tunes.
+- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game themes. Each draws on tens of thousands of tunes.
 - **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.
 - **From tunes you like.** Once five tunes carry a heart, this builds a station from them.
 - **Surprise me.** Anything at all.
@@ -805,7 +805,7 @@ Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap a
 
 **Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.
 
-While Remote Input is open, the keypad drives your C64. With the joystick, the **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **Right Soft Key** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **Left Soft Key** opens the menu, which is also where you close Remote Input.
+While Remote Input is open, the keypad drives your C64. With the joystick, the **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, **Adjust view** when the picture is on, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **Right Soft Key** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **Left Soft Key** opens the menu, which is also where you close Remote Input.
 
 ![Remote Input keyboard mode](../../img/app/home/remote-input/03-keyboard-compact.png)
 
@@ -833,7 +833,7 @@ The picture fills the whole screen. Your phone steers with its number keys, so a
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/compact/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` shows or hides RETURN, SPACE, the other quick keys and the **Watch** and **Listen** switches over the bottom of the picture. `*`, or the menu key, switches between driving the C64 and adjusting the view. **Back** leaves.
+With the controls out of the way, three keys still reach everything. `#` shows or hides RETURN, SPACE, the other quick keys and the **Watch** and **Listen** switches over the bottom of the picture. `*` switches between driving the C64 and adjusting the view, which the menu also offers as **Adjust view**. **Back** leaves.
 
 The floating **Show controls** button, marked with two small sliders at the top of the picture, brings the toolbar back.
 
@@ -1182,7 +1182,7 @@ The best place to look is listed first, in bold.
 
 On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
-While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
+While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 
 #### Directional Pad
 
@@ -1203,7 +1203,7 @@ The keys under the screen have no printed labels, and the bar along the bottom o
 | Key on your phone | Word in the bar | What it does |
 | --- | --- | --- |
 | Left Soft Key | Back, Exit, Done or Close | Leaves the current dialog, field, group or page. In Remote Input it gives the keypad back to your C64. |
-| D-pad Center / OK | Open, Activate, Edit, Select, Toggle, Adjust or Switch | Goes in or presses the selected control. |
+| D-pad Center / OK | Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu | Goes in or presses the selected control. |
 | Right Soft Key | Menu, or Delete in a text field | Opens the menu of the selected item, or the Quick menu when it has none. In a text field that holds text it deletes the last character. |
 
 The word is always about the key on the same side, not about a key called Back or Menu: your phone has no keys with those names.

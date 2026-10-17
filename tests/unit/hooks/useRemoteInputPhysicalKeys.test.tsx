@@ -160,3 +160,20 @@ describe("useRemoteInputPhysicalKeys function keys", () => {
     expect(setHeldKeyboardInputs).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("useRemoteInputPhysicalKeys menu key", () => {
+  const namedKey = (key: string, code: string) =>
+    ({ key, code, repeat: false, preventDefault: vi.fn() }) as unknown as ReactKeyboardEvent<HTMLDivElement>;
+
+  it("leaves the menu key to the controls menu and lets only the star key toggle the view adjustment", () => {
+    const toggleMode = vi.fn();
+    const mirrorRef = { current: { getMode: () => "drive", toggleMode } as unknown as AvMirrorImmersiveHandle };
+    const { hook } = setup({ mirrorRef });
+
+    act(() => hook.result.current.handleKeyDown(namedKey("ContextMenu", "ContextMenu")));
+    expect(toggleMode).not.toHaveBeenCalled();
+
+    act(() => hook.result.current.handleKeyDown(namedKey("*", "Star")));
+    expect(toggleMode).toHaveBeenCalledTimes(1);
+  });
+});

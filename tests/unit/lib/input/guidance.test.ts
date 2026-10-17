@@ -89,9 +89,11 @@ describe("resolveGuidanceLabels — center / OK key", () => {
     ["select", "Select"],
     ["switch", "Toggle"],
     ["slider", "Adjust"],
-    ["tab", "Switch"],
+    ["tab", "Open"],
     ["link", "Open"],
-    ["button", "Activate"],
+    ["menu", "Open menu"],
+    ["button", "Press"],
+    ["none", "Press"],
   ] as const)("'%s' control → OK label '%s'", (kind, label) => {
     expect(resolveGuidanceLabels(state({ currentKind: kind })).center).toBe(label);
   });
@@ -179,7 +181,9 @@ describe("classifyFocusKind", () => {
     ['<div role="button"></div>', "button"],
     ['<button aria-expanded="true">Spectrum</button>', "collapse"],
     ['<button aria-expanded="false">Spectrum</button>', "expand"],
-    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "button"],
+    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "menu"],
+    ['<button aria-haspopup="dialog">Edit</button>', "link"],
+    ['<button aria-pressed="false">Watch</button>', "switch"],
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
   });

@@ -102,4 +102,63 @@ describe("revealRingElementAfterLayout", () => {
 
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
+  it("reveals the element when the layout changes after the timed checks, as a late size change does", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(1000);
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("reveals the ring's current element when the pressed one was replaced during the watch", async () => {
+    const { element } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    const replacement = document.createElement("button");
+    replacement.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    const replacementScroll = vi.fn();
+    replacement.scrollIntoView = replacementScroll;
+
+    element.replaceWith(replacement);
+    focusRingElement(replacement);
+    replacementScroll.mockClear();
+    await Promise.resolve();
+
+    expect(replacementScroll).toHaveBeenCalled();
+  });
+
+  it("stops watching at the next key press", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+    vi.advanceTimersByTime(2000);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("stops watching after the watch window", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(2000);
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

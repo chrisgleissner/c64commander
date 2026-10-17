@@ -610,10 +610,10 @@ describe("PlaybackControlsCard", () => {
       expect(onSeekToFraction).not.toHaveBeenCalled();
     });
 
-    it("keeps Left and Right away from the focus ring and names OK as Seek", () => {
+    it("keeps Left and Right away from the focus ring and names OK as Adjust", () => {
       const { bar } = renderSeekBar();
       expect(bar).toHaveAttribute("data-key-nav-horizontal");
-      expect(bar).toHaveAttribute("data-key-nav-verb", "Seek");
+      expect(bar).toHaveAttribute("data-key-nav-verb", "Adjust");
     });
   });
 
