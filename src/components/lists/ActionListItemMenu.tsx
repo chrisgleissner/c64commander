@@ -63,22 +63,21 @@ export const groupItemMenuEntries = (entries: readonly ActionListMenuItem[]): It
   return blocks.filter((block) => (block.kind === "details" ? block.rows.length > 0 : block.entries.length > 0));
 };
 
-const detailsBlockToEntries = (block: Extract<ItemMenuBlock, { kind: "details" }>): ActionListMenuItem[] => [
-  ...(block.label ? [{ type: "label" as const, label: block.label }] : []),
-  ...block.rows.map((row) => ({ type: "info" as const, label: row.label, value: row.value })),
-];
+const withoutStraySeparators = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] =>
+  entries.filter((entry, index) => {
+    if (entry.type !== "separator") return true;
+    const previous = entries[index - 1];
+    const next = entries[index + 1];
+    return previous !== undefined && previous.type !== "separator" && next !== undefined;
+  });
 
 /** Actions come first: on a short screen the details are read by scrolling, the actions are what the reader came for. */
 export const orderActionsFirst = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] => {
-  const blocks = groupItemMenuEntries(entries);
-  const actions = blocks.filter((block) => block.kind === "actions").flatMap((block) => block.entries);
-  const details = blocks.filter((block) => block.kind === "details");
-  const ordered: ActionListMenuItem[] = [...actions];
-  details.forEach((block, index) => {
-    if (index > 0 || actions.length > 0) ordered.push({ type: "separator" });
-    ordered.push(...detailsBlockToEntries(block));
-  });
-  return ordered;
+  const actions = entries.filter((entry) => entry.type === "action");
+  const details = withoutStraySeparators(entries.filter((entry) => entry.type !== "action"));
+  return actions.length > 0 && details.length > 0
+    ? [...actions, { type: "separator" }, ...details]
+    : [...actions, ...details];
 };
 
 const keepMenuOpen = (event: Event) => event.preventDefault();
