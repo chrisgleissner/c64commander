@@ -71,8 +71,8 @@ Results:
 | Sequence discontinuities, c64u sender      | 4 single-step gaps in 30 minutes (Ethernet side, one lost packet each)           |
 | Seconds with zero packets                  | 0                                                                                |
 
-One event worth recording. From 23:55:25 to 23:56:05 (host clock) a second sender, 192.168.1.13 (the u64), appeared on
-the video group at up to 2.5k packets/s on top of the c64u's 3.4k. The wire rate rose to about 5.9k packets/s and the
+One event worth recording. In 18 one-second samples between 23:55:25 and 23:56:05 (host clock) a second sender, 192.168.1.13 (the u64), appeared on
+the video group at up to 3.4k packets/s on top of the c64u's 3.4k. The wire rate rose to up to 6.8k packets/s and the
 combined stream showed up to 59 discontinuities per second, as expected from two interleaved senders. The app's sender
 filter (`expectedSource` 192.168.1.146) rejected those packets (`rejectedPackets` rose to 54876,
 `senders` listed both addresses) and the picture kept running: no frame gap long enough to trip the 8 s watchdog, no log
