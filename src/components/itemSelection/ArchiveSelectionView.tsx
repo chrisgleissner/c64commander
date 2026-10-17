@@ -211,9 +211,11 @@ export const ArchiveSelectionView = ({
               Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
             </div>
             {resolvedConfig.host !== currentDefaults.host ? <p>Override host active.</p> : null}
-            <p data-testid="archive-legal-notice">{LEGAL_NOTICE}</p>
           </div>
         ) : null}
+        <p className="px-2 text-xs text-muted-foreground" data-testid="archive-legal-notice">
+          {LEGAL_NOTICE}
+        </p>
       </div>
 
       {isDeveloperModeEnabled && queryPreview ? (

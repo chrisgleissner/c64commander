@@ -139,11 +139,10 @@ describe("ArchiveSelectionView", () => {
     expect(screen.getByText(/Override host active/i)).toBeInTheDocument();
   });
 
-  it("keeps the licence sentence inside About this archive instead of the footer", () => {
+  it("always shows the license sentence, as small text, without opening About this archive", () => {
     renderView();
-    expect(screen.queryByTestId("archive-legal-notice")).toBeNull();
-    fireEvent.click(screen.getByTestId("archive-about-toggle"));
     expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
+    expect(screen.getByTestId("archive-legal-notice")).toHaveClass("text-xs");
   });
 
   it("shows placeholder text when form is empty and no query preview", () => {

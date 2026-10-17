@@ -82,7 +82,7 @@ test.describe("compact Docs contents and archive search", () => {
     expect(tour.height, "the tour card is one row on this screen").toBeLessThan(80);
   });
 
-  test("archive search shows a plain summary, keeps Search on screen and puts the licence in a collapsible", async ({
+  test("archive search shows a plain summary, keeps Search on screen and always shows the license sentence", async ({
     page,
   }) => {
     await page.goto("/play", { waitUntil: "domcontentloaded" });
@@ -105,7 +105,7 @@ test.describe("compact Docs contents and archive search", () => {
     await picker.getByLabel("Name").fill("joyride");
     await expect(picker.getByTestId("archive-filter-summary")).toHaveText("Name joyride");
     await expect(dialog).not.toContainText("(name:");
-    await expect(dialog).not.toContainText("necessary license or rights");
+    await expect(picker.getByTestId("archive-legal-notice")).toBeVisible();
 
     await dialog.getByTestId("add-items-scroll").evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
     const scrolled = await searchBox();
@@ -114,7 +114,6 @@ test.describe("compact Docs contents and archive search", () => {
     );
     expect(scrolled.y).toBeGreaterThan(0);
 
-    await picker.getByTestId("archive-about-toggle").click();
     await expect(picker.getByTestId("archive-legal-notice")).toBeVisible();
 
     expect(await ringFocus(page, search), "the keypad ring can reach Search").toBe(true);

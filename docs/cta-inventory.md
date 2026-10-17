@@ -1564,9 +1564,9 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 
 **Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.
 
-- About this archive — button — `archive-about-toggle` — opens the source, host and the license
-  sentence (`archive-legal-notice`); closed by default, so the sheet footer holds only Cancel and
-  Add
+- About this archive — button — `archive-about-toggle` — opens the source and host; closed by
+  default. The license sentence (`archive-legal-notice`) is small text under it and is always
+  visible, not a stop
 - Search — button — `archive-search-button` — disabled until the composed query has at
   least one term and while a search is running. It sits in a bar pinned to the bottom of the
   scrolling body (`archive-search-bar`), beside a plain-language summary of the filled-in filters
