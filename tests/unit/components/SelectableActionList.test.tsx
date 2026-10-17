@@ -663,7 +663,7 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("renders item with icon, titleSuffix, subtitle, and meta", () => {
+  it("renders titleSuffix, subtitle, and meta, and no leading icon in the dense row", () => {
     const items: ActionListItem[] = [
       {
         id: "track-1",
@@ -689,7 +689,8 @@ describe("SelectableActionList view-all wrapping", () => {
         maxVisible={10}
       />,
     );
-    expect(screen.getByTestId("row-icon")).toBeInTheDocument();
+    // The dense row drops the leading glyph: where an item lives is in its Details menu.
+    expect(screen.queryByTestId("row-icon")).not.toBeInTheDocument();
     expect(screen.getByText("(v2)")).toBeInTheDocument();
     expect(screen.getByTestId("item-subtitle")).toHaveTextContent("Artist Name");
     expect(screen.getByText("Extra info")).toBeInTheDocument();
