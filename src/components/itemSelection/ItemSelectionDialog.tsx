@@ -115,11 +115,18 @@ export const ItemSelectionDialog = ({
   // is made for, although its width says otherwise.
   const shortViewport = useMediaQuery("(max-height: 520px)");
   // Held until the dialog closes: tapping a result hides the keyboard, and without this the layout
-  // would flip back to the tall one under the user's finger and move the list.
+  // would flip back to the tall one under the user's finger and move the list. A change of display
+  // profile is a real resize, not a keyboard, and releases it.
   const [keyboardSeen, setKeyboardSeen] = useState(false);
+  const profileWhenKeyboardSeen = useRef(displayProfile);
   useEffect(() => {
-    if (shortViewport) setKeyboardSeen(true);
-  }, [shortViewport]);
+    if (shortViewport) {
+      profileWhenKeyboardSeen.current = displayProfile;
+      setKeyboardSeen(true);
+    } else if (profileWhenKeyboardSeen.current !== displayProfile) {
+      setKeyboardSeen(false);
+    }
+  }, [shortViewport, displayProfile]);
   useEffect(() => {
     if (!open) setKeyboardSeen(false);
   }, [open]);

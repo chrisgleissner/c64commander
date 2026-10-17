@@ -1195,6 +1195,43 @@ describe("ItemSelectionDialog confirm in flight", () => {
     }
   });
 
+  it("releases the compact layout when the display profile itself changes, which is a resize and not a keyboard", async () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    const originalMatchMedia = window.matchMedia;
+    let short = true;
+    const listeners = new Set<() => void>();
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return query === "(max-height: 520px)" && short;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(
+        <DisplayProfileProvider>
+          <Harness />
+        </DisplayProfileProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      short = false;
+      act(() => listeners.forEach((listener) => listener()));
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("From C64U");
+
+      act(() => {
+        fireEvent.click(screen.getByText("Expanded override"));
+      });
+
+      expect(screen.getByTestId("add-items-title")).toHaveTextContent("Add items");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it("makes confirm available again after onConfirm fails", async () => {
     setViewportWidth(1280);
     const first = deferred();
