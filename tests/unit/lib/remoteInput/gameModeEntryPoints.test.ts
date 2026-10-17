@@ -136,7 +136,7 @@ describe("the guidance bar's Game Mode hint", () => {
   it("does not disturb the soft-key labels", () => {
     const labels = resolveGuidanceLabels(state());
     expect(labels.left).toBe("Back");
-    expect(labels.center).toBe("Activate");
+    expect(labels.center).toBe("Press");
     expect(labels.right).toBeNull();
   });
 });
