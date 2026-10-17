@@ -262,8 +262,8 @@ describe("auto-advance follows a seek", () => {
     expect(page).toContain(
       "const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);",
     );
-    // Only when it moved: this deadline is mirrored to the native background watchdog.
-    expect(page).toContain("if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current)");
+    // Only when it moved or a seek is outstanding: this deadline is mirrored to the native background watchdog.
+    expect(page).toContain("shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)");
     expect(page).not.toContain("holdAutoAdvanceWhilePending");
   });
 });
