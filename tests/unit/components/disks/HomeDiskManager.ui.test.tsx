@@ -188,6 +188,8 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const toggleBtn = screen.getByTestId("drive-status-toggle-a");
     expect(toggleBtn).toHaveTextContent("ON");
+    expect(toggleBtn).toHaveAccessibleName("Turn off Drive A");
+    expect(screen.getByTestId("drive-status-toggle-b")).toHaveAccessibleName(/^Turn (on|off) Drive B$/);
 
     // Mock error
     mockApi.driveOff.mockRejectedValueOnce(new Error("Power error"));

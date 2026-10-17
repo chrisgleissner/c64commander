@@ -2022,6 +2022,7 @@ export const HomeDiskManager = () => {
                         onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-status-toggle-${key}`}
+                        aria-label={`${powerEnabled ? "Turn off" : "Turn on"} ${driveLabel}`}
                       >
                         {powerEnabled ? "ON" : "OFF"}
                       </FocusableDiskButton>
@@ -2237,6 +2238,7 @@ export const HomeDiskManager = () => {
                     }
                     disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
                     data-testid="drive-status-toggle-soft-iec"
+                    aria-label={`${softIecPowerEnabled ? "Turn off" : "Turn on"} Soft IEC drive`}
                   >
                     {softIecPowerEnabled ? "ON" : "OFF"}
                   </FocusableDiskButton>
