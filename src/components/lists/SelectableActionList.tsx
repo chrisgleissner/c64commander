@@ -122,6 +122,9 @@ export type SelectableActionListProps = {
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
 const DEFAULT_DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact", "medium"];
 const NO_PROFILES: readonly DisplayProfile[] = [];
+const LIST_OVERSCAN_PX = 500;
+// Every row built beyond the viewport is built again after each jump, and a 320 px screen held about 11 of them.
+const COMPACT_LIST_OVERSCAN_PX = 200;
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
@@ -716,7 +719,7 @@ export const SelectableActionList = ({
                       style={{ height: "100%" }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
-                      overscan={500}
+                      overscan={isCompact ? COMPACT_LIST_OVERSCAN_PX : LIST_OVERSCAN_PX}
                       endReached={() => {
                         if (hasMoreViewAllItems) {
                           onViewAllEndReached?.();
