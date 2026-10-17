@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
-import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
 
@@ -1027,8 +1026,8 @@ describe("ItemSelectionDialog archive source buttons", () => {
     fireEvent.click(screen.getByTestId("import-option-commoserve"));
     expect(await screen.findByText("From CommoServe")).toBeVisible();
     expect(screen.getByTestId("add-items-selection-icon")).toBeVisible();
-    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
-    expect(screen.getAllByText(LEGAL_NOTICE)).toHaveLength(1);
+    expect(screen.queryByText(/necessary license or rights/)).toBeNull();
+    expect(screen.queryByTestId("archive-legal-notice")).toBeNull();
   });
 
   it("keeps chooser labels aligned while enlarging the CommoServe interstitial icon", async () => {

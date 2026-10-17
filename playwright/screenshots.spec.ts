@@ -3383,7 +3383,7 @@ test.describe("App screenshots", () => {
         }
       });
       await expect(categoryTrigger).toContainText("Apps");
-      await expect(archivePicker.getByTestId("archive-query-preview")).toContainText(SCREENSHOT_ARCHIVE_QUERY);
+      await expect(archivePicker.getByTestId("archive-filter-summary")).toHaveText("Name joyride, Category Apps");
       await expect(archiveDialog.getByTestId("add-items-selection-heading")).toHaveText("From CommoServe");
       await captureScreenshot(page, testInfo, "play/import/04-commoserve-search.png", { skipFuzzyHeadRestore: true });
 
