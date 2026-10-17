@@ -166,6 +166,17 @@ describe("manual generator", () => {
     }
   });
 
+  it("explains the unlabeled soft keys and the bottom bar words in the keypad manual only", async () => {
+    const contexts = await contextByVariant();
+    const remote = renderManualMarkdown(contexts["c64u-remote"]);
+    const broad = renderManualMarkdown(contexts.c64commander);
+
+    expect(remote).toContain("#### The two keys under the screen");
+    expect(remote).toContain("| Left Soft Key");
+    expect(remote).toContain("| Right Soft Key");
+    expect(broad).not.toContain("The two keys under the screen");
+  });
+
   it("names no device model in either manual", async () => {
     const contexts = await contextByVariant();
     const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;

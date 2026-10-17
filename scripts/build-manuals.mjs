@@ -698,6 +698,37 @@ const renderKeyboardReference = ({ features, variant }) => {
       ? "Two keys carry most of it: **D-pad Center/OK goes in, Left Soft Key comes out**, and **Right Soft Key opens choices**. F1 and F3 are separate shortcuts you can set yourself; they never stand in for the soft keys."
       : "Two keys carry most of it: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
     "",
+    ...(isC64uRemoteVariant(variant)
+      ? [
+          "#### The two keys under the screen",
+          "",
+          "The keys under the screen have no printed labels, and the bar along the bottom of the app names what each does right now. The bar draws a word at the same side as its key, so read it like the labels on an older phone.",
+          "",
+          table(
+            ["Key on your phone", "Word in the bar", "What it does"],
+            [
+              [
+                "Left Soft Key",
+                "Back, Exit, Done or Close",
+                "Leaves the current dialog, field, group or page. In Remote Input it gives the keypad back to your C64.",
+              ],
+              [
+                "D-pad Center / OK",
+                "Open, Activate, Edit, Select, Toggle, Adjust or Switch",
+                "Goes in or presses the selected control.",
+              ],
+              [
+                "Right Soft Key",
+                "Menu, or Delete in a text field",
+                "Opens the menu of the selected item, or the Quick menu when it has none. In a text field that holds text it deletes the last character.",
+              ],
+            ],
+          ),
+          "",
+          "The word is always about the key on the same side, not about a key called Back or Menu: your phone has no keys with those names.",
+          "",
+        ]
+      : []),
     "#### Number Keys",
     "",
     "Outside text fields, the number keys jump to pages, **8** and **9** pause and reset the machine, and **0** goes straight to playing. An open dialog or sheet keeps them for itself:",
