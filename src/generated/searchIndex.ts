@@ -958,10 +958,10 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
   {
     id: "settings.control.allow-circuit-override",
     titleKey: "search.settings.allowCircuitOverride",
-    titleDefault: "Allow circuit override",
+    titleDefault: "Allow manual retry while paused",
     subtitleKey: "search.settings.allowCircuitOverride.subtitle",
-    subtitleDefault: "Let the app change settings that can stress the hardware",
-    keywords: ["safety", "override", "protection", "advanced"],
+    subtitleDefault: "Let you retry a connection the app has paused after repeated failures",
+    keywords: ["safety", "override", "circuit", "retry", "protection", "advanced"],
     group: "setting",
     iconId: "shield",
     target: {

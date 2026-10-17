@@ -618,7 +618,7 @@ past it to anything below.
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
 - **Device safety**: Machine input cooldown (ms) — number —
   `device-safety-machine-input-cooldown` — the coalescing window the app holds between
-  `machine:input` writes (0–2000) ; Allow circuit override — checkbox —
+  `machine:input` writes (0–2000) ; Allow manual retry while paused — checkbox —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
   label activates it as well as the box ; Keep device settings after a restart —
   checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
