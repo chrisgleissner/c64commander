@@ -88,11 +88,19 @@ export const useHeaderActionsFit = (enabled: boolean, title: string): [HeaderAct
       );
     };
     measure();
+    let disposed = false;
+    // The title is measured on a canvas, so a web font that finishes loading later changes its width.
+    void document.fonts?.ready.then(() => {
+      if (!disposed) measure();
+    });
     const observer = new ResizeObserver(measure);
     for (const element of [section.current, toggle.current, actions.current?.firstElementChild]) {
       if (element) observer.observe(element);
     }
-    return () => observer.disconnect();
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
     // `fits` re-attaches the observer: switching layout draws the actions in a new element.
   }, [enabled, title, fits]);
 
