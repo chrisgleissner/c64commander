@@ -1182,7 +1182,7 @@ The best place to look is listed first, in bold.
 
 On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
-While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
+While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 
 #### Directional Pad
 
@@ -1203,7 +1203,7 @@ The keys under the screen have no printed labels, and the bar along the bottom o
 | Key on your phone | Word in the bar | What it does |
 | --- | --- | --- |
 | Left Soft Key | Back, Exit, Done or Close | Leaves the current dialog, field, group or page. In Remote Input it gives the keypad back to your C64. |
-| D-pad Center / OK | Open, Activate, Edit, Select, Toggle, Adjust or Switch | Goes in or presses the selected control. |
+| D-pad Center / OK | Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu | Goes in or presses the selected control. |
 | Right Soft Key | Menu, or Delete in a text field | Opens the menu of the selected item, or the Quick menu when it has none. In a text field that holds text it deletes the last character. |
 
 The word is always about the key on the same side, not about a key called Back or Menu: your phone has no keys with those names.

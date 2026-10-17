@@ -10,6 +10,8 @@ import { Activity, CircleDot, Keyboard, MonitorSmartphone, Wifi, WifiOff } from 
 import { appDeviceName, isKeypadEdition, targetDeviceDescription, targetDeviceShortName } from "@/lib/docs/deviceNames";
 import { backKeyName, menuKeyName } from "@/lib/docs/guide/keyNames";
 import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/types";
+import { OK_KEY_WORDS } from "@/lib/input/guidance";
+import { getKeyLabels } from "@/lib/variant/keyLabels";
 
 export const gettingStartedChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
   id: "getting-started",
@@ -149,6 +151,32 @@ export const connectionProblemsChapter = ({ variantId }: GuideContext): GuideCha
   ],
 });
 
+const joinWords = (words: readonly string[]): string =>
+  `${words.slice(0, -1).join(", ")} or ${words[words.length - 1]}`;
+
+/** The same three rows as the manual's "The two keys under the screen", worded as the guidance bar words them. */
+const keypadSoftKeysBlock = (variantId: string): GuideBlock => {
+  const keys = getKeyLabels(variantId);
+  return {
+    kind: "keys",
+    heading: "The two keys under the screen",
+    items: [
+      {
+        key: keys.leftSoft,
+        action: `The bar says ${joinWords([keys.backWord, "Exit", "Done", keys.closeWord])}. Leaves the current dialog, field, group or page. In Remote Input it gives the keypad back to your C64.`,
+      },
+      {
+        key: keys.center,
+        action: `The bar says ${joinWords(OK_KEY_WORDS)}. Goes in or presses the selected control.`,
+      },
+      {
+        key: keys.rightSoft,
+        action: `The bar says ${keys.menuWord}, or ${keys.deleteWord} in a text field. Opens the menu of the selected item, or the Quick menu when it has none. In a text field that holds text it deletes the last character.`,
+      },
+    ],
+  };
+};
+
 export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
   const keypad = isKeypadEdition(variantId);
   return {
@@ -173,6 +201,7 @@ export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
           `Press the ${menuKeyName(variantId)} for the selected item's menu, or the Quick menu where it has none.`,
         ],
       },
+      ...(keypad ? [keypadSoftKeysBlock(variantId)] : []),
       {
         kind: "keys",
         heading: "Keys",

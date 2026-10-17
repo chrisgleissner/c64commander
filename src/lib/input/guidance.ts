@@ -112,6 +112,19 @@ const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   none: "",
 };
 
+/** Every word the OK key can read on a control, in the order the guides list them. */
+export const OK_KEY_WORDS: readonly string[] = [
+  "Open",
+  "Press",
+  "Edit",
+  "Select",
+  "Toggle",
+  "Adjust",
+  "Expand",
+  "Collapse",
+  "Open menu",
+];
+
 /** What OK reads on a control of no kind the table above names, so the key never shows without a word. */
 const GENERIC_CENTER_LABEL = "Press";
 

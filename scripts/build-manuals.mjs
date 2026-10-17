@@ -679,7 +679,7 @@ const renderKeyboardReference = ({ features, variant }) => {
     "",
     `${featureAvailability(features.keypad_input_enabled)} Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.`,
     "",
-    "While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.",
+    "While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.",
     "",
     "#### Directional Pad",
     "",
@@ -714,7 +714,7 @@ const renderKeyboardReference = ({ features, variant }) => {
               ],
               [
                 variant.runtime.keyLabels.center,
-                "Open, Activate, Edit, Select, Toggle, Adjust or Switch",
+                "Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu",
                 "Goes in or presses the selected control.",
               ],
               [
