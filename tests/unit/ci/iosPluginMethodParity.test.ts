@@ -83,6 +83,8 @@ export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
     new Map([
       ["setPlaybackState", "iOS has no media-session surface to update; the matrix records the plugin as Partial"],
       ["setNowPlaying", "iOS has no media-session surface to update; the matrix records the plugin as Partial"],
+      ["heartbeat", "iOS has no foreground service whose notification could outlive the app"],
+      ["takeLaunchCommand", "the resume request comes from the Android notification, which iOS does not have"],
       ["checkPermissions", "iOS needs no runtime notification permission for background audio"],
       ["requestPermissions", "iOS needs no runtime notification permission for background audio"],
     ]),

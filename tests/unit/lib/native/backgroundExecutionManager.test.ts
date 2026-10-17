@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   stop: vi.fn(async () => undefined),
   setPlaybackState: vi.fn(async () => undefined),
   setNowPlaying: vi.fn(async () => undefined),
+  heartbeat: vi.fn(async () => undefined),
+  getPlatform: vi.fn(() => "android"),
   addLog: vi.fn(),
   getLifecycleState: vi.fn(() => "active"),
   classifyError: vi.fn(() => ({
@@ -19,8 +21,11 @@ vi.mock("@/lib/native/backgroundExecution", () => ({
     stop: mocks.stop,
     setPlaybackState: mocks.setPlaybackState,
     setNowPlaying: mocks.setNowPlaying,
+    heartbeat: mocks.heartbeat,
   },
 }));
+
+vi.mock("@/lib/native/platform", () => ({ getPlatform: mocks.getPlatform }));
 
 vi.mock("@/lib/logging", () => ({
   addLog: mocks.addLog,
@@ -41,6 +46,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 }));
 
 import {
+  BACKGROUND_HEARTBEAT_INTERVAL_MS,
   isBackgroundExecutionActive,
   resetBackgroundExecutionState,
   setBackgroundExecutionNowPlaying,
@@ -58,6 +64,9 @@ describe("backgroundExecutionManager", () => {
     mocks.setPlaybackState.mockReset();
     mocks.setNowPlaying.mockReset();
     mocks.addLog.mockReset();
+    mocks.heartbeat.mockReset();
+    mocks.heartbeat.mockResolvedValue(undefined);
+    mocks.getPlatform.mockReturnValue("android");
     keepAlive.start.mockReset();
     keepAlive.stop.mockReset();
     mocks.getLifecycleState.mockReturnValue("active");
@@ -370,5 +379,77 @@ describe("backgroundExecutionManager", () => {
         error: "string-failure",
       }),
     );
+  });
+
+  describe("heartbeat for the native liveness check (issue 504)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mocks.start.mockResolvedValue(undefined);
+      mocks.stop.mockResolvedValue(undefined);
+      mocks.setPlaybackState.mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      resetBackgroundExecutionState();
+      vi.useRealTimers();
+    });
+
+    it("beats at once on start and then every interval while the session plays", async () => {
+      await startBackgroundExecution({ source: "test" });
+      expect(mocks.heartbeat).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS * 3);
+
+      expect(mocks.heartbeat).toHaveBeenCalledTimes(4);
+    });
+
+    it("beats well inside the native timeout of 15 seconds", () => {
+      expect(BACKGROUND_HEARTBEAT_INTERVAL_MS * 2).toBeLessThan(15_000);
+    });
+
+    it("stops beating while paused and resumes beating when playback resumes", async () => {
+      await startBackgroundExecution({ source: "test" });
+      await setBackgroundExecutionPaused(true, { source: "test" });
+      mocks.heartbeat.mockClear();
+
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS * 3);
+      expect(mocks.heartbeat).not.toHaveBeenCalled();
+
+      await setBackgroundExecutionPaused(false, { source: "test" });
+      expect(mocks.heartbeat).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS);
+      expect(mocks.heartbeat).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops beating when the session stops", async () => {
+      await startBackgroundExecution({ source: "test" });
+      await stopBackgroundExecution({ source: "test" });
+      mocks.heartbeat.mockClear();
+
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS * 3);
+
+      expect(mocks.heartbeat).not.toHaveBeenCalled();
+    });
+
+    it("does not beat off Android, where the plugin has no such method", async () => {
+      mocks.getPlatform.mockReturnValue("ios");
+
+      await startBackgroundExecution({ source: "test" });
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS * 3);
+
+      expect(mocks.heartbeat).not.toHaveBeenCalled();
+    });
+
+    it("logs a failing heartbeat once instead of on every beat", async () => {
+      mocks.heartbeat.mockRejectedValue(new Error("bridge gone"));
+
+      await startBackgroundExecution({ source: "test" });
+      await vi.advanceTimersByTimeAsync(BACKGROUND_HEARTBEAT_INTERVAL_MS * 3);
+
+      const warnings = mocks.addLog.mock.calls.filter(([level, message]) => {
+        return level === "warn" && message === "Background execution heartbeat failed";
+      });
+      expect(warnings).toHaveLength(1);
+    });
   });
 });
