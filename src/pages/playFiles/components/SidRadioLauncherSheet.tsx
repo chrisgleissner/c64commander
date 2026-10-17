@@ -157,7 +157,7 @@ export const SidRadioLauncherSheet = ({
               >
                 <h3 className="text-sm font-semibold">Similar to {readableSeedLabel(songSeedLabel)}</h3>
                 <p
-                  className="text-xs text-muted-foreground"
+                  className={cn("text-xs text-muted-foreground", !songSeedInHvsc && "flex min-h-11 items-center")}
                   data-testid="sid-radio-song-hint"
                   tabIndex={songSeedInHvsc ? undefined : 0}
                 >

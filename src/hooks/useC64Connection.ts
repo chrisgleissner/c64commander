@@ -687,6 +687,7 @@ export function useC64MachineControl() {
       onSuccess: () => {
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: ["c64"] });
+          BACKGROUND_QUERY_PREFIXES.forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
         }, 3000);
       },
     }),
