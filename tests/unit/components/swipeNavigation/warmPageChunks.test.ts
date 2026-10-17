@@ -9,6 +9,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loaded = vi.hoisted(() => [] as string[]);
+const addLogMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: addLogMock,
+}));
 
 const PAGE_MODULES: Array<[string, string]> = [
   ["@/pages/HomePage", "home"],
@@ -25,6 +31,7 @@ describe("warmPageChunks", () => {
     vi.useFakeTimers();
     vi.resetModules();
     loaded.length = 0;
+    addLogMock.mockClear();
     for (const [path, name] of PAGE_MODULES) {
       vi.doMock(path, () => {
         loaded.push(name);
@@ -63,5 +70,41 @@ describe("warmPageChunks", () => {
     cancel();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(loaded).toEqual(["play"]);
+  });
+
+  it("does not start another load after it is cancelled while a load is still in flight", async () => {
+    let finishPlayLoad: () => void = () => undefined;
+    vi.doMock("@/pages/PlayFilesPage", async () => {
+      await new Promise<void>((resolve) => {
+        finishPlayLoad = resolve;
+      });
+      loaded.push("play");
+      return { default: () => null };
+    });
+    const cancel = (await importWarm())();
+
+    await vi.advanceTimersByTimeAsync(2_600);
+    cancel();
+    finishPlayLoad();
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(loaded).toEqual(["play"]);
+  });
+
+  it("logs a failed load with its stack and keeps warming the others", async () => {
+    vi.doMock("@/pages/PlayFilesPage", () => {
+      throw new Error("chunk 404");
+    });
+    const cancel = (await importWarm())();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    cancel();
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Page code warm-up failed",
+      expect.objectContaining({ error: expect.any(String), stack: expect.stringContaining("Error") }),
+    );
+    expect(loaded).toEqual(["disks", "config", "settings"]);
   });
 });

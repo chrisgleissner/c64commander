@@ -41,21 +41,34 @@ const WARM_STEP_DELAY_MS = 1500;
 export const warmPageChunks = (): (() => void) => {
   const loaders = [loadPlayFilesPage, loadDisksPage, loadConfigBrowserPage, loadSettingsPage];
   let timer: number | undefined;
+  let cancelled = false;
   let index = 0;
+  const whenIdle = (callback: () => void, delayMs: number) => {
+    timer = window.setTimeout(() => {
+      if (cancelled) return;
+      if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(callback, { timeout: 3000 });
+      else callback();
+    }, delayMs);
+  };
   const loadNext = () => {
     const load = loaders[index];
     index += 1;
-    if (!load) return;
+    if (cancelled || !load) return;
     load()
       .catch((error: unknown) => {
-        addLog("warn", "Page code warm-up failed", { step: index, error: (error as Error).message });
+        addLog("warn", "Page code warm-up failed", {
+          step: index,
+          error: (error as Error).message,
+          stack: (error as Error).stack,
+        });
       })
-      .finally(() => {
-        timer = window.setTimeout(loadNext, WARM_STEP_DELAY_MS);
-      });
+      .finally(() => whenIdle(loadNext, WARM_STEP_DELAY_MS));
   };
-  timer = window.setTimeout(loadNext, WARM_START_DELAY_MS);
-  return () => window.clearTimeout(timer);
+  whenIdle(loadNext, WARM_START_DELAY_MS);
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timer);
+  };
 };
 
 const HomeSlot = () => <HomePage />;
