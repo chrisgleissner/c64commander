@@ -198,17 +198,13 @@ export const FocusNavigationProvider = ({
         // `contains` check lets that focus stand while still re-anchoring a plain
         // button/control that did not move focus.
         onActivate: (item) => {
-          // Anchored on the ring's item, which for a single-control card is the card: DOM focus
-          // left on the control it clicked took the next OK from the ring, and a card header's
-          // toggle then closed the card it had just opened instead of going into it.
+          // Anchored on the ring's item (the card, for a single-control card): focus left on the clicked
+          // control took the next OK from the ring and closed the card a header toggle had just opened.
           const element = ringElementFor(created.focus.current()?.id ?? item.id);
           if (element && element.contains(document.activeElement)) return;
-          // Activating a bare text field is the explicit "go in" that starts
-          // editing, so it is the one place the field does take real DOM focus.
-          // `focusRingElement` deliberately withholds focus from editables on
-          // arrival (that is what stops the ring being trapped), so focus it
-          // here instead of going through it. A synthetic click would not:
-          // `.click()` does not move focus the way a real pointer press does.
+          // Activating a bare text field is the explicit "go in" that starts editing, so it is the one
+          // place the field takes real DOM focus; `focusRingElement` withholds it on arrival so the ring
+          // is not trapped. A synthetic click would not focus it: `.click()` does not move focus.
           if (element && isEditableTarget(element)) {
             element.focus({ preventScroll: true });
             element.scrollIntoView({ block: "nearest", inline: "nearest" });

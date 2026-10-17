@@ -12,7 +12,8 @@ vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLogMock(...args),
 }));
 
-vi.mock("@/lib/hvsc/hvscStateStore", () => ({
+vi.mock("@/lib/hvsc/hvscStateStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hvsc/hvscStateStore")>()),
   loadHvscState: (...args: unknown[]) => loadHvscStateMock(...args),
   updateHvscState: (...args: unknown[]) => updateHvscStateMock(...args),
 }));
