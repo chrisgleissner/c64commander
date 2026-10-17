@@ -504,16 +504,20 @@ describe("SelectableActionList", () => {
   it("lays a compact row out as select, name with details, and play above the item menu in one grid", () => {
     localStorage.clear();
     setViewportWidth(320);
-    renderRow({ menuItems: [{ type: "info", label: "Type", value: "SID" }], meta: <span>SID • 3:05</span> });
+    renderRow({
+      menuItems: [{ type: "info", label: "Type", value: "SID" }],
+      titleSuffix: "3:05",
+    });
 
     const row = screen.getByTestId("row");
-    expect(row).toHaveClass("grid", "grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]");
+    expect(row).toHaveClass("grid", "grid-cols-[2.75rem_minmax(0,1fr)_2.75rem_2.75rem]");
     expect(row).not.toHaveClass("flex-wrap");
-    const title = screen.getByRole("button", { name: "Alpha" });
-    expect(title.closest(".row-span-2")).not.toBeNull();
+    const title = screen.getByRole("button", { name: /^Alpha/ });
+    expect(title.closest(".col-start-2")).not.toBeNull();
     expect(screen.getByRole("checkbox", { name: "Select Alpha" }).closest("label")).toHaveClass("col-start-1");
-    expect(screen.getByRole("button", { name: "Play Alpha" }).parentElement).toHaveClass("col-start-3", "row-start-1");
-    expect(row).toHaveTextContent("SID • 3:05");
+    expect(screen.getByRole("button", { name: "Play Alpha" })).toHaveClass("col-start-3", "row-start-1");
+    expect(screen.getByRole("button", { name: "Item actions" }).parentElement).toHaveClass("col-start-4");
+    expect(title).toHaveTextContent("3:05");
   });
 
   it("keeps the wrapping flex row on profiles the dense grid does not apply to", () => {

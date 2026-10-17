@@ -22,40 +22,26 @@ const item = (overrides: Partial<PlaylistItem> & { songNr?: number }): PlaylistI
   }) as unknown as PlaylistItem;
 
 describe("buildPlaylistRowSubtitle", () => {
-  it("shows the file name, not the folder, when the title is something else", () => {
-    expect(buildPlaylistRowSubtitle(item({}), "Commando (title screen)")).toBe("Commando.sid");
-  });
-
-  it("shows no second line when the title is the file name without its extension or with spaces for underscores", () => {
-    expect(buildPlaylistRowSubtitle(item({}), "Commando")).toBeNull();
-    const underscored = item({ path: "/A/SYS64738_Days.sid" });
-    expect(buildPlaylistRowSubtitle(underscored, "SYS64738 Days")).toBeNull();
-  });
-
-  it("shows no second line when the title already is the file name", () => {
-    expect(buildPlaylistRowSubtitle(item({}), "Commando.sid")).toBeNull();
+  it("shows no second line for an ordinary single-tune row: the file name is on the details menu", () => {
+    expect(buildPlaylistRowSubtitle(item({}))).toBeNull();
   });
 
   it("shows which tune it is once a file has been expanded", () => {
     // The point: without this every one of the nineteen rows reads identically.
-    expect(buildPlaylistRowSubtitle(item({ songNr: 7, subsongCount: 19 }), "Commando")).toBe("Tune 7 of 19");
+    expect(buildPlaylistRowSubtitle(item({ songNr: 7, subsongCount: 19 }))).toBe("Tune 7 of 19");
   });
 
   it("adds the tune's name when STIL has one", () => {
-    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 19, tuneTitle: "BGM1" }), "Commando")).toBe(
+    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 19, tuneTitle: "BGM1" }))).toBe(
       "Tune 1 of 19 · BGM1",
     );
   });
 
   it("treats a single-tune file as an ordinary row even when a song number is set", () => {
-    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }), "Commando (title screen)")).toBe(
-      "Commando.sid",
-    );
+    expect(buildPlaylistRowSubtitle(item({ songNr: 1, subsongCount: 1 }))).toBeNull();
   });
 
   it("ignores a blank title rather than leaving a dangling separator", () => {
-    expect(buildPlaylistRowSubtitle(item({ songNr: 2, subsongCount: 19, tuneTitle: "   " }), "Commando")).toBe(
-      "Tune 2 of 19",
-    );
+    expect(buildPlaylistRowSubtitle(item({ songNr: 2, subsongCount: 19, tuneTitle: "   " }))).toBe("Tune 2 of 19");
   });
 });

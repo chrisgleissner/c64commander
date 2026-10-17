@@ -126,10 +126,10 @@ describe("usePlaylistListItems", () => {
     listItems.forEach((entry) => {
       const sourceInfo = entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source");
       expect(sourceInfo).toBeUndefined();
-      expect(entry.subtitle ?? "").not.toContain("/");
-      const { unmount } = render(<>{entry.meta}</>);
-      expect(screen.getByTestId("file-origin-icon")).toBeInTheDocument();
-      unmount();
+      expect(entry.subtitle).toBeNull();
+      expect(entry.titleSuffix).not.toContain("This device");
+      expect(entry.titleSuffix).not.toContain("C64 Ultimate");
+      expect(entry.titleSuffix).not.toContain("HVSC");
     });
   });
 
@@ -375,7 +375,7 @@ describe("usePlaylistListItems", () => {
     expect(startPlaylist).toHaveBeenNthCalledWith(2, playlist, 0);
     expect(startPlaylist).toHaveBeenNthCalledWith(3, playlist, 1);
 
-    render(<>{candidateRow?.meta}</>);
-    expect(screen.getByLabelText("Online archive file")).toBeInTheDocument();
+    expect(candidateRow?.secondaryActionLabel).toBe("CFG?");
+    expect(candidateRow?.titleSuffix).not.toContain("CFG");
   });
 });
