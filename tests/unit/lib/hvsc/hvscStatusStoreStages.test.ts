@@ -40,6 +40,7 @@ describe("hvsc status summary stage measurements", () => {
       event("archive_extraction", { processedCount: 10, totalCount: 10, elapsedTimeMs: 480_000 }),
     );
     vi.advanceTimersByTime(60_000);
+    summary = applyHvscProgressEventToSummary(summary, event("complete"));
     summary = applyHvscProgressEventToSummary(
       summary,
       event("sid_metadata_hydration", {

@@ -38,7 +38,8 @@ describe("hvscStageMetrics", () => {
     const m = run([
       [0, event("archive_extraction", { processedCount: 500, totalCount: 1_000 })],
       [5_000, event("archive_extraction", { processedCount: 1_000, totalCount: 1_000 })],
-      [5_100, event("sid_metadata_hydration", { processedCount: 0, totalCount: 61_000, statusToken: "queued" })],
+      [5_100, event("complete")],
+      [5_200, event("sid_metadata_hydration", { processedCount: 0, totalCount: 61_000, statusToken: "queued" })],
     ]);
 
     expect(m.unpack?.finishedAtMs).toBe(5_100);
@@ -49,6 +50,7 @@ describe("hvscStageMetrics", () => {
   it("keeps the final analysis pass as its own step with its own counters", () => {
     const m = run([
       [0, event("sid_metadata_parsing", { ingestedSongs: 100, totalSongs: 100 })],
+      [10_000, event("complete")],
       [10_000, event("sid_metadata_hydration", { processedCount: 0, totalCount: 60_000, statusToken: "queued" })],
       [20_000, event("sid_metadata_hydration", { processedCount: 6_000, totalCount: 60_000, statusToken: "running" })],
     ]);
@@ -126,5 +128,42 @@ describe("hvscStageMetrics", () => {
     expect(formatRemaining(30_000)).toBe("about 30 s left");
     expect(formatRemaining(89_000)).toBe("about 89 s left");
     expect(formatRemaining(300_000)).toBe("about 5 min left");
+  });
+
+  it("starts a fresh analysis measurement when a run begins, even if the previous run never finished", () => {
+    // Hydration can end without a done event (the app is killed, or a library reset aborts it). The
+    // next run's queued event must not inherit the old start time.
+    const abandoned = run([
+      [0, event("sid_metadata_hydration", { processedCount: 0, totalCount: 100, statusToken: "queued" })],
+      [10_000, event("sid_metadata_hydration", { processedCount: 40, totalCount: 100, statusToken: "running" })],
+    ]);
+    const weeksLater = 14 * 24 * 3_600_000;
+
+    const next = applyHvscStageEvent(
+      abandoned,
+      event("sid_metadata_hydration", { processedCount: 0, totalCount: 60_000, statusToken: "queued" }),
+      weeksLater,
+    );
+
+    expect(next.analyze).toEqual({ startedAtMs: weeksLater, finishedAtMs: null, processed: 0, total: 60_000 });
+  });
+
+  it("does not let a late hydration event finish the download of the next install", () => {
+    // The hydrator checks whether it should continue only before each chunk, so one more running event
+    // can arrive after a reinstall has started.
+    const reinstalling = run([
+      [0, event("start")],
+      [1_000, event("download", { downloadedBytes: 10, totalBytes: 100 })],
+      [1_500, event("sid_metadata_hydration", { processedCount: 50, totalCount: 100, statusToken: "running" })],
+    ]);
+    expect(reinstalling.download?.finishedAtMs).toBeNull();
+
+    const afterwards = applyHvscStageEvent(
+      reinstalling,
+      event("download", { downloadedBytes: 60, totalBytes: 100 }),
+      2_000,
+    );
+
+    expect(afterwards.download).toEqual({ startedAtMs: 1_000, finishedAtMs: null, processed: 60, total: 100 });
   });
 });

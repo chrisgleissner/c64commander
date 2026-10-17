@@ -45,8 +45,7 @@ const isStepFinishedByEvent = (
   return false;
 };
 
-const isRestartOfFinishedAnalysis = (event: HvscProgressEvent) =>
-  event.statusToken === "queued" || event.processedCount === 0;
+const isStartOfAnalysis = (event: HvscProgressEvent) => event.statusToken === "queued" || event.processedCount === 0;
 
 const finishStepsBefore = (measurements: HvscStageMeasurements, index: number, nowMs: number) => {
   HVSC_STAGE_ORDER.slice(0, index).forEach((id) => {
@@ -72,13 +71,10 @@ export const applyHvscStageEvent = (
   const stage = stepForStage(event.stage);
   if (!stage) return measurements;
 
-  const index = HVSC_STAGE_ORDER.indexOf(stage);
-  finishStepsBefore(measurements, index, nowMs);
+  if (stage !== "analyze") finishStepsBefore(measurements, HVSC_STAGE_ORDER.indexOf(stage), nowMs);
 
   let existing = measurements[stage];
-  if (stage === "analyze" && existing?.finishedAtMs != null && isRestartOfFinishedAnalysis(event)) {
-    existing = undefined;
-  }
+  if (stage === "analyze" && isStartOfAnalysis(event)) existing = undefined;
   if (existing?.finishedAtMs != null) return measurements;
 
   const counts = countsOf(stage, event);
