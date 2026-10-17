@@ -7,6 +7,7 @@
  */
 
 import { LocalSidChunkScheduler } from "./localSidChunkScheduler";
+import type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
@@ -225,6 +226,7 @@ const releaseAudioOwnership = (engine: object): void => {
 export const __hasLocalSidAudioOwner = (): boolean => phoneAudioOwner() !== null;
 
 export { LocalSidUnavailableError };
+export type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 
 export interface LocalSidEngineOptions {
   /** One factory for every renderer and role; tests use it to inject a fake worker. */
@@ -240,57 +242,6 @@ export interface LocalSidEngineOptions {
   sampleRate?: number;
   /** Render with this one whatever Settings says, with no fallback: the device probe's choice. */
   renderer?: SidEmulationEngine;
-}
-
-export interface LocalSidPlayCallbacks {
-  /** Playback position in seconds, emitted as chunks are scheduled/drain. */
-  onPosition?: (seconds: number) => void;
-  /** The tune reached its natural end and all audio drained. */
-  onEnded?: () => void;
-  /** A fatal engine error during playback. */
-  onError?: (error: Error) => void;
-  /**
-   * The engine has given up on this tune and no further audio is coming.
-   *
-   * Distinct from {@link onEnded}, which means the tune finished normally. This fires when a stall
-   * could not be repaired, so the caller can move on rather than leave a track that will produce
-   * nothing for the rest of its length.
-   */
-  onUnrecoverable?: () => void;
-}
-
-export interface LocalSidPlayResult {
-  /**
-   * True when the tune needs C64 ROMs we cannot ship (spec §12.2). Playback is
-   * NOT started; the caller (LE2) routes it to "Play on C64" instead.
-   */
-  romRequired: boolean;
-  /** False when `romRequired` — no audio was started. */
-  started: boolean;
-  sampleRate: number;
-  channels: number;
-  tuneInfo: Record<string, unknown> | null;
-}
-
-export interface LocalSidStats {
-  /** Average ms to render one second of audio (≥ 4× realtime ⇒ < 250, §12.6). */
-  renderMsPerSec: number;
-  /**
-   * p99 of the per-chunk render rate — the aggregation the §12.6 budget is
-   * pinned on. The running average converges and hides the spikes that
-   * actually cause underruns, so the HIL asserts this instead.
-   */
-  renderMsPerSecP99: number;
-  /** Worst-case ms/sec seen this session. */
-  peakRenderMsPerSec: number;
-  /** Audible gaps in the gapless schedule (target 0 over a 3-min PSID). */
-  audioUnderruns: number;
-  /** Seconds currently buffered ahead of the audio clock. */
-  bufferedSeconds: number;
-  /** Playback position in seconds. */
-  positionSeconds: number;
-  /** Chunks scheduled so far. */
-  chunksScheduled: number;
 }
 
 interface OpenPending {
@@ -1077,7 +1028,13 @@ export class LocalSidEngine {
         // so no further "prerender-chunk" can ever arrive. Left outstanding, the target latches the
         // engine into a silence the stall watchdog is deliberately forbidden to judge, and the tune
         // never reports its end either. Dragging into the closing seconds of a tune reaches this.
-        this.resolvePendingSeekAgainstCompletedRender(pcm, message.sampleRate, message.channels, message.seconds);
+        this.resolvePendingSeekAgainstCompletedRender(
+          pcm,
+          message.sampleRate,
+          message.channels,
+          message.seconds,
+          partial,
+        );
         // Playback was following this render as it grew. It has stopped growing, so whatever is in
         // hand is now all there will be — which means the flag comes off here unconditionally. A
         // render that finished with nothing to show for it is the case that matters: leaving the
@@ -1403,8 +1360,6 @@ export class LocalSidEngine {
       return;
     }
     if (!this.worker || !this.scheduler) return;
-    const id = this.nextId;
-    this.nextId += 1;
 
     this.seekEpoch += 1;
     const epoch = this.seekEpoch;
@@ -1458,7 +1413,8 @@ export class LocalSidEngine {
     // worker seek, which re-renders from the start with the audio gated (15-20 s on a Pixel 4).
     this.cached = null;
     this.cachedCursor = 0;
-    if (this.prerenderingForThisRenderer(this.currentKey)) {
+    const targetIsBeyondTheLeadIn = this.prerenderPartialSeconds !== null && target >= this.prerenderPartialSeconds;
+    if (this.prerenderingForThisRenderer(this.currentKey) && !targetIsBeyondTheLeadIn) {
       this.pendingSeek = {
         targetSeconds: target,
         renderedAtRequestSeconds: rendered?.durationSeconds ?? 0,
@@ -1476,6 +1432,17 @@ export class LocalSidEngine {
       return;
     }
 
+    await this.seekThroughWorker(target, epoch);
+  }
+
+  /**
+   * Seek by asking the worker's live renderer to go there, which re-renders the tune from its start
+   * with the audio gated. Used when no render of the tune covers the target and none is on its way
+   * there.
+   */
+  private async seekThroughWorker(target: number, epoch: number): Promise<void> {
+    const id = this.nextId;
+    this.nextId += 1;
     await new Promise<void>((resolve) => {
       // Hand the slot over rather than overwrite it: the `seeked` handler only resolves the current
       // id, so a dropped resolver never settles, and `seekPending` gates every chunk — a leaked entry
@@ -1568,6 +1535,7 @@ export class LocalSidEngine {
     sampleRate: number,
     channels: number,
     seconds: number,
+    partial: boolean,
   ): void {
     const pending = this.pendingSeek;
     if (!pending) return;
@@ -1589,6 +1557,17 @@ export class LocalSidEngine {
         seconds: pending.targetSeconds,
       });
       this.pump();
+      return;
+    }
+    if (partial) {
+      // Only the opening of the tune was rendered, so a target beyond it is not the end of the tune.
+      // The live renderer has to go there.
+      addLog("debug", "Local SID awaited seek is beyond the lead-in; seeking through the live renderer", {
+        service: "local-sid",
+        seconds: pending.targetSeconds,
+        renderedSeconds: seconds,
+      });
+      void this.seekThroughWorker(pending.targetSeconds, this.seekEpoch);
       return;
     }
     addLog("debug", "Local SID awaited seek landed at or past the end of the tune", {
