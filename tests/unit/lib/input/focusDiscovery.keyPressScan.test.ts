@@ -56,6 +56,25 @@ describe("a key press with a ring re-scan pending", () => {
     engine.stop();
   });
 
+  it("scans inside the press when the selection is the last known stop of its group and rows were added after it", async () => {
+    const { controller, engine, refresh } = startOnCards();
+    controller.setCurrent("a1");
+    const current = controller.current()!;
+    const lastOfGroup = controller
+      .list()
+      .filter((item) => (item.parentId ?? null) === (current.parentId ?? null))
+      .at(-1)!;
+    controller.setCurrent(lastOfGroup.id);
+    document.getElementById("body-b")!.insertAdjacentHTML("beforeend", `<button id="b2">B2</button>`);
+    await afterObserver();
+
+    engine.flushPendingRefresh({ allowStaleRing: true });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(engine.isRingStop(document.getElementById("b2")!)).toBe(true);
+    engine.stop();
+  });
+
   it("scans after the next paint and picks up the content the key did not wait for", async () => {
     const { controller, engine, refresh } = startOnCards();
     document.getElementById("body-a")!.insertAdjacentHTML("beforeend", `<button id="a2">A2</button>`);

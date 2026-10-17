@@ -212,9 +212,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   }, []);
 
   useLayoutEffect(() => {
-    resetContainerScroll("state-sync");
     scheduleContainerScrollReset("state-sync-frame");
-  }, [resetContainerScroll, routeIndex, runway.phase, scheduleContainerScrollReset]);
+  }, [routeIndex, runway.phase, scheduleContainerScrollReset]);
 
   useEffect(() => {
     const container = containerRef.current;
