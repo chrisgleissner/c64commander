@@ -2051,7 +2051,7 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
     expect(labels).not.toContain("Second row 3");
   });
 
-  it("Down moves on the last ring and leaves the re-scan for after the paint when a card has just gained content", async () => {
+  it("Down scans before it acts when the selection is the last known stop of its card and the card has just gained content", async () => {
     setProgressiveMountEnabled(false);
     render(
       <FocusNavigationProvider>
@@ -2072,7 +2072,7 @@ describe("FocusNavigationProvider with rows still being built inside a card", ()
 
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
 
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
     await act(afterRingRescan);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
