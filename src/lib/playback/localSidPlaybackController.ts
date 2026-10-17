@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { tuneChangeGapTracker } from "./tuneChangeGap";
 import type { LocalSidEngine, LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngine";
 import { localSidPlaybackSupported } from "./localSidSupport";
 import { traceLocalSid } from "./localSidTrace";
@@ -158,6 +159,13 @@ export class LocalSidPlaybackController {
       ms: Math.round(performance.now() - readStartedAt),
       started: result.started,
     });
+    if (result.started) {
+      tuneChangeGapTracker.noteTuneAudioStarted({
+        durationMs: options?.durationSeconds ? options.durationSeconds * 1000 : null,
+        auto: options?.outgoingEndsAtSeconds !== undefined,
+        label: options?.prerenderKey,
+      });
+    }
     // Kick off a full render of this tune in the background so seeking inside
     // it becomes a buffer offset rather than a re-render from the start. Uses a
     // COPY of the bytes: `play` transferred the original to the worker, and the
@@ -303,6 +311,7 @@ export class LocalSidPlaybackController {
     // `isActive()` actually flips and where the notify lives — and that path
     // also covers an ownership eviction, which never comes through here.
     this.engine?.stop();
+    tuneChangeGapTracker.reset();
   }
 
   /**
