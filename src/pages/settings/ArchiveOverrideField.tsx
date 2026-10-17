@@ -22,6 +22,12 @@ type Props = {
 };
 
 // The effective value is printed under the field: as a placeholder it was cut off at the field's edge.
+/** A long host breaks after a dot, never inside a label, so it wraps instead of being clipped at the largest text size. */
+const breakAfterDots = (value: string) =>
+  value
+    .split(".")
+    .flatMap((part, index, parts) => (index < parts.length - 1 ? [part, ".", <wbr key={index} />] : [part]));
+
 export const ArchiveOverrideField = ({ id, label, value, onChange, effectiveValue, error, children }: Props) => (
   <div className="space-y-2">
     <Label htmlFor={id} className="text-sm font-medium">
@@ -37,7 +43,7 @@ export const ArchiveOverrideField = ({ id, label, value, onChange, effectiveValu
       data-testid={id}
     />
     <p className="break-normal text-xs text-muted-foreground" data-testid={`${id}-effective`}>
-      In use: {effectiveValue}
+      In use: {breakAfterDots(effectiveValue)}
     </p>
     {error ? (
       <p id={`${id}-error`} className="text-xs text-destructive" role="alert">
