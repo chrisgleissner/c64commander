@@ -938,9 +938,7 @@ class BackgroundExecutionService : Service() {
         dueAtElapsedMs = null
 
         if (nextDueAtMs == null) {
-            if (hadWatchdog) {
-                AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
-            }
+            if (hadWatchdog) AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
             return
         }
 
