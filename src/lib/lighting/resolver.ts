@@ -7,7 +7,7 @@
  */
 
 import {
-  LIGHTING_CIRCADIAN_PERIOD_LABELS,
+  formatCircadianLabel,
   LIGHTING_PERIOD_MODIFIERS,
   LIGHTING_SOURCE_BUCKET_LABELS,
 } from "@/lib/lighting/constants";
@@ -105,11 +105,11 @@ export const resolveLightingState = (input: LightingResolverInput): LightingReso
     if (input.circadian && input.studioState.automation.circadian.enabled) {
       finalState = applyCircadianModifier(finalState, input.circadian) ?? finalState;
       owner = "circadian";
-      label = `Circadian ${LIGHTING_CIRCADIAN_PERIOD_LABELS[input.circadian.period]}`;
+      label = formatCircadianLabel(input.circadian.period);
       detail = input.circadian.fallbackActive
         ? `Fallback schedule from ${input.circadian.resolvedLocation.label}`
         : `Solar schedule from ${input.circadian.resolvedLocation.label}`;
-      activeAutomationChip = `Circadian: ${LIGHTING_CIRCADIAN_PERIOD_LABELS[input.circadian.period]}`;
+      activeAutomationChip = formatCircadianLabel(input.circadian.period);
     }
 
     if (input.sourceBucket && input.studioState.automation.sourceIdentityMap.enabled) {
@@ -201,7 +201,7 @@ export const resolveLightingState = (input: LightingResolverInput): LightingReso
     sourceCue,
     circadianChip:
       input.circadian && input.studioState.automation.circadian.enabled
-        ? `Circadian: ${LIGHTING_CIRCADIAN_PERIOD_LABELS[input.circadian.period]}`
+        ? formatCircadianLabel(input.circadian.period)
         : null,
   };
 };

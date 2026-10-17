@@ -84,6 +84,8 @@ const buildHookValue = (overrides: Record<string, unknown> = {}) => ({
     fallbackActive: true,
     resolvedLocation: { source: "city", lat: 51.5, lon: -0.12, label: "London" },
   },
+  connectionSentinelState: "connected",
+  playbackContext: { sourceBucket: null, activeItemLabel: null },
   manualLockEnabled: false,
   lockCurrentLook: vi.fn(),
   unlockCurrentLook: vi.fn(),
@@ -140,7 +142,7 @@ describe("LightingStudioDialog", () => {
     expect(screen.getByTestId("lighting-keyboard-unsupported")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-active-profile-chip")).toHaveTextContent("Arcade");
     expect(screen.getByTestId("lighting-circadian-fallback")).toHaveTextContent("Fallback schedule");
-    expect(screen.getByTestId("lighting-open-context-lens")).toHaveTextContent("Why");
+    expect(screen.getByTestId("lighting-open-context-lens")).toHaveAccessibleName("Why this look?");
     expect(screen.getByTestId("lighting-device-mockup")).toBeInTheDocument();
     expect(document.querySelector("#c64-root")).not.toBeNull();
     expect(document.querySelector("#case-shell")).not.toBeNull();
@@ -149,6 +151,42 @@ describe("LightingStudioDialog", () => {
     expect(document.querySelector("#function-keys")).not.toBeNull();
     expect(document.querySelector("#led-layer")).not.toBeNull();
     expect(screen.getByTestId("lighting-mockup-led-strip")).toHaveAttribute("fill", "#F5F5F5");
+  });
+
+  it("names every automation switch by its visible row title", () => {
+    renderDialog();
+
+    expect(screen.getByTestId("lighting-connection-sentinel-toggle")).toHaveAccessibleName("Connection sentinel");
+    expect(screen.getByTestId("lighting-quiet-launch-toggle")).toHaveAccessibleName("Quiet Launch");
+    expect(screen.getByTestId("lighting-source-identity-toggle")).toHaveAccessibleName("Source identity map");
+    expect(screen.getByTestId("lighting-circadian-toggle")).toHaveAccessibleName("Circadian palette");
+    expect(screen.getByTestId("lighting-use-device-location")).toHaveAccessibleName("Use device location");
+  });
+
+  it("labels the save field and button without a duplicate placeholder", () => {
+    renderDialog();
+
+    const nameField = screen.getByTestId("lighting-profile-save-name");
+    expect(nameField).toHaveAttribute("placeholder", "New profile name");
+    expect(nameField).toHaveAccessibleName("New profile name");
+    expect(screen.getByTestId("lighting-profile-save")).toHaveAccessibleName("Save as new profile");
+  });
+
+  it("spells out unsaved profile changes instead of an unexplained asterisk", () => {
+    mocks.useLightingStudio.mockReturnValue(buildHookValue({ isActiveProfileModified: true }));
+    renderDialog();
+
+    const chip = screen.getByTestId("lighting-active-profile-chip");
+    expect(chip).toHaveTextContent("Arcade (edited)");
+    expect(chip).not.toHaveTextContent("*");
+  });
+
+  it("keeps the footer actions in one non-wrapping row", () => {
+    renderDialog();
+
+    const footer = screen.getByTestId("lighting-apply-draft").parentElement!;
+    expect(footer).toHaveClass("flex", "flex-nowrap");
+    expect(footer.querySelectorAll("button")).toHaveLength(3);
   });
 
   it("saves a new profile from the draft and surfaces location-denied fallback state", () => {
@@ -376,7 +414,7 @@ describe("LightingStudioDialog", () => {
     expect(screen.getByText("Shape looks and automate them.")).toBeInTheDocument();
     expect(screen.getByTestId("lighting-active-profile-chip")).toHaveTextContent("Device look");
     expect(screen.getByTestId("lighting-unlock")).toHaveTextContent("Unlock look");
-    expect(screen.getByText("Which resolver layer currently owns each lighting surface.")).toBeInTheDocument();
+    expect(screen.getByText("Which rule owns each lighting surface, and the signals behind it.")).toBeInTheDocument();
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Unsupported").length).toBeGreaterThan(0);
     expect(screen.getByTestId("lighting-circadian-location")).toHaveTextContent("Not resolved");

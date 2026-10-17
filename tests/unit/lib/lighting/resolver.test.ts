@@ -115,6 +115,8 @@ describe("lighting resolver", () => {
     });
     expect(resolved.resolvedState.case?.tint).toBe("Whisper");
     expect(resolved.circadianChip).toBe("Circadian: Night");
+    expect(resolved.activeAutomationChip).toBe("Circadian: Night");
+    expect(resolved.contextLens.map((entry) => entry.label)).toEqual(["Circadian: Night", "Circadian: Night"]);
   });
 
   it("applies source identity mapping above circadian modifiers", () => {

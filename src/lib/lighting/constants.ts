@@ -70,6 +70,9 @@ export const LIGHTING_CIRCADIAN_PERIOD_LABELS: Record<LightingCircadianPeriod, s
   night: "Night",
 };
 
+export const formatCircadianLabel = (period: LightingCircadianPeriod) =>
+  `Circadian: ${LIGHTING_CIRCADIAN_PERIOD_LABELS[period]}`;
+
 export const LIGHTING_QUIET_LAUNCH_WINDOW_MS = 45_000;
 export const LIGHTING_CONNECTION_HOLD_MS = 10_000;
 // HARD18-019: a failed apply write must not retry on every render/circadian
