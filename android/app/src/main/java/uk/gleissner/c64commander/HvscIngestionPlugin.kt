@@ -568,7 +568,7 @@ open class HvscIngestionPlugin : Plugin() {
                                   ) {
                                     lastReportedProgress = progress.processedEntries
                                     emitProgress(
-                                            stage = "sid_metadata_parsing",
+                                            stage = "archive_extraction",
                                             message = "Processing HVSC archive…",
                                             processedCount = progress.processedEntries,
                                             totalCount = progress.totalEntries,

@@ -872,10 +872,14 @@ class HvscIngestionPluginTest {
     }
   }
 
-  private fun ingestUpdateResolving(extraction: ExtractionResult): JSObject {
+  private fun ingestUpdateResolving(
+          extraction: ExtractionResult,
+          progress: List<ExtractionProgress> = emptyList(),
+          eventsOut: MutableList<JSObject>? = null,
+  ): JSObject {
     val testablePlugin = TestableHvscIngestionPlugin()
     injectBridge(testablePlugin, context)
-    testablePlugin.fakeExtractor = FakeHvscArchiveExtractor(extraction)
+    testablePlugin.fakeExtractor = FakeHvscArchiveExtractor(extraction, progress)
     val archiveFile = File(context.filesDir, "hvsc-cache/fake-update.7z")
     archiveFile.parentFile?.mkdirs()
     archiveFile.writeText("not-a-real-archive-body")
@@ -902,6 +906,7 @@ class HvscIngestionPluginTest {
       Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
       Thread.sleep(10)
     }
+    eventsOut?.addAll(testablePlugin.progressEvents)
     return payloadHolder[0] ?: error("ingestHvsc never resolved a payload")
   }
 
@@ -942,6 +947,33 @@ class HvscIngestionPluginTest {
   }
 
   @Test
+  fun ingestHvscReportsTheExtractionOfArchiveEntriesAsExtractionProgress() {
+    // The counts are archive entries (directories and documents included), and the app shows them
+    // as the unpack step. Reported as song parsing they credited the whole extraction to the song
+    // details step and left unpacking with a duration of zero.
+    try {
+      val events = mutableListOf<JSObject>()
+      ingestUpdateResolving(
+              fakeExtractionResult(emptyList()),
+              progress =
+                      listOf(
+                              ExtractionProgress(1, 1000, "/DOCUMENTS/readme.txt", 0),
+                              ExtractionProgress(1000, 1000, "/MUSICIANS/A/Artist/Tiny.sid", 1),
+                      ),
+              eventsOut = events,
+      )
+
+      val stages = events.map { it.getString("stage") }
+      assertFalse("entry progress must not be reported as parsing", stages.contains("sid_metadata_parsing"))
+      val entryEvents = events.filter { it.has("totalCount") && it.getInt("totalCount") == 1000 }
+      assertEquals(listOf("archive_extraction"), entryEvents.map { it.getString("stage") })
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+
+  @Test
   fun ingestHvscStillResolvesWithoutAHeaderIndexWhenItCannotBeWritten() {
     try {
       File(context.filesDir, "hvsc").mkdirs()
@@ -959,7 +991,10 @@ class HvscIngestionPluginTest {
   }
 }
 
-private class FakeHvscArchiveExtractor(private val result: ExtractionResult) : HvscArchiveExtractor {
+private class FakeHvscArchiveExtractor(
+        private val result: ExtractionResult,
+        private val progress: List<ExtractionProgress> = emptyList(),
+) : HvscArchiveExtractor {
   override fun probe(archiveFile: File, mode: HvscArchiveMode, cancellationToken: AtomicBoolean): ArchiveProfile =
           result.profile
 
@@ -970,5 +1005,8 @@ private class FakeHvscArchiveExtractor(private val result: ExtractionResult) : H
           cancellationToken: AtomicBoolean,
           memoryBudget: MemoryBudget,
           onProgress: (ExtractionProgress) -> Unit,
-  ): ExtractionResult = result
+  ): ExtractionResult {
+    progress.forEach(onProgress)
+    return result
+  }
 }
