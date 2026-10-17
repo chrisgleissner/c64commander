@@ -235,7 +235,8 @@ persistent status badge that appear on every page).
 ## 4. Page hierarchies
 
 Legend — Type: `button`, `link`, `tab`, `slider`, `select` (Radix `combobox`),
-`checkbox` (incl. switches/toggles rendered with `role=checkbox`), `text`,
+`checkbox` (selection and filters, `role=checkbox`), `switch` (a setting that applies at once,
+`role=switch`, see §4.7), `text`,
 `number`, `password`, `search`. R = reachable via keypad, I = interactive via
 keypad. `[disabled]` marks controls disabled by current state (legitimate, e.g.
 not-connected / empty / single-device).
@@ -306,15 +307,15 @@ not-connected / empty / single-device).
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
   - CPU Speed — slider — `home-cpu-speed-slider` — R✅ I✅ **(verified end-to-end: keypad Right 1→4 reflected in c64u firmware; Left restored)**
-  - Badline Timing — checkbox — `home-cpu-badline-timing` — R✅ I✅
-  - SuperCPU Detect — checkbox — `home-cpu-supercpu-detect` — R✅ I✅
+  - Badline Timing — switch — `home-cpu-badline-timing` — R✅ I✅
+  - SuperCPU Detect — switch — `home-cpu-supercpu-detect` — R✅ I✅
   - RAM Expansion — select — `quickconfig-ram-expansion` — R✅ I✅
   - RAM Size (REU) — select — `quickconfig-ram-size` — R✅ I✅ _(conditional on RAM Expansion)_
 - **Quick Config → Ports** (`home-ports-summary`)
   - Joystick Input — select — `home-joystick-swapper` — R✅ I✅
   - Serial Bus Mode — select — `home-serial-bus-mode` — R✅ I✅
   - Cartridge Preference — select — `home-cartridge-preference` — R✅ I✅
-  - User Port Power — checkbox — `home-user-port-power` — R✅ I✅
+  - User Port Power — switch — `home-user-port-power` — R✅ I✅
   - _Every Quick Config row (`SummaryConfigControlRow`) whose item the connected device does not have — an Ultimate-II+ has no `U64 Specific Settings` — reads "Not available" and is disabled, and the focus ring skips it. A checkbox row shows the words instead of a box, so it is neither on nor off._
 - **Quick Config → Video** (`home-video-summary`)
   - Screen colors — button — `home-video-screen-colors` — R✅ I✅ — first in the card, because it is the one row here people actually change; opens the **Screen colors sheet** (below) _(needs no device connection: the app's own palette is a local rendering choice, so the row stays usable while the rest of the card is disabled. The 16-swatch strip beneath it, `home-video-screen-colors-preview`, is display-only)_
@@ -326,7 +327,7 @@ not-connected / empty / single-device).
     - _The two halves are different things. The app's palette is **render-only**: the video stream carries 4-bit colour indices, so it cannot change what the device sent. Applying to the C64 uploads a `.vpl` into `/flash/data` and writes the `U64 Specific Settings` / `Palette Definition` config item, which changes the machine's own output on HDMI and analog, so the television changes too. Whether that survives a power cycle depends on **Keep device settings after a restart** in Settings (§4.5); `screen-colors-install-note` says so on the Remote and Both targets._
   - Video Mode — select — `home-video-mode` — R✅ I✅
   - HDMI Resolution — select — `home-video-hdmi-resolution` — R✅ I✅
-  - HDMI Scan Lines — checkbox — `home-video-scanlines` — R✅ I✅
+  - HDMI Scan Lines — switch — `home-video-scanlines` — R✅ I✅
   - Analog — select — `home-video-analog` — R✅ I✅
   - Digital — select — `home-video-digital` — R✅ I✅
 - **Quick Config → User Interface**
@@ -339,20 +340,20 @@ not-connected / empty / single-device).
   - Color slider, Intensity slider — slider ×2 each — R✅ I✅ when the live config item exists; unsupported live-spec items render disabled as "Not available".
 - **Drives** (`data-section-label="Drives"`) — per drive A / B / Soft-IEC:
   - Reset — button — `home-drives-reset` — R✅ I✅
-  - Power toggle (ON/OFF) — button — `home-drive-toggle-*` — R✅ I✅
+  - Power toggle — switch — `home-drive-toggle-*` — R✅ I✅
   - Mount / path — button — `home-drive-mounted-*` — R✅ I✅
   - Bus ID — select — `home-drive-bus-*` — R✅ I✅
   - Drive Type — select — `home-drive-type-*` — R✅ I✅
   - Status (OK) — button — `home-drive-status-*` — R✅ I✅ (status dialog)
 - **Printer** (`data-section-label="Printers"`)
   - Reset — button — `home-printer-reset` — R✅ I✅
-  - Power toggle — button — `home-printer-toggle` — R✅ I✅
+  - Power toggle — switch — `home-printer-toggle` — R✅ I✅
   - Bus — select — `home-printer-bus` — R✅ I✅
 - **SID / Audio mixer** (`data-section-label="SID"`) — per socket/UltiSID:
   - Reset — button — `home-sid-reset` — R✅ I✅
   - Master volume — slider — `home-sid-volume-master` — R✅ I✅ when the live `Vol Master` item exists.
     Left/Right (and PageUp/PageDown, ×10) move one mixer option per press; dragging keeps its fine step.
-  - Enable toggle — button — `home-sid-toggle-*` — R✅ I✅
+  - Enable toggle — switch — `home-sid-toggle-*` — R✅ I✅
   - Type / Address / Shaping ×N — select — `home-sid-type-*`, `home-sid-address-*`, `home-sid-shaping-*` — R✅ I✅
   - Volume, Pan — slider ×2 — `home-sid-volume-*`, `home-sid-pan-*` — R✅ I✅ — one mixer option per Left/Right press, like Master volume.
 - **Streams** (`home-stream-status`) — per VIC / Audio / Debug:
@@ -555,7 +556,7 @@ Listed below in the order they are rendered and walked by the focus ring.
 
 Per drive (A / B / Soft-IEC):
 
-- Status toggle (ON/OFF) — button — `drive-status-toggle-*` — R✅ I✅ _(on Drive A and B this is the only power control; Soft IEC keeps a separate Turn on/off button because the pill writes its configuration while the button powers the running drive)_
+- Status toggle — switch — `drive-status-toggle-*` — R✅ I✅ _(on Drive A and B this is the only power control; Soft IEC keeps a separate Turn on/off button because the pill writes its configuration while the button powers the running drive)_
 - Mount disk / select directory — button — `drive-mount-toggle-*` — R✅ I✅
 - Bus ID — select — `drive-bus-select-*` — R✅ I✅
 - Drive Type — select — `drive-type-select-*` — R✅ I✅ _(A/B)_
@@ -605,7 +606,7 @@ past it to anything below.
 
 - **App style**: one button per style plus **Match my device** — button —
   `settings-app-style-match-my-device` — which follows the platform's own accent instead
-  of pinning a style ; Card descriptions — checkbox — `settings-show-section-descriptions`
+  of pinning a style ; Card descriptions — switch — `settings-show-section-descriptions`
   — off by default, because the description costs about half the height of every closed
   card on a small screen
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Text size
@@ -613,13 +614,13 @@ past it to anything below.
   `settings-text-size-default|large|larger|largest` — R✅ I✅ ; Display
   profile (Small/Standard/Large/Auto) — segmented — R✅ I✅ ; Orientation
   (Portrait/Landscape/Auto) — segmented — R✅ I✅
-- **Full screen** _(native Android only)_ — checkbox ×2 — Hide status bar
+- **Full screen** _(native Android only)_ — switch ×2 — Hide status bar
   (`settings-hide-status-bar`) / Hide navigation bar
   (`settings-hide-navigation-bar`) — R✅ I✅ ; default per build variant
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
 - **Device safety**: Machine input cooldown (ms) — number —
   `device-safety-machine-input-cooldown` — the coalescing window the app holds between
-  `machine:input` writes (0–2000) ; Allow manual retry while paused — checkbox —
+  `machine:input` writes (0–2000) ; Allow manual retry while paused — switch —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
   label activates it as well as the box ; Keep device settings after a restart —
   checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
@@ -655,13 +656,13 @@ past it to anything below.
   button — `settings-use-discovered-device-*` — R✅ I✅ `[visible after scan]` ;
   discovered-device password — password/button — `settings-device-password-*` —
   R✅ I✅ `[visible when a discovered device requires a network password]` ;
-  Automatic Demo Mode — checkbox — `demo-mode-enabled` — R✅ I✅ (default on:
+  Automatic Demo Mode — switch — `demo-mode-enabled` — R✅ I✅ (default on:
   offers the built-in simulated device when real-device discovery fails) ;
   Preview Demo Mode — button — `settings-preview-demo-mode` — R✅ I✅ `[visible
   while not already in Demo Mode; switches to the simulated device immediately,
   even with a real C64U connected]`
 - **Open diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
-- **Feature flags** — checkbox — `feature-flag-*` (incl.
+- **Feature flags** — switch — `feature-flag-*` (incl.
   `feature-flag-keypad_input_enabled`) — R✅ I✅ (`c64u-remote`: RAM snapshots
   and keypad ship on; background execution, HVSC, and Home Telnet
   config/drive/printer/power actions are visible toggles; developer-only flags
@@ -673,9 +674,9 @@ past it to anything below.
 - **Disk autostart** — select — R✅ I✅
 - **Mute C64 seeking** — select — `settings-c64-seek-mute` — R✅ I✅ (Always / Rewind
   only / Never, default Rewind only; directly below Disk autostart in Play and disk)
-- **Play and disk** _(Content Explorer)_: Search inside disk images — checkbox —
+- **Play and disk** _(Content Explorer)_: Search inside disk images — switch —
   `settings-search-inside-disks` — R✅ I✅ _(flag `in_image_search_enabled`)_ ;
-  Answer cartridge boot menu after reset — checkbox — `settings-boot-menu-answer`
+  Answer cartridge boot menu after reset — switch — `settings-boot-menu-answer`
   — R✅ I✅ _(flag `launch_safety_enabled`, default on, so visible by default)_ —
   when checked reveals Menu key — select — `settings-boot-menu-key` — R✅ I✅ and
   Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
@@ -708,9 +709,9 @@ settings-joystick-bind-rejection naming what the key already does]` ;
   touchscreen. **Auto** waits for a physical key that steers the GAME, not the app-wide
   input modality. The stored values were renamed from `always`/`never`; both spellings
   are read, only the new ones are written)_ ;
-  Enter Game Mode when a game starts — checkbox — `settings-game-mode-on-launch` —
+  Enter Game Mode when a game starts — switch — `settings-game-mode-on-launch` —
   R✅ I✅ _(per-variant default from `variant.runtime.defaultGameModeOnLaunch`)_ ;
-  Show Autofire button — checkbox — `settings-show-autofire` — R✅ I✅ ; Autofire
+  Show Autofire button — switch — `settings-show-autofire` — R✅ I✅ ; Autofire
   rate — slider — `settings-autofire-rate-slider` — R✅ I✅ `[disabled while the
 Autofire button is hidden]`; **C64U Remote only:** F1 assignment — select —
 `settings-remote-function-1` — R✅ I✅; F3 assignment — select —
@@ -724,18 +725,18 @@ assignments are refused. Defaults are F1 Play/Pause and F3 Next tune.
   setting, not a developer one)_ ; Clear my rankings — button —
   `settings-clear-rankings` — R✅ I✅ — opens the **Clear my rankings confirmation**
   (`clear-rankings-dialog`; Cancel `clear-rankings-cancel` takes focus, Clear
-  `clear-rankings-confirm` removes every ♥/✕) ; Enable SID Radio — checkbox —
+  `clear-rankings-confirm` removes every ♥/✕) ; Enable SID Radio — switch —
   `settings-sid-radio-enabled` — R✅ I✅ `[developer-mode only]` ; Show ♥/✕ ranking —
-  checkbox — `settings-sid-ranking-enabled` — R✅ I✅ `[developer-mode only; shown only
+  switch — `settings-sid-ranking-enabled` — R✅ I✅ `[developer-mode only; shown only
 when SID Radio is on]` ;
-  On-device playback engine — checkbox — `settings-local-engine-enabled` — R✅ I✅
+  On-device playback engine — switch — `settings-local-engine-enabled` — R✅ I✅
   `[developer-mode only]` ;
   SID emulation — button group — `settings-sid-engine-sidplayez|residfp|sidlite`
   (`settings-sid-engine`) — R✅ I✅ _(shown whenever on-device playback is on, also
   without developer mode. Fast & accurate (`sidplayez`, libSidplayEZ) is offered only
   where it runs — Android — and is the default there in both editions; elsewhere Accurate
   (reSIDfp) is the default and the group has two buttons)_ ; SID chip
-  (`settings-sid-chip`): Match my Commodore 64 — checkbox —
+  (`settings-sid-chip`): Match my Commodore 64 — switch —
   `settings-sid-chip-from-device` — R✅ I✅ _(default on; reads the chip from the
   connected Ultimate and remembers it)_ ; fallback chip — button group —
   `settings-sid-chip-6581|8580` — R✅ I✅ _(used when the switch above is off or no
@@ -745,7 +746,7 @@ when SID Radio is on]` ;
 single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   button — `settings-roms-fetch` — R✅ I✅ ; Remove — button —
   `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
-  automatically — checkbox — `settings-roms-auto` — on by default, because without the
+  automatically — switch — `settings-roms-auto` — on by default, because without the
   ROMs accurate local playback is silent
 - **Audio processing** (`settings-audio-processing`, Android only; every control off by default, and an
   effect that is off leaves the samples untouched): Normalize volume — switch —
@@ -756,7 +757,7 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   `settings-audio-stereo-off|subtle|wide` (stored as 0 / 35 / 70) — R✅ I✅ ; Reverb — button group —
   `settings-audio-reverb-off|room|hall` (stored as 0 / 25 / 55) — R✅ I✅
 - **Play and disk lists**: Items shown before View all — number — `#listPreviewLimit`
-  (no testid; it commits on blur and on Enter) ; Friendly SID names — checkbox —
+  (no testid; it commits on blur and on Enter) ; Friendly SID names — switch —
   `settings-friendly-sid-names`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider —
   `settings-notification-duration-slider` — R✅ I✅ (2–8 s in 0.5 s steps, default 4 s;
@@ -795,6 +796,35 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   Official Site — link — `docs-external-resource-*` — R✅ I✅
   (`c64u-remote`: card hidden — its only external link, the C64U User Guide,
   is already reachable from Settings → About, see §4.5 above)
+
+---
+
+### 4.7 Boolean controls
+
+Two patterns, one reason each. A **switch** (`role=switch`, `components/ui/switch.tsx`) is a setting that
+applies the moment it is flipped; it sits at the right end of its row and takes the row label as its
+accessible name. A **checkbox** (`role=checkbox`, `components/ui/checkbox.tsx`) is a selection in a list, a
+filter, or an option that a later confirm button applies. Both are at least 44 x 44 CSS px (`hit-area-44`),
+reached by the focus ring, and toggled by OK. Testids are unchanged by the conversion.
+
+| Page / surface | Control (testid) | Was | Now |
+| -------------- | ---------------- | --- | --- |
+| Home, Video, CPU and User Port rows | `home-video-scanlines`, `home-cpu-badline-timing`, `home-cpu-supercpu-detect`, `home-user-port-power`, other two-value rows | checkbox | switch |
+| Home, Drives | `home-drive-toggle-*` | ON/OFF button | switch |
+| Home, SID sockets | `home-sid-toggle-*` | ON/OFF button | switch |
+| Home, Printer | `home-printer-toggle` | ON/OFF button | switch |
+| Disks | `drive-status-toggle-a|b|soft-iec` | ON/OFF button | switch |
+| Config | Enabled/Disabled and On/Off items | checkbox (name "<item> checkbox") | switch (name "<item>") |
+| Settings | `settings-show-section-descriptions`, `settings-hide-status-bar`, `settings-hide-navigation-bar`, `demo-mode-enabled`, `debug-logging`, `settings-friendly-sid-names`, `settings-search-inside-disks`, `settings-boot-menu-answer`, `settings-stream-*` (4), `settings-show-autofire`, `feature-flag-*`, `settings-persist-config-to-flash`, `settings-allow-circuit-override`, `settings-game-mode-on-launch`, `settings-follow-marker`, SID Radio toggles | checkbox or switch | switch |
+| Settings (already switches) | `settings-audio-levelling`, `settings-roms-auto` | switch | switch |
+| Lighting Studio, Remote Input, Config solo | `lighting-*-toggle`, joystick port, solo | switch | switch |
+| Play, playlist | `playlist-type-*` | checkbox | checkbox (filter) |
+| Play, Add items | `playback-recurse` | checkbox | checkbox (applied by Add) |
+| Play, row and list selection; Add items and archive rows | `playlist-item` select, source and archive rows | checkbox | checkbox (selection) |
+| Diagnostics, latency filters | "All call types" and per-type filters | native input | checkbox (filter) |
+| Play, transport | `playback-shuffle`, `playback-repeat` | checkbox | checkbox (not converted yet) |
+| Home, Drives and Disks | `home-drive-b-turn-on`, `home-softiec-turn-on` | Turn on button | button (a Telnet action, not a state toggle) |
+| Diagnostics filters, Remote Input, Live View | `aria-pressed` chips and toolbar buttons | chip or button | unchanged (mode or tool selection, not a setting) |
 
 ---
 
