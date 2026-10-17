@@ -2926,6 +2926,7 @@ export default function PlayFilesPage() {
             stageDone={hvsc.hvscStageDone}
             stageTotal={hvsc.hvscStageTotal}
             throughputLabel={hvsc.hvscPreparationThroughputLabel}
+            analyzing={hvsc.hvscAnalyzing}
             readySongCount={hvsc.hvscReadySongCount}
             errorReason={hvsc.hvscPreparationErrorReason}
             onBrowse={handleBrowsePreparedHvsc}

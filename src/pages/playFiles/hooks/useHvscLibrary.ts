@@ -69,6 +69,8 @@ export type HvscLibraryState = {
   hvscPreparationErrorReason: string | null;
   hvscPreparationFailedPhase: HvscPreparationPhase;
   hvscPreparationThroughputLabel: string | null;
+  /** The library is ready to use while the pass that reads every tune again is still running. */
+  hvscAnalyzing: boolean;
   hvscReadySongCount: number;
   hvscStatusSummary: HvscStatusSummary;
   hvscRoot: ReturnType<typeof loadHvscRoot>;
@@ -1355,7 +1357,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         : hvscStatusSummary.download.status === "in-progress"
           ? "download"
           : null);
-  const hvscStageMeasurement = hvscStageStep ? hvscStatusSummary.stages[hvscStageStep] : undefined;
+  const hvscStageMeasurement = hvscStageStep ? hvscStatusSummary.stages?.[hvscStageStep] : undefined;
   const [hvscStageDone, hvscStageTotal] =
     hvscStageStep === "download"
       ? [hvscDownloadBytes, hvscDownloadTotalBytes]
@@ -1384,7 +1386,8 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     if (hvscStateKnown) logHvscPreparationTransition(hvscPreparationSnapshot);
   }, [hvscPreparationSnapshot, hvscStateKnown]);
 
-  const hvscClockRunning = hvscInProgress || hvscStatusSummary.metadata.status === "in-progress";
+  const hvscAnalyzing = hvscStatusSummary.metadata.status === "in-progress" && hvscStage === "sid_metadata_hydration";
+  const hvscClockRunning = hvscInProgress || hvscAnalyzing;
   useEffect(() => {
     if (!hvscClockRunning) return;
     const timer = window.setInterval(() => setHvscElapsedNow(Date.now()), 1000);
@@ -1438,6 +1441,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscPreparationErrorReason: hvscPreparationSnapshot.errorReason,
     hvscPreparationFailedPhase: hvscPreparationSnapshot.failedPhase,
     hvscPreparationThroughputLabel,
+    hvscAnalyzing,
     hvscReadySongCount,
     hvscStatusSummary,
     hvscRoot,
