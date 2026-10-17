@@ -107,4 +107,18 @@ describe("warmPageChunks", () => {
     );
     expect(loaded).toEqual(["disks", "config", "settings"]);
   });
+
+  it("loads nothing while the browser is offline and carries on once it is back", async () => {
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const warmPageChunks = await importWarm();
+    warmPageChunks();
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(loaded).toEqual([]);
+
+    online.mockReturnValue(true);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(loaded[0]).toBe("play");
+    online.mockRestore();
+  });
 });

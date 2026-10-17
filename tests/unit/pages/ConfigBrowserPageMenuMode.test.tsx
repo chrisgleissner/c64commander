@@ -238,7 +238,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     await waitFor(() => expect(row).toHaveAttribute("data-value", "updated"));
 
     fireEvent.click(screen.getByTestId("config-refresh-video-setup"));
-    expect(screen.getByTestId("config-refresh-video-setup")).toHaveAccessibleName(/^Refresh /);
+    expect(screen.getByTestId("config-refresh-video-setup")).toHaveAccessibleName("Refresh");
 
     await waitFor(() =>
       expect(reportUserError).toHaveBeenCalledWith(

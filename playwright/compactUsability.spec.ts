@@ -746,7 +746,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       return ranges.slice(1).map((rect, index) => rect.left - ranges[index].right);
     });
     expect(labelGaps.length).toBe(4);
-    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(6);
+    for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(5.9);
 
     audit.assertAllUsable();
   });

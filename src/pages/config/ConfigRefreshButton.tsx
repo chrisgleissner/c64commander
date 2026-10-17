@@ -20,7 +20,8 @@ export const ConfigRefreshButton = forwardRef<
     size="icon"
     onClick={onRefresh}
     className="size-11 shrink-0"
-    aria-label={`Refresh ${categoryLabel}`}
+    aria-label="Refresh"
+    title={`Refresh ${categoryLabel}`}
     data-testid={`config-refresh-${slug}`}
   >
     <RefreshCw className="h-4 w-4" />

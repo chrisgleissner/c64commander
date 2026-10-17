@@ -1611,7 +1611,8 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     expect(focusContext.current?.engine.elementForId("config-category-action-audio-mixer")).toBe(resetButton);
     expect(focusContext.current?.engine.elementForId("config-refresh-audio-mixer")).toBe(refreshButton);
     expect(refreshButton.closest('[data-testid="config-group-actions"]')).toBeNull();
-    expect(refreshButton).toHaveAccessibleName("Refresh Audio Mixer");
+    expect(refreshButton).toHaveAccessibleName("Refresh");
+    expect(refreshButton).toHaveAttribute("title", "Refresh Audio Mixer");
   });
 
   it("center-activates Clock Settings' Sync clock group action", async () => {

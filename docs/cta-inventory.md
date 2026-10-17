@@ -577,7 +577,7 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   WiFi, Tape, LED Strip, Keyboard Lighting, Drive A/B, Data Streams, Modem, User
   Interface). Each expands to `ConfigItemRow`s whose control is a select / slider
   / checkbox / text per item; Audio Mixer adds Reset + per-SID Solo; Clock adds
-  Sync Clock; every category adds Refresh.
+  Sync Clock; every category adds a Refresh icon button (`config-refresh-<slug>`, name "Refresh") in its header while the category is open.
 - Retry — button — `config-retry` `[only when the category list itself failed to load]` — inside
   `config-load-error`, which states the device's own message; re-runs the categories request
 

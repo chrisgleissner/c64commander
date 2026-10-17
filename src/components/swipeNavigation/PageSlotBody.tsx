@@ -51,9 +51,14 @@ export const warmPageChunks = (): (() => void) => {
     }, delayMs);
   };
   const loadNext = () => {
+    if (cancelled) return;
+    if (navigator.onLine === false) {
+      whenIdle(loadNext, WARM_STEP_DELAY_MS);
+      return;
+    }
     const load = loaders[index];
     index += 1;
-    if (cancelled || !load) return;
+    if (!load) return;
     load()
       .catch((error: unknown) => {
         addLog("warn", "Page code warm-up failed", {
