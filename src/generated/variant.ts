@@ -200,6 +200,18 @@ export const variantConfig = {
         device_host: "c64u",
         hvsc_base_url: "https://hvsc.brona.dk/HVSC/",
       },
+      keyLabels: {
+        backWord: "Back",
+        center: "OK",
+        centerCap: "OK",
+        closeWord: "Close",
+        deleteWord: "Delete",
+        leftCap: "Back",
+        leftSoft: "Back key",
+        menuWord: "Menu",
+        rightCap: "Menu",
+        rightSoft: "Menu key",
+      },
     },
     theme: {
       backgroundColor: "#6C7EB7",

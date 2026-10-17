@@ -396,6 +396,43 @@ describe("generate-variant", () => {
     ).toThrow(/default_game_mode_joystick must be one of/);
   });
 
+  describe("runtime.key_labels", () => {
+    const parseWithKeyLabels = (lines: string[]) => {
+      const repoRoot = createTempDir("variant-config-");
+      writeRepoFixtures(repoRoot);
+      return parseVariantSource(
+        buildVariantsYaml({ runtimeExtras: { "c64u-remote": ["key_labels:", ...lines.map((line) => `  ${line}`)] } }),
+        { repoRoot },
+      ) as any;
+    };
+
+    it("fills every label the variant does not set from the generic defaults", () => {
+      const config = parseWithKeyLabels(["left_soft: Lower Left", "delete_word: Clear"]);
+      const labels = config.variants["c64u-remote"].runtime.keyLabels;
+      expect(labels.leftSoft).toBe("Lower Left");
+      expect(labels.deleteWord).toBe("Clear");
+      expect(labels.rightSoft).toBe("Menu key");
+      expect(labels.centerCap).toBe("OK");
+      expect(config.variants.c64commander.runtime.keyLabels.leftSoft).toBe("Back key");
+    });
+
+    it("rejects a label name it does not recognise", () => {
+      expect(() => parseWithKeyLabels(["middle_soft: Nope"])).toThrow(
+        /key_labels contains unsupported key "middle_soft"/,
+      );
+    });
+
+    it("rejects an empty label", () => {
+      expect(() => parseWithKeyLabels(['left_soft: ""'])).toThrow(/key_labels\.left_soft/);
+    });
+
+    it("rejects a label longer than the guidance bar can show", () => {
+      expect(() => parseWithKeyLabels([`left_soft: ${"x".repeat(25)}`])).toThrow(
+        /key_labels\.left_soft must be at most 24/,
+      );
+    });
+  });
+
   it("rejects a joystick layout it does not recognise", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);
