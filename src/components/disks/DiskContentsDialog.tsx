@@ -50,9 +50,11 @@ export function DiskContentsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent surface="confirmation" className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <DiscAlbum className="h-5 w-5" aria-hidden />
-            {diskName}
+          <DialogTitle className="flex items-start gap-2 text-left leading-snug">
+            <DiscAlbum className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+            <span className="min-w-0 [overflow-wrap:anywhere]" data-testid="disk-contents-title">
+              {diskName}
+            </span>
           </DialogTitle>
           <DialogDescription>
             {entries
@@ -94,12 +96,21 @@ export function DiskContentsDialog({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-medium" title={entry.name}>
-                            {entry.name || "(unnamed)"}
-                          </span>
-                          <Badge variant="secondary">{entry.type}</Badge>
-                          {entry.locked && <Badge variant="outline">locked</Badge>}
+                        <div
+                          className="font-medium [overflow-wrap:anywhere]"
+                          data-testid={`disk-entry-name-${entry.index}`}
+                        >
+                          {entry.name || "(unnamed)"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" className="whitespace-nowrap">
+                            {entry.type}
+                          </Badge>
+                          {entry.locked && (
+                            <Badge variant="outline" className="whitespace-nowrap">
+                              locked
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
                           {entry.blocks} blocks{loadAddr ? ` · ${loadAddr}` : ""}
