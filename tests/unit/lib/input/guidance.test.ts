@@ -416,3 +416,38 @@ describe("resolveSoftKeyMenuPanelLabels", () => {
     ]);
   });
 });
+
+describe("accessibleLabelFor — rendered text reads", () => {
+  const withRenderedTextCounter = (html: string) => {
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const element = host.firstElementChild as HTMLElement;
+    let reads = 0;
+    Object.defineProperty(element, "innerText", {
+      get: () => {
+        reads += 1;
+        return element.textContent;
+      },
+    });
+    return { element, reads: () => reads };
+  };
+
+  it("reads the laid-out text once while the element's text stays the same", () => {
+    const { element, reads } = withRenderedTextCounter("<section>Connection</section>");
+
+    expect(accessibleLabelFor(element)).toBe("Connection");
+    expect(accessibleLabelFor(element)).toBe("Connection");
+
+    expect(reads()).toBe(1);
+  });
+
+  it("reads the laid-out text again once the element's text changes", () => {
+    const { element, reads } = withRenderedTextCounter("<section>Connection</section>");
+
+    accessibleLabelFor(element);
+    element.textContent = "Devices";
+
+    expect(accessibleLabelFor(element)).toBe("Devices");
+    expect(reads()).toBe(2);
+  });
+});
