@@ -8,7 +8,6 @@
 
 import { useMemo, useState, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderOpen } from "lucide-react";
 import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import { configCategorySectionId } from "@/lib/search/configDeepLink";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -28,6 +27,7 @@ import { FallbackCategoryBlock } from "./FallbackCategoryBlock";
 import { useConfigLeafWrite } from "./useConfigLeafWrite";
 import { refreshConfigCategories } from "./refreshConfigCategories";
 import { reportUserError } from "@/lib/uiErrors";
+import { configCategoryIcon } from "@/pages/config/configCategoryIcon";
 
 interface MenuPageSectionProps {
   page: MenuNode;
@@ -120,7 +120,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       id={slug}
       title={page.label}
       summary={groupLabel ?? undefined}
-      icon={FolderOpen}
+      icon={configCategoryIcon(page.label)}
       headerRef={headerFocusRef}
       toggleTestId={`config-menu-page-${slug}`}
       bodyId={sectionId}
