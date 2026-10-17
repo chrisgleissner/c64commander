@@ -135,17 +135,29 @@ describe("a list row's item actions on the compact profile", () => {
     expect(action.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("make each detail row a stop the keypad can step to, and open on the first action", async () => {
+  it("make each detail row a stop the keypad can step to", async () => {
     renderList(buildItem(), 320);
     const sheet = await openSheet();
     const rows = sheet.getAllByTestId("action-list-item-sheet-detail-row");
     expect(rows).toHaveLength(3);
     for (const row of rows) expect(row).toHaveAttribute("tabindex", "0");
+  });
+
+  it("open on the play button, the first control shown, not on the first menu action below it", async () => {
+    renderList(buildItem(), 320);
+    const sheet = await openSheet();
+    await waitFor(() => expect(sheet.getByTestId("action-list-item-sheet-primary")).toHaveFocus());
+  });
+
+  it("open on the first action when the play button is unavailable", async () => {
+    renderList(buildItem({ isDimmed: true }), 320);
+    const sheet = await openSheet();
     await waitFor(() => expect(sheet.getByRole("button", { name: "Review playback config" })).toHaveFocus());
   });
 
-  it("open on the first detail row when the item has no actions", async () => {
+  it("open on the first detail row when the item has neither a play button nor actions", async () => {
     const item = buildItem({
+      onAction: undefined,
       menuItems: [
         { type: "label", label: "Details" },
         { type: "info", label: "Type", value: "SID music" },
