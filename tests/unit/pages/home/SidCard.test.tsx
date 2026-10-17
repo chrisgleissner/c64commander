@@ -85,26 +85,25 @@ describe("SidCard", () => {
 
   it("names the power toggle by its socket and state, so the keypad guidance bar does not read only ON", () => {
     render(<SidCard {...defaultProps} />);
-    expect(guidanceLabelFor(screen.getByText("ON").closest("button"))).toBe("SID 1 power: on");
+    expect(guidanceLabelFor(screen.getByRole("switch"))).toBe("SID 1 power: on");
   });
 
   it("renders basic info", () => {
     render(<SidCard {...defaultProps} />);
     expect(screen.getByText("SID 1")).toBeDefined();
-    expect(screen.getByText("ON")).toBeDefined();
+    expect(screen.getByRole("switch", { name: "SID 1 power: on" })).toBeChecked();
     expect(screen.getByText("SID Model")).toBeDefined();
   });
 
   it("handles power toggle", () => {
     render(<SidCard {...defaultProps} power={false} />);
-    fireEvent.click(screen.getByText("OFF"));
+    fireEvent.click(screen.getByRole("switch", { name: "SID 1 power: off" }));
     expect(defaultProps.onPowerToggle).toHaveBeenCalled();
   });
 
   it("renders readonly power button if no toggle handler", () => {
     render(<SidCard {...defaultProps} onPowerToggle={undefined} />);
-    const btn = screen.getByText("ON").closest("button");
-    expect(btn).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "SID 1 power: on" })).toBeDisabled();
   });
 
   it("renders readonly identity", () => {
@@ -182,8 +181,7 @@ describe("SidCard", () => {
 
   it("disables controls when disconnected or pending", () => {
     render(<SidCard {...defaultProps} isConnected={false} />);
-    const buttons = screen.getAllByTestId("button");
-    expect(buttons[0]).toBeDisabled();
+    expect(screen.getByRole("switch")).toBeDisabled();
 
     const selects = screen.getAllByTestId("select");
     selects.forEach((s) => expect(s.getAttribute("data-disabled")).toBe("true"));
