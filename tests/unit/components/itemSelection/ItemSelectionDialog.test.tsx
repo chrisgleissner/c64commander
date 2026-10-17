@@ -327,7 +327,9 @@ describe("ItemSelectionDialog display profiles", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
-    expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).toBeNull();
+    // The filter is the first row of the scrolling area, so a short viewport (the soft keyboard is up)
+    // is left with the list instead of a pinned filter, scope buttons and footer and no room for results.
+    expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).not.toBeNull();
 
     const filterInput = screen.getByPlaceholderText("Filter files…");
     fireEvent.change(filterInput, { target: { value: "Alpha" } });

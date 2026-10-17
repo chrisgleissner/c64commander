@@ -712,41 +712,36 @@ export const ItemSelectionDialog = ({
             </AppSheetHeader>
           )}
 
-          <div
-            className={cn(
-              "shrink-0 border-b border-border",
-              compactHeader ? "space-y-2" : "space-y-3",
-              bodyPaddingClassName,
-              compactHeader && "py-0",
-            )}
-          >
-            {compactHeader ? null : (
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  {selectionHeading}
-                  {selectionCount}
-                </div>
-              </div>
-            )}
-
-            {!isArchiveSource ? (
-              <ItemSelectionSearch
-                browser={browser}
-                compact={profile === "compact"}
-                searchText={searchText}
-                onSearchTextChange={(nextValue) => {
-                  if (usesNavigatorQuery) {
-                    browser.setQuery?.(nextValue);
-                    return;
-                  }
-                  setFilterText(nextValue);
-                }}
-                selectedSourceLabel={selectedSourceLabel}
-              />
-            ) : null}
-          </div>
-
           <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
+            <div
+              className={cn("border-b border-border pb-2", compactHeader ? "mb-2 space-y-2" : "mb-3 space-y-3")}
+              data-testid="add-items-filter-block"
+            >
+              {compactHeader ? null : (
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    {selectionHeading}
+                    {selectionCount}
+                  </div>
+                </div>
+              )}
+
+              {!isArchiveSource ? (
+                <ItemSelectionSearch
+                  browser={browser}
+                  compact={profile === "compact"}
+                  searchText={searchText}
+                  onSearchTextChange={(nextValue) => {
+                    if (usesNavigatorQuery) {
+                      browser.setQuery?.(nextValue);
+                      return;
+                    }
+                    setFilterText(nextValue);
+                  }}
+                  selectedSourceLabel={selectedSourceLabel}
+                />
+              ) : null}
+            </div>
             <div
               className={sourceContentClassName}
               data-testid={
