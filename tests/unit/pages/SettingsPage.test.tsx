@@ -2536,13 +2536,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(FolderPicker.listChildren).toHaveBeenCalled();
@@ -2570,18 +2570,20 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: "SAF_DIAGNOSTICS",
+          title: "Folder access diagnostics",
+          description: "No folders have been granted to the app yet.",
         }),
       );
     });
@@ -3322,7 +3324,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith("SAF persisted URI lookup failed", {
@@ -3339,13 +3341,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith("SAF enumeration failed", {

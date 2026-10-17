@@ -760,8 +760,8 @@ export default function SettingsPage() {
     if (!treeUri) {
       reportUserError({
         operation: "SAF_DIAGNOSTICS",
-        title: "SAF diagnostics",
-        description: "No persisted SAF permissions found.",
+        title: "Folder access diagnostics",
+        description: "No folders have been granted to the app yet.",
       });
       return;
     }
@@ -2148,7 +2148,7 @@ export default function SettingsPage() {
                         onClick={() => void refreshSafPermissions()}
                         disabled={safBusy}
                       >
-                        List persisted URIs
+                        List allowed folders
                       </Button>
                       <Button
                         variant="outline"
@@ -2156,7 +2156,7 @@ export default function SettingsPage() {
                         onClick={() => void enumerateSafRoot()}
                         disabled={safBusy || safUris.length === 0}
                       >
-                        Enumerate first root
+                        List first folder contents
                       </Button>
                     </div>
                     {safError ? <p className="text-xs text-destructive">{safError}</p> : null}
