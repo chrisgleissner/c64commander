@@ -775,11 +775,13 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
 
 ### 4.6 Docs (`/docs`)
 
-- Take the tour — card `docs-tour-card`, button `docs-tour-start` — R✅ I✅ — first on the page
-- Contents — card `docs-card-contents`, toggle `docs-toggle-contents` — R✅ I✅ — open on a
-  first visit. One jump link per chapter, two to a row — button —
+- Contents — card `docs-card-contents`, toggle `docs-toggle-contents` — R✅ I✅ — first on the
+  page, open on a first visit. One jump link per chapter, one to a row, 44 px tall, with the
+  chapter's icon — button —
   `docs-contents-link-<chapter id>` — R✅ I✅. OK opens the chapter, scrolls its header to the
   top of the page and moves the ring onto it.
+- Take the tour — card `docs-tour-card`, button `docs-tour-start` — R✅ I✅ — after the contents;
+  one row on the compact profile (button reads "Start")
 - Chapter toggles, in page order: Get started, Play a tune from HVSC, Find a tune fast, Build
   and order a playlist, Use SID Radio, Listen here or on your C64, Mount and run a disk, Type on
   the C64 with Remote Input, Play a game with Game Mode (… and the keypad on `c64u-remote`),
@@ -1518,8 +1520,15 @@ connected it is disabled with the reason `import-option-c64u-unavailable` ("Need
 
 **Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.
 
+- About this archive — button — `archive-about-toggle` — opens the source, host and the licence
+  sentence (`archive-legal-notice`); closed by default, so the sheet footer holds only Cancel and
+  Add
 - Search — button — `archive-search-button` — disabled until the composed query has at
-  least one term and while a search is running
+  least one term and while a search is running. It sits in a bar pinned to the bottom of the
+  scrolling body (`archive-search-bar`), beside a plain-language summary of the filled-in filters
+  (`archive-filter-summary`), so it is on screen however far the form is scrolled. The raw query
+  (`archive-query-preview`) appears only in developer mode. A finished search scrolls its results
+  into view
 - Select all (N) — button — `archive-select-all` `[only once there are results]`
 - Clear selection — button — `archive-clear-selection` `[only once something is
   selected]`

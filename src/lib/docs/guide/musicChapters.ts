@@ -106,7 +106,7 @@ export const findTuneChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
   id: "playlist",
   title: "Build and order a playlist",
-  navLabel: "Playlist",
+  navLabel: "Build a playlist",
   icon: ListMusic,
   blocks: [
     {
@@ -187,7 +187,7 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const audioOutputChapter = ({ variantId }: GuideContext): GuideChapter => ({
   id: "audio-output",
   title: "Listen here or on your C64",
-  navLabel: "Here or C64",
+  navLabel: "Listen here or on C64",
   icon: Headphones,
   blocks: [
     {

@@ -39,7 +39,6 @@ import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 
 const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
@@ -452,7 +451,7 @@ export const ItemSelectionDialog = ({
    * One wrapping row on every profile. Without `flex` the folder options and the buttons stacked as
    * blocks with no gap, the checkbox row flush on the buttons. Compact fits both on one row, since its
    * confirm button is up in the title bar; elsewhere the buttons wrap below, and the scan progress
-   * line or the archive notice still take their own line.
+   * line still takes its own line.
    */
   const footerLayoutClassName = "flex flex-row flex-wrap items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row" : "flex-row ml-auto";
@@ -472,8 +471,7 @@ export const ItemSelectionDialog = ({
           : SOURCE_LABELS.commoserve
     : null;
   const selectedSourceOrigin = source?.type ?? null;
-  const showArchiveLegalNotice = source?.type === "commoserve";
-  const showCompactHeaderConfirm = profile === "compact" && !showArchiveLegalNotice;
+  const showCompactHeaderConfirm = profile === "compact" && !isArchiveSource;
   const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
   const interstitialIconSlotClassName = cn(
     "flex shrink-0 items-center justify-center self-center",
@@ -734,35 +732,37 @@ export const ItemSelectionDialog = ({
           )}
 
           <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
-            <div
-              className={cn("border-b border-border pb-2", compactHeader ? "mb-2 space-y-2" : "mb-3 space-y-3")}
-              data-testid="add-items-filter-block"
-            >
-              {compactHeader ? null : (
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    {selectionHeading}
-                    {selectionCount}
+            {isArchiveSource && compactHeader ? null : (
+              <div
+                className={cn("border-b border-border pb-2", compactHeader ? "mb-2 space-y-2" : "mb-3 space-y-3")}
+                data-testid="add-items-filter-block"
+              >
+                {compactHeader ? null : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      {selectionHeading}
+                      {selectionCount}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {!isArchiveSource ? (
-                <ItemSelectionSearch
-                  browser={browser}
-                  compact={profile === "compact"}
-                  searchText={searchText}
-                  onSearchTextChange={(nextValue) => {
-                    if (usesNavigatorQuery) {
-                      browser.setQuery?.(nextValue);
-                      return;
-                    }
-                    setFilterText(nextValue);
-                  }}
-                  selectedSourceLabel={selectedSourceLabel}
-                />
-              ) : null}
-            </div>
+                {!isArchiveSource ? (
+                  <ItemSelectionSearch
+                    browser={browser}
+                    compact={profile === "compact"}
+                    searchText={searchText}
+                    onSearchTextChange={(nextValue) => {
+                      if (usesNavigatorQuery) {
+                        browser.setQuery?.(nextValue);
+                        return;
+                      }
+                      setFilterText(nextValue);
+                    }}
+                    selectedSourceLabel={selectedSourceLabel}
+                  />
+                ) : null}
+              </div>
+            )}
             <div
               className={sourceContentClassName}
               data-testid={
@@ -864,11 +864,6 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
-            {showArchiveLegalNotice ? (
-              <p className="text-xs leading-snug text-muted-foreground" data-testid="archive-legal-notice">
-                {LEGAL_NOTICE}
-              </p>
-            ) : null}
             {/* Not on an archive search: its results are individual files, so there are no folders for
                 this to say anything about. */}
             {folderOptions && allowFolderSelection && source && !isArchiveSource ? (
@@ -890,7 +885,7 @@ export const ItemSelectionDialog = ({
               >
                 {progress?.status === "scanning" && onCancelScan ? "Cancel scan" : "Cancel"}
               </Button>
-              {source && (profile !== "compact" || showArchiveLegalNotice) && (
+              {source && (profile !== "compact" || isArchiveSource) && (
                 <Button
                   variant="default"
                   size="default"
