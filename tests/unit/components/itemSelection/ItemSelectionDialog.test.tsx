@@ -1149,6 +1149,26 @@ describe("ItemSelectionDialog confirm in flight", () => {
     });
   });
 
+  it("takes the compact layout when the viewport is short, whatever its width", async () => {
+    // A phone with the soft keyboard open has about 400 CSS px of height. The expanded layout (title
+    // "Add items", confirm in a tall footer) left a filtered file list with no height at all.
+    setViewportWidth(1280);
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(max-height: 520px)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderOpenSource(vi.fn());
+
+      expect(await screen.findByTestId("add-items-title")).toHaveTextContent("From C64U");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it("makes confirm available again after onConfirm fails", async () => {
     setViewportWidth(1280);
     const first = deferred();

@@ -38,6 +38,7 @@ import { ItemSelectionSearch } from "./ItemSelectionSearch";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
 
 const isLocalAutoConfirmDisabled = () =>
@@ -109,7 +110,11 @@ export const ItemSelectionDialog = ({
   archiveConfigs,
   folderOptions,
 }: ItemSelectionDialogProps) => {
-  const { profile } = useDisplayProfile();
+  const { profile: displayProfile } = useDisplayProfile();
+  // A phone with the soft keyboard open has about 400 CSS px of height, the room the compact layout
+  // is made for, although its width says otherwise.
+  const shortViewport = useMediaQuery("(max-height: 520px)");
+  const profile = displayProfile === "compact" || shortViewport ? "compact" : displayProfile;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [archiveSelection, setArchiveSelection] = useState<Map<string, ArchiveSearchResult>>(new Map());
