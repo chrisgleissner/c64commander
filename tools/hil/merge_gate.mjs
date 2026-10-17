@@ -56,7 +56,7 @@
  * USAGE
  *
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
- *                                [--quiet-check] [--volume 3] [--json artifacts/hil-gate.json]
+ *                                [--quiet-check] [--volume 3] [--tone-volume 8] [--json artifacts/hil-gate.json]
  *                                [--keep-dir artifacts/gate-runs] [--target auto|handset|pixel]
  *
  * `--target auto` (the default) drives the keypad handset when droidctl lists it as ready, and the
@@ -447,11 +447,13 @@ const TONE_TUNES = [
 const TONE_SECONDS = 10;
 
 /**
- * The playback stages' volume. They ran at 10, which the person beside the phone called most annoying and
- * loud. At 2 the 550 Hz tone still measured 33 dB above its noise floor at the grille and `sid-local`
- * graded 100% present, so 3 keeps a margin. `MAX_VOLUME` is still an absolute refusal.
+ * The playback stages' volume. At 3 or 4 the 550 Hz tone peaked at about -63 dBFS at the grille, below
+ * the -60 dBFS floor the grader can separate from the room, so both stages failed as unmeasurable.
+ * They measure at 8 and stay under the ceiling. `MAX_VOLUME` is still an absolute refusal.
  */
-const TONE_VOLUME = Math.min(MAX_VOLUME, Number(arg("tone-volume", "3")));
+export const DEFAULT_TONE_VOLUME = 8;
+export const TONE_PEAK_FLOOR_DBFS = -60;
+const TONE_VOLUME = Number(arg("tone-volume", String(DEFAULT_TONE_VOLUME)));
 const CROSSFADE_SECONDS = 12;
 
 const results = [];
@@ -746,6 +748,8 @@ return JSON.stringify({engine:q("playback-engine-toggle")?.getAttribute("data-en
     wav,
     "--hz",
     String(TONE_TUNES[0].hz),
+    "--min-peak-dbfs",
+    String(TONE_PEAK_FLOOR_DBFS),
     "--json",
   ]);
   const report = JSON.parse((/\{.*\}/s.exec(graded.out) ?? ["{}"])[0]);
@@ -754,11 +758,20 @@ return JSON.stringify({engine:q("playback-engine-toggle")?.getAttribute("data-en
     throw new Error(`${label}: nothing was playing — ${report.faults.join("; ")}`);
   }
   if (report.verdict === "TOO QUIET TO GRADE") {
-    throw new Error(`${label}: cannot be measured on this rig — ${report.faults.join("; ")}`);
+    throw new Error(tooQuietMessage(label, report, TONE_VOLUME));
   }
   if (report.verdict !== "clean") throw new Error(`${label}: ${report.faults.join("; ")}`);
   return `${label}: tone present ${(report.present_fraction * 100).toFixed(1)}%, ${report.cents >= 0 ? "+" : ""}${report.cents} cents, longest gap ${report.longest_gap_ms} ms`;
 };
+
+/**
+ * The refusal for a tone the grader cannot separate from the room, naming the measured peak, the
+ * floor and the volume the stage ran at so the operator knows which of the three to change.
+ */
+export const tooQuietMessage = (label, report, volume, floor = TONE_PEAK_FLOOR_DBFS) =>
+  `${label}: cannot be measured on this rig — the tone peaked at ${report.peak_dbfs} dBFS, ` +
+  `${(floor - report.peak_dbfs).toFixed(1)} dB below the ${floor} dBFS floor, at phone volume ${volume} of 25 ` +
+  `(ceiling ${MAX_VOLUME}). Move the microphone closer to the grille or raise --tone-volume, never above ${MAX_VOLUME}`;
 
 /**
  * What the native pipeline hands the AudioTrack over the next `seconds`, after mixing and gain: the
@@ -1101,8 +1114,10 @@ const main = async () => {
   console.log(
     `HIL merge gate — Ultimate ${HOST}, target ${TARGET_MODE}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`,
   );
-  if (GATE_VOLUME > MAX_VOLUME) {
-    console.error(`refusing to run at volume ${GATE_VOLUME}: the ceiling is ${MAX_VOLUME} (see the header)`);
+  if (GATE_VOLUME > MAX_VOLUME || TONE_VOLUME > MAX_VOLUME) {
+    console.error(
+      `refusing to run at volume ${Math.max(GATE_VOLUME, TONE_VOLUME)}: the ceiling is ${MAX_VOLUME} (see the header)`,
+    );
     process.exit(2);
   }
 

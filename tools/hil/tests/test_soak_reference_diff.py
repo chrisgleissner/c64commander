@@ -197,3 +197,69 @@ def test_exit_status_is_one_only_when_a_defect_exists(tmp_path):
     )
     assert result.returncode == 0
     assert "unrenderable" in result.stdout
+
+
+LATE_SILENCE_PATTERN = [(12, 0.3), (10, 0.1), (12, 0.2), (8, 0.0), (10, 0.3), (8, 0.05)]
+
+
+def late_silence_setup(tmp_path):
+    root = make_hvsc(tmp_path, {"Aurora_Dreams-Sequence_2.sid": "Something Else"})
+    index = module.build_index(str(root))
+    renderer = fake_renderer({"Aurora_Dreams-Sequence_2": signal(LATE_SILENCE_PATTERN)})
+    return index, renderer, sampler(tmp_path, [TITLE, TITLE])
+
+
+def paused_recording():
+    return np.concatenate([signal(LATE_SILENCE_PATTERN[:2]), signal([(6, 0.0)]), signal(LATE_SILENCE_PATTERN[2:])])
+
+
+def test_a_real_pause_is_flagged_and_the_music_after_it_is_still_graded_against_the_shifted_reference(tmp_path):
+    index, renderer, samples = late_silence_setup(tmp_path)
+    report = run(tmp_path, samples, paused_recording(), index, renderer)
+    tune = report["tunes"][0]
+    assert tune["status"] == "graded"
+    assert tune["defects"] == [{"tune_second": 22, "seconds": 6, "wav_second": 22}]
+    assert tune["content_silences"] == [{"tune_second": 40, "seconds": 8}]
+    assert [r["shift_s"] for r in tune["realignments"]] == [6]
+
+
+def test_a_single_global_offset_would_report_the_shifted_content_silence_as_a_second_defect(tmp_path):
+    reference = levels_of(signal(LATE_SILENCE_PATTERN))
+    window = levels_of(paused_recording())[:60]
+    defects, _ = module.grade_segment(window, reference[:60], 30.0, 3)
+    assert [length for _, length in defects] == [6, 6]
+
+
+def test_a_recording_without_a_pause_keeps_a_zero_shift(tmp_path):
+    index, renderer, samples = late_silence_setup(tmp_path)
+    report = run(tmp_path, samples, signal(LATE_SILENCE_PATTERN), index, renderer)
+    tune = report["tunes"][0]
+    assert tune["status"] == "graded"
+    assert tune["defects"] == []
+    assert tune["realignments"] == []
+
+
+def test_ungradable_tunes_are_listed_with_a_reason_and_the_graded_fraction(tmp_path):
+    index, renderer, _ = one_tune_setup(tmp_path)
+    samples = sampler(tmp_path, ["Nothing Like This", "Nothing Like This", TITLE, TITLE])
+    report = run(tmp_path, samples, signal([(60, 0.2)] + TUNE_PATTERN), index, renderer)
+    by_title = {entry["title"]: entry for entry in report["ungradable"]}
+    assert by_title["Nothing Like This"]["status"] == "unmatched"
+    assert "no .sid" in by_title["Nothing Like This"]["reason"]
+    assert report["totals"]["graded_fraction"] == pytest.approx(0.5)
+    lines = module.format_report(report)
+    assert "graded 1 of 2 tunes (50%)" in lines[-1]
+    assert any("Nothing Like This: unmatched - no .sid" in line for line in lines)
+
+
+def test_a_weak_alignment_reason_names_the_correlation(tmp_path):
+    index, renderer, samples = one_tune_setup(tmp_path)
+    report = run(tmp_path, samples, signal([(80, 0.2)]), index, renderer)
+    assert report["ungradable"][0]["status"] == "weak alignment"
+    assert "below 0.5" in report["ungradable"][0]["reason"]
+
+
+def test_an_unrenderable_tune_reason_carries_the_render_error(tmp_path):
+    index, _, samples = one_tune_setup(tmp_path)
+    report = run(tmp_path, samples, signal(TUNE_PATTERN), index, fake_renderer({}))
+    assert "no such tune" in report["ungradable"][0]["reason"]

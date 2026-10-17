@@ -3,7 +3,9 @@
 
 `soak_report.py` lists every silence in the recording, but a tune may contain silence of its own. This tool
 renders each tune from an HVSC copy with sidplayfp, aligns the render with the recording and reports a silence
-as a defect only where the reference is audible. Silence in both is reported as content.
+as a defect only where the reference is audible. Silence in both is reported as content. After each silence the
+offset is re-estimated within +-10 s before the next segment is graded. Tunes that cannot be graded are listed with
+a reason (unmatched, unrenderable, weak alignment).
 
 Usage:
   soak_reference_diff.py SAMPLES.csv --wav FILE --hvsc-root C64Music [--wav-start-epoch N]
@@ -40,6 +42,9 @@ soak = load_sibling("soak_report")
 mic = soak.mic
 
 SEARCH_RADIUS_SECONDS = 45
+INITIAL_ALIGN_SECONDS = 40
+REALIGN_RADIUS_SECONDS = 10
+REALIGN_WINDOW_SECONDS = 30
 RENDER_MARGIN_SECONDS = 15
 MIN_ALIGN_SECONDS = 10
 WEAK_CORRELATION = 0.5
@@ -109,11 +114,11 @@ def correlation(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.corrcoef(a, b)[0, 1])
 
 
-def align(recording: np.ndarray, reference: np.ndarray, estimate: int, length: int) -> tuple[int, float]:
+def align(recording: np.ndarray, reference: np.ndarray, estimate: int, length: int, radius: int = SEARCH_RADIUS_SECONDS) -> tuple[int, float]:
     """Offset into the recording, within the search radius of the estimate, where its levels best follow the reference."""
     length = min(length, len(reference))
     best_offset, best = estimate, -2.0
-    candidates = sorted(range(estimate - SEARCH_RADIUS_SECONDS, estimate + SEARCH_RADIUS_SECONDS + 1), key=lambda o: abs(o - estimate))
+    candidates = sorted(range(estimate - radius, estimate + radius + 1), key=lambda o: abs(o - estimate))
     for offset in candidates:
         if offset < 0:
             continue
@@ -151,6 +156,60 @@ def grade_segment(recording: np.ndarray, reference: np.ndarray, below_db: float,
     return runs_of(recording_quiet & audible, min_seconds), runs_of(recording_quiet & reference_silent, min_seconds)
 
 
+def realign_after_silences(recording: np.ndarray, reference: np.ndarray, offset: int, span: int, below_db: float, min_seconds: int):
+    """Follow the reference through the recording, re-estimating the offset after every silence.
+
+    Returns the reference levels placed on the recording's own time axis for [offset, offset + span), and the
+    list of offset changes. A silence is mapped with the offset in force before it, so a pause the reference
+    does not contain is still compared against audible reference.
+    """
+    window = recording[offset : offset + span]
+    silences = runs_of(window < np.percentile(window, 90) - below_db, min_seconds)
+    floor = float(np.min(reference))
+    segments = []
+    current = offset
+    realignments = []
+    for start, length in silences:
+        end = offset + start + length
+        segments.append((end, current))
+        remaining = min(REALIGN_WINDOW_SECONDS, offset + span - end)
+        if remaining < MIN_ALIGN_SECONDS:
+            continue
+        best_offset, best = current, -2.0
+        for candidate in sorted(range(current - REALIGN_RADIUS_SECONDS, current + REALIGN_RADIUS_SECONDS + 1), key=lambda o: abs(o - current)):
+            ref_start = end - candidate
+            if ref_start < 0 or ref_start + remaining > len(reference):
+                continue
+            score = correlation(recording[end : end + remaining], reference[ref_start : ref_start + remaining])
+            if score > best:
+                best_offset, best = candidate, score
+        if best_offset != current and best >= WEAK_CORRELATION:
+            realignments.append({"wav_second": end, "shift_s": best_offset - current, "correlation": best})
+            current = best_offset
+            segments[-1] = (end, current)
+    mapped = np.full(span, floor)
+    boundaries = [(offset, offset)] + [(end, off) for end, off in segments]
+    for index, (from_second, segment_offset) in enumerate(boundaries):
+        until = boundaries[index + 1][0] if index + 1 < len(boundaries) else offset + span
+        for second in range(from_second, until):
+            reference_index = second - segment_offset
+            if 0 <= reference_index < len(reference):
+                mapped[second - offset] = reference[reference_index]
+    return mapped, realignments
+
+
+def initial_align_length(recording: np.ndarray, estimate: int, window: int, below_db: float, min_seconds: int) -> int:
+    """How much of the tune to align on first: up to INITIAL_ALIGN_SECONDS, stopping at the first silence after the estimate."""
+    length = min(window, INITIAL_ALIGN_SECONDS)
+    head = recording[max(estimate, 0) : max(estimate, 0) + length]
+    if len(head) < MIN_ALIGN_SECONDS:
+        return length
+    silences = runs_of(head < np.percentile(head, 90) - below_db, min_seconds)
+    if silences and silences[0][0] >= MIN_ALIGN_SECONDS:
+        return silences[0][0]
+    return length
+
+
 def tune_windows(samples) -> list[dict]:
     timeline = soak.tune_timeline(samples)
     gaps = [b.ts - a.ts for a, b in zip(samples, samples[1:]) if b.ts > a.ts]
@@ -162,10 +221,11 @@ def tune_windows(samples) -> list[dict]:
 def grade_tune(tune, recording, wav_start_epoch, index, renderer, render_dir, sidplayfp, below_db, min_seconds) -> dict:
     window = tune["end_ts"] - tune["start_ts"]
     estimate = tune["start_ts"] - wav_start_epoch
-    result = {**tune, "window_s": window, "status": None, "file": None, "offset_s": None, "correlation": None, "defects": [], "content_silences": []}
+    result = {**tune, "window_s": window, "status": None, "file": None, "offset_s": None, "correlation": None, "reason": None, "realignments": [], "defects": [], "content_silences": []}
     candidates = index.get(title_key(tune["title"]), [])
     if not candidates:
         result["status"] = "unmatched"
+        result["reason"] = "no .sid in the HVSC copy has this title"
         return result
     seconds = math.ceil(window) + RENDER_MARGIN_SECONDS
     best = None
@@ -176,21 +236,28 @@ def grade_tune(tune, recording, wav_start_epoch, index, renderer, render_dir, si
         except RenderError as error:
             errors.append(f"{candidate}: {error}")
             continue
-        offset, score = align(recording, reference, estimate, window)
+        offset, score = align(recording, reference, estimate, initial_align_length(recording, estimate, window, below_db, min_seconds))
         if best is None or score > best[0]:
             best = (score, offset, reference, candidate)
     if best is None:
         result["status"] = "unrenderable"
         result["error"] = "; ".join(errors)
+        result["reason"] = f"every candidate failed to render: {result['error']}"
         return result
     score, offset, reference, candidate = best
     result.update({"file": str(candidate), "offset_s": offset, "correlation": score})
     span = min(window, len(reference), len(recording) - offset)
     if span < MIN_ALIGN_SECONDS or score < WEAK_CORRELATION:
         result["status"] = "weak alignment"
+        result["reason"] = (
+            f"recording is too short to align ({span} s)" if span < MIN_ALIGN_SECONDS
+            else f"correlation {score:.2f} is below {WEAK_CORRELATION}"
+        )
         return result
-    defects, content = grade_segment(recording[offset : offset + span], reference[:span], below_db, min_seconds)
+    mapped, realignments = realign_after_silences(recording, reference, offset, span, below_db, min_seconds)
+    defects, content = grade_segment(recording[offset : offset + span], mapped, below_db, min_seconds)
     result["status"] = "graded"
+    result["realignments"] = realignments
     result["defects"] = [{"tune_second": start, "seconds": length, "wav_second": offset + start} for start, length in defects]
     result["content_silences"] = [{"tune_second": start, "seconds": length} for start, length in content]
     return result
@@ -213,7 +280,9 @@ def build_report(samples, recording, wav_start_epoch, index, renderer, render_di
             "weak_alignment": sum(t["status"] == "weak alignment" for t in tunes),
             "content_silences": sum(len(t["content_silences"]) for t in tunes),
             "defects": len(defects),
+            "graded_fraction": (sum(t["status"] == "graded" for t in tunes) / len(tunes)) if tunes else 0.0,
         },
+        "ungradable": [{"title": t["title"], "status": t["status"], "reason": t["reason"]} for t in tunes if t["status"] != "graded"],
     }
 
 
@@ -238,6 +307,11 @@ def format_report(report: dict) -> list[str]:
         f"totals: {totals['tunes']} tunes, {totals['graded']} graded, {totals['unmatched']} unmatched, {totals['unrenderable']} unrenderable, "
         f"{totals['weak_alignment']} weak alignment, {totals['content_silences']} content silences, {totals['defects']} defects"
     )
+    if report["ungradable"]:
+        lines.append(f"{len(report['ungradable'])} tune(s) not graded:")
+        for entry in report["ungradable"]:
+            lines.append(f"  {entry['title']}: {entry['status']} - {entry['reason']}")
+    lines.append(f"graded {totals['graded']} of {totals['tunes']} tunes ({totals['graded_fraction'] * 100:.0f}%)")
     return lines
 
 
