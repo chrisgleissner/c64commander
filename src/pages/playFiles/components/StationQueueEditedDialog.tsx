@@ -19,13 +19,20 @@ import { buttonVariants } from "@/components/ui/button";
 
 type StationQueueEditedDialogProps = {
   open: boolean;
+  stationTuneCount: number;
+  /** Null when the saved playlist has not been read back since the app started. */
+  playlistTuneCount: number | null;
   onKeepStationTunes: () => void;
   onReturnToPlaylist: () => void;
   onDismiss: () => void;
 };
 
+const tunes = (count: number) => `${count} ${count === 1 ? "tune" : "tunes"}`;
+
 export const StationQueueEditedDialog = ({
   open,
+  stationTuneCount,
+  playlistTuneCount,
   onKeepStationTunes,
   onReturnToPlaylist,
   onDismiss,
@@ -33,9 +40,11 @@ export const StationQueueEditedDialog = ({
   <AlertDialog open={open} onOpenChange={(next) => (next ? undefined : onDismiss())}>
     <AlertDialogContent data-testid="station-queue-edited-dialog">
       <AlertDialogHeader>
-        <AlertDialogTitle>Keep the station&apos;s tunes or return to your playlist?</AlertDialogTitle>
+        <AlertDialogTitle>Keep the SID Radio tunes or go back to your playlist?</AlertDialogTitle>
         <AlertDialogDescription className="not-sr-only">
-          You changed the queue while the station was playing.
+          You changed the queue while the station was playing. Keep the {tunes(stationTuneCount)} now queued, or put
+          back{" "}
+          {playlistTuneCount === null ? "the playlist you had before the station" : `your ${tunes(playlistTuneCount)}`}.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
