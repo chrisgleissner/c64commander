@@ -13,12 +13,18 @@ export type CoarseConnectionSnapshot = Omit<
   "lastProbeAtMs" | "lastProbeSucceededAtMs" | "lastProbeFailedAtMs"
 >;
 
-const shallowEqual = (a: object | null, b: object | null): boolean => {
+const sameValue = (a: unknown, b: unknown): boolean => {
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((item, i) => sameValue(item, b[i]));
+  return Object.is(a, b);
+};
+
+/** Device info is parsed from JSON on every answer, so its `errors` array is a new array each time. */
+const sameFields = (a: object | null, b: object | null): boolean => {
   if (a === b) return true;
   if (!a || !b) return false;
   const left = Object.entries(a);
   const right = b as Record<string, unknown>;
-  return left.length === Object.keys(b).length && left.every(([key, value]) => Object.is(right[key], value));
+  return left.length === Object.keys(b).length && left.every(([key, value]) => sameValue(value, right[key]));
 };
 
 const sameCoarseFields = (a: CoarseConnectionSnapshot, b: CoarseConnectionSnapshot): boolean =>
@@ -28,7 +34,7 @@ const sameCoarseFields = (a: CoarseConnectionSnapshot, b: CoarseConnectionSnapsh
   a.lastProbeError === b.lastProbeError &&
   a.demoInterstitialVisible === b.demoInterstitialVisible &&
   a.demoInterstitialReason === b.demoInterstitialReason &&
-  shallowEqual(a.deviceInfo, b.deviceInfo);
+  sameFields(a.deviceInfo, b.deviceInfo);
 
 const toCoarse = (snapshot: ConnectionSnapshot): CoarseConnectionSnapshot => ({
   state: snapshot.state,
