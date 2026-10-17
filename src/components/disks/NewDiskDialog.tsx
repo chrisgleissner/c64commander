@@ -89,6 +89,7 @@ export function NewDiskDialog({
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [deviceFolder, setDeviceFolder] = useState<string | null>(null);
+  const [foldersUnavailable, setFoldersUnavailable] = useState(false);
   const initialFolder = defaultFolder ?? deviceFolder ?? "";
   const [chosenFolder, setChosenFolder] = useState<string | null>(null);
   const folder = chosenFolder ?? initialFolder;
@@ -104,11 +105,13 @@ export function NewDiskDialog({
     if (!open || defaultFolder !== undefined) return undefined;
     let cancelled = false;
     setDeviceFolder(null);
+    setFoldersUnavailable(false);
     listStorageRoots()
       .then((roots) => {
         if (!cancelled) setDeviceFolder(pickNewDiskFolder(roots));
       })
       .catch((err) => {
+        if (!cancelled) setFoldersUnavailable(true);
         addLog("warn", "New Disk: could not list the device's storage folders", {
           error: (err as Error).message,
           stack: (err as Error).stack,
@@ -139,6 +142,8 @@ export function NewDiskDialog({
       return (err as Error).message;
     }
   }, [args, name]);
+
+  const lookingUpFolder = defaultFolder === undefined && deviceFolder === null && !foldersUnavailable;
 
   const reset = () => {
     setKind("d64");
@@ -259,7 +264,7 @@ export function NewDiskDialog({
               data-testid="new-disk-folder"
               data-t9-mode="hostname"
               value={folder}
-              placeholder="/USB0"
+              placeholder={lookingUpFolder ? "Looking up device storage…" : "/USB0"}
               onChange={(event) => setChosenFolder(event.target.value)}
               autoComplete="off"
             />
@@ -275,7 +280,7 @@ export function NewDiskDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 z-10 border-t border-border bg-background pt-2">
           <Button
             variant="outline"
             onClick={() => {
