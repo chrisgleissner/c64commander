@@ -6,7 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { useFocusNavigationContext } from "@/hooks/useFocusNavigation";
+import { restoreRingFocus } from "@/lib/input/restoreRingFocus";
 import { subscribeSearchOpen, type SearchOpenRequest } from "@/lib/search/overlayState";
 import { useTier1SearchEntries } from "@/hooks/useTier1SearchEntries";
 
@@ -23,11 +25,23 @@ const SearchOverlay = lazy(() => import("@/components/search/SearchOverlay"));
 
 export const SearchOverlayHost = () => {
   const [request, setRequest] = useState<SearchOpenRequest | null>(null);
+  const ring = useFocusNavigationContext();
+  const wasOpenRef = useRef(false);
 
   // Registered here, not in the overlay: the overlay is lazy, so entries published from inside it
   // would be missing from the first query of every launch.
   useTier1SearchEntries();
   useEffect(() => subscribeSearchOpen(setRequest), []);
+
+  useEffect(() => {
+    if (request !== null) {
+      wasOpenRef.current = true;
+      return;
+    }
+    if (!wasOpenRef.current) return;
+    wasOpenRef.current = false;
+    if (ring) restoreRingFocus(ring);
+  }, [request, ring]);
 
   if (request === null) return null;
 

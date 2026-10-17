@@ -151,6 +151,8 @@ export interface DiscoveryScan {
   readonly styles: Map<Element, CSSStyleDeclaration | null>;
   readonly positions: Map<Element, ReadingPosition>;
   readonly scrollOffsets: Map<Element, { top: number; left: number }>;
+  readonly skipped: Map<Element, Map<Element, boolean>>;
+  readonly cards: Map<Element, Element | null>;
 }
 
 export const createDiscoveryScan = (): DiscoveryScan => ({
@@ -158,6 +160,8 @@ export const createDiscoveryScan = (): DiscoveryScan => ({
   styles: new Map(),
   positions: new Map(),
   scrollOffsets: new Map(),
+  skipped: new Map(),
+  cards: new Map(),
 });
 
 const computedStyleOf = (element: Element, scan?: DiscoveryScan): CSSStyleDeclaration | null => {
@@ -207,13 +211,33 @@ export const isFocusDisabled = (element: Element): boolean =>
   isNativelyDisabled(element) || element.getAttribute("aria-disabled") === "true";
 
 /** Within a `data-key-nav-skip` subtree (bounded at `scope`). */
-export const isSkipped = (element: Element, scope: Element): boolean => {
+export const isSkipped = (element: Element, scope: Element, scan?: DiscoveryScan): boolean => {
+  if (!scan) return isSkippedUncached(element, scope);
+  let memo = scan.skipped.get(scope);
+  if (!memo) {
+    memo = new Map();
+    scan.skipped.set(scope, memo);
+  }
+  return isSkippedMemoized(element, scope, memo);
+};
+
+const isSkippedUncached = (element: Element, scope: Element): boolean => {
   let node: Element | null = element;
   while (node && node !== scope.parentElement) {
     if (node.hasAttribute(SKIP_ATTR)) return true;
     node = node.parentElement;
   }
   return false;
+};
+
+/** Siblings share nearly every ancestor, so each node's answer is settled once per scan and scope. */
+const isSkippedMemoized = (node: Element | null, scope: Element, memo: Map<Element, boolean>): boolean => {
+  if (!node || node === scope.parentElement) return false;
+  const cached = memo.get(node);
+  if (cached !== undefined) return cached;
+  const skipped = node.hasAttribute(SKIP_ATTR) || isSkippedMemoized(node.parentElement, scope, memo);
+  memo.set(node, skipped);
+  return skipped;
 };
 
 /** True when the browser can focus the element without a `tabindex` shim. */
@@ -319,9 +343,18 @@ const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: Readi
  */
 export const compareFocusables = (a: Element, b: Element): number => compareReadingOrder(a, b);
 
+const cardOf = (element: Element, scan?: DiscoveryScan): Element | null => {
+  if (!scan) return element.closest(SECTION_SCOPE_SELECTOR);
+  const cached = scan.cards.get(element);
+  if (cached !== undefined) return cached;
+  const card = element.closest(SECTION_SCOPE_SELECTOR);
+  scan.cards.set(element, card);
+  return card;
+};
+
 const compareReadingOrder = (a: Element, b: Element, scan?: DiscoveryScan): number => {
-  const aCard = a.closest(SECTION_SCOPE_SELECTOR);
-  const bCard = b.closest(SECTION_SCOPE_SELECTOR);
+  const aCard = cardOf(a, scan);
+  const bCard = cardOf(b, scan);
   // A growing card lays out its children at full height before its animated wrapper reaches that
   // height. Comparing those children with the next card interleaves their stops, and the ring keeps
   // that order after the animation finishes. Compare cards first so their stops stay contiguous;
@@ -363,7 +396,8 @@ const hasInteractive = (scope: Element, scan?: DiscoveryScan): boolean => {
   if (scope.hasAttribute(SKIP_ATTR)) return false;
   const candidates = scope.querySelectorAll(INTERACTIVE_SELECTOR);
   for (const candidate of candidates) {
-    if (isFocusVisible(candidate, scan) && !isFocusDisabled(candidate) && !isSkipped(candidate, scope)) return true;
+    if (isFocusVisible(candidate, scan) && !isFocusDisabled(candidate) && !isSkipped(candidate, scope, scan))
+      return true;
   }
   return false;
 };
@@ -417,7 +451,7 @@ export const discoverInteractiveElements = (scope: Element, options: DiscoverOpt
     if (seen.has(candidate)) continue;
     if (!isFocusVisible(candidate, scan)) continue;
     if (isNativelyDisabled(candidate)) continue;
-    if (isSkipped(candidate, scope)) continue;
+    if (isSkipped(candidate, scope, scan)) continue;
     if (excluded.some((selector) => candidate.closest(selector))) continue;
     seen.add(candidate);
     result.push(candidate);

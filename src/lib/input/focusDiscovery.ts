@@ -208,6 +208,20 @@ const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
   record.target instanceof Element &&
   record.oldValue === record.target.getAttribute(record.attributeName);
 
+/** Every element that has at least one of `elements` below it, found by climbing once from each. */
+const properAncestorsOf = (elements: Iterable<Element>): Set<Element> => {
+  const holding = new Set<Element>();
+  for (const element of elements) {
+    for (let node = element.parentElement; node && !holding.has(node); node = node.parentElement) holding.add(node);
+  }
+  return holding;
+};
+
+const hasAncestorIn = (element: Element, ancestors: ReadonlySet<Element>): boolean => {
+  for (let node = element.parentElement; node; node = node.parentElement) if (ancestors.has(node)) return true;
+  return false;
+};
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -568,6 +582,12 @@ export class FocusDiscoveryEngine {
     const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees, scan });
     const discoveredSet = new Set<HTMLElement>(discovered);
     const elements: HTMLElement[] = [...discovered];
+    const inRing = new Set<HTMLElement>(discovered);
+    const addToRing = (element: HTMLElement) => {
+      if (inRing.has(element)) return;
+      inRing.add(element);
+      elements.push(element);
+    };
 
     // The persistent tab bar is its own scope, appended after page content.
     const tabbar = scope.kind === "page" ? this.doc.querySelector(TABBAR_SCOPE_SELECTOR) : null;
@@ -581,8 +601,8 @@ export class FocusDiscoveryEngine {
       heldWhileDisabled !== null &&
       inScope(heldWhileDisabled) &&
       isFocusVisible(heldWhileDisabled, scan) &&
-      !isSkipped(heldWhileDisabled, scopeEl);
-    if (holdsDisabledSelection && !elements.includes(heldWhileDisabled)) elements.push(heldWhileDisabled);
+      !isSkipped(heldWhileDisabled, scopeEl, scan);
+    if (holdsDisabledSelection) addToRing(heldWhileDisabled);
 
     const registrationByElement = new Map<HTMLElement, ExplicitRegistration>();
     const groupElements = new Set<Element>();
@@ -595,12 +615,12 @@ export class FocusDiscoveryEngine {
         skipElements.add(element);
         continue;
       }
-      if (!inScope(element) || !isFocusVisible(element, scan) || isSkipped(element, scopeEl)) continue;
+      if (!inScope(element) || !isFocusVisible(element, scan) || isSkipped(element, scopeEl, scan)) continue;
       registrationByElement.set(element, registration);
       if (registration.descriptor.kind === "group") groupElements.add(element);
       // An explicitly-registered element that discovery missed (e.g. a non-
       // interactive group <div>) still joins the ring.
-      if (!elements.includes(element)) elements.push(element);
+      addToRing(element);
     }
     // Explicit `useFocusGroup` registrations captured above are always honoured.
     const explicitGroupElements = new Set<Element>(groupElements);
@@ -609,7 +629,7 @@ export class FocusDiscoveryEngine {
       ...Array.from(scopeEl.querySelectorAll(GROUP_CONTAINER_SELECTOR)),
     ].filter(
       (element): element is HTMLElement =>
-        element instanceof HTMLElement && isFocusVisible(element, scan) && !isSkipped(element, scopeEl),
+        element instanceof HTMLElement && isFocusVisible(element, scan) && !isSkipped(element, scopeEl, scan),
     );
     // A labelled container becomes a group only when it is the INNERMOST group
     // container — it must not contain another group container (explicit or
@@ -620,13 +640,11 @@ export class FocusDiscoveryEngine {
     // shallow — page → card → control — instead of page → section → card →
     // control. Explicit `useFocusGroup` nesting is left untouched (intentional).
     const groupCandidatePool = new Set<Element>([...explicitGroupElements, ...implicitGroupCandidates]);
+    const holdingAnotherGroupContainer = properAncestorsOf(groupCandidatePool);
     for (const element of implicitGroupCandidates) {
-      const containsAnotherGroupContainer = [...groupCandidatePool].some(
-        (other) => other !== element && element.contains(other),
-      );
-      if (containsAnotherGroupContainer) continue;
+      if (holdingAnotherGroupContainer.has(element)) continue;
       groupElements.add(element);
-      if (!elements.includes(element)) elements.push(element);
+      addToRing(element);
     }
 
     // The "field row" pattern: an explicit ITEM (not a group) that wraps
@@ -638,9 +656,9 @@ export class FocusDiscoveryEngine {
     const explicitItemContainers = [...registrationByElement.entries()]
       .filter(([, registration]) => registration.descriptor.kind !== "group")
       .map(([element]) => element);
+    const holdingExplicitItem = new Set<Element>(explicitItemContainers);
     const ownedByExplicitItem = (element: HTMLElement): boolean =>
-      !registrationByElement.has(element) &&
-      explicitItemContainers.some((container) => container !== element && container.contains(element));
+      !registrationByElement.has(element) && hasAncestorIn(element, holdingExplicitItem);
 
     // Sort the union into reading order, then drop groups that ended up empty and
     // non-interactive (a decorative container with no controls is not a ring stop).
@@ -671,6 +689,7 @@ export class FocusDiscoveryEngine {
       ...sortIntoReadingOrder(kept.filter(inTabbar), scan),
     ];
 
+    let holdingRingNode: Set<Element> | undefined;
     return ordered
       .map((element) => {
         const registration = registrationByElement.get(element);
@@ -686,7 +705,8 @@ export class FocusDiscoveryEngine {
       })
       .map((node, _index, all): RingNode | null => {
         if (!node.isGroup) return node;
-        if (all.some((other) => other !== node && node.element.contains(other.element))) return node;
+        holdingRingNode ??= properAncestorsOf(all.map((other) => other.element));
+        if (holdingRingNode.has(node.element)) return node;
         // A group with no in-scope descendant is either empty chrome, which is not a ring stop, or
         // a control that happens to carry a section label and has no interactive children of its
         // own. Dropping both took Home's System info button out of the ring entirely, with no key
