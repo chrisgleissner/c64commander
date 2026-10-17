@@ -733,7 +733,8 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     const preparation = page.getByTestId("hvsc-preparation-sheet");
     await audit.check(page, "Play / Preparing HVSC library", preparation, "confirmation");
     // Words wider than an equal share ran into their neighbours: "Download" ended 2px before
-    // "Unpack" began, and the row read as "DownloadUnpack".
+    // "Unpack" began, and the row read as "DownloadUnpack". Five steps fit in one row at 320 px only
+    // because no word is wider than "Analyze"; the first step is "Fetch" for that reason.
     const labelGaps = await page.evaluate(() => {
       const ranges = [...document.querySelectorAll("[data-testid^='hvsc-preparation-progress-'] > span")].map(
         (label) => {
@@ -744,7 +745,7 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
       );
       return ranges.slice(1).map((rect, index) => rect.left - ranges[index].right);
     });
-    expect(labelGaps.length).toBe(3);
+    expect(labelGaps.length).toBe(4);
     for (const gap of labelGaps) expect(gap, "space between two step labels").toBeGreaterThanOrEqual(6);
 
     audit.assertAllUsable();

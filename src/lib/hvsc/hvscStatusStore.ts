@@ -7,6 +7,7 @@
  */
 
 import type { HvscProgressEvent } from "./hvscTypes";
+import { applyHvscStageEvent, type HvscStageMeasurements } from "./hvscStageMetrics";
 import { addLog } from "@/lib/logging";
 
 export type HvscFailureCategory =
@@ -64,6 +65,8 @@ export type HvscStatusSummary = {
   download: HvscDownloadStatus;
   extraction: HvscExtractionStatus;
   metadata: HvscMetadataHydrationStatus;
+  /** Each install step's own clock and counters. See `hvscStageMetrics`. */
+  stages: HvscStageMeasurements;
   lastUpdatedAt?: string | null;
 };
 
@@ -73,6 +76,7 @@ export const getDefaultHvscStatusSummary = (): HvscStatusSummary => ({
   download: { status: "idle" },
   extraction: { status: "idle" },
   metadata: { status: "idle", stateToken: null },
+  stages: {},
   lastUpdatedAt: null,
 });
 
@@ -141,6 +145,15 @@ const buildRecoveryHint = (category: HvscFailureCategory, stage?: string | null)
 };
 
 export const applyHvscProgressEventToSummary = (
+  summary: HvscStatusSummary,
+  event: HvscProgressEvent,
+  lastStage?: string | null,
+): HvscStatusSummary => ({
+  ...applyEventToStepStatuses(summary, event, lastStage),
+  stages: applyHvscStageEvent(summary.stages, event, Date.now()),
+});
+
+const applyEventToStepStatuses = (
   summary: HvscStatusSummary,
   event: HvscProgressEvent,
   lastStage?: string | null,

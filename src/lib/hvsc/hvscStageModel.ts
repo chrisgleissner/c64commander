@@ -7,7 +7,7 @@
  */
 
 /**
- * Installing HVSC as four named steps, rather than one percentage.
+ * Installing HVSC as five named steps, rather than one percentage.
  *
  * A single bar was tried twice and failed on the device both times. The reason is not arithmetic: the
  * counters behind it are not one continuous quantity. Each stage reports its own, in its own units —
@@ -26,9 +26,9 @@
  */
 
 import type { HvscPreparationState } from "./hvscPreparationState";
+import { HVSC_STAGE_ORDER, stepForStage, type HvscStageId } from "./hvscStageIds";
 
-/** The four steps, in the order they run. */
-export type HvscStageId = "download" | "unpack" | "scan" | "details";
+export { HVSC_STAGE_ORDER, stepForStage, type HvscStageId };
 
 export type HvscStageStatus = "pending" | "active" | "done" | "failed";
 
@@ -42,10 +42,11 @@ export interface HvscStageStep {
 }
 
 export const HVSC_STAGE_LABELS: Record<HvscStageId, string> = {
-  download: "Download",
+  download: "Fetch",
   unpack: "Unpack",
   scan: "Find songs",
   details: "Song details",
+  analyze: "Analyze",
 };
 
 /**
@@ -64,35 +65,9 @@ export const HVSC_STAGE_DESCRIPTIONS: Record<HvscStageId, string> = {
   download: "Fetching the archive from the High Voltage SID Collection.",
   unpack: "Decompressing the archive and writing the tunes to this device.",
   scan: "Listing every tune in the collection and where it lives.",
-  details: "Reading each tune's name, composer and length. This is the long one.",
+  details: "Loading song lengths and reading the tune headers in the archive.",
+  analyze: "Reading every tune again for its name, composer and year. This is the long one.",
 };
-
-export const HVSC_STAGE_ORDER: HvscStageId[] = ["download", "unpack", "scan", "details"];
-
-/**
- * Which step a raw progress stage belongs to.
- *
- * The stage vocabulary is the native ingestion runtime's, and is finer-grained than anything worth
- * showing: `archive_validation` and `archive_extraction` are both "unpacking" as far as the user is
- * concerned, and `songlengths`, `sid_metadata_parsing` and `database_insertion` are all "reading the
- * details of each song".
- */
-const STAGE_TO_STEP: Record<string, HvscStageId> = {
-  download: "download",
-  archive_validation: "unpack",
-  archive_extraction: "unpack",
-  sid_enumeration: "scan",
-  songlengths: "details",
-  sid_metadata_parsing: "details",
-  // The hydration pass reports under its own name. Leaving it unmapped showed "Unpack" as the running
-  // step for the whole of it — observed on the device, stuck there for minutes while the panel below
-  // plainly read "HVSC META 128/61,157".
-  sid_metadata_hydration: "details",
-  database_insertion: "details",
-};
-
-export const stepForStage = (stage: string | null | undefined): HvscStageId | null =>
-  stage ? (STAGE_TO_STEP[stage] ?? null) : null;
 
 export interface HvscStageInput {
   state: HvscPreparationState;

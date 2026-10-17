@@ -23,7 +23,7 @@ export type HvscStageStepsProps = HvscStageInput & {
 };
 
 /**
- * The four install steps as a row of circles.
+ * The five install steps as a row of circles.
  *
  * This replaces a single percentage bar that failed on hardware twice. The problem was never the
  * arithmetic — it is that the counters behind the stages are in different units and disappear when
@@ -48,10 +48,11 @@ export const HvscStageSteps = ({
 
   return (
     <div className="space-y-2" data-testid={testId}>
-      {/* Equal columns, except that none is narrower than its longest word: at 320px an equal share
-          was 60px and "Download" is 66px at the smallest type allowed, so it ran into "Unpack". */}
+      {/* Equal columns, except that none is narrower than its longest word. At 320px an equal share of
+          five is 56px: no label may have a word wider than "Analyze", which is why the first step is
+          "Fetch" and not "Download" (66px at the smallest type allowed). */}
       <ol
-        className="grid items-start gap-x-3"
+        className="grid items-start gap-x-1.5"
         style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(min-content, 1fr))` }}
       >
         {steps.map((step, index) => (

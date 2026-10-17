@@ -26,12 +26,12 @@ const statuses = (input: Parameters<typeof hvscStageSteps>[0]) => hvscStageSteps
 const idOf = (input: Parameters<typeof hvscStageSteps>[0]) =>
   hvscStageSteps(input).find((step) => step.status === "active")?.id ?? null;
 
-describe("installing HVSC as four named steps", () => {
+describe("installing HVSC as five named steps", () => {
   it("names the last step after the work, not the implementation", () => {
     // It read "meta" on the device, next to a number that meant nothing to anyone who had not read
     // the ingestion runtime.
     const labels = hvscStageSteps({ state: "NOT_PRESENT" }).map((step) => step.label);
-    expect(labels).toEqual(["Download", "Unpack", "Find songs", "Song details"]);
+    expect(labels).toEqual(["Fetch", "Unpack", "Find songs", "Song details", "Analyze"]);
   });
 
   it("marks exactly one step active at a time while working", () => {
@@ -75,9 +75,16 @@ describe("installing HVSC as four named steps", () => {
   it("shows every step finished once the library is reachable, and only then", () => {
     // The bar's worst failure was never displaying its completion at all. Here the finished state is
     // the resting state, so it cannot be missed.
-    expect(statuses({ state: "READY" })).toEqual(["done", "done", "done", "done"]);
-    expect(statuses({ state: "INGESTING", stage: "sid_metadata_parsing" })).not.toContain("pending");
-    expect(statuses({ state: "INGESTING", stage: "sid_metadata_parsing" })).toContain("active");
+    expect(statuses({ state: "READY" })).toEqual(["done", "done", "done", "done", "done"]);
+    expect(statuses({ state: "INGESTING", stage: "sid_metadata_hydration" })).not.toContain("pending");
+    expect(statuses({ state: "INGESTING", stage: "sid_metadata_hydration" })).toContain("active");
+    expect(statuses({ state: "INGESTING", stage: "sid_metadata_parsing" })).toEqual([
+      "done",
+      "done",
+      "done",
+      "active",
+      "pending",
+    ]);
   });
 
   it("counts the download finished as soon as ingestion begins, whatever stage is reported", () => {
@@ -93,19 +100,50 @@ describe("installing HVSC as four named steps", () => {
   });
 
   it("keeps the archive step finished while the archive sits cached", () => {
-    expect(statuses({ state: "DOWNLOADED" })).toEqual(["done", "pending", "pending", "pending"]);
+    expect(statuses({ state: "DOWNLOADED" })).toEqual(["done", "pending", "pending", "pending", "pending"]);
   });
 
   it("shows where a failure happened, with the earlier steps still credited", () => {
-    expect(statuses({ state: "ERROR", stage: "sid_metadata_parsing" })).toEqual(["done", "done", "done", "failed"]);
-    expect(statuses({ state: "ERROR", stage: "download" })).toEqual(["failed", "pending", "pending", "pending"]);
+    expect(statuses({ state: "ERROR", stage: "sid_metadata_parsing" })).toEqual([
+      "done",
+      "done",
+      "done",
+      "failed",
+      "pending",
+    ]);
+    expect(statuses({ state: "ERROR", stage: "sid_metadata_hydration" })).toEqual([
+      "done",
+      "done",
+      "done",
+      "done",
+      "failed",
+    ]);
+    expect(statuses({ state: "ERROR", stage: "download" })).toEqual([
+      "failed",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
     // With only the coarse phase to go on, credit the download and blame the earliest ingest step
     // rather than overstating how far it got.
-    expect(statuses({ state: "ERROR", failedPhase: "ingest" })).toEqual(["done", "failed", "pending", "pending"]);
-    expect(statuses({ state: "ERROR", failedPhase: "download" })).toEqual(["failed", "pending", "pending", "pending"]);
+    expect(statuses({ state: "ERROR", failedPhase: "ingest" })).toEqual([
+      "done",
+      "failed",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+    expect(statuses({ state: "ERROR", failedPhase: "download" })).toEqual([
+      "failed",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
   });
 
-  it("groups the runtime's stage vocabulary onto the four the user sees", () => {
+  it("groups the runtime's stage vocabulary onto the five the user sees", () => {
     const grouped: Record<string, HvscStageId | null> = {
       download: "download",
       archive_validation: "unpack",
@@ -115,7 +153,7 @@ describe("installing HVSC as four named steps", () => {
       sid_metadata_parsing: "details",
       // The hydration pass reports under its own name. Observed unmapped on the device: the stepper
       // showed "Unpack" running for minutes while the panel below read "HVSC META 128/61,157".
-      sid_metadata_hydration: "details",
+      sid_metadata_hydration: "analyze",
       database_insertion: "details",
       unknown_stage: null,
     };
@@ -138,12 +176,19 @@ describe("installing HVSC as four named steps", () => {
     // Reopening the app mid-install restores state from the persisted summary without replaying
     // progress events, so the raw stage is null. Observed on the device: "Unpack" shown as running
     // for minutes while the panel below read "HVSC META 128/61,157".
-    expect(statuses({ state: "INGESTING", stage: null, step: "details" })).toEqual(["done", "done", "done", "active"]);
-    expect(idOf({ state: "INGESTING", stage: "archive_extraction", step: "details" })).toBe("details");
+    expect(statuses({ state: "INGESTING", stage: null, step: "analyze" })).toEqual([
+      "done",
+      "done",
+      "done",
+      "done",
+      "active",
+    ]);
+    expect(idOf({ state: "INGESTING", stage: "archive_extraction", step: "analyze" })).toBe("analyze");
   });
 
-  it("puts the hydration pass on the song-details step", () => {
+  it("puts the hydration pass on its own final step, after the song details", () => {
     expect(statuses({ state: "INGESTING", stage: "sid_metadata_hydration" })).toEqual([
+      "done",
       "done",
       "done",
       "done",

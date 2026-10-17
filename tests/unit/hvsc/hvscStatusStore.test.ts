@@ -87,6 +87,7 @@ describe("hvscStatusStore", () => {
           percent: 100,
           recoveryHint: null as never,
         },
+        stages: {},
         lastUpdatedAt: "later",
       };
 
