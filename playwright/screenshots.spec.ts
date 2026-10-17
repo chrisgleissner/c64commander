@@ -2812,6 +2812,9 @@ test.describe("App screenshots", () => {
       await expect(sheet).toBeVisible();
       const immersiveMirror = sheet.getByTestId("av-mirror-immersive");
       if (await immersiveMirror.isVisible().catch(() => false)) {
+        // On the compact profile the picture is a thin strip without its zoom controls, so the controls
+        // are exercised at the medium profile.
+        await applyDisplayProfileViewport(page, "medium");
         await expect(immersiveMirror.getByTestId("av-mirror-immersive-controls")).toBeVisible({ timeout: 8000 });
         // Zoom in so the picture is magnified and the corner minimap (with its draggable
         // viewport rectangle) is on screen — the CTAs the manual/README describe.
