@@ -74,7 +74,11 @@ import {
 import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
-import { dispatchDeviceBackKey, installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import {
+  dispatchDeviceBackKey,
+  installDeviceBackButton,
+  runBackWhenOverlaysSettled,
+} from "@/lib/input/deviceBackButton";
 import {
   DIALOG_ANCESTOR_SELECTOR,
   ENTER_IGNORING_CONTROL_SELECTOR,
@@ -438,7 +442,7 @@ export const FocusNavigationProvider = ({
       // does. Once per press: a held key must not close a select, then its dialog, then walk on.
       if (action === "softLeft" && isAnyOverlayOpen()) {
         event.preventDefault();
-        if (!event.repeat) dispatchDeviceBackKey(document.activeElement ?? document);
+        if (!event.repeat) runBackWhenOverlaysSettled(() => dispatchDeviceBackKey(document.activeElement ?? document));
         return;
       }
       const shortcuts = shortcutsRef.current;
