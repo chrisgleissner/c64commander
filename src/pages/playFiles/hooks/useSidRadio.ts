@@ -554,7 +554,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         const hvscMissing = getMd548PathIndexStats().size === 0;
         // Only the Likes station is seeded by likes, so only its refusal may ask for more of them.
         const emptyRefusal: Record<ActiveStation["seedKind"], SidRadioNotice> = {
-          song: "no-radio-for-tune",
+          song: styleFilter === null ? "no-radio-for-tune" : "no-radio-for-tune-in-style",
           style: "no-radio-for-style",
           taste: "no-radio",
           collection: "no-radio-for-collection",

@@ -46,6 +46,8 @@ export type SidRadioLauncherSheetProps = {
    * entirely, because a mood on its own is what the style tiles below already offer.
    */
   songSeedLabel?: string | null;
+  /** False when the tune is not an HVSC tune, so no station can be built from it. Defaults to true. */
+  songSeedInHvsc?: boolean;
   /** The mood the active Song station is constrained to; `null` is all moods. */
   songStyleBit?: number | null;
   /** Start the Song station, or re-aim the active one, at this mood; `null` is all moods. */
@@ -97,6 +99,7 @@ export const SidRadioLauncherSheet = ({
   onSurprise,
   songSeedLabel = null,
   songStyleBit = null,
+  songSeedInHvsc = true,
   onStartSong,
   hvscMissing = false,
   onInstallHvsc,
@@ -148,8 +151,20 @@ export const SidRadioLauncherSheet = ({
               </div>
             ) : null}
             {songSeedLabel && onStartSong ? (
-              <div className="flex flex-col gap-2" data-testid="sid-radio-song-section">
-                <Label className="font-medium">Similar to {readableSeedLabel(songSeedLabel)}</Label>
+              <div
+                className="flex flex-col gap-2 rounded-md border border-primary/40 p-3"
+                data-testid="sid-radio-song-section"
+              >
+                <h3 className="text-sm font-semibold">Similar to {readableSeedLabel(songSeedLabel)}</h3>
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="sid-radio-song-hint"
+                  tabIndex={songSeedInHvsc ? undefined : 0}
+                >
+                  {songSeedInHvsc
+                    ? "Start a station from this tune, then pick a mood."
+                    : "This tune is not in HVSC, so no station can be built from it."}
+                </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {songMoodOptions.map((option) => {
                     // A mood with no members admits nothing, so the intersection with any seed is
@@ -165,7 +180,7 @@ export const SidRadioLauncherSheet = ({
                         className="h-auto whitespace-normal py-1.5 text-xs"
                         data-testid={`sid-radio-song-mood-${option.bit ?? "all"}`}
                         aria-pressed={selected}
-                        disabled={hvscMissing || !populated}
+                        disabled={hvscMissing || !populated || !songSeedInHvsc}
                         onClick={() => {
                           close();
                           onStartSong(option.bit);
