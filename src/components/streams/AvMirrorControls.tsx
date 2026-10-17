@@ -131,7 +131,11 @@ export function AvMirrorControls({
         </Button>
       )}
       {error && (
-        <span role="alert" className="text-xs text-destructive" data-testid="av-mirror-error">
+        <span
+          role="alert"
+          className={cn("text-xs", video.reconnecting ? "text-warning" : "text-destructive")}
+          data-testid="av-mirror-error"
+        >
           {error}
         </span>
       )}

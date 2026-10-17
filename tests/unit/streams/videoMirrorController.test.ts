@@ -129,6 +129,69 @@ describe("VideoMirrorController", () => {
     }
   });
 
+  const goSilent = async (onStreamLost: (info: unknown) => boolean) => {
+    vi.useFakeTimers();
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      onStreamLost,
+      now: () => clock,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    for (let i = 0; i < 12; i += 1) {
+      clock += 1000;
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    return controller;
+  };
+
+  it("reports how long the stream was live and how it ended when it goes silent", async () => {
+    const onStreamLost = vi.fn(() => false);
+    try {
+      await goSilent(onStreamLost);
+      expect(onStreamLost).toHaveBeenCalledTimes(1);
+      expect(onStreamLost).toHaveBeenCalledWith(
+        expect.objectContaining({ silentMs: expect.any(Number), liveForMs: expect.any(Number), pageHidden: false }),
+      );
+      const info = onStreamLost.mock.calls[0][0] as { silentMs: number; liveForMs: number };
+      expect(info.silentMs).toBeGreaterThanOrEqual(8000);
+      expect(info.liveForMs).toBeGreaterThanOrEqual(info.silentMs);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says the video is reconnecting when its owner is restarting the lost stream", async () => {
+    try {
+      const controller = await goSilent(() => true);
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().reconnecting).toBe(true);
+      expect(controller.getSnapshot().error).toBe("Video lost, reconnecting…");
+      controller.abandonReconnect();
+      expect(controller.getSnapshot().reconnecting).toBe(false);
+      expect(controller.getSnapshot().error).toMatch(/stopped arriving/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the reconnecting state when the stream is started again", async () => {
+    try {
+      const controller = await goSilent(() => true);
+      await controller.start();
+      expect(controller.getSnapshot().reconnecting).toBe(false);
+      expect(controller.getSnapshot().error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stamps a frame with the EARLIEST arrival of its packets, despite reordering", async () => {
     const receiver = new FakeReceiver();
     const renderFrame = vi.fn();

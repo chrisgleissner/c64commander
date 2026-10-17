@@ -141,6 +141,23 @@ describe("SidCard", () => {
     expect(screen.queryAllByTestId("select")).toHaveLength(2); // Identity + Address only
   });
 
+  it("shows a shaping value as text, not an empty select, while the device has listed no options for it", () => {
+    render(
+      <SidCard
+        {...defaultProps}
+        shapingControls={[{ label: "Resistor", value: "—", options: [], onChange: vi.fn() }]}
+      />,
+    );
+    expect(screen.getByTestId("home-sid-shaping-foo-0-readonly")).toHaveTextContent("—");
+    expect(screen.queryAllByTestId("select")).toHaveLength(2);
+  });
+
+  it("shows the identity value as text, not an empty select, while the device has listed no options for it", () => {
+    render(<SidCard {...defaultProps} identityOptions={[]} />);
+    expect(screen.getByTestId("home-sid-type-foo")).toHaveTextContent("8580");
+    expect(screen.queryAllByTestId("select")).toHaveLength(2);
+  });
+
   it("handles volume interaction", () => {
     const commit = vi.fn();
     const change = vi.fn();
