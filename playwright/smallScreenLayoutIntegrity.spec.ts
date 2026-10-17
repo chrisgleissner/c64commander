@@ -524,7 +524,7 @@ test.describe("Small screen layout integrity", () => {
       name: "Settings / Diagnostics",
       route: "/settings",
       open: async (page) => {
-        await page.getByRole("button", { name: "Diagnostics", exact: true }).first().click();
+        await page.getByRole("button", { name: "Open diagnostics", exact: true }).first().click();
       },
     },
   ];

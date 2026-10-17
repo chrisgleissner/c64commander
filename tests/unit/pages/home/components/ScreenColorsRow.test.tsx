@@ -58,7 +58,7 @@ describe("ScreenColorsRow", () => {
     // reference palette. Where it came from sits on its own line, so a narrow screen truncates the
     // palette's name rather than the fact that it is the machine's.
     expect(screen.getByTestId("home-video-screen-colors")).toHaveTextContent("Default");
-    expect(screen.getByTestId("home-video-screen-colors-following")).toHaveTextContent("Following the C64");
+    expect(screen.getByTestId("home-video-screen-colors-following")).toHaveTextContent("Set on the C64");
   });
 
   it("follows the painted palette when it changes", () => {

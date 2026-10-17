@@ -79,7 +79,7 @@ export function ScreenColorsRow({
           screen legibility floor exists to stop. */}
       {following ? (
         <span className="block text-muted-foreground" data-testid="home-video-screen-colors-following">
-          Following the C64
+          Set on the C64
         </span>
       ) : null}
       {/* Mounted only once opened. The sheet reads the machine's palette list, and Home should not

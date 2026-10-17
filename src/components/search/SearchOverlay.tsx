@@ -394,7 +394,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
           }}
           onKeyDown={onKeyDown}
           data-testid="search-input"
-          className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none"
         />
         <Button
           variant="ghost"

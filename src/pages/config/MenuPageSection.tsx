@@ -125,14 +125,23 @@ export const MenuPageSection = memo(function MenuPageSection({
       toggleTestId={`config-menu-page-${slug}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      actions={
+        isOpen ? (
+          <Button
+            ref={refreshFocusRef}
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
+            className="size-11 shrink-0"
+            aria-label={`Refresh ${page.label}`}
+            data-testid={`config-refresh-${slug}`}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        ) : undefined
+      }
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: page.label }, "ConfigHeader")}
     >
-      <div className="flex items-center justify-end py-2" data-testid="config-group-actions">
-        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
       {blocks.map((block) => (
         <MenuBlock
           key={block.key}
@@ -144,9 +153,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       ))}
       {advancedCategories.length > 0 ? (
         <div data-testid={`config-page-advanced-${slug}`}>
-          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold text-muted-foreground/70">
-            Advanced
-          </h4>
+          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold text-muted-foreground/70">Advanced</h4>
           {advancedCategories.map((category) => (
             <FallbackCategoryBlock
               key={`advanced:${category}`}

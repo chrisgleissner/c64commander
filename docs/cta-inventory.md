@@ -640,7 +640,7 @@ past it to anything below.
   to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
   `settings-delete-device` — R✅ I✅ `[disabled: single device]` — the confirmation
   names the device selected when it opened, by name and address, and deletes that
-  device even if the selection changes while it is open ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
+  device even if the selection changes while it is open (its red confirm button is `settings-delete-device-confirm`) ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —
   `settings-device-http|ftp|telnet` — R✅ I✅ ; password — password — R✅ I✅ ;
   device-editor reachability hint — status panel —
@@ -659,7 +659,7 @@ past it to anything below.
   Preview Demo Mode — button — `settings-preview-demo-mode` — R✅ I✅ `[visible
   while not already in Demo Mode; switches to the simulated device immediately,
   even with a real C64U connected]`
-- **Diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
+- **Open diagnostics** — button — `diagnostics-open-dialog` — R✅ I✅
 - **Feature flags** — checkbox — `feature-flag-*` (incl.
   `feature-flag-keypad_input_enabled`) — R✅ I✅ (`c64u-remote`: RAM snapshots
   and keypad ship on; background execution, HVSC, and Home Telnet

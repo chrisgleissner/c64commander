@@ -52,7 +52,7 @@ import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorF
 import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { requestTourStart } from "@/lib/tour/tourState";
@@ -2068,6 +2068,8 @@ export default function SettingsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                       <AlertDialogAction
+                        className={buttonVariants({ variant: "destructive" })}
+                        data-testid="settings-delete-device-confirm"
                         onClick={() => {
                           void confirmDeleteDevice();
                         }}
@@ -2111,7 +2113,7 @@ export default function SettingsPage() {
                   data-testid="diagnostics-open-dialog"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Diagnostics
+                  Open diagnostics
                 </Button>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">

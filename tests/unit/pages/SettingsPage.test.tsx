@@ -1706,6 +1706,17 @@ describe("SettingsPage", () => {
       await waitFor(() => expect(persistedDeviceIds()).toEqual(["saved-device-1"]));
     });
 
+    it("styles the confirm button as destructive", async () => {
+      await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+      await screen.findByRole("alertdialog", { name: /delete device/i });
+
+      expect(screen.getByTestId("settings-delete-device-confirm").className).toContain("bg-destructive");
+    });
+
     it("counts a single referring item in the singular", async () => {
       await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
       mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 1, playlistItemCount: 0, totalCount: 1 });
@@ -2804,7 +2815,7 @@ describe("SettingsPage", () => {
   it("requests the global diagnostics overlay from the settings trigger", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open diagnostics" }));
 
     expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");

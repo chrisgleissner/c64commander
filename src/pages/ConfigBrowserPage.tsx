@@ -829,11 +829,26 @@ const CategorySection = memo(function CategorySection({
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      actions={
+        isOpen ? (
+          <Button
+            ref={refreshFocusRef}
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
+            className="size-11 shrink-0"
+            aria-label={`Refresh ${displayTitle ?? categoryName}`}
+            data-testid={`config-refresh-${categorySlug}`}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        ) : undefined
+      }
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
       {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}
-      <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
-        <div className="flex items-center gap-2">
+      {hasCategoryGroupAction ? (
+        <div className="flex items-center gap-2 py-2" data-testid="config-group-actions">
           {categoryName === "Audio Mixer" && (
             <Button
               ref={categoryActionFocusRef}
@@ -859,11 +874,7 @@ const CategorySection = memo(function CategorySection({
             </Button>
           )}
         </div>
-        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
+      ) : null}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">

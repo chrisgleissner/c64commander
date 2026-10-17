@@ -73,11 +73,7 @@ export function FallbackCategoryBlock({
 
   return (
     <div data-testid={`config-fallback-category-${category.toLowerCase().replace(/\s+/g, "-")}`}>
-      {hideHeading ? null : (
-        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold text-muted-foreground">
-          {category}
-        </h4>
-      )}
+      {hideHeading ? null : <h4 className="px-1 pt-3 pb-1 text-xs font-semibold text-muted-foreground">{category}</h4>}
       <div className="divide-y divide-border" data-testid="config-group-list">
         {leftover.slice(0, staged.count).map((item) => {
           const overlay = resolveOverlayEntry(category, item);

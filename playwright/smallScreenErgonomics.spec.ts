@@ -512,7 +512,7 @@ test.describe("Small screen ergonomics", () => {
   test("diagnostics device line and overflow menu rows meet the target size @layout", async ({ page }) => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await settle(page);
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
     await dialog.getByTestId("diagnostics-overflow-menu").click();
