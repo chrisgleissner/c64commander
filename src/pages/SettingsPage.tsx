@@ -278,12 +278,15 @@ const resolveAppStyleSwatchColors = (style: AppStyle, preferredMode: AppStyleMod
   return mode === "dark" ? style.dark?.colors : style.light?.colors;
 };
 
-const AppStyleSwatch = ({ colors }: { colors: AppStyleColors }) => (
+const AppStyleSwatch = ({ colors, selected = false }: { colors: AppStyleColors; selected?: boolean }) => (
   <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
     {[colors.background, colors.primary, colors.accent].map((hsl, index) => (
       <span
         key={index}
-        className="h-4 w-4 rounded-full border border-border/60"
+        className={cn(
+          "h-4 w-4 rounded-full border",
+          selected ? "border-2 border-primary-foreground" : "border-border/60",
+        )}
         style={{ backgroundColor: `hsl(${hsl})` }}
       />
     ))}
@@ -1325,7 +1328,7 @@ export default function SettingsPage() {
                         isCompactProfile ? "p-2" : "p-4",
                       )}
                     >
-                      <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                      <Icon className={`h-6 w-6 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                       {/* break-normal here too: the global :where(span) rule (src/index.css) matches
                           this span directly, so the button's own break-normal above does not cascade
                           to it — a real device wrapped "Light" as "Ligh"/"t" without this. */}
@@ -1386,7 +1389,7 @@ export default function SettingsPage() {
                             </span>
                           ) : null}
                         </span>
-                        {swatchColors ? <AppStyleSwatch colors={swatchColors} /> : null}
+                        {swatchColors ? <AppStyleSwatch colors={swatchColors} selected={isActive} /> : null}
                       </Button>
                     );
                   })}
@@ -1408,7 +1411,7 @@ export default function SettingsPage() {
                       >
                         <span className="break-normal text-sm font-medium">Match my device</span>
                         {swatchColors ? (
-                          <AppStyleSwatch colors={swatchColors} />
+                          <AppStyleSwatch colors={swatchColors} selected={isMatchMyDevice} />
                         ) : (
                           <span className="shrink-0 text-xs text-muted-foreground">?</span>
                         )}
