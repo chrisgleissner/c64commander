@@ -565,6 +565,22 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-rendered-ahead")).toHaveAttribute("data-rendered-percent", "30");
   });
 
+  it.each([
+    ["nothing rendered yet", { renderedPercent: 0 }],
+    ["a tune rendered in part", { renderedPercent: 40 }],
+    ["a tune that is fully rendered", { renderedPercent: 100 }],
+    ["no render figure at all", {}],
+  ])("draws the empty track of the seek bar for %s", (_name, extra) => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 0, onSeekToFraction: () => {}, ...extra })}
+      />,
+    );
+    const track = screen.getByTestId("playback-track");
+    expect(track).toHaveClass("bg-secondary");
+    expect(track.parentElement).toContainElement(screen.getByTestId("playback-progress"));
+  });
+
   it("names the progress bar Playback progress, on the seekable bar and on the plain indicator", () => {
     const { unmount } = render(
       <PlaybackControlsCard
