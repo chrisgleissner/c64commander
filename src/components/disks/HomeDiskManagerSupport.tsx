@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { formatByteSize, formatDetailDate, UNKNOWN_VALUE } from "@/lib/ui/detailFormat";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -163,3 +165,19 @@ export const getStatusMessageColorClass = (status: { severity: "INFO" | "WARN" |
   if (status.message === "OK") return "text-success";
   return getDiagnosticsColorClassForDisplaySeverity(status.severity);
 };
+
+export const driveFieldsClass = (compact: boolean) =>
+  cn(
+    "min-w-0 overflow-hidden text-xs text-muted-foreground",
+    compact
+      ? "grid grid-cols-[auto_1fr] items-center justify-items-start gap-x-3 gap-y-1 whitespace-normal"
+      : "flex flex-wrap items-center gap-x-4 gap-y-1 whitespace-nowrap",
+  );
+
+/** A label with its control. Wider profiles keep the two together when the row wraps; compact aligns them in columns. */
+export const DriveField = ({ label, compact, children }: { label: string; compact: boolean; children: ReactNode }) => (
+  <div className={compact ? "contents" : "flex items-center gap-1"}>
+    <span className="shrink-0">{label}</span>
+    {children}
+  </div>
+);

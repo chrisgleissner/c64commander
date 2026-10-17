@@ -133,3 +133,15 @@ export const orderDisksInGroup = <T extends { name: string; importOrder?: number
         a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) ||
         (a.importOrder ?? 0) - (b.importOrder ?? 0),
     );
+
+const comparableName = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[\s_-]+/g, " ")
+    .trim();
+
+export const groupRepeatsFolder = (group: string, folderPath: string): boolean => {
+  const segments = folderPath.split("/").filter(Boolean);
+  const folderName = segments[segments.length - 1];
+  return folderName !== undefined && comparableName(folderName) === comparableName(group);
+};

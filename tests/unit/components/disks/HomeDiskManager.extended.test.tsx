@@ -619,8 +619,8 @@ describe("HomeDiskManager Extended", () => {
 
   it("handles drive power toggle", async () => {
     renderComponent();
-    const toggleA = screen.getByTestId("drive-power-toggle-a");
-    expect(toggleA).toHaveTextContent("Turn off");
+    const toggleA = screen.getByTestId("drive-status-toggle-a");
+    expect(toggleA).toHaveTextContent("ON");
     fireEvent.click(toggleA);
     await waitFor(() => {
       expect(mockDriveOff).toHaveBeenCalledWith("a");

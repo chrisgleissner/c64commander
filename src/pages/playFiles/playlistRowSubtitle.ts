@@ -9,22 +9,24 @@
 import { NOW_PLAYING_METADATA_SEPARATOR } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaylistItem } from "./types";
 
+const fileNameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
 /**
- * The second line of a playlist row.
+ * The second line of a playlist row, or null when the row has nothing to add to its title.
  *
- * Normally the file's path, which is what tells one tune from another and where it came from.
- *
- * That breaks down for a file expanded into its tunes: nineteen rows then carry the same name and
- * the same path, and nothing on any of them says which tune it is. So for those rows the path —
- * which is identical on all of them and therefore distinguishes nothing — gives way to the two
- * facts that do: which tune this is, and what STIL calls it where it has a name. The path is still
- * on the row's details menu.
+ * The folder is on the group header above the row, so the line carries only the file name, and only
+ * when the title shows something else (a friendly SID name). A file expanded into its tunes is the
+ * exception: nineteen rows then carry the same name, and the two facts that tell them apart are
+ * which tune this is and what STIL calls it where it has a name. The full path is on the details menu.
  */
-export const buildPlaylistRowSubtitle = (item: PlaylistItem): string => {
+export const buildPlaylistRowSubtitle = (item: PlaylistItem, displayTitle: string): string | null => {
   const songNr = item.request.songNr;
   const tuneCount = item.subsongCount ?? 0;
   const isOneOfMany = typeof songNr === "number" && songNr > 0 && tuneCount > 1;
-  if (!isOneOfMany) return item.path;
+  if (!isOneOfMany) {
+    const fileName = fileNameOf(item.path);
+    return fileName === displayTitle ? null : fileName;
+  }
 
   const segments = [`Tune ${songNr} of ${tuneCount}`];
   const title = item.tuneTitle?.trim();

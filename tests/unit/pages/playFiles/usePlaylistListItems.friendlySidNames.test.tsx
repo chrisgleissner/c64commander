@@ -69,8 +69,7 @@ describe("usePlaylistListItems friendly SID names", () => {
 
     const [row] = rowsOf(result.current);
     expect(row.title).toBe("Bossa in Do");
-    // The raw path is still what the row carries underneath, so nothing that keys off it moves.
-    expect(row.subtitle).toBe("/MUSICIANS/H/Hubbard_Rob/Bossa_in_Do_2SID.sid");
+    expect(row.subtitle).toBe("Bossa_in_Do_2SID.sid");
     expect(row.id).toBe(sidItem.id);
 
     render(<>{row.meta}</>);

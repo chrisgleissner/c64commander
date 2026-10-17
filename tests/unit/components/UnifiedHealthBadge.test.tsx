@@ -1335,10 +1335,45 @@ describe("UnifiedHealthBadge", () => {
     const selectedRow = screen.getByTestId("switch-device-row-device-office");
     const backupRow = screen.getByTestId("switch-device-row-device-backup");
 
-    expect(selectedRow).toHaveTextContent("Selected");
-    expect(selectedRow).not.toHaveTextContent("Offline selection");
+    expect(selectedRow).toHaveAttribute("aria-current", "true");
+    expect(selectedRow).not.toHaveTextContent("Offline");
+    expect(backupRow).not.toHaveAttribute("aria-current");
     expect(backupRow).toHaveTextContent("Offline");
-    expect(backupRow).toHaveTextContent("Offline selection");
+    expect(backupRow).not.toHaveTextContent("selection");
+  });
+
+  it("leaves the status word out of the summary when the health badge already says it, and marks the selected row for assistive technology", async () => {
+    vi.useFakeTimers();
+    render(<UnifiedHealthBadge />);
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await act(() => vi.advanceTimersByTimeAsync(450));
+
+    const backupRow = screen.getByTestId("switch-device-row-device-backup");
+    expect(screen.getByTestId("switch-device-status-device-backup")).toHaveTextContent("Checking");
+    expect(backupRow).toHaveTextContent("2/6 probes");
+    expect(backupRow).not.toHaveTextContent("Verifying");
+    const officeRow = screen.getByTestId("switch-device-row-device-office");
+    expect(officeRow).toHaveAttribute("aria-current", "true");
+    expect(officeRow).not.toHaveTextContent("Selected");
+  });
+
+  it("states a switcher row's status once in its summary line, with the badge beside the name and no status pill", async () => {
+    vi.useFakeTimers();
+    mockState.currentProfile = "compact";
+    mockState.switchStatuses["device-backup"] = "verifying";
+    delete (mockState.savedDeviceHealthChecks.byDeviceId as Record<string, unknown>)["device-backup"];
+
+    render(<UnifiedHealthBadge />);
+    fireEvent.pointerDown(screen.getByTestId("unified-health-badge"));
+    await act(() => vi.advanceTimersByTimeAsync(450));
+
+    const backupRow = screen.getByTestId("switch-device-row-device-backup");
+    expect(backupRow.textContent?.match(/Verifying/g)).toHaveLength(1);
+    expect(backupRow).not.toHaveTextContent("Verifying selection");
+    const badge = screen.getByTestId("switch-device-status-device-backup");
+    expect(badge.parentElement).toHaveTextContent("Backup Lab");
+    expect(badge.parentElement).not.toHaveTextContent("Verifying");
+    expect(backupRow.querySelector(".rounded-full.border")).toBeNull();
   });
 
   it("uses the app's stronger selected treatment for the active switch-device card", async () => {
