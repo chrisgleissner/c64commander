@@ -373,6 +373,8 @@ export const PlaybackControlsCard = ({
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
+  // The composer link grows upward by up to 44px, so the details need room above it that no control occupies.
+  const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
   const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
   /**
@@ -853,7 +855,10 @@ export const PlaybackControlsCard = ({
         </div>
         {/* Below the transport: credits, facts and STIL change height between tunes, and the buttons must not. */}
         {hasCurrentItem ? (
-          <div className="mt-3 text-xs text-muted-foreground" data-testid="playback-current-details">
+          <div
+            className={cn("text-xs text-muted-foreground", hasComposerLink ? "mt-7" : "mt-3")}
+            data-testid="playback-current-details"
+          >
             {/* Two metadata lines, and the actions sit on the second one rather than on a row of
                 their own.
 

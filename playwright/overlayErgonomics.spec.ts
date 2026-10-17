@@ -426,6 +426,7 @@ test.describe("Now playing links on a phone", () => {
       ];
       for (const neighbor of neighbors) {
         const label = (await neighbor.getAttribute("data-testid")) ?? (await neighbor.getAttribute("aria-label"));
+        await neighbor.evaluate((element) => element.scrollIntoView({ block: "center" }));
         const report = await hitTestTarget(neighbor);
         expect(report.takenBy, `${label}: controls that take taps inside its own box`).toEqual([]);
         if (await neighbor.isDisabled()) continue;
