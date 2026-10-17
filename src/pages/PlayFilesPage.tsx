@@ -226,7 +226,7 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
-import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
+import { resolvePlayheadAnchor, shouldRefreshDeadline } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 /** Buttons that open a sheet from the Play page share rows: short labels that grow to fill the row. */
@@ -1504,6 +1504,7 @@ export default function PlayFilesPage() {
       // auto-advance deadline computed from a clock that ran ahead cuts the tune off before its end.
       const controller = getSharedLocalSidPlaybackController();
       const localActive = controller.isActive();
+      const awaitingSeek = localActive && controller.isSeeking();
       const anchor = resolvePlayheadAnchor({
         enginePositionMs: localActive ? controller.positionSeconds() * 1000 : null,
         trackStartedAtMs: trackStartedAtRef.current,
@@ -1512,7 +1513,7 @@ export default function PlayFilesPage() {
         // worker is silent and unannounced but every bit as deliberate, and letting the deadline run
         // down through it would skip the track the listener is waiting to hear.
         previousElapsedMs: anchoredElapsedRef.current,
-        awaitingSeek: localActive && controller.isSeeking(),
+        awaitingSeek,
       });
       if (anchor) {
         trackStartedAtRef.current = anchor.trackStartedAtMs;
@@ -1523,15 +1524,18 @@ export default function PlayFilesPage() {
         // would be constant bridge traffic for nothing. The second is the important one: the
         // deadline is what rescues a tune that has stopped producing audio, and re-deriving it from
         // a frozen playhead would push it into the future for ever — see `stalled`.
-        if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current) {
-          const guard = autoAdvanceGuardRef.current;
-          if (guard && !guard.userCancelled) {
-            const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
-            guard.dueAtMs = dueAtMs;
-            guard.autoFired = false;
-            guard.deferredToEnd = false;
-            setAutoAdvanceDueAtMs(dueAtMs);
-          }
+        const guard = autoAdvanceGuardRef.current;
+        if (
+          guard &&
+          !guard.userCancelled &&
+          currentDurationMsRef.current &&
+          shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)
+        ) {
+          const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
+          guard.dueAtMs = dueAtMs;
+          guard.autoFired = false;
+          guard.deferredToEnd = false;
+          setAutoAdvanceDueAtMs(dueAtMs);
         }
       }
       setPlayedMs(playedClockRef.current.current(now));

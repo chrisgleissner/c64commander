@@ -332,9 +332,11 @@ test.describe("Lighting Studio", () => {
     await page.getByTestId("home-lighting-studio").click();
     const lightingSheet = page.getByTestId("lighting-studio-sheet");
     await expect(lightingSheet).toBeVisible();
+    await expect
+      .poll(async () => (await lightingSheet.boundingBox())?.y ?? Number.NaN, { message: "lighting sheet top" })
+      .toBeLessThanOrEqual(160);
     const lightingBox = await lightingSheet.boundingBox();
     expect(lightingBox).not.toBeNull();
     expect(lightingBox!.y).toBeGreaterThanOrEqual(minimumSheetTop - 4);
-    expect(lightingBox!.y).toBeLessThanOrEqual(160);
   });
 });
