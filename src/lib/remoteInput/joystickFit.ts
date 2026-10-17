@@ -46,3 +46,6 @@ export const fitJoystickControls = ({
   const fittedControlPx = Math.max(MIN_FITTED_CONTROL_PX, Math.floor(controlPx * factor));
   return { controlPx: fittedControlPx, firePx: Math.floor((firePx * fittedControlPx) / controlPx) };
 };
+
+export const canGrowJoystickControls = (current: JoystickFitInput, next: JoystickFit): boolean =>
+  fitJoystickControls({ ...current, ...next }).controlPx > fitJoystickControls(current).controlPx;

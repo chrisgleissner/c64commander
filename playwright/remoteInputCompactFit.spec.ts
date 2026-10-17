@@ -106,6 +106,22 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     expect(await body.evaluate((el) => el.scrollTop), "the body has not scrolled").toBe(0);
   });
 
+  test("size stepper buttons are 44 px targets and Larger is disabled once the height caps the joystick", async ({
+    page,
+  }) => {
+    await page.getByTestId("remote-input-joystick-options").click();
+    const decrease = page.getByTestId("remote-input-size-decrease");
+    const increase = page.getByTestId("remote-input-size-increase");
+    for (const button of [decrease, increase]) {
+      const box = (await button.boundingBox()) as Box;
+      expect(box.width, "stepper button width").toBeGreaterThanOrEqual(MIN_TARGET_PX);
+      expect(box.height, "stepper button height").toBeGreaterThanOrEqual(MIN_TARGET_PX);
+    }
+    for (let step = 0; step < 3 && (await increase.isEnabled()); step += 1) await increase.click();
+    await expect(increase).toBeDisabled();
+    await expect(page.getByTestId("remote-input-size-label")).not.toHaveText("XXL");
+  });
+
   test("port is a labelled 1 | 2 choice", async ({ page }) => {
     const port1 = page.getByTestId("remote-input-port-1");
     const port2 = page.getByTestId("remote-input-port-2");
@@ -144,8 +160,8 @@ test.describe("Remote Input sheet on the compact display profile", () => {
     const footer = await boxOf(page, "remote-input-mirror-controls").catch(() => null);
     if (footer) {
       const scrollBox = (await scroller.boundingBox()) as Box;
-      expect(scrollBox.y + scrollBox.height, "the key scroller ends above the footer").toBeLessThanOrEqual(
-        footer.y + 0.5,
+      expect(footer.y + footer.height, "the Listen and Watch controls sit above the key scroller").toBeLessThanOrEqual(
+        scrollBox.y + 0.5,
       );
     }
 
@@ -223,9 +239,32 @@ test.describe("Remote Input sheet on the compact display profile", () => {
       const scroller = await boxOf(page, "remote-input-keyboard-scroll");
       const footer = await boxOf(page, "remote-input-mirror-controls");
       expect(scroller.height, "the key scroller height").toBeGreaterThanOrEqual(MIN_KEY_SCROLLER_PX);
-      expect(scroller.y + scroller.height, "the scroller ends above the footer").toBeLessThanOrEqual(footer.y + 0.5);
-      await page.getByTestId("remote-input-mirror-controls").scrollIntoViewIfNeeded();
-      expectInsideViewport("the footer once scrolled into view", await boxOf(page, "remote-input-mirror-controls"));
+      expect(footer.y + footer.height, "the Listen and Watch controls ride the toolbar").toBeLessThanOrEqual(
+        scroller.y + 0.5,
+      );
+      expect(scroller.y + scroller.height, "the scroller ends inside the viewport").toBeLessThanOrEqual(
+        HEIGHT - NAVIGATION_BAR_PX + 0.5,
+      );
+      for (const id of ["av-audio-toggle", "av-video-toggle"]) {
+        const box = await boxOf(page, id);
+        expect(box.width, `${id} width`).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+        expect(box.height, `${id} height`).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+      }
+      expectInsideViewport("the footer without scrolling", footer);
+      const body = page.locator('[data-testid="remote-input-sheet"] [data-surface-body="true"]');
+      expect(await body.evaluate((el) => el.scrollTop), "the body has not scrolled").toBe(0);
+      const keyRows = await page
+        .getByTestId("remote-input-keyboard-scroll")
+        .locator("button")
+        .evaluateAll((els, limit) => {
+          const rows = new Set<number>();
+          for (const el of els) {
+            const box = el.getBoundingClientRect();
+            if (box.top >= 0 && box.bottom <= limit) rows.add(Math.round(box.top / 4));
+          }
+          return rows.size;
+        }, scroller.y + scroller.height);
+      expect(keyRows, "complete key rows visible without scrolling").toBeGreaterThanOrEqual(3);
     });
   });
 });
