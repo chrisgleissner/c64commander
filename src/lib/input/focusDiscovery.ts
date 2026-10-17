@@ -441,9 +441,20 @@ export class FocusDiscoveryEngine {
    */
   flushPendingRefresh(options: { allowStaleRing?: boolean } = {}): void {
     if (!this.scheduled) return;
-    if (options.allowStaleRing && this.staleTolerable && this.everyStopIsAttached()) return;
+    if (options.allowStaleRing && this.staleTolerable && this.everyStopIsAttached() && !this.standsOnLastSibling()) {
+      return;
+    }
     this.scheduled = false;
     if (this.started) this.refresh();
+  }
+
+  /** A key on the last known stop of its group would wrap past rows the pending change added after it. */
+  private standsOnLastSibling(): boolean {
+    const current = this.controller.current();
+    if (!current) return false;
+    const items = this.controller.list();
+    const at = items.findIndex((item) => item.id === current.id);
+    return !items.slice(at + 1).some((item) => (item.parentId ?? null) === (current.parentId ?? null));
   }
 
   private everyStopIsAttached(): boolean {
