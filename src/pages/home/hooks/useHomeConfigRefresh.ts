@@ -147,7 +147,8 @@ export function useHomeConfigRefresh({
       return { consecutiveFailures, nextIntervalMs: backoffIntervalMs() };
     };
     // One slow answer from a busy device is routine; the second in a row is a problem worth a warning.
-    const failureLevel = () => (consecutiveFailures >= 2 ? "warn" : "info");
+    // Thrown errors always warn: they are exceptions, not slowness.
+    const timeoutLevel = () => (consecutiveFailures >= 2 ? "warn" : "info");
 
     const run = async (reason: RefreshReason) => {
       inFlight = true;
@@ -156,7 +157,7 @@ export function useHomeConfigRefresh({
         const completed = await readHomeConfigWithTimeout(queryClient, () => writePendingRef.current);
         if (!completed) {
           const failure = recordFailure();
-          addLog(failureLevel(), "Home config refresh timed out; releasing the single-flight slot", {
+          addLog(timeoutLevel(), "Home config refresh timed out; releasing the single-flight slot", {
             reason,
             timeoutMs: HOME_CONFIG_REFRESH_TIMEOUT_MS,
             ...failure,
@@ -167,7 +168,7 @@ export function useHomeConfigRefresh({
         }
       } catch (error) {
         const failure = recordFailure();
-        addLog(failureLevel(), "Home config refresh failed", {
+        addLog("warn", "Home config refresh failed", {
           reason,
           error: (error as Error).message,
           stack: (error as Error).stack,
