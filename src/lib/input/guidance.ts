@@ -170,6 +170,19 @@ export const resolveSoftKeyMenuOverlayLabels = (
   };
 };
 
+/** Set on the search overlay, which handles its own keys: Up and Down pick a result, OK opens it, Back closes. */
+export const SEARCH_OVERLAY_ATTR = "data-key-nav-search-overlay";
+
+/** PURE: the labels while the search overlay is up. */
+export const resolveSearchOverlayLabels = (visible: boolean): GuidanceLabels => ({
+  visible,
+  breadcrumb: ["Search"],
+  left: getKeyLabels().closeWord,
+  center: "Open",
+  right: null,
+  shortcut: null,
+});
+
 /** PURE: the labels while that menu is open. */
 export const resolveSoftKeyMenuPanelLabels = (
   visible: boolean,

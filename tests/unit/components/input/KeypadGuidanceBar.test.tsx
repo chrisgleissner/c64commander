@@ -205,6 +205,26 @@ describe("KeypadGuidanceBar", () => {
     expect(bar()).toHaveAttribute("data-visible", "false");
   });
 
+  it("names Close and Open while the search overlay has focus in its field", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <div role="dialog" aria-label="Search" data-key-nav-skip="true" data-key-nav-search-overlay="true">
+          <input data-testid="search-field" aria-label="Search the app" />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+
+    act(() => screen.getByTestId("search-field").focus());
+
+    expect(bar()).toHaveAttribute("data-visible", "true");
+    expect(breadcrumb()).toHaveTextContent("Search");
+    expect(actionText("keypad-guidance-left")).toBe("Close");
+    expect(actionText("keypad-guidance-center")).toBe("Open");
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
   it("names Close and Menu, and no OK action, while a dialog that drives its own keys offers a menu", () => {
     render(
       <FocusNavigationProvider enabled>

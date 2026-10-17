@@ -812,7 +812,9 @@ Opened by three doors — the Home field, the Quick Menu's top entry
   (`data-key-nav-skip` on the root and on the list): Up/Down move
   `aria-activedescendant` while DOM focus STAYS in the field, Enter activates the active
   row, Escape and Back close. The ring's own Up/Down inside a dialog move real DOM focus,
-  which would take the user out of the field on the first press.
+  which would take the user out of the field on the first press. The guidance bar shows
+  while the field has focus (`data-key-nav-search-overlay`): Back "Close", OK "Open". On a
+  handset with a soft keyboard up, the system consumes the first Back to hide it.
 - Close — button — `search-close` — R✅ I✅
 - Result row — `search-result-<entry id>` — R✅ I✅ — `role="option"`, at least 44 px, with
   the group folded into its accessible name. A row whose requirements are unmet is
