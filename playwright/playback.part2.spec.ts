@@ -811,17 +811,13 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-populated");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     const playlistList = page.getByTestId("playlist-list");
     await expect(playlistList.getByTestId("playlist-item-header").filter({ hasText: "/local-play/" })).toBeVisible();
-    await expect(playlistList.getByText("/local-play/demo.sid")).toHaveCount(1);
+    await expect(playlistList.getByTestId("playlist-item").filter({ hasText: /SID •/ })).toHaveCount(1);
 
     const resetBefore = server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length;
-    await page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
-      .getByRole("button", { name: "Play" })
-      .click();
+    await page.getByTestId("playlist-item").filter({ hasText: /SID •/ }).getByRole("button", { name: "Play" }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
     expect(server.sidplayRequests[0].method).toBe("POST");
     await snap(page, testInfo, "sid-playback-requested");

@@ -121,4 +121,18 @@ describe("warmPageChunks", () => {
     expect(loaded[0]).toBe("play");
     online.mockRestore();
   });
+
+  it("waits for two quiet seconds after a key press or touch, so a parse never lands inside an interaction", async () => {
+    const warmPageChunks = await importWarm();
+    const stop = warmPageChunks();
+    await vi.advanceTimersByTimeAsync(2_400);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(loaded).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(loaded[0]).toBe("play");
+    stop();
+  });
 });

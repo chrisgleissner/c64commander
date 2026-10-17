@@ -33,6 +33,7 @@ const DocsPage = lazy(() => import("@/pages/DocsPage"));
 const WARM_START_DELAY_MS = 2500;
 const WARM_STEP_DELAY_MS = 1500;
 
+const WARM_QUIET_AFTER_INPUT_MS = 2_000;
 /**
  * Loads the other tabs' code one at a time while the app is idle, so a first visit shows the page
  * instead of "Loading screen..." (about 0.7 s on a phone). One chunk per step keeps each parse short
@@ -50,9 +51,15 @@ export const warmPageChunks = (): (() => void) => {
       else callback();
     }, delayMs);
   };
+  let lastInputAt = Number.NEGATIVE_INFINITY;
+  const noteInput = () => {
+    lastInputAt = Date.now();
+  };
+  const INPUT_EVENTS = ["keydown", "pointerdown", "touchstart", "wheel"] as const;
+  INPUT_EVENTS.forEach((type) => window.addEventListener(type, noteInput, { capture: true, passive: true }));
   const loadNext = () => {
     if (cancelled) return;
-    if (navigator.onLine === false) {
+    if (navigator.onLine === false || Date.now() - lastInputAt < WARM_QUIET_AFTER_INPUT_MS) {
       whenIdle(loadNext, WARM_STEP_DELAY_MS);
       return;
     }
@@ -73,6 +80,7 @@ export const warmPageChunks = (): (() => void) => {
   return () => {
     cancelled = true;
     window.clearTimeout(timer);
+    INPUT_EVENTS.forEach((type) => window.removeEventListener(type, noteInput, { capture: true }));
   };
 };
 

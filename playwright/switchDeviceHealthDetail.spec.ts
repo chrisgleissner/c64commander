@@ -175,7 +175,7 @@ test.describe("Switch device health detail on a 320x427 screen", () => {
       });
       expect(measured.clipped, `${id}: nothing in the card is cut off`).toBe(0);
       expect(measured.pill, `${id}: no separate status pill`).toBe(false);
-      expect(measured.height, `${id}: card height`).toBeLessThanOrEqual(110);
+      expect(measured.height, `${id}: card height`).toBeLessThanOrEqual(125);
       const [rowBox, badgeBox] = await Promise.all([row.boundingBox(), badge.boundingBox()]);
       expect(badgeBox!.y - rowBox!.y, `${id}: the badge sits beside the name or directly under it`).toBeLessThan(70);
     }

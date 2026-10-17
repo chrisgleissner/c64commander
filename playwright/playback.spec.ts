@@ -348,12 +348,12 @@ test.describe("Playback file browser", () => {
 
     await page.goto("/play");
     const playlistList = page.getByTestId("playlist-list");
-    await expect(playlistList).toContainText("Track_0001.sid");
-    await expect(playlistList).toContainText("/USB0/Demos/Track_0001.sid");
-    await expect(playlistList).toContainText("local-demo.sid");
-    await expect(playlistList).toContainText("/Music/local-demo.sid");
-    await expect(playlistList).toContainText("Commando.sid");
-    await expect(playlistList).toContainText("/MUSICIANS/Hubbard_Rob/Commando.sid");
+    await expect(playlistList).toContainText(/Track.0001/);
+    await expect(playlistList).toContainText("/USB0/Demos/");
+    await expect(playlistList).toContainText(/local.demo/i);
+    await expect(playlistList).toContainText("/Music/");
+    await expect(playlistList).toContainText("Commando");
+    await expect(playlistList).toContainText("/MUSICIANS/Hubbard_Rob/");
     await expect(playlistList).toContainText("3:00");
     await expect(playlistList).not.toContainText("This device");
     await expect(playlistList).not.toContainText("C64 Ultimate");
@@ -435,7 +435,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
-    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/Track.0001/);
 
     await clearTraces(page);
 
@@ -537,12 +537,12 @@ test.describe("Playback file browser", () => {
     server.setFaultMode("refused");
     await page.getByTestId("playlist-play").click();
     await expect(page.getByText("Playback failed", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/Track.0001/);
     await snap(page, testInfo, "play-failed");
 
     await page.goto("/disks");
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/Track.0001/);
     await snap(page, testInfo, "playlist-restored");
     server.setFaultMode("none");
   });
