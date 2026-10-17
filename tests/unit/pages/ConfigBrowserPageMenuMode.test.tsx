@@ -237,7 +237,8 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     fireEvent.click(within(row).getByText("Update System Mode"));
     await waitFor(() => expect(row).toHaveAttribute("data-value", "updated"));
 
-    fireEvent.click(within(document.getElementById("config-menu-section-video-setup")!).getByText("Refresh"));
+    fireEvent.click(screen.getByTestId("config-refresh-video-setup"));
+    expect(screen.getByTestId("config-refresh-video-setup")).toHaveAccessibleName(/^Refresh /);
 
     await waitFor(() =>
       expect(reportUserError).toHaveBeenCalledWith(
@@ -340,7 +341,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
 describe("ConfigBrowserPage — search (C64U)", () => {
   const search = (query: string) =>
-    fireEvent.change(screen.getByPlaceholderText("Search categories..."), { target: { value: query } });
+    fireEvent.change(screen.getByPlaceholderText("Search categories"), { target: { value: query } });
 
   it("finds the page that holds a setting when the search names the setting", () => {
     renderPage();

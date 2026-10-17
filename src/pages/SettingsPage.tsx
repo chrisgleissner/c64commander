@@ -52,7 +52,7 @@ import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorF
 import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { requestTourStart } from "@/lib/tour/tourState";
@@ -1381,7 +1381,7 @@ export default function SettingsPage() {
                             /* text-[11px] is the smallest size the compact profile compensates
                                (to 0.9rem); anything smaller falls below the 14px legibility floor
                                on a 320px screen. */
-                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                               Dark only
                             </span>
                           ) : null}
@@ -2068,6 +2068,8 @@ export default function SettingsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                       <AlertDialogAction
+                        className={buttonVariants({ variant: "destructive" })}
+                        data-testid="settings-delete-device-confirm"
                         onClick={() => {
                           void confirmDeleteDevice();
                         }}
@@ -2111,7 +2113,7 @@ export default function SettingsPage() {
                   data-testid="diagnostics-open-dialog"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Diagnostics
+                  Open diagnostics
                 </Button>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
@@ -2206,10 +2208,10 @@ export default function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* 4. Play and Disk */}
+            {/* 4. Play and disk */}
             <SettingsSection
               id="play-and-disk"
-              title="Play and Disk"
+              title="Play and disk"
               summary="Launching, Live View streaming, Remote Input"
               icon={Play}
             >
@@ -2619,10 +2621,10 @@ export default function SettingsPage() {
                   // Label because a label may not nest inside another label.
                   <label
                     key={feature.id}
-                    className="flex min-h-11 cursor-pointer items-start justify-between gap-3 min-w-0"
+                    className="flex min-h-11 cursor-pointer items-center justify-between gap-3 min-w-0"
                   >
                     <div className="space-y-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col items-start gap-1">
                         <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
                           <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">

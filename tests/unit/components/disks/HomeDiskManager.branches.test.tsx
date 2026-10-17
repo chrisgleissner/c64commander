@@ -633,23 +633,23 @@ describe("HomeDiskManager targeted branch coverage", () => {
   });
 
   // ── drive power enabled/disabled display ──────────────────────────────────
-  it('shows "Turn Off" label when drive is enabled', () => {
+  it('shows "Turn off" label when drive is enabled', () => {
     drivesMock.data = {
       drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
     };
     renderComponent();
-    const turnOffButtons = screen.queryAllByText("Turn Off");
-    // Drive A and B both enabled → should see Turn Off buttons
+    const turnOffButtons = screen.queryAllByText("Turn off");
+    // Drive A and B both enabled → should see Turn off buttons
     expect(turnOffButtons.length).toBeGreaterThanOrEqual(0);
   });
 
   // ── drive power disabled display ──────────────────────────────────────────
-  it('shows "Turn On" label when drive is disabled', () => {
+  it('shows "Turn on" label when drive is disabled', () => {
     drivesMock.data = {
       drives: [{ a: { bus_id: 8, enabled: false } }, { b: { bus_id: 9, enabled: false } }],
     };
     renderComponent();
-    const turnOnButtons = screen.queryAllByText("Turn On");
+    const turnOnButtons = screen.queryAllByText("Turn on");
     expect(turnOnButtons.length).toBeGreaterThanOrEqual(0);
   });
 

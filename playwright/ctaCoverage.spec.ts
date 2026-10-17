@@ -170,7 +170,7 @@ test.describe("Shuffle Mode Tests", () => {
   });
 });
 
-test.describe("Home Page Quick Actions", () => {
+test.describe("Home Page Quick actions", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -223,7 +223,7 @@ test.describe("Home Page Quick Actions", () => {
      * The Config card, opened.
      *
      * This test used to read Home with every card closed, where none of the Config actions is in
-     * the DOM at all — it was passing on the "Save RAM" and "Load RAM" tiles in Quick Actions,
+     * the DOM at all — it was passing on the "Save RAM" and "Load RAM" tiles in Quick actions,
      * which matched /save/i and /load/i and are not config management. Renaming those to Backup and
      * Restore is what exposed it. The card has to be open for this to be a test of what it says.
      */

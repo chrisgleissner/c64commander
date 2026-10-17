@@ -103,7 +103,7 @@ export function KeyExplorerPopup({ open, onClose }: { open: boolean; onClose: ()
     <AnalyticPopup
       open={open}
       onClose={onClose}
-      title="Key Explorer"
+      title="Key explorer"
       contentClassName="h-auto max-h-[min(72dvh,38rem)]"
       data-testid="key-explorer-popup"
     >

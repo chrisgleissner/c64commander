@@ -80,7 +80,7 @@ test.describe("Settings diagnostics workflows", () => {
     await snap(page, testInfo, "settings-open");
 
     const diagnosticsButton = page.getByRole("button", {
-      name: "Diagnostics",
+      name: "Open diagnostics",
       exact: true,
     });
     await expect(diagnosticsButton).toBeVisible();
@@ -125,7 +125,7 @@ test.describe("Settings diagnostics workflows", () => {
     await refreshButton.click();
     await snap(page, testInfo, "refresh-clicked");
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
@@ -240,7 +240,7 @@ test.describe("Settings diagnostics workflows", () => {
       });
     });
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
 
@@ -290,7 +290,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
     await page.getByTestId("diagnostics-overflow-menu").click();
 
@@ -303,7 +303,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
 
     // Clear All is inside the overflow menu

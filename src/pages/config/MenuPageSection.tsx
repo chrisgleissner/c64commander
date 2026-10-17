@@ -8,10 +8,10 @@
 
 import { useMemo, useState, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen } from "lucide-react";
+import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import { configCategorySectionId } from "@/lib/search/configDeepLink";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
-import { Button } from "@/components/ui/button";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import type { AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
@@ -125,14 +125,9 @@ export const MenuPageSection = memo(function MenuPageSection({
       toggleTestId={`config-menu-page-${slug}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      actions={configRefreshAction(isOpen, refreshFocusRef, page.label, slug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: page.label }, "ConfigHeader")}
     >
-      <div className="flex items-center justify-end py-2" data-testid="config-group-actions">
-        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
       {blocks.map((block) => (
         <MenuBlock
           key={block.key}
@@ -144,9 +139,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       ))}
       {advancedCategories.length > 0 ? (
         <div data-testid={`config-page-advanced-${slug}`}>
-          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
-            Advanced
-          </h4>
+          <h4 className="px-1 pt-4 pb-1 text-xs font-semibold text-muted-foreground/70">Advanced</h4>
           {advancedCategories.map((category) => (
             <FallbackCategoryBlock
               key={`advanced:${category}`}

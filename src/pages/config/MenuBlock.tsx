@@ -81,7 +81,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
 
   return (
     <div data-testid={block.title ? `config-subsection-${block.title.toLowerCase().replace(/\s+/g, "-")}` : undefined}>
-      {/* The heading is not uppercase with `tracking-wide`: that styling is most of a heading's
+      {/* The heading is not with `tracking-wide`: that styling is most of a heading's
           width, and at the largest Text size "Time Synchronization" needed 275px against a 258px
           box and was clipped. Title case fits. */}
       {block.title ? (
@@ -117,7 +117,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
                 data-testid="config-menu-only"
               >
                 <span className="text-sm">{entry.label}</span>
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">On device</span>
+                <span className="text-xs text-muted-foreground">On device</span>
               </div>
             ))}
       </div>

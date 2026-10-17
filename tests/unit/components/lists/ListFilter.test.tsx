@@ -39,7 +39,7 @@ const Harness = ({
       <CollapsibleListFilter
         value={text}
         onChange={setText}
-        placeholder="Filter files..."
+        placeholder="Filter files"
         testId="filter-input"
         toggleTestId={TOGGLE}
         header={<button type="button">Songs</button>}

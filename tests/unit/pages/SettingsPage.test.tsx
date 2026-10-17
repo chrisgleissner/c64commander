@@ -1288,7 +1288,7 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-device-row-saved-wired")).toHaveTextContent("Same device as Desk wifi");
   });
 
-  it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
+  it("offers Friendly SID names in Play and disk, reflecting the stored preference and writing it back", () => {
     renderSettingsPage();
 
     const toggle = screen.getByTestId("settings-friendly-sid-names");
@@ -1706,6 +1706,17 @@ describe("SettingsPage", () => {
       await waitFor(() => expect(persistedDeviceIds()).toEqual(["saved-device-1"]));
     });
 
+    it("styles the confirm button as destructive", async () => {
+      await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+      await screen.findByRole("alertdialog", { name: /delete device/i });
+
+      expect(screen.getByTestId("settings-delete-device-confirm").className).toContain("bg-destructive");
+    });
+
     it("counts a single referring item in the singular", async () => {
       await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
       mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 1, playlistItemCount: 0, totalCount: 1 });
@@ -1944,6 +1955,9 @@ describe("SettingsPage", () => {
     const stableSection = screen.getByTestId("settings-feature-group-stable");
     const experimentalSection = screen.getByTestId("settings-feature-group-experimental");
     expect(within(stableSection).getByTestId("feature-flag-hvsc_enabled")).toBeInTheDocument();
+    const hvscRow = screen.getByTestId("feature-flag-hvsc_enabled").closest("label");
+    expect(hvscRow?.className).toContain("items-center");
+    expect(hvscRow?.querySelector(".flex-col")).not.toBeNull();
     expect(within(stableSection).getByTestId("feature-flag-commoserve_enabled")).toBeInTheDocument();
     expect(
       within(experimentalSection).getByTestId("feature-flag-home_telnet_config_actions_enabled"),
@@ -2804,7 +2818,7 @@ describe("SettingsPage", () => {
   it("requests the global diagnostics overlay from the settings trigger", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open diagnostics" }));
 
     expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");

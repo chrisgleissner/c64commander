@@ -46,7 +46,7 @@ describe("SidRadioLauncherSheet", () => {
   it("starts a broad style station and closes the sheet", () => {
     const { onStartStyle, onOpenChange } = setup(0);
     fireEvent.click(screen.getByTestId("sid-radio-style-0"));
-    expect(onStartStyle).toHaveBeenCalledWith(0, "Fast-Paced", false);
+    expect(onStartStyle).toHaveBeenCalledWith(0, "Fast-paced", false);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -54,7 +54,7 @@ describe("SidRadioLauncherSheet", () => {
     const { onStartStyle } = setup(3);
     fireEvent.click(screen.getByTestId("sid-radio-likes-toggle"));
     fireEvent.click(screen.getByTestId("sid-radio-style-0"));
-    expect(onStartStyle).toHaveBeenCalledWith(0, "Fast-Paced", true);
+    expect(onStartStyle).toHaveBeenCalledWith(0, "Fast-paced", true);
   });
 
   it("locks Taste below the like threshold with a hint (D1)", () => {
@@ -115,7 +115,7 @@ describe("SidRadioLauncherSheet Song moods", () => {
 
   it("offers All moods plus one option per style tile, named after the tune", () => {
     setupSong();
-    expect(screen.getByTestId("sid-radio-song-section")).toHaveTextContent("Similar to Bouncy_Balls.sid");
+    expect(screen.getByTestId("sid-radio-song-section")).toHaveTextContent("Similar to Bouncy Balls");
     expect(screen.getByTestId("sid-radio-song-mood-all")).toBeInTheDocument();
     for (const tile of SID_RADIO_STYLE_TILES) {
       expect(screen.getByTestId(`sid-radio-song-mood-${tile.bit}`)).toHaveTextContent(tile.label);

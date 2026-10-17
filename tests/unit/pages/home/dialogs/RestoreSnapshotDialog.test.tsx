@@ -116,9 +116,9 @@ describe("RestoreSnapshotDialog – snapshot with label", () => {
     expect(screen.getByText("JupiterLander.crt")).toBeInTheDocument();
   });
 
-  it("shows the type label (Program Snapshot)", () => {
+  it("shows the type label (Program snapshot)", () => {
     renderDialog(SNAPSHOT_WITH_LABEL);
-    expect(screen.getByText("Program Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("Program snapshot")).toBeInTheDocument();
   });
 
   it("shows the display range", () => {
@@ -135,7 +135,7 @@ describe("RestoreSnapshotDialog – snapshot without label", () => {
 
   it("shows type label for basic snapshot", () => {
     renderDialog(SNAPSHOT_NO_LABEL);
-    expect(screen.getByText("Basic Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("BASIC snapshot")).toBeInTheDocument();
   });
 });
 

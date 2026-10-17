@@ -28,6 +28,7 @@ import {
   SID_RADIO_TASTE_UNLOCK_LIKES,
   isStylePopulated,
 } from "@/pages/playFiles/hooks/useSidRadio";
+import { readableSeedLabel } from "@/pages/playFiles/sidRadioSeedLabel";
 
 export type SidRadioLauncherSheetProps = {
   open: boolean;
@@ -120,9 +121,7 @@ export const SidRadioLauncherSheet = ({
       <AppSheetContent className="overflow-hidden p-0" data-testid="sid-radio-launcher-sheet">
         <AppSheetHeader>
           <AppSheetTitle>SID Radio</AppSheetTitle>
-          <AppSheetDescription>
-            Endless stations of SIDs — pick a mood, your taste, or a collection from the HVSC tune notes.
-          </AppSheetDescription>
+          <AppSheetDescription>Endless stations: pick a mood, your taste or a collection.</AppSheetDescription>
         </AppSheetHeader>
 
         <AppSheetBody className="px-3 pt-3 pb-[calc(0.75rem+var(--safe-area-inset-bottom))]">
@@ -150,7 +149,7 @@ export const SidRadioLauncherSheet = ({
             ) : null}
             {songSeedLabel && onStartSong ? (
               <div className="flex flex-col gap-2" data-testid="sid-radio-song-section">
-                <Label className="font-medium">Similar to {songSeedLabel}</Label>
+                <Label className="font-medium">Similar to {readableSeedLabel(songSeedLabel)}</Label>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {songMoodOptions.map((option) => {
                     // A mood with no members admits nothing, so the intersection with any seed is

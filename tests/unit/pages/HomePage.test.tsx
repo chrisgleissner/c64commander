@@ -1219,7 +1219,7 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-system-firmware").textContent).toContain("1.0.0");
     expect(screen.getByTestId("home-system-git").textContent).toContain("deadbeef");
     expect(screen.getByTestId("home-system-build-time").textContent).toContain("2024-03-20 12:34:00 UTC");
-    expect(screen.getByText("Quick Actions")).toBeTruthy();
+    expect(screen.getByText("Quick actions")).toBeTruthy();
     expect(screen.queryByTestId("home-drive-summary")).toBeNull();
     openSaveRamDialog();
     expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM folder:");
@@ -1885,7 +1885,7 @@ describe("HomePage SID status", () => {
 
     // The RAM folder row is no longer a Quick Action: it is shown inside the Save RAM and Load RAM
     // dialogs, where the folder it names is about to be used.
-    const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
+    const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick actions"]');
     expect(machineSection).toBeTruthy();
     // Not opened here: this test is about the order of the cards on the page, and a dialog left
     // open changes the scroll-lock state a later assertion reads. That the row is inside the

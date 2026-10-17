@@ -324,7 +324,7 @@ export const SelectableActionList = ({
   headerActions,
   filterHeader,
   viewAllFilterHeader,
-  filterPlaceholder = "Filter files...",
+  filterPlaceholder = "Filter files",
   filterValue,
   onFilterValueChange,
   viewAllFilterValue,

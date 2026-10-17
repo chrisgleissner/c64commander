@@ -367,12 +367,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const selectedRotation: DeviceRotation | "auto" = rotationSource === "auto" ? "auto" : deviceRotation;
   const rotationOverride = (
     <div
-      className="flex items-center gap-1"
+      className="flex flex-wrap items-center gap-1"
       data-testid="remote-input-rotation-override"
       data-rotation={deviceRotation}
       data-source={rotationSource}
     >
-      <span className="mr-1 text-xs text-muted-foreground">Orientation</span>
+      <span className="mr-1 shrink-0 whitespace-nowrap text-xs text-muted-foreground">Orientation</span>
       {ROTATION_CHOICES.map(({ label, value }) => (
         <Button
           key={label}

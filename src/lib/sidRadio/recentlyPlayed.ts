@@ -10,7 +10,7 @@
  * What just played.
  *
  * A station is endless and strictly one-way. A tune goes by, you think "what *was* that", and it is
- * gone: Liked Tunes only holds what you reacted to in time, and the playlist has already moved on.
+ * gone: Liked tunes only holds what you reacted to in time, and the playlist has already moved on.
  * This is the way back — a short list of what has been heard, newest first, with the same two
  * actions the search results already offer.
  *

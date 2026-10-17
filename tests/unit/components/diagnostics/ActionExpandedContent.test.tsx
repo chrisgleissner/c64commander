@@ -181,7 +181,7 @@ describe("ActionExpandedContent", () => {
               type: "TELNET",
               label: "Printer on",
               actionId: "printerTurnOn",
-              actionLabel: "Turn On",
+              actionLabel: "Turn on",
               menuPath: null,
               target: "printer",
               result: "failed",

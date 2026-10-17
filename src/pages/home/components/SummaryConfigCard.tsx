@@ -82,7 +82,7 @@ export function SummaryConfigCard({
       data-testid={testId}
       tabIndex={focusId ? -1 : undefined}
     >
-      {hideTitle ? null : <p className="text-xs font-semibold text-primary uppercase tracking-wider">{title}</p>}
+      {hideTitle ? null : <p className="text-xs font-semibold text-primary">{title}</p>}
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );

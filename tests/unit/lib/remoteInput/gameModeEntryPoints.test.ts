@@ -115,7 +115,7 @@ describe("the guidance bar's Game Mode hint", () => {
     modality: "key-navigation",
     hasCurrent: true,
     currentKind: "button",
-    breadcrumb: ["Quick Actions"],
+    breadcrumb: ["Quick actions"],
     atRoot: true,
     fieldEngaged: false,
     layerOpen: false,

@@ -248,9 +248,7 @@ function PickerHealthStatusBadge({
         aria-hidden="true"
       >
         <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
-          <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-            {badgeText.leadingLabel}
-          </span>
+          <span className="truncate text-xs font-semibold text-foreground">{badgeText.leadingLabel}</span>
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
           </span>
@@ -270,9 +268,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
-                {badgeText.trailingLabel}
-              </span>
+              <span className="truncate text-xs font-semibold text-foreground">{badgeText.trailingLabel}</span>
             </>
           ) : null}
         </span>
@@ -701,7 +697,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                   means and the header decides what it has room to draw.
                 */}
           <span
-            className="app-chrome-badge-status truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+            className="app-chrome-badge-status truncate text-xs font-semibold text-foreground"
             data-overlay-critical="badge"
           >
             {badgeText.trailingLabel}
@@ -795,7 +791,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 // sign that nothing real is connected.
                 <>
                   <span
-                    className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    className="shrink-0 text-xs font-semibold text-foreground"
                     data-overlay-critical="badge"
                     data-testid="unified-health-badge-demo"
                   >
@@ -809,7 +805,7 @@ export function UnifiedHealthBadge({ className }: Props) {
               {narrowHeader ? null : (
                 <>
                   <span
-                    className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                    className="app-chrome-badge-host truncate text-xs font-semibold text-foreground"
                     data-overlay-critical="badge"
                   >
                     {badgeText.leadingLabel}

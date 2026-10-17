@@ -161,7 +161,7 @@ export function SidCard({
     >
       {/* Row 1: Name and Power */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
+        <p className="text-xs font-semibold text-primary">{name}</p>
         {onPowerToggle ? (
           <Button
             variant="outline"

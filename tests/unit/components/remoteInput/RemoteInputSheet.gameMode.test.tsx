@@ -591,6 +591,19 @@ describe("RemoteInputSheet — Game Mode", () => {
     });
   });
 
+  describe("orientation label", () => {
+    it("keeps the Orientation label on one line and lets the buttons wrap below it", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+
+      const row = screen.getByTestId("remote-input-rotation-override");
+      expect(row.className).toContain("flex-wrap");
+      expect(screen.getByText("Orientation").className).toContain("whitespace-nowrap");
+    });
+  });
+
   describe("GM-14: reaching everything with the controls hidden", () => {
     it("`#` shows the quick keys and the Live View switches over the picture", () => {
       mirrorState.videoState = "live";

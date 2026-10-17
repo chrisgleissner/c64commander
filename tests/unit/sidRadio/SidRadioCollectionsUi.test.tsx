@@ -183,6 +183,7 @@ describe("SID Radio chip for a collection", () => {
 
   it.each([
     [{ seedKind: "song", seedLabel: "Commando" }, "Similar to Commando"],
+    [{ seedKind: "song", seedLabel: "Monty_on_the_Run.sid" }, "Similar to Monty on the Run"],
     [{ seedKind: "style", seedLabel: "Melodic" }, "Matches Melodic"],
     [{ seedKind: "taste", seedLabel: "Tunes you like" }, "From tunes you like"],
     [{ seedKind: "collection", seedLabel: "Classical" }, "In the Classical collection"],

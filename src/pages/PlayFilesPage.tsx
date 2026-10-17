@@ -2698,7 +2698,7 @@ export default function PlayFilesPage() {
                           size="sm"
                           id="sid-radio-liked-tunes-open"
                           className={SHEET_OPENER_CLASS}
-                          aria-label="Liked Tunes"
+                          aria-label="Liked tunes"
                           data-testid="sid-radio-liked-tunes-open"
                           onClick={() => likedTunesSheet.set(true)}
                         >

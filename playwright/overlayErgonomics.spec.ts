@@ -115,7 +115,7 @@ const seedLists = async (page: Page) => {
 const openDiagnostics = async (page: Page) => {
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await settle(page, "medium");
-  await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+  await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible();
   return dialog;

@@ -69,7 +69,7 @@ export const TAB_CANARY_STEPS: readonly KeypadCanaryStep[] = [
     kind: "tab-shortcut",
     keyName: "1",
     keyCode: KEYCODES.KEY_1,
-    expectedText: ["Home", "Quick Actions"],
+    expectedText: ["Home", "Quick actions"],
   },
   {
     id: "digit-2-play",

@@ -403,11 +403,11 @@ const featureRows = ({ features, variant }) => {
       "**Header badge long-press / `#`**, Settings → Connection",
       "**Switch device** to change; Settings to edit.",
     ],
-    ["Menu / Pause / Reset", "**Home → Quick Actions**", "The everyday controls."],
-    ["Reboot", "**Home → Quick Actions → Power**", "In the Power sheet, with the other heavier controls."],
+    ["Menu / Pause / Reset", "**Home → Quick actions**", "The everyday controls."],
+    ["Reboot", "**Home → Quick actions → Power**", "In the Power sheet, with the other heavier controls."],
     [
       "Power Off",
-      "**Home → Quick Actions → Power**",
+      "**Home → Quick actions → Power**",
       "Shown where the device can do it. To turn it back on, use the machine itself.",
     ],
   ];
@@ -415,36 +415,36 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "home_telnet_power_cycle_enabled")) {
     rows.push([
       "Power Cycle",
-      "**Home → Quick Actions → Power**",
+      "**Home → Quick actions → Power**",
       featureAvailability(features.home_telnet_power_cycle_enabled),
     ]);
   }
   if (includeFeature(features, "home_telnet_clear_ram_reboot_enabled")) {
     rows.push([
       "Clear-RAM reboot",
-      "**Home → Quick Actions → Power**",
+      "**Home → Quick actions → Power**",
       featureAvailability(features.home_telnet_clear_ram_reboot_enabled),
     ]);
   }
   if (includeFeature(features, "ram_snapshots_enabled")) {
-    rows.push(["Backup / Restore", "**Home → Quick Actions**", featureAvailability(features.ram_snapshots_enabled)]);
+    rows.push(["Backup / Restore", "**Home → Quick actions**", featureAvailability(features.ram_snapshots_enabled)]);
   }
   if (includeFeature(features, "remote_input_enabled")) {
     rows.push([
       "Game Mode",
-      "**Home → Quick Actions**, Play (while an item plays), `0`",
-      "In the first band of Quick Actions, labeled **Game**. Opens the controller with the picture and sound as you last left them.",
+      "**Home → Quick actions**, Play (while an item plays), `0`",
+      "In the first band of Quick actions, labeled **Game**. Opens the controller with the picture and sound as you last left them.",
     ]);
     rows.push([
       "Remote Input",
-      "**Home → Quick Actions**, Play (while an item plays)",
+      "**Home → Quick actions**, Play (while an item plays)",
       `${featureAvailability(features.remote_input_enabled)} ${remoteInputFirmwareShort(variant)}`,
     ]);
   }
   if (includeFeature(features, "home_telnet_reu_snapshot_enabled")) {
     rows.push([
       "Save / Restore REU",
-      "**Home → Quick Actions**",
+      "**Home → Quick actions**",
       featureAvailability(features.home_telnet_reu_snapshot_enabled),
     ]);
   }
@@ -501,7 +501,7 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "launch_safety_enabled")) {
     rows.push([
       "Launch Safety (cartridge parking)",
-      "Automatic; boot-menu answer in **Settings → Play and Disk**",
+      "Automatic; boot-menu answer in **Settings → Play and disk**",
       featureAvailability(features.launch_safety_enabled),
     ]);
   }
@@ -743,8 +743,8 @@ const renderKeyboardReference = ({ features, variant }) => {
     ),
     "",
     isC64uRemoteVariant(variant)
-      ? "Change either one in **Settings → Play and Disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key Explorer** and press one."
-      : "Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key Explorer** and press one.",
+      ? "Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one."
+      : "Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one.",
     "",
     "#### Star and Pound",
     "",
@@ -951,7 +951,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "At the top is the search field, and under it **Quick Actions**, a grid of tiles in four bands:",
+    "At the top is the search field, and under it **Quick actions**, a grid of tiles in four bands:",
     "",
     "- **Watch** first: Live, Game and Input.",
     "- **Listen** next: Radio, Last and Recent.",
@@ -1030,7 +1030,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "A playlist can hold a single song, or a whole evening's worth.",
     "",
-    "A short list fits on the Play page. When it grows, open **View all**. There you have room to scan, filter, select and remove, with the playback controls still in sight. **Settings → Play and Disk → List preview limit** sets how many rows Play shows before you need View all; it starts at 50.",
+    "A short list fits on the Play page. When it grows, open **View all**. There you have room to scan, filter, select and remove, with the playback controls still in sight. **Settings → Play and disk → List preview limit** sets how many rows Play shows before you need View all; it starts at 50.",
     "",
     "> **Tip.** Add broadly, then filter narrowly. Add a whole folder, then type a few letters to narrow it down. The filter matches the title, the path, the source and the kind of file.",
     "",
@@ -1046,7 +1046,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.",
     "",
-    "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and Disk → Friendly SID names**.",
+    "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and disk → Friendly SID names**.",
     "",
     "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
     "",
@@ -1103,7 +1103,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Settings is a list of chapters, each with a one-line summary under its heading. **Connection** is open on your first visit; the rest start closed, and whatever you leave open stays open next time.",
     "",
-    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, **8/9 on** for example. **HVSC** and **Online Archive** disappear if you switch their features off.",
+    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, **8/9 on** for example. **HVSC** and **Online Archive** disappear if you switch their features off.",
     "",
     "If the device is hard to reach, start in **Connection**. If it answers but seems fragile, start in **Device Safety**.",
     "",
@@ -1400,7 +1400,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- **Press and hold next** to fast forward. The tune races ahead, faster every second you hold: the app raises your C64's CPU speed one step at a time. Let go and the tune plays on at normal speed from there.",
     "- **Press and hold previous** to wind back 10 seconds, then 20, 40 and 80 more for each further second you hold. The timer shows where you will land; let go to jump there.",
     "- A tune cannot run backwards, so jumping back starts it again and fast forwards to the spot. That takes a second or two.",
-    `- **Settings → Play and Disk → Mute C64 seeking** chooses what you hear meanwhile. **Rewind only**, the default, silences your C64 while it winds back and lets you hear a fast forward race ahead. **Always** silences both, and **Never** neither. Playing on your ${appDeviceName(variant)}, seeking is silent whatever this is set to.`,
+    `- **Settings → Play and disk → Mute C64 seeking** chooses what you hear meanwhile. **Rewind only**, the default, silences your C64 while it winds back and lets you hear a fast forward race ahead. **Always** silences both, and **Never** neither. Playing on your ${appDeviceName(variant)}, seeking is silent whatever this is set to.`,
     "- Your C64's CPU speed and volume are always put back the way you had them, also when the app closes or loses the connection in the middle: they are restored the next time the app reaches that C64. Nothing is saved to the C64's flash memory.",
     isC64uRemoteVariant(variant)
       ? "- This needs a tune with its own play routine, which is most of them, and firmware 1.2.0 or later on your Commodore 64 Ultimate. Otherwise next and previous only step between tunes."
@@ -1468,7 +1468,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:",
     "",
-    "- **A mood.** There are nine: Fast-Paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer Deep-Dive, Era Explorer, Deep Cuts, and Game Themes. Each draws on tens of thousands of tunes.",
+    "- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game Themes. Each draws on tens of thousands of tunes.",
     "- **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.",
     "- **From tunes you like.** Once five tunes carry a heart, this builds a station from them.",
     "- **Surprise me.** Anything at all.",
@@ -1500,11 +1500,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "#### Telling it what you like",
     "",
-    "While a tune plays, a heart and a cross appear just above its title, at the right of the card. Tap the **heart** to add it to your **Liked Tunes** list. Tap the **cross** to skip it: the station moves on at once and steers away from similar tunes. You need not do either; the station plays happily if you just listen.",
+    "While a tune plays, a heart and a cross appear just above its title, at the right of the card. Tap the **heart** to add it to your **Liked tunes** list. Tap the **cross** to skip it: the station moves on at once and steers away from similar tunes. You need not do either; the station plays happily if you just listen.",
     "",
     `Your choices stay on your ${appDeviceName(variant)}. They belong to the music itself, not to a file name, so they survive an update to the collection even if the tune moves.`,
     "",
-    "**Liked Tunes** is an ordinary list: play it, shuffle it, or take a tune off it. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.",
+    "**Liked tunes** is an ordinary list: play it, shuffle it, or take a tune off it. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.",
     "",
     "#### What a station will and will not do",
     "",
@@ -1575,7 +1575,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "There is only ever one Live View. Start it in one place, and it keeps playing wherever you go in the app.",
           "",
-          `You find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it.${isC64uRemoteVariant(variant) ? "" : " The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it."} Inside are two switches:`,
+          `You find it just below the Quick actions on **Home**, as a card that starts closed; tap its header to open it.${isC64uRemoteVariant(variant) ? "" : " The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it."} Inside are two switches:`,
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
@@ -1598,7 +1598,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Live View needs no setting up. Nothing crosses the network until you press **Watch** or **Listen**.",
           "",
-          "The device sends to two network ports, 11000 for the picture and 11001 for the sound. If those are already taken on your network, change them in **Settings → Play and Disk**.",
+          "The device sends to two network ports, 11000 for the picture and 11001 for the sound. If those are already taken on your network, change them in **Settings → Play and disk**.",
           "",
           "The **Live View** switch in Settings → Stable Features hides the whole feature. **Audio Mirror** and **Video Mirror**, in Experimental Features, choose which of the two feeds it offers.",
           "",
@@ -1656,7 +1656,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "The sound takes a **fast, low-latency path**, so what you hear follows your keypresses closely.",
                 "",
-                `Three switches in **Settings → Play and Disk** control this, and all three start on.${
+                `Three switches in **Settings → Play and disk** control this, and all three start on.${
                   isC64uRemoteVariant(variant) ? "" : " The two native ones take effect on Android only."
                 } **Low-latency audio (native)** is that fast path. **Fast video (native assembly)** builds the picture the same way, and reaches the full 50 frames a second of a PAL machine.`,
                 "",
@@ -1724,7 +1724,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "You can open it from two places:",
           "",
-          "- On **Home**, tap **Game** or **Input**, the second and third Quick Actions tiles. Both open the same screen: **Game** sets it up for playing (Game Mode), **Input** shows everything (Remote Input).",
+          "- On **Home**, tap **Game** or **Input**, the second and third Quick actions tiles. Both open the same screen: **Game** sets it up for playing (Game Mode), **Input** shows everything (Remote Input).",
           "- On **Play**, tap **Remote Input** or **Game Mode** while an item is playing.",
           "",
           "Each place opens its own copy of the controller, so a key held in one never leaks into the other.",
@@ -1738,7 +1738,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "- choose how the stick behaves: **Stick**, **D-Pad**, or **Swipe**;",
           "- send it to **Port 1** or **Port 2** with the port toggle (most games read Port 2);",
           "- make the controls bigger or smaller, from M up to XXL, with the **Size** stepper (L to begin with);",
-          "- turn on **Autofire**, at 1 to 10 presses a second (5 to begin with). Few C64 games need it, so the button stays hidden until you turn on **Show Autofire button** in **Settings → Play and Disk**, where the rate is set too.",
+          "- turn on **Autofire**, at 1 to 10 presses a second (5 to begin with). Few C64 games need it, so the button stays hidden until you turn on **Show Autofire button** in **Settings → Play and disk**, where the rate is set too.",
           "",
           "Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap away: RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C= and SHIFT modifiers. Answer a prompt without letting go of the stick.",
           "",
@@ -1762,13 +1762,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "**Game Mode** is the app set up for playing: the picture and sound as you last left them, everything else out of the way, and the controls that suit how you play.",
           "",
-          "Start it with the **Game** tile on Home, the **Game Mode** button on Play (**Game** on a small screen), or the `0` key from anywhere. Starting a program, cartridge or disk can open it too; **Settings → Play and Disk → Enter Game Mode when a game starts** decides whether it does.",
+          "Start it with the **Game** tile on Home, the **Game Mode** button on Play (**Game** on a small screen), or the `0` key from anywhere. Starting a program, cartridge or disk can open it too; **Settings → Play and disk → Enter Game Mode when a game starts** decides whether it does.",
           "",
           image("Game Mode", profile, "home/remote-input/profiles/{profile}/02-game-mode.png"),
           "",
           isC64uRemoteVariant(variant)
-            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible**."
-            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and Disk → On-screen joystick in Game Mode** to **Visible** or **Hidden** instead of **Auto**.",
+            ? "The picture fills the whole screen. Your phone steers with its number keys, so an on-screen joystick would only be in the way. While the picture is on, press **Show joystick** on the Game Mode toolbar to bring one up for this game. To keep it for good, set **Settings → Play and disk → On-screen joystick in Game Mode** to **Visible**."
+            : "The on-screen joystick stays until you pick up the keys. Play by touch and it is there. Steer with a physical key and it steps aside, giving the picture the whole screen; touch the screen and it comes straight back.\n\nNothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide for yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar while the picture is on, or set **Settings → Play and disk → On-screen joystick in Game Mode** to **Visible** or **Hidden** instead of **Auto**.",
           "",
           image(
             "Game Mode, played on the physical keys",
@@ -1824,12 +1824,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.",
                 "",
-                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
+                "To use different keys, open **Settings → Play and disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
+                "**Settings → Play and disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
               ]),
           "",
         ]
@@ -1876,7 +1876,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "A disk from the online archive has no file of yours to go back to. Its changes last only while the app is running, and ejecting it offers **Save a local copy**.",
     "",
-    'Once a disk is mounted, there are two ways to start it, and **Settings → Play and Disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would type yourself: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is much quicker.',
+    'Once a disk is mounted, there are two ways to start it, and **Settings → Play and disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would type yourself: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is much quicker.',
     "",
     "A few loaders do not like arriving that way. If a disk that used to start no longer does, try the classic route.",
     "",
@@ -1922,7 +1922,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "**Mount & Load** resets the machine anyway, so Launch Safety leaves it alone. All of this happens by itself; there is nothing to press.",
                 "",
-                "While Launch Safety is on, one more option appears in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one rare case: a cartridge that shows a boot menu when the machine resets, and so swallows the LOAD that Mount & Load types.",
+                "While Launch Safety is on, one more option appears in **Settings → Play and disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one rare case: a cartridge that shows a boot menu when the machine resets, and so swallows the LOAD that Mount & Load types.",
                 "",
                 "Turn it on, then choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to begin with) and a **boot settle** time between 1000 and 8000 milliseconds (2800 to begin with). After the reset, the app presses that key to clear the menu. Leave it off unless you have such a cartridge.",
                 "",
@@ -1954,17 +1954,17 @@ export const renderManualMarkdown = ({ variant, features }) => {
             variant,
           )} so you can put it back later. Think of it as a save button for programs that have none of their own.`,
           "",
-          "You find both buttons in **Home → Quick Actions**: **Backup** to capture, **Restore** to put it back. These are not the same as **Save** and **Load** on the Config card, which store your machine's settings rather than its memory.",
+          "You find both buttons in **Home → Quick actions**: **Backup** to capture, **Restore** to put it back. These are not the same as **Save** and **Load** on the Config card, which store your machine's settings rather than its memory.",
           "",
           "Your device must be connected and idle. The app pauses the machine while the memory crosses the network, then lets it carry on, so a running program is not disturbed.",
           "",
           "When you tap **Backup**, the app asks which part of memory to capture:",
           "",
           "- **CPU + RAM snapshot** freezes the running program and stores the whole 64K of memory together with the processor's registers, so the program can pick up exactly where it stopped. It suits BASIC and unhurried programs; a fast game may not resume cleanly. Some machines and programs will not give up their processor state; the app then says so and suggests a Program snapshot. Once in a while a program stays frozen afterward, and the app tells you that too. Restore it, or reset the machine.",
-          "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
-          "- **Basic Snapshot** stores only the BASIC program and its variables.",
-          "- **Screen Snapshot** stores the current screen and its colors.",
-          "- **Custom Snapshot** lets you type the exact address ranges you want.",
+          "- **Program snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
+          "- **BASIC snapshot** stores only the BASIC program and its variables.",
+          "- **Screen snapshot** stores the current screen and its colors.",
+          "- **Custom snapshot** lets you type the exact address ranges you want.",
           "",
           `Snapshots live on your ${appDeviceName(
             variant,
@@ -2034,7 +2034,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "On a machine with lights, in the case or the keyboard, you will see them **pulse once** as the check runs: a little heartbeat that says the connection is alive. On a machine without lights, it nudges a mixer volume instead, for about a twelfth of a second.",
     "",
-    "The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, **Key Explorer**, a shortcut to **Manage devices**, and Share and Clear.",
+    "The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, **Key explorer**, a shortcut to **Manage devices**, and Share and Clear.",
     "",
     "### Sharing a Diagnostics Report",
     "",
@@ -2368,14 +2368,14 @@ export const INDEX_TERMS = [
   { term: "joystick", match: ["**Joystick**"] },
   { term: "joystick keys", match: ["Classic T9", "Diamond (8-centered)"] },
   { term: "KERNAL", match: ["**KERNAL**", "Classic KERNAL load"] },
-  { term: "Key Explorer", match: ["Key Explorer"] },
+  { term: "Key explorer", match: ["Key explorer"] },
   { term: "keyboard, on-screen", match: ["**Keys**"] },
   { term: "keyboard, physical", match: ["Steering with a physical keyboard", "hardware keyboards"] },
   { term: "keypad navigation", match: ["Directional navigation", "Directional Pad"] },
   { term: "Launch Safety", match: ["Launch Safety"] },
   { term: "latency", match: ["Tap latency", "latency"] },
   { term: "Lighting", match: ["**Lighting**"] },
-  { term: "Liked Tunes", match: ["**Liked Tunes**", "Liked Tunes"] },
+  { term: "Liked tunes", match: ["**Liked tunes**", "Liked tunes"] },
   { term: "Listen", match: ["turns the sound on", "Listen"] },
   { term: "Live View", match: ["Live View"] },
   { term: "Local files", match: ["**Local**"] },
@@ -2407,7 +2407,7 @@ export const INDEX_TERMS = [
   { term: "Power sheet", match: ["where your device supports it"] },
   { term: "PRG programs", match: ["**PRG**", "PRG"] },
   { term: "printer", match: ["The Virtual Printer", "**Home → Printers**"] },
-  { term: "Quick Actions", match: ["Quick Actions"] },
+  { term: "Quick actions", match: ["Quick actions"] },
   { term: "quick keys", match: ["quick keys"] },
   { term: "Quick menu", match: ["Quick menu"] },
   { term: "RAM expansion", match: ["RAM expansion"] },

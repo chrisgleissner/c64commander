@@ -84,7 +84,7 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
               >
                 <button
                   type="button"
-                  className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+                  className="flex min-h-11 min-w-0 flex-1 flex-wrap items-center gap-x-2 text-left"
                   onClick={() => handleStreamEditOpen(entry.key)}
                   disabled={locked}
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
@@ -97,10 +97,9 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
                       : entry.label.toUpperCase()}
                   </span>
                   <span
-                    // Wraps rather than truncating: this row carries a fixed label and two buttons,
-                    // so the address is left 83 CSS px of the 128 it needs on a 320 px screen, and
-                    // a multicast endpoint cut to "239.0.1." identifies nothing.
-                    className="min-w-0 break-all font-semibold text-foreground"
+                    // The whole address moves to the next line when it does not fit beside the label;
+                    // breaking inside it leaves "239.0.1.64:11" and "000".
+                    className="min-w-0 whitespace-nowrap font-semibold text-foreground"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}
                   >
                     {buildStreamEndpointLabel(draft.ip, draft.port)}

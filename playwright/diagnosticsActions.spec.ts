@@ -178,7 +178,7 @@ test.describe("Diagnostics Actions tab", () => {
     }, events);
 
     // Open the diagnostics dialog
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
 
@@ -364,7 +364,7 @@ test.describe("Diagnostics Actions tab", () => {
       });
     }, events);
 
-    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await page.getByRole("button", { name: "Open diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     // Expand to full details before checking filters and action summaries
     // Actions are shown by default

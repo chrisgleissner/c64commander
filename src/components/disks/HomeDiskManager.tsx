@@ -1896,7 +1896,7 @@ export const HomeDiskManager = () => {
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === "boolean";
-    const powerLabel = powerEnabled ? "Turn Off" : "Turn On";
+    const powerLabel = powerEnabled ? "Turn off" : "Turn on";
     const powerTarget = !powerEnabled;
     const powerPending = Boolean(drivePowerPending[key]);
     const mountedDiskId = resolveMountedDiskId(key);
@@ -1950,7 +1950,7 @@ export const HomeDiskManager = () => {
   const softIecMountedLabel = softIecDevice?.imageFile ?? NO_DISK_LABEL;
   const softIecPowerEnabled = drivePowerOverride.softiec ?? softIecDevice?.enabled ?? false;
   const softIecHasPowerState = typeof softIecPowerEnabled === "boolean";
-  const softIecPowerLabel = softIecPowerEnabled ? "Turn Off" : "Turn On";
+  const softIecPowerLabel = softIecPowerEnabled ? "Turn off" : "Turn on";
   const softIecPowerTarget = !softIecPowerEnabled;
   const softIecResetPending = Boolean(driveResetPending.softiec);
   const softIecPowerPending = Boolean(drivePowerPending.softiec);
@@ -2447,7 +2447,7 @@ export const HomeDiskManager = () => {
               onRemoveSelected={() => setBulkDeleteOpen(true)}
               maxVisible={listPreviewLimit}
               viewAllTitle="All disks"
-              filterPlaceholder="Filter disks..."
+              filterPlaceholder="Filter disks"
               listTestId="disk-list"
               rowTestId="disk-row"
               viewAllMode="non-empty"

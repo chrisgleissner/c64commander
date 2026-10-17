@@ -176,7 +176,7 @@ const FilterEditorSurface = ({
         <AppSheetBody className="px-4 py-4">
           <div className="space-y-5">
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+              <p className="text-xs font-semibold text-muted-foreground">Scope</p>
               <FilterToggle
                 label="All call types"
                 checked={filters.allCallTypes}
@@ -191,7 +191,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
+              <p className="text-xs font-semibold text-muted-foreground">Transport</p>
               {TRANSPORT_FAMILIES.map((transport) => (
                 <FilterToggle
                   key={transport}
@@ -203,7 +203,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
+              <p className="text-xs font-semibold text-muted-foreground">Endpoint</p>
               {ENDPOINT_CLASSES.map((endpoint) => (
                 <FilterToggle
                   key={endpoint}

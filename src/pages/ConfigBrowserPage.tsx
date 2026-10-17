@@ -11,7 +11,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
-import { Search, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { Search, Loader2, FolderOpen } from "lucide-react";
+import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import {
   useC64Categories,
   useC64Category,
@@ -829,11 +830,12 @@ const CategorySection = memo(function CategorySection({
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      actions={configRefreshAction(isOpen, refreshFocusRef, displayTitle ?? categoryName, categorySlug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
       {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}
-      <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
-        <div className="flex items-center gap-2">
+      {hasCategoryGroupAction ? (
+        <div className="flex items-center gap-2 py-2" data-testid="config-group-actions">
           {categoryName === "Audio Mixer" && (
             <Button
               ref={categoryActionFocusRef}
@@ -859,11 +861,7 @@ const CategorySection = memo(function CategorySection({
             </Button>
           )}
         </div>
-        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
+      ) : null}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
@@ -893,7 +891,7 @@ const CategorySection = memo(function CategorySection({
               <div className="flex items-center gap-3">
                 {isMutedBySolo && <span className="text-xs font-medium text-muted-foreground">Muted</span>}
                 <div className="flex items-center gap-2">
-                  <Label htmlFor={`solo-${item.name}`} className="text-xs uppercase tracking-wide">
+                  <Label htmlFor={`solo-${item.name}`} className="text-xs">
                     Solo
                   </Label>
                   <Switch
@@ -1058,7 +1056,7 @@ export default function ConfigBrowserPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search categories..."
+            placeholder="Search categories"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

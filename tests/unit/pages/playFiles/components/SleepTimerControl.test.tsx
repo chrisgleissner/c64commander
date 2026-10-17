@@ -56,13 +56,14 @@ describe("SleepTimerControl", () => {
     expect(onChange).toHaveBeenLastCalledWith(SLEEP_TIMER_OFF);
   });
 
-  it("always states what it is going to do", () => {
+  it("states what an armed timer is going to do, and does not repeat an Off choice", () => {
     // Playback stopping on its own is otherwise indistinguishable from playback breaking.
     const nowMs = 1_700_000_000_000;
     const { rerender } = render(
       <SleepTimerControl mode={SLEEP_TIMER_OFF} onChange={vi.fn()} nowMs={nowMs} isPlaying />,
     );
-    expect(screen.getByTestId("sleep-timer-state")).toHaveTextContent("Off");
+    expect(screen.queryByTestId("sleep-timer-state")).toBeNull();
+    expect(screen.getByTestId("sleep-timer-off")).toHaveAttribute("aria-pressed", "true");
 
     rerender(<SleepTimerControl mode={{ kind: "after-tune" }} onChange={vi.fn()} nowMs={nowMs} isPlaying />);
     expect(screen.getByTestId("sleep-timer-state")).toHaveTextContent("After this tune");

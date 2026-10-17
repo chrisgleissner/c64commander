@@ -252,7 +252,7 @@ describe("CollapsibleSection", () => {
   it("keeps an untouched defaultOpen section open even after another section in the same scope is touched", () => {
     const first = render(
       <>
-        <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+        <CollapsibleSection scope="test" id="quick-actions" title="Quick actions" icon={Radio} defaultOpen>
           <p>Reset</p>
         </CollapsibleSection>
         <CollapsibleSection scope="test" id="printers" title="Printers" icon={Radio}>
@@ -269,7 +269,7 @@ describe("CollapsibleSection", () => {
     // Re-render fresh: quick-actions was never explicitly stored, so it must fall back
     // to its own defaultOpen regardless of what else in the scope has been stored.
     const { unmount } = render(
-      <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+      <CollapsibleSection scope="test" id="quick-actions" title="Quick actions" icon={Radio} defaultOpen>
         <p>Reset</p>
       </CollapsibleSection>,
     );
@@ -280,7 +280,7 @@ describe("CollapsibleSection", () => {
 
   it("remembers an explicitly closed defaultOpen section across remounts", () => {
     const first = render(
-      <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+      <CollapsibleSection scope="test" id="quick-actions" title="Quick actions" icon={Radio} defaultOpen>
         <p>Reset</p>
       </CollapsibleSection>,
     );
@@ -289,7 +289,7 @@ describe("CollapsibleSection", () => {
     first.unmount();
 
     const { unmount } = render(
-      <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+      <CollapsibleSection scope="test" id="quick-actions" title="Quick actions" icon={Radio} defaultOpen>
         <p>Reset</p>
       </CollapsibleSection>,
     );
