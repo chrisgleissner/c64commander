@@ -480,8 +480,8 @@ export const PlaybackControlsCard = ({
 
                 The title starts at the left edge of the card, level with the metadata line under it.
                 There used to be a small file-origin glyph in front of it, which indented it by its
-                own width and left the two lines misaligned; where a tune came from is already shown
-                against every row of the playlist. */}
+                own width and left the two lines misaligned; where an item came from is in its
+                playlist menu under Details. */}
               <div className="flex w-full flex-nowrap items-center">
                 <span
                   className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"

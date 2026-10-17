@@ -72,3 +72,21 @@ export const formatPlayCategory = (category: PlayFileCategory) => {
       return "File";
   }
 };
+
+/** The short tag a compact row shows next to the duration. */
+export const formatPlayCategoryTag = (category: PlayFileCategory) => {
+  switch (category) {
+    case "sid":
+      return "SID";
+    case "mod":
+      return "MOD";
+    case "prg":
+      return "PRG";
+    case "crt":
+      return "CRT";
+    case "disk":
+      return "Disk";
+    default:
+      return "File";
+  }
+};

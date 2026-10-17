@@ -92,7 +92,7 @@ describe("usePlaylistListItems", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("does not include source-kind labels in playlist item details", () => {
+  it("shows where each item lives in its details, not in the row", () => {
     const playlist = [
       buildItem("ultimate", "/USB0/Music/track1.sid"),
       buildItem("local", "/Music/track2.sid"),
@@ -123,9 +123,14 @@ describe("usePlaylistListItems", () => {
     const listItems = result.current.filter((entry) => entry.variant !== "header");
     expect(listItems).toHaveLength(3);
 
+    const sourceValues = listItems.map(
+      (entry) =>
+        entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source") as
+          { value: string } | undefined,
+    );
+    expect(sourceValues.map((row) => row?.value)).toEqual(["C64U", "Local", "HVSC"]);
+
     listItems.forEach((entry) => {
-      const sourceInfo = entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source");
-      expect(sourceInfo).toBeUndefined();
       expect(entry.subtitle).toBeNull();
       expect(entry.titleSuffix).not.toContain("This device");
       expect(entry.titleSuffix).not.toContain("C64 Ultimate");
