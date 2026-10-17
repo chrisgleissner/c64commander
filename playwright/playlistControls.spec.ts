@@ -92,11 +92,13 @@ test.describe("Playlist controls and advanced features", () => {
       const remove = page.getByTestId("playlist-list-remove-selected");
       await expect(remove, "the action keeps its place while nothing is selected").toBeHidden();
 
-      const listTop = async () => (await page.getByTestId("playlist-list").boundingBox())!.y;
-      const before = await listTop();
+      const listBelowSelectAll = async () =>
+        (await page.getByTestId("playlist-list").boundingBox())!.y -
+        (await page.getByTestId("playlist-list-toggle-select-all").boundingBox())!.y;
+      const before = await listBelowSelectAll();
       await rows.first().getByRole("checkbox").click();
       await expect(remove).toBeVisible();
-      expect(await listTop(), "the list stays where it was when the action appears").toBeCloseTo(before, 0);
+      expect(await listBelowSelectAll(), "the list stays where it was when the action appears").toBeCloseTo(before, 0);
       await snap(page, testInfo, "first-item-selected");
     },
   );

@@ -636,7 +636,7 @@ export const SelectableActionList = ({
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
           </div>
-          {removeSelectedLabel && onRemoveSelected ? (
+          {removeSelectedLabel && onRemoveSelected && (items.length > 0 || selectedCount > 0) ? (
             // Always laid out, and hidden while nothing is selected: it used to appear on the first
             // selection, wrap onto a row of its own, and move the whole list down by that row.
             <Button
