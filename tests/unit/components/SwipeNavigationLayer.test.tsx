@@ -486,6 +486,34 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
+  it("does not read the runway scroll offset while committing a route change", async () => {
+    renderLayer("/play", <NavigationProbe />);
+    const container = await screen.findByTestId("swipe-navigation-container");
+    let reads = 0;
+    Object.defineProperty(container, "scrollLeft", {
+      configurable: true,
+      get: () => {
+        reads += 1;
+        return 0;
+      },
+    });
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByText("Go Config"));
+    });
+
+    expect(reads).toBe(0);
+    act(() => {
+      frames.forEach((frame) => frame(16));
+    });
+    expect(reads).toBeGreaterThan(0);
+  });
+
   it("re-clears late horizontal drift on the next animation frame", async () => {
     let frameCallback: FrameRequestCallback | null = null;
     const requestAnimationFrameSpy = vi
