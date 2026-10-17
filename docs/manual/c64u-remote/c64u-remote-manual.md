@@ -1194,7 +1194,7 @@ While you are steering by keys, a bar along the bottom shows where you are and w
 | Back / Escape | Close the top dialog, leave a field, leave a group, or go back. |
 | Menu / Context Menu | Open the focused item menu; if none exists, open the Quick menu. |
 
-Two keys carry most of it: **D-pad Center/OK goes in, Left Soft Key comes out**, and **Right Soft Key opens choices**. F1 and F3 are separate shortcuts you can set yourself; they never stand in for the soft keys.
+Two keys carry most of it: **D-pad Center / OK goes in, Left Soft Key comes out**, and **Right Soft Key opens choices**. F1 and F3 are separate shortcuts you can set yourself; they never stand in for the soft keys.
 
 #### The two keys under the screen
 

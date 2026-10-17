@@ -695,7 +695,7 @@ const renderKeyboardReference = ({ features, variant }) => {
     ),
     "",
     isC64uRemoteVariant(variant)
-      ? "Two keys carry most of it: **D-pad Center/OK goes in, Left Soft Key comes out**, and **Right Soft Key opens choices**. F1 and F3 are separate shortcuts you can set yourself; they never stand in for the soft keys."
+      ? `Two keys carry most of it: **${variant.runtime.keyLabels.center} goes in, ${variant.runtime.keyLabels.leftSoft} comes out**, and **${variant.runtime.keyLabels.rightSoft} opens choices**. F1 and F3 are separate shortcuts you can set yourself; they never stand in for the soft keys.`
       : "Two keys carry most of it: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
     "",
     ...(isC64uRemoteVariant(variant)
@@ -708,24 +708,24 @@ const renderKeyboardReference = ({ features, variant }) => {
             ["Key on your phone", "Word in the bar", "What it does"],
             [
               [
-                "Left Soft Key",
-                "Back, Exit, Done or Close",
+                variant.runtime.keyLabels.leftSoft,
+                `${variant.runtime.keyLabels.backWord}, Exit, Done or ${variant.runtime.keyLabels.closeWord}`,
                 "Leaves the current dialog, field, group or page. In Remote Input it gives the keypad back to your C64.",
               ],
               [
-                "D-pad Center / OK",
+                variant.runtime.keyLabels.center,
                 "Open, Activate, Edit, Select, Toggle, Adjust or Switch",
                 "Goes in or presses the selected control.",
               ],
               [
-                "Right Soft Key",
-                "Menu, or Delete in a text field",
+                variant.runtime.keyLabels.rightSoft,
+                `${variant.runtime.keyLabels.menuWord}, or ${variant.runtime.keyLabels.deleteWord} in a text field`,
                 "Opens the menu of the selected item, or the Quick menu when it has none. In a text field that holds text it deletes the last character.",
               ],
             ],
           ),
           "",
-          "The word is always about the key on the same side, not about a key called Back or Menu: your phone has no keys with those names.",
+          `The word is always about the key on the same side, not about a key called ${variant.runtime.keyLabels.backWord} or ${variant.runtime.keyLabels.menuWord}: your phone has no keys with those names.`,
           "",
         ]
       : []),
@@ -811,7 +811,7 @@ const renderKeyboardReference = ({ features, variant }) => {
       "2. Press a number key repeatedly to step through its letters, then pause or press another key to move on. `0` types a space.",
       "3. Press `#` to switch between letters and digits. Host, address and folder fields start with digits; other fields start with letters.",
       "4. Press `*` in host fields to cycle separators. In other fields, `1` steps through punctuation and symbols such as `@`, `#` and `&`.",
-      "5. Press the Right Soft Key to delete the last character. The guidance bar shows **Delete** while it does.",
+      `5. Press the ${variant.runtime.keyLabels.rightSoft} to delete the last character. The guidance bar shows **${variant.runtime.keyLabels.deleteWord}** while it does.`,
       "6. Press OK when you are done. In a field on a page, OK and Back both leave the field.",
       "",
       `For hostnames, this makes ${t9HostnameExamples(variant)} practical without a touchscreen.`,
@@ -1776,7 +1776,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "**Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.",
           "",
           variant.runtime.defaultT9InputEnabled
-            ? "While Remote Input is open, the keypad drives your C64. With the joystick, the **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **Right Soft Key** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **Left Soft Key** opens the menu, which is also where you close Remote Input."
+            ? `While Remote Input is open, the keypad drives your C64. With the joystick, the **${variant.runtime.keyLabels.rightSoft}** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **${variant.runtime.keyLabels.leftSoft}** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, \`#\` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **${variant.runtime.keyLabels.rightSoft}** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **${variant.runtime.keyLabels.leftSoft}** opens the menu, which is also where you close Remote Input.`
             : "With a keyboard or D-pad, **F2** (the Menu soft key) opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, move to the other controls, **Release all**, or close Remote Input. While the joystick is in use, the arrow keys steer and OK fires, so this menu is the way to the other controls. **Back** then gives the keys back to your C64. In **Keys**, the arrow keys move between the keys on the screen and OK presses the selected one.",
           "",
           image("Remote Input keyboard mode", profile, remoteInputKeyboardImage(profile)),

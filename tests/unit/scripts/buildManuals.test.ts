@@ -177,6 +177,36 @@ describe("manual generator", () => {
     expect(broad).not.toContain("The two keys under the screen");
   });
 
+  it("takes the key names in the keypad manual from the variant's key labels", async () => {
+    const contexts = await contextByVariant();
+    const remote = contexts["c64u-remote"];
+    const relabelled = renderManualMarkdown({
+      ...remote,
+      variant: {
+        ...remote.variant,
+        runtime: {
+          ...remote.variant.runtime,
+          keyLabels: {
+            ...remote.variant.runtime.keyLabels,
+            leftSoft: "Lower Left Key",
+            center: "Middle Key",
+            rightSoft: "Lower Right Key",
+            deleteWord: "Erase",
+          },
+        },
+      },
+    });
+
+    expect(relabelled).toContain("| Lower Left Key");
+    expect(relabelled).toContain("| Middle Key");
+    expect(relabelled).toContain(
+      "Press the Lower Right Key to delete the last character. The guidance bar shows **Erase**",
+    );
+    expect(relabelled).toContain("**Lower Right Key** opens a menu of the controls");
+    expect(relabelled).not.toContain("Soft Key");
+    expect(renderManualMarkdown(remote)).toContain("| Left Soft Key");
+  });
+
   it("names no device model in either manual", async () => {
     const contexts = await contextByVariant();
     const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;
