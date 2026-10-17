@@ -535,8 +535,8 @@ Listed below in the order they are rendered and walked by the focus ring.
 **Sleep timer** _(with the playback settings: a decision about the session, not about a file)_
 
 - Off / This tune / 15m / 30m / 45m / 60m — buttons — `sleep-timer-off`, `sleep-timer-after-tune`,
-  `sleep-timer-m15`, `sleep-timer-m30`, `sleep-timer-m45`, `sleep-timer-m60` — R✅ I✅ — state is
-  always stated in `sleep-timer-state`; **This tune** `[disabled: nothing is playing]`
+  `sleep-timer-m15`, `sleep-timer-m30`, `sleep-timer-m45`, `sleep-timer-m60` — R✅ I✅ — an armed timer is
+  stated in `sleep-timer-state` (hidden while Off, which is already the selected button); **This tune** `[disabled: nothing is playing]`
 
 **Spectrum card** _(Android only: it exists only where the native plugin can analyse the phone's sound)_
 

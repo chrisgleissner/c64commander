@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { SID_RADIO_STYLE_TILES, type ActiveStation } from "@/pages/playFiles/hooks/useSidRadio";
+import { readableSeedLabel } from "@/pages/playFiles/sidRadioSeedLabel";
 
 export type SidRadioChipProps = {
   /** The running station, or null when the queue is just the playlist. */
@@ -31,7 +32,7 @@ export type SidRadioChipProps = {
 export const whyThisTuneFor = (station: ActiveStation): string => {
   switch (station.seedKind) {
     case "song":
-      return `Similar to ${station.seedLabel}`;
+      return `Similar to ${readableSeedLabel(station.seedLabel)}`;
     case "style":
       return `Matches ${station.seedLabel}`;
     case "collection":

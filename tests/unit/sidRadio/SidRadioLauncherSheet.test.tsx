@@ -115,7 +115,7 @@ describe("SidRadioLauncherSheet Song moods", () => {
 
   it("offers All moods plus one option per style tile, named after the tune", () => {
     setupSong();
-    expect(screen.getByTestId("sid-radio-song-section")).toHaveTextContent("Similar to Bouncy_Balls.sid");
+    expect(screen.getByTestId("sid-radio-song-section")).toHaveTextContent("Similar to Bouncy Balls");
     expect(screen.getByTestId("sid-radio-song-mood-all")).toBeInTheDocument();
     for (const tile of SID_RADIO_STYLE_TILES) {
       expect(screen.getByTestId(`sid-radio-song-mood-${tile.bit}`)).toHaveTextContent(tile.label);
