@@ -56,6 +56,8 @@ import {
 } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { resolveDiagnosticsPanelFromPath } from "@/lib/diagnostics/diagnosticsOverlayRoutes";
 
+import { LazyDialogBoundary } from "@/components/diagnostics/LazyDialogBoundary";
+
 const DiagnosticsDialog = lazy(() =>
   import("@/components/diagnostics/DiagnosticsDialog").then((module) => ({ default: module.DiagnosticsDialog })),
 );
@@ -618,36 +620,42 @@ export const GlobalDiagnosticsOverlay = () => {
   );
 
   return (
-    <Suspense fallback={null}>
-      {diagnosticsEverOpened.current ? (
-        <DiagnosticsDialog
-          open={overlayOpen}
-          onOpenChange={handleOpenChange}
-          onFirstVisible={handleDiagnosticsFirstVisible}
-          healthState={healthState}
-          logs={logs}
-          errorLogs={errorLogs}
-          traceEvents={traceEvents}
-          actionSummaries={actionSummaries}
-          onShareAll={() => withDiagnosticsTraceOverride(handleShareAll)}
-          onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFiltered(entries))}
-          onClearAll={handleClearAll}
-          onRetryConnection={handleRetryConnection}
-          connectionCallbacks={connectionCallbacks}
-          deviceInfo={deviceInfo}
-          healthCheckRunning={healthCheckState.running}
-          lastHealthCheckResult={healthCheckState.latestResult}
-          liveHealthCheckProbes={healthCheckState.liveProbes}
-          healthHistory={overlayOpen ? getHealthHistorySnapshot() : []}
-          requestedPanel={requestedPanel}
-          repairRunning={repairRunning}
-          onRepair={handleRepair}
-          onRunHealthCheck={() => {
-            void handleRunHealthCheck();
-          }}
-        />
-      ) : null}
-    </Suspense>
+    <LazyDialogBoundary
+      operation="DIAGNOSTICS_LOAD"
+      title="Diagnostics could not be opened"
+      description="Its code did not load. Reload the app and try again."
+    >
+      <Suspense fallback={null}>
+        {diagnosticsEverOpened.current ? (
+          <DiagnosticsDialog
+            open={overlayOpen}
+            onOpenChange={handleOpenChange}
+            onFirstVisible={handleDiagnosticsFirstVisible}
+            healthState={healthState}
+            logs={logs}
+            errorLogs={errorLogs}
+            traceEvents={traceEvents}
+            actionSummaries={actionSummaries}
+            onShareAll={() => withDiagnosticsTraceOverride(handleShareAll)}
+            onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFiltered(entries))}
+            onClearAll={handleClearAll}
+            onRetryConnection={handleRetryConnection}
+            connectionCallbacks={connectionCallbacks}
+            deviceInfo={deviceInfo}
+            healthCheckRunning={healthCheckState.running}
+            lastHealthCheckResult={healthCheckState.latestResult}
+            liveHealthCheckProbes={healthCheckState.liveProbes}
+            healthHistory={overlayOpen ? getHealthHistorySnapshot() : []}
+            requestedPanel={requestedPanel}
+            repairRunning={repairRunning}
+            onRepair={handleRepair}
+            onRunHealthCheck={() => {
+              void handleRunHealthCheck();
+            }}
+          />
+        ) : null}
+      </Suspense>
+    </LazyDialogBoundary>
   );
 };
 
