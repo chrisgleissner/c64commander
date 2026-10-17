@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { Copy, Info, MapPinned, Pin, PinOff, Save, Sparkles, Trash2 } from "lucide-react";
+import { Check, Copy, Eraser, Eye, Info, MapPinned, Pin, PinOff, Save, Sparkles, Trash2 } from "lucide-react";
 import {
   AppSheet,
   AppSheetBody,
@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { LightingContextLensDialog } from "@/components/lighting/LightingContextLensDialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -739,6 +740,48 @@ function LightingDeviceMockup({
   );
 }
 
+function WhyThisLookButton({ onClick, testId }: { onClick: () => void; testId?: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      aria-label="Why this look?"
+      title="Why this look?"
+      data-testid={testId}
+    >
+      <Info className="h-5 w-5" />
+    </Button>
+  );
+}
+
+function AutomationRuleHeader({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+  testId,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  testId: string;
+}) {
+  const titleId = `${testId}-title`;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p id={titleId} className="font-medium">
+          {title}
+        </p>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-labelledby={titleId} data-testid={testId} />
+    </div>
+  );
+}
+
 export function LightingAutomationCue({
   label,
   onOpenStudio,
@@ -763,50 +806,8 @@ export function LightingAutomationCue({
       <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onOpenStudio}>
         Studio
       </Button>
-      {onOpenContextLens ? (
-        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onOpenContextLens}>
-          Why
-        </Button>
-      ) : null}
+      {onOpenContextLens ? <WhyThisLookButton onClick={onOpenContextLens} /> : null}
     </div>
-  );
-}
-
-function LightingContextLensDialog() {
-  const { contextLensOpen, closeContextLens, resolved } = useLightingStudio();
-
-  return (
-    <AppSheet open={contextLensOpen} onOpenChange={(open) => (open ? undefined : closeContextLens())}>
-      <AppSheetContent
-        className="overflow-hidden p-0 sm:w-[min(100vw-2rem,36rem)]"
-        data-testid="lighting-context-lens-sheet"
-      >
-        <AppSheetHeader>
-          <AppSheetTitle>Context Lens</AppSheetTitle>
-          <AppSheetDescription>Which resolver layer currently owns each lighting surface.</AppSheetDescription>
-        </AppSheetHeader>
-        <AppSheetBody className="space-y-2 px-4 py-4 sm:px-5">
-          {resolved.contextLens.map((entry) => (
-            <div
-              key={`${entry.surface}-${entry.owner}`}
-              className="flex items-start justify-between gap-2 rounded-lg border border-border/60 p-2.5"
-              data-testid={`lighting-context-lens-${entry.surface}`}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{entry.surface === "case" ? "Case" : "Keys"}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{entry.detail}</p>
-              </div>
-              <Badge variant="secondary" className="shrink-0 text-xs">
-                {entry.label}
-              </Badge>
-            </div>
-          ))}
-          {resolved.contextLens.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">No resolver data available.</p>
-          ) : null}
-        </AppSheetBody>
-      </AppSheetContent>
-    </AppSheet>
   );
 }
 
@@ -965,7 +966,7 @@ export function LightingStudioDialog() {
   const activeProfileChip = resolved.activeProfile ? (
     <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">
       {resolved.activeProfile.name}
-      {isActiveProfileModified ? " *" : ""}
+      {isActiveProfileModified ? <span className="font-normal text-muted-foreground"> (edited)</span> : null}
     </Badge>
   ) : (
     <Badge variant="outline" className="text-xs" data-testid="lighting-active-profile-chip">
@@ -994,8 +995,8 @@ export function LightingStudioDialog() {
             <ScrollArea className="flex-1 min-h-0">
               <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
                 <section data-testid="lighting-header-actions">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 self-center">
                       {activeProfileChip}
                       {resolved.activeAutomationChip ? (
                         <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
@@ -1006,16 +1007,8 @@ export function LightingStudioDialog() {
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 shrink-0 px-2 text-xs"
-                        onClick={openContextLens}
-                        data-testid="lighting-open-context-lens"
-                      >
-                        Why
-                      </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <WhyThisLookButton onClick={openContextLens} testId="lighting-open-context-lens" />
                       {manualLockEnabled ? (
                         <Button
                           variant="secondary"
@@ -1040,18 +1033,20 @@ export function LightingStudioDialog() {
                       <Input
                         value={saveName}
                         onChange={(event) => setSaveName(event.target.value)}
-                        placeholder="Save current"
+                        placeholder="New profile name"
+                        aria-label="New profile name"
                         data-testid="lighting-profile-save-name"
-                        className={cn("min-w-0", narrow ? "flex-1" : null, compact ? "h-8 text-xs" : "w-40")}
+                        className={cn("min-w-0", narrow ? "flex-1" : "w-40")}
                       />
                       <Button
                         size="sm"
                         onClick={handleSaveDraft}
                         data-testid="lighting-profile-save"
-                        className={compact ? "h-8 px-2.5" : undefined}
+                        aria-label="Save as new profile"
+                        title="Save as new profile"
                       >
-                        <Save className="h-3.5 w-3.5" />
-                        <span className={cn("ml-1.5", compact && "sr-only")}>Save</span>
+                        <Save className="h-4 w-4" />
+                        <span className={cn(compact && "sr-only")}>Save</span>
                       </Button>
                     </div>
                   </div>
@@ -1263,22 +1258,18 @@ export function LightingStudioDialog() {
                   </div>
 
                   <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
-                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                      <div>
-                        <p className="font-medium">Connection sentinel</p>
-                        <p className="text-sm text-muted-foreground">Map link state to looks.</p>
-                      </div>
-                      <Switch
-                        checked={studioState.automation.connectionSentinel.enabled}
-                        onCheckedChange={(checked) =>
-                          updateAutomation((state) => ({
-                            ...state,
-                            connectionSentinel: { ...state.connectionSentinel, enabled: checked === true },
-                          }))
-                        }
-                        data-testid="lighting-connection-sentinel-toggle"
-                      />
-                    </div>
+                    <AutomationRuleHeader
+                      title="Connection sentinel"
+                      description="Map link state to looks."
+                      checked={studioState.automation.connectionSentinel.enabled}
+                      onCheckedChange={(checked) =>
+                        updateAutomation((state) => ({
+                          ...state,
+                          connectionSentinel: { ...state.connectionSentinel, enabled: checked },
+                        }))
+                      }
+                      testId="lighting-connection-sentinel-toggle"
+                    />
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {(Object.keys(CONNECTION_STATE_LABELS) as LightingConnectionSentinelState[]).map((stateKey) => (
                         <div key={stateKey} className="space-y-1.5">
@@ -1316,22 +1307,18 @@ export function LightingStudioDialog() {
                   </div>
 
                   <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
-                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                      <div>
-                        <p className="font-medium">Quiet Launch</p>
-                        <p className="text-sm text-muted-foreground">Use a calm look at startup, then hand off.</p>
-                      </div>
-                      <Switch
-                        checked={studioState.automation.quietLaunch.enabled}
-                        onCheckedChange={(checked) =>
-                          updateAutomation((state) => ({
-                            ...state,
-                            quietLaunch: { ...state.quietLaunch, enabled: checked === true },
-                          }))
-                        }
-                        data-testid="lighting-quiet-launch-toggle"
-                      />
-                    </div>
+                    <AutomationRuleHeader
+                      title="Quiet Launch"
+                      description="Use a calm look at startup, then hand off."
+                      checked={studioState.automation.quietLaunch.enabled}
+                      onCheckedChange={(checked) =>
+                        updateAutomation((state) => ({
+                          ...state,
+                          quietLaunch: { ...state.quietLaunch, enabled: checked },
+                        }))
+                      }
+                      testId="lighting-quiet-launch-toggle"
+                    />
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <Label>Launch profile</Label>
@@ -1365,22 +1352,18 @@ export function LightingStudioDialog() {
                   </div>
 
                   <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
-                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                      <div>
-                        <p className="font-medium">Source identity map</p>
-                        <p className="text-sm text-muted-foreground">Reflect the active source on Play and Disks.</p>
-                      </div>
-                      <Switch
-                        checked={studioState.automation.sourceIdentityMap.enabled}
-                        onCheckedChange={(checked) =>
-                          updateAutomation((state) => ({
-                            ...state,
-                            sourceIdentityMap: { ...state.sourceIdentityMap, enabled: checked === true },
-                          }))
-                        }
-                        data-testid="lighting-source-identity-toggle"
-                      />
-                    </div>
+                    <AutomationRuleHeader
+                      title="Source identity map"
+                      description="Reflect the active source on Play and Disks."
+                      checked={studioState.automation.sourceIdentityMap.enabled}
+                      onCheckedChange={(checked) =>
+                        updateAutomation((state) => ({
+                          ...state,
+                          sourceIdentityMap: { ...state.sourceIdentityMap, enabled: checked },
+                        }))
+                      }
+                      testId="lighting-source-identity-toggle"
+                    />
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {(
                         Object.keys(LIGHTING_SOURCE_BUCKET_LABELS) as Array<keyof typeof LIGHTING_SOURCE_BUCKET_LABELS>
@@ -1422,54 +1405,46 @@ export function LightingStudioDialog() {
                   </div>
 
                   <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
-                    <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
-                      <div>
-                        <p className="font-medium">Circadian palette</p>
-                        <p className="text-sm text-muted-foreground">
-                          Offline sun phases from device, manual, or city location.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={studioState.automation.circadian.enabled}
-                        onCheckedChange={(checked) =>
-                          updateAutomation((state) => ({
-                            ...state,
-                            circadian: { ...state.circadian, enabled: checked === true },
-                          }))
-                        }
-                        data-testid="lighting-circadian-toggle"
-                      />
-                    </div>
+                    <AutomationRuleHeader
+                      title="Circadian palette"
+                      description="Offline sun phases from device, manual, or city location."
+                      checked={studioState.automation.circadian.enabled}
+                      onCheckedChange={(checked) =>
+                        updateAutomation((state) => ({
+                          ...state,
+                          circadian: { ...state.circadian, enabled: checked },
+                        }))
+                      }
+                      testId="lighting-circadian-toggle"
+                    />
                     <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
                       <div className="space-y-3">
-                        <div
-                          className={cn(
-                            "rounded-lg border border-border/60 bg-background/70 p-3",
-                            narrow ? "space-y-3" : "flex items-center justify-between gap-3",
-                          )}
-                        >
-                          <div>
-                            <p className="font-medium">Use device location</p>
-                            <p className="text-xs text-muted-foreground">Best when permission is granted.</p>
-                          </div>
-                          <div className="flex items-center gap-2">
+                        <div className="space-y-2 rounded-lg border border-border/60 bg-background/70 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p id="lighting-use-device-location-title" className="font-medium">
+                                Use device location
+                              </p>
+                              <p className="text-xs text-muted-foreground">Best when permission is granted.</p>
+                            </div>
                             <Switch
                               checked={studioState.automation.circadian.locationPreference.useDeviceLocation}
                               onCheckedChange={(checked) =>
                                 updateCircadianLocationPreference({ useDeviceLocation: checked === true })
                               }
+                              aria-labelledby="lighting-use-device-location-title"
                               data-testid="lighting-use-device-location"
                             />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={requestDeviceLocation}
-                              data-testid="lighting-request-device-location"
-                            >
-                              <MapPinned className="mr-2 h-4 w-4" />
-                              Refresh
-                            </Button>
                           </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={requestDeviceLocation}
+                            data-testid="lighting-request-device-location"
+                          >
+                            <MapPinned className="mr-2 h-4 w-4" />
+                            Refresh location
+                          </Button>
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1590,32 +1565,39 @@ export function LightingStudioDialog() {
           </AppSheetBody>
 
           <AppSheetFooter
-            className={cn("shrink-0 border-t border-border/60", compact ? "flex-row gap-1.5 p-3" : "p-5 pt-4")}
+            className={cn(
+              "shrink-0 flex-row flex-nowrap gap-1.5 border-t border-border/60",
+              compact ? "p-3" : "p-5 pt-4",
+            )}
           >
             <Button
               variant="outline"
               size={compact ? "sm" : "default"}
-              className={compact ? "flex-1" : undefined}
+              className="min-w-0 flex-1 px-2"
               onClick={clearPreviewState}
               data-testid="lighting-clear-preview"
+              aria-label="Clear preview"
             >
-              {compact ? "Clear" : "Clear preview"}
+              <Eraser />
+              Clear
             </Button>
             <Button
               variant="outline"
               size={compact ? "sm" : "default"}
-              className={compact ? "flex-1" : undefined}
+              className="min-w-0 flex-1 px-2"
               onClick={handlePreview}
               data-testid="lighting-preview"
             >
+              <Eye />
               Preview
             </Button>
             <Button
               size={compact ? "sm" : "default"}
-              className={compact ? "flex-1" : undefined}
+              className="min-w-0 flex-1 px-2"
               onClick={() => applyPreviewAsProfileBase(studioState.activeProfileId)}
               data-testid="lighting-apply-draft"
             >
+              <Check />
               Apply
             </Button>
           </AppSheetFooter>

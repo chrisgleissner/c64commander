@@ -1773,7 +1773,7 @@ function HomePageContent() {
                     data-testid="home-lighting-profile-chip"
                   >
                     {lightingResolved.activeProfile
-                      ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
+                      ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " (edited)" : ""}`
                       : "Device look"}
                   </span>
                   {lightingResolved.activeAutomationChip ? (

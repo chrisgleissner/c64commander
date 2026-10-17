@@ -1306,8 +1306,13 @@ DOM order, which is the order the focus ring walks.
 
 **Header** (`lighting-header-actions`)
 
-- Why — button — `lighting-open-context-lens` — opens the **Context Lens** sheet
-  (`lighting-context-lens-sheet`), which explains why the current look was chosen
+- Why this look? — icon button (info icon, accessible name only) — `lighting-open-context-lens` —
+  opens the **Context Lens** sheet (`lighting-context-lens-sheet`): one card per surface
+  (`lighting-context-lens-case`, `-keyboard`) naming the rule that owns it, then a
+  Signals list (`lighting-context-lens-signals`, rows `lighting-context-signal-<id>`) with
+  the value of each contributing signal. Display only, so no further controls
+- The active profile chip (`lighting-active-profile-chip`) reads "<name> (edited)" while
+  the active profile has unsaved changes
 - Unlock look — button — `lighting-unlock` `[visible only while a manual lock is held]`
 
 **Device mockup** (`lighting-device-mockup`) — the C64 picture that chooses which
@@ -1324,8 +1329,9 @@ ids mark geometry rather than controls.
 
 **Profiles** (`lighting-profiles-section`)
 
-- Profile name — text — `lighting-profile-save-name`
-- Save — button — `lighting-profile-save` — saves the current draft under that name
+- New profile name — text — `lighting-profile-save-name`
+- Save as new profile — button — `lighting-profile-save` — saves the current draft under
+  that name (icon only on the compact profile, icon and "Save" elsewhere)
 - Selected profile (`lighting-profile-detail-card`), for the profile a chip selects:
   - Rename field — text — `lighting-profile-rename-input`
   - Apply — button — `lighting-profile-apply`
@@ -1341,15 +1347,15 @@ ids mark geometry rather than controls.
 **Automation** (`lighting-automation-section`) — four independent rules, each a switch
 with its own controls beneath it, revealed only while that switch is on.
 
-- Connection sentinel — checkbox — `lighting-connection-sentinel-toggle` — maps link
+- Connection sentinel — switch — `lighting-connection-sentinel-toggle` — maps link
   state to looks; a per-state profile select sits beneath it for each state
-- Quiet Launch — checkbox — `lighting-quiet-launch-toggle` — a calm look at startup,
+- Quiet Launch — switch — `lighting-quiet-launch-toggle` — a calm look at startup,
   handed off afterwards; Launch profile — select — `lighting-quiet-launch-profile`
-- Source identity map — checkbox — `lighting-source-identity-toggle` — reflects the
+- Source identity map — switch — `lighting-source-identity-toggle` — reflects the
   active source on Play and Disks; a per-bucket select sits beneath it for each bucket
-- Circadian palette — checkbox — `lighting-circadian-toggle` — offline sun phases. Its
+- Circadian palette — switch — `lighting-circadian-toggle` — offline sun phases. Its
   location can come from three places and all three are shown at once:
-  - Use device location — checkbox — `lighting-use-device-location` ; Refresh — button —
+  - Use device location — switch — `lighting-use-device-location` ; Refresh location — button —
     `lighting-request-device-location` (status in `lighting-device-location-status`)
   - Latitude / Longitude — number — `lighting-manual-latitude`, `lighting-manual-longitude`
     (errors in `lighting-manual-{latitude,longitude}-error`) ; Use manual coordinates —
@@ -1359,10 +1365,9 @@ with its own controls beneath it, revealed only while that switch is on.
 
 **Footer**
 
-- Clear preview — button — `lighting-clear-preview` (label shortens to "Clear" on the
-  compact profile)
-- Preview — button — `lighting-preview`
-- Apply — button — `lighting-apply-draft`
+One non-wrapping row of three equal buttons, each with an icon: Clear
+(accessible name "Clear preview") — `lighting-clear-preview`, Preview —
+`lighting-preview`, Apply — `lighting-apply-draft`.
 
 ---
 
