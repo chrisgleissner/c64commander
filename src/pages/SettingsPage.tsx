@@ -54,7 +54,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { requestTourStart } from "@/lib/tour/tourState";
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
@@ -1486,7 +1486,7 @@ export default function SettingsPage() {
                       Off by default — it costs about half the height of every closed card on a small screen.
                     </p>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="show-section-descriptions"
                     data-testid="settings-show-section-descriptions"
                     checked={showSectionDescriptions}
@@ -1568,7 +1568,7 @@ export default function SettingsPage() {
                         </Label>
                         <HelperText>Extend the app over the top status bar (clock, battery, signal).</HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="full-screen-hide-status-bar"
                         data-testid="settings-hide-status-bar"
                         checked={hideStatusBar}
@@ -1584,7 +1584,7 @@ export default function SettingsPage() {
                           Hide navigation bar
                         </Label>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="full-screen-hide-navigation-bar"
                         data-testid="settings-hide-navigation-bar"
                         checked={hideNavigationBar}
@@ -1821,7 +1821,7 @@ export default function SettingsPage() {
                       </Label>
                       <HelperText>Offer the built-in simulated device after real-device discovery fails.</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id="demo-mode-enabled"
                       checked={demoModeEnabled}
                       onCheckedChange={(checked) => {
@@ -2124,7 +2124,7 @@ export default function SettingsPage() {
                       Records extra detail in the diagnostics log, including file access and device requests.
                     </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="debug-logging"
                     checked={debugLoggingEnabled}
                     onCheckedChange={(checked) => {
@@ -2247,7 +2247,7 @@ export default function SettingsPage() {
                       Shows SID tunes as “Bossa in Do” instead of the raw filename, badged with chip count.
                     </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="settings-friendly-sid-names"
                     data-testid="settings-friendly-sid-names"
                     checked={friendlySidNames}
@@ -2299,7 +2299,7 @@ export default function SettingsPage() {
                       </Label>
                       <HelperText>Also matches programs inside .d64/.d71/.d81 images, not just filenames.</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id="settings-search-inside-disks"
                       data-testid="settings-search-inside-disks"
                       checked={searchInsideDisks}
@@ -2324,7 +2324,7 @@ export default function SettingsPage() {
                           doesn&apos;t swallow the typed LOAD. Leave off unless you run such a cartridge.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-boot-menu-answer"
                         data-testid="settings-boot-menu-answer"
                         checked={bootMenuAnswerEnabled}
@@ -2453,7 +2453,7 @@ export default function SettingsPage() {
                         </Label>
                         <HelperText>Full frame rate (50 fps PAL / 60 fps NTSC). Leave on; Android only.</HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-native-assembly"
                         data-testid="settings-stream-native-assembly"
                         checked={streamNativeVideoAssembly}
@@ -2477,7 +2477,7 @@ export default function SettingsPage() {
                           unobstructed screen.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-video-badges"
                         data-testid="settings-stream-video-badges"
                         checked={streamVideoBadges}
@@ -2501,7 +2501,7 @@ export default function SettingsPage() {
                           Leave on.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-input-priority"
                         data-testid="settings-stream-input-priority"
                         checked={streamInputPriority}
@@ -2524,7 +2524,7 @@ export default function SettingsPage() {
                           Cuts keypress-to-sound delay vs. the browser engine. Leave on; Android only.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-native-audio"
                         data-testid="settings-stream-native-audio"
                         checked={streamNativeAudio}
@@ -2551,7 +2551,7 @@ export default function SettingsPage() {
                       Rarely needed, so it&apos;s hidden by default in Remote Input and Game Mode.
                     </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="settings-show-autofire"
                     data-testid="settings-show-autofire"
                     checked={showAutofireButton}
@@ -2635,7 +2635,7 @@ export default function SettingsPage() {
                       </div>
                       <HelperText>{feature.definition.description}</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id={`feature-flag-${feature.id}`}
                       checked={feature.value}
                       disabled={!feature.editable}
@@ -2860,7 +2860,7 @@ export default function SettingsPage() {
                     survives a power cycle, same as saving from the C64&apos;s own menu.
                   </HelperText>
                 </div>
-                <Checkbox
+                <Switch
                   id="settings-persist-config-to-flash"
                   data-testid="settings-persist-config-to-flash"
                   checked={persistConfigToFlash}
@@ -3316,7 +3316,7 @@ export default function SettingsPage() {
                       16px box, and so the control has an accessible name at all. */}
                   <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
                     <span className="text-sm font-medium">Allow manual retry while paused</span>
-                    <Checkbox
+                    <Switch
                       aria-label="Allow manual retry while paused"
                       data-testid="settings-allow-circuit-override"
                       checked={allowCircuitOverride}

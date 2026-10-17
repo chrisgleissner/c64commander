@@ -108,7 +108,7 @@ describe("ConfigItemRow control selection + REST updates", () => {
     });
   });
 
-  it("renders a checkbox for Enabled/Disabled and updates via REST immediately", async () => {
+  it("renders a switch for Enabled/Disabled and updates via REST immediately", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
@@ -120,8 +120,8 @@ describe("ConfigItemRow control selection + REST updates", () => {
       />,
     );
 
-    const checkbox = screen.getByLabelText("Drive checkbox");
-    expect(checkbox).toHaveAttribute("role", "checkbox");
+    const checkbox = screen.getByRole("switch", { name: "Drive" });
+    expect(checkbox).toHaveAttribute("role", "switch");
 
     fireEvent.pointerDown(checkbox);
     fireEvent.click(checkbox);
@@ -135,8 +135,22 @@ describe("ConfigItemRow control selection + REST updates", () => {
     });
   });
 
-  // On the phone the 18 px box was the only touch target; a tap a few pixels beside it did nothing.
-  it("toggles a checkbox item from a tap in the 44 px square around the box, once", async () => {
+  it("names the switch by the item label, not by its control type", () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Menu Mouse Navigation"
+        value="Enabled"
+        options={["Disabled", "Enabled"]}
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("switch", { name: "Menu Mouse Navigation" })).toBeChecked();
+    expect(screen.queryByLabelText("Menu Mouse Navigation checkbox")).toBeNull();
+  });
+
+  it("toggles a switch item once per press and reports the opposite value", () => {
     const onValueChange = vi.fn();
     renderWithQuery(
       <ConfigItemRow
@@ -148,17 +162,12 @@ describe("ConfigItemRow control selection + REST updates", () => {
       />,
     );
 
-    const target = screen.getByLabelText("Menu Mouse Navigation checkbox").parentElement as HTMLElement;
-    expect(target).toHaveClass("h-11", "w-11");
-    fireEvent.click(target);
+    fireEvent.click(screen.getByRole("switch", { name: "Menu Mouse Navigation" }));
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("Disabled");
-
-    fireEvent.click(screen.getByLabelText("Menu Mouse Navigation checkbox"));
-    expect(onValueChange).toHaveBeenCalledTimes(2);
   });
 
-  it("ignores a tap in the square around a read-only checkbox", () => {
+  it("does not toggle a read-only switch", () => {
     const onValueChange = vi.fn();
     renderWithQuery(
       <ConfigItemRow
@@ -171,12 +180,12 @@ describe("ConfigItemRow control selection + REST updates", () => {
       />,
     );
 
-    fireEvent.click(screen.getByLabelText("Menu Mouse Navigation checkbox").parentElement as HTMLElement);
+    fireEvent.click(screen.getByRole("switch", { name: "Menu Mouse Navigation" }));
 
     expect(onValueChange).not.toHaveBeenCalled();
   });
 
-  it("renders a checkbox for On/Off and maps checked=On, unchecked=Off", async () => {
+  it("renders a switch for On/Off and maps checked=On, unchecked=Off", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
@@ -187,8 +196,8 @@ describe("ConfigItemRow control selection + REST updates", () => {
       />,
     );
 
-    const checkbox = screen.getByLabelText("Power checkbox");
-    expect(checkbox).toHaveAttribute("role", "checkbox");
+    const checkbox = screen.getByRole("switch", { name: "Power" });
+    expect(checkbox).toHaveAttribute("role", "switch");
 
     // Toggle to Off
     fireEvent.click(checkbox);
@@ -280,8 +289,8 @@ describe("ConfigItemRow control selection + REST updates", () => {
       />,
     );
 
-    const checkbox = await screen.findByLabelText("Drive checkbox");
-    expect(checkbox).toHaveAttribute("role", "checkbox");
+    const checkbox = await screen.findByRole("switch", { name: "Drive" });
+    expect(checkbox).toHaveAttribute("role", "switch");
 
     // No options passed: should fetch `/v1/configs/{category}/{item}` and render select.
     renderWithQuery(
@@ -374,7 +383,7 @@ describe("ConfigItemRow slider and input behaviors", () => {
       </>,
     );
 
-    expect(screen.getByLabelText("Drive checkbox")).not.toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Drive" })).not.toBeDisabled();
     expect(screen.getByLabelText("Video Mode select")).not.toBeDisabled();
   });
 
@@ -390,7 +399,7 @@ describe("ConfigItemRow slider and input behaviors", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Drive checkbox")).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Drive" })).toBeDisabled();
   });
 
   it("orders off/low/medium/high slider options", () => {

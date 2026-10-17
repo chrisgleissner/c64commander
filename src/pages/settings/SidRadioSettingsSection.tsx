@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { Radio } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -76,7 +76,7 @@ const ToggleRow = ({ id, testId, label, description, checked, onChange }: Toggle
       </Label>
       <p className="text-xs text-muted-foreground">{description}</p>
     </div>
-    <Checkbox id={id} data-testid={testId} checked={checked} onCheckedChange={(v) => onChange(v === true)} />
+    <Switch id={id} data-testid={testId} checked={checked} onCheckedChange={onChange} />
   </div>
 );
 
