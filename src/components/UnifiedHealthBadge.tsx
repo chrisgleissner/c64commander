@@ -99,7 +99,12 @@ const resolveDeviceHealthSummary = (
   device: { lastSuccessfulConnectionAt?: string | null },
   isSelected: boolean,
 ) => {
-  const switchPrefix = switchStatusLabel && switchStatusLabel !== "Selected" ? `${switchStatusLabel} selection` : null;
+  const badgeStatesIt =
+    (switchStatusLabel === "Verifying" && snapshot?.running) ||
+    (switchStatusLabel === "Offline" &&
+      !snapshot?.running &&
+      (snapshot?.error || snapshot?.latestResult?.connectivity === "Offline"));
+  const switchPrefix = switchStatusLabel === "Selected" || badgeStatesIt ? null : switchStatusLabel;
   const lastSeenAt = snapshot?.lastObservedAt ?? snapshot?.lastCompletedAt ?? device.lastSuccessfulConnectionAt ?? null;
 
   if (!snapshot) {
@@ -854,6 +859,14 @@ export function UnifiedHealthBadge({ className }: Props) {
                 ? "verifying"
                 : (resolveDeviceSwitchStatusFromHealth(healthSnapshot) ?? getSavedDeviceSwitchStatus(device.id));
               const statusLabel = resolvePickerStatusLabel(status, isSelected);
+              const statusBadge = (
+                <PickerHealthStatusBadge snapshot={healthSnapshot} testId={`switch-device-status-${device.id}`} />
+              );
+              const statusSummary = (
+                <span className="text-xs text-muted-foreground">
+                  {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
+                </span>
+              );
               const isExpanded = expandedDeviceIdSet.has(device.id);
               const sameDeviceNote = describeSameDeviceEntry(device.id, savedDevices);
 
@@ -879,21 +892,16 @@ export function UnifiedHealthBadge({ className }: Props) {
                       }}
                       data-testid={`switch-device-row-${device.id}`}
                       data-badge-layout={pickerBadgeOwnLine ? "stacked" : "inline"}
+                      aria-current={isSelected ? "true" : undefined}
                     >
                       <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="min-w-0 break-words text-sm font-medium text-foreground">
                             {buildSavedDevicePrimaryLabel(device, verified)}
                           </span>
-                          {statusLabel ? (
-                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              {statusLabel}
-                            </span>
-                          ) : null}
+                          {pickerBadgeOwnLine ? statusBadge : null}
                         </span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {resolveDeviceHealthSummary(healthSnapshot, totalProbeCount, statusLabel, device, isSelected)}
-                        </span>
+                        <span className="mt-1 block">{statusSummary}</span>
                         {sameDeviceNote ? (
                           <span
                             className="mt-1 block text-xs text-muted-foreground"
@@ -903,19 +911,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                           </span>
                         ) : null}
                       </span>
-                      {pickerBadgeOwnLine ? (
-                        <span className="flex min-w-0 max-w-full items-start">
-                          <PickerHealthStatusBadge
-                            snapshot={healthSnapshot}
-                            testId={`switch-device-status-${device.id}`}
-                          />
-                        </span>
-                      ) : (
-                        <PickerHealthStatusBadge
-                          snapshot={healthSnapshot}
-                          testId={`switch-device-status-${device.id}`}
-                        />
-                      )}
+                      {pickerBadgeOwnLine ? null : statusBadge}
                     </button>
                     <Button
                       type="button"
