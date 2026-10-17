@@ -49,3 +49,42 @@ stream again clears the state.
 
 Listen stopping because another app took the speaker is reported by a toast (audio focus handling in
 `AvMirrorSession`), not by this path.
+
+## Measurements (2026-10-17): 30 minutes of Watch on a Pixel 4, no loss
+
+Issue #516 stays open: this run did not reproduce a loss, so it does not establish a cause.
+
+Setup: Pixel 4 (screen on, plugged into USB, app in the foreground on Home, default edition build) with Watch on
+against the c64u (192.168.1.146). The phone and the host were on the same LAN. A host script joined 239.0.1.64:11000 on
+the Ethernet interface (192.168.1.185) and logged, once per second, the packet count, bytes, the distinct senders and
+the number of sequence discontinuities per sender (a step other than +1 on the 16-bit counter). In parallel, a CDP
+sampler read every 5 s the Watch button state, `StreamUdp.readStreamDiagnostics({ name: "video" })` and the `Video
+Mirror` entries of the in-app log (`c64u_app_logs`). The run lasted 1800 s (360 app samples, 1800 wire samples).
+
+Results:
+
+| Quantity                                   | Value                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| Watch button state                         | "Watching" in all 359 samples; page never hidden                                 |
+| `Video Mirror` log entries                 | 0 (no loss declared, no restart)                                                 |
+| Wire rate from the c64u                    | median 3409 packets/s (about 2.6 MB/s); no second with fewer than 3200 packets   |
+| Sequence discontinuities, c64u sender      | 4 single-step gaps in 30 minutes (Ethernet side, one lost packet each)           |
+| Seconds with zero packets                  | 0                                                                                |
+
+One event worth recording. From 23:55:25 to 23:56:05 (host clock) a second sender, 192.168.1.13 (the u64), appeared on
+the video group at up to 2.5k packets/s on top of the c64u's 3.4k. The wire rate rose to about 5.9k packets/s and the
+combined stream showed up to 59 discontinuities per second, as expected from two interleaved senders. The app's sender
+filter (`expectedSource` 192.168.1.146) rejected those packets (`rejectedPackets` rose to 54876,
+`senders` listed both addresses) and the picture kept running: no frame gap long enough to trip the 8 s watchdog, no log
+entry. So a second sender on the group alone did not cause the loss in this run. The audio group also showed the u64
+(1273 rejected packets at the start of the run), which indicates that the u64 had been left streaming by earlier work.
+Whoever started the u64 stream was not identified.
+
+What this does not cover:
+
+- Duration. The report in #516 describes two losses in about three hours; 30 minutes is a sixth of that.
+- Screen off. The planned 10 minute screen-off run was not done because the time budget went to the battery run for
+  #505. Whether the screen-off state (WebView timers frozen, multicast lock behavior) triggers the loss is untested here.
+- The Wi-Fi path itself was not measured at the access point. The host sees the Ethernet side only; a loss that happens
+  between the access point and the phone (multicast delivery on Wi-Fi) is invisible to this counter. `lastFps` and
+  the sender-filter entry that the app now logs on a loss are the evidence to read when it happens again.
