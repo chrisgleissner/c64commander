@@ -21,13 +21,13 @@ Setup:
 
 | Time (min) | Battery temp (sysfs) | cpu-0-0 | Other zones (sdm-therm / pa-therm) | App CPU time since start (user + system) | batterystats app estimate (mAh) | Partial wakelock | RSS (MB) |
 | ---------- | -------------------- | ------- | ---------------------------------- | ---------------------------------------- | ------------------------------- | ---------------- | -------- |
-| 0          | 32.4 C (5 s: 33.5 C) | n/a     | n/a                                | 0 s (baseline 3.2 M ticks)               | 0.16                            | 4 s              | n/a      |
-| 5          | 32.4 C               | 40.7 C  | 35.0 / 32.9 C                      | 113 s                                    | 0.49                            | 5 m 29 s         | 364      |
-| 10         | 31.6 C               | 39.5 C  | 34.2 / 32.0 C                      | 242 s                                    | 0.78                            | 10 m 23 s        | 399      |
-| 15         | 30.7 C               | 39.1 C  | 33.9 / 31.7 C                      | 387 s                                    | 1.12                            | 15 m 22 s        | 371      |
-| 20         | 30.2 C               | 38.0 C  | 32.9 / 31.0 C                      | 496 s                                    | 1.57                            | 20 m 21 s        | 354      |
-| 25         | 29.8 C               | 37.6 C  | 33.0 / 30.8 C                      | 636 s                                    | 2.02                            | 25 m 21 s        | 377      |
-| 30         | 29.6 C               | 37.2 C  | 32.7 / 30.5 C                      | 761 s                                    | 2.46                            | 30 m 10 s        | 370      |
+| 0          | 33.5 C (dumpsys)    | n/a     | n/a                                | 0 s                                     | 0.16                            | 4 s              | n/a      |
+| 5          | 32.4 C               | 40.7 C  | 35.0 / 32.9 C                      | 121 s                                    | 0.49                            | 5 m 29 s         | 364      |
+| 10         | 31.6 C               | 39.5 C  | 34.2 / 32.0 C                      | 251 s                                    | 0.78                            | 10 m 23 s        | 399      |
+| 15         | 30.7 C               | 39.1 C  | 33.9 / 31.7 C                      | 396 s                                    | 1.12                            | 15 m 22 s        | 371      |
+| 20         | 30.2 C               | 38.0 C  | 32.9 / 31.0 C                      | 505 s                                    | 1.57                            | 20 m 21 s        | 354      |
+| 25         | 29.8 C               | 37.6 C  | 33.0 / 30.8 C                      | 645 s                                    | 2.02                            | 25 m 21 s        | 377      |
+| 30         | 29.6 C               | 37.2 C  | 32.7 / 30.5 C                      | 762 s                                    | 2.46                            | 30 m 10 s        | 370      |
 
 Notes on the columns: CPU time is `utime + stime` from `/proc/<pid>/stat` (10 ms ticks) of the app process, which
 stayed the same PID (9174) throughout, minus the sample taken at screen-off. The 0 minute row's thermal zones were not
@@ -37,8 +37,8 @@ because it reports a stale averaged percentage.
 
 What the numbers show:
 
-- Average app CPU use over the 30 minutes: 761 s of CPU in 1800 s, about 42 % of one core, ranging from 109 to 145 s per
-  5 minute interval. No upward trend.
+- Average app CPU use over the 30 minutes: 762 s of CPU in 1800 s, about 42 % of one core, ranging from 109 to 145 s per
+  5 minute interval (first interval 4.5 minutes). No upward trend.
 - `batterystats` attributes about 2.3 mAh to the app over the 30 minutes, about 4.6 mAh per hour, nearly all of it to the
   foreground service (2.29 mAh), which held a partial wakelock for the whole 30 minutes (30 m 10 s). On the 2200 mAh
   estimated capacity that is about 0.2 % of the battery per hour. The model probably under-reports the cost of audio
