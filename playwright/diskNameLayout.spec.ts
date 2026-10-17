@@ -133,3 +133,42 @@ test.describe("Disk names get room to read", () => {
     });
   }
 });
+
+test.describe("Compact disk rows", () => {
+  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.beforeEach(async ({ page }) => {
+    server = await createMockC64Server({}, {}, { timingMode: "fast" });
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      const disks = ["Sisters", "Chronicle"].map((name, index) => ({
+        id: `ultimate:/Usb0/Sample Arcade/Sample ${name}.d64`,
+        name: `Sample ${name}.d64`,
+        path: `/Usb0/Sample Arcade/Sample ${name}.d64`,
+        location: "ultimate",
+        group: "Sample Arcade",
+        importOrder: index + 1,
+        importedAt: new Date().toISOString(),
+      }));
+      localStorage.setItem("c64u_disk_library:TEST-123", JSON.stringify({ disks }));
+    });
+  });
+
+  test.afterEach(async () => {
+    await server.close();
+  });
+
+  test("a disk row is one compact block that does not repeat the folder as a group @layout", async ({ page }) => {
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+    await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0, { timeout: 15_000 });
+    const row = page.getByTestId("disk-list").getByTestId("disk-row").first();
+    await row.scrollIntoViewIfNeeded();
+    await capture(page, "compact-disk-row");
+    const height = await row.evaluate((element) => element.getBoundingClientRect().height);
+    expect(height, "row height with select, name, mount and menu").toBeLessThanOrEqual(100);
+    await expect(row.getByText("Group:")).toHaveCount(0);
+    await expect(row.getByRole("button", { name: /^Mount / })).toBeVisible();
+  });
+});

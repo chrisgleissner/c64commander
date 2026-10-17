@@ -120,6 +120,7 @@ export type SelectableActionListProps = {
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
+const DEFAULT_DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact"];
 const NO_PROFILES: readonly DisplayProfile[] = [];
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -173,11 +174,11 @@ const ActionListRow = React.memo(function ActionListRow({
   return (
     <div
       className={cn(
-        "items-center rounded-md px-1 min-w-0 max-w-full",
+        "items-center rounded-md min-w-0 max-w-full",
         dense
-          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] gap-x-1 py-1"
+          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] py-1"
           : cn(
-              "flex flex-wrap gap-x-2",
+              "flex flex-wrap gap-x-2 px-1",
               // The stacked title is a 44 px target on its own line, so the row gives back its own
               // vertical padding and line gap to stay the height it was.
               stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
@@ -358,7 +359,7 @@ export const SelectableActionList = ({
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
-  denseRowProfiles = NO_PROFILES,
+  denseRowProfiles = DEFAULT_DENSE_ROW_PROFILES,
   letterIndexSource,
   collapsibleFilterProfiles = NO_PROFILES,
   filterHeaderSummary = null,

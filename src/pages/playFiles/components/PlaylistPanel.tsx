@@ -54,7 +54,6 @@ const PLAY_PLAYLIST_FOCUS_ORDER = {
 } as const;
 
 const COLLAPSIBLE_FILTER_PROFILES: readonly DisplayProfile[] = ["compact"];
-const DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact"];
 
 export const PlaylistPanel = ({
   previewItems,
@@ -133,7 +132,6 @@ export const PlaylistPanel = ({
         filterHeader={typeFilters}
         filterHeaderSummary={describePlaylistTypeFilter(playlistTypeFilters)}
         collapsibleFilterProfiles={COLLAPSIBLE_FILTER_PROFILES}
-        denseRowProfiles={DENSE_ROW_PROFILES}
         filterValue={playlistFilterText}
         onFilterValueChange={onPlaylistFilterTextChange}
         viewAllFilterValue={playlistFilterText}

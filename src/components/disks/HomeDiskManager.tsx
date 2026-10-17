@@ -99,7 +99,7 @@ import {
   normalizeDiskPath,
   type DiskEntry,
 } from "@/lib/disks/diskTypes";
-import { assignDiskGroupsByPrefix, orderDisksInGroup } from "@/lib/disks/diskGrouping";
+import { assignDiskGroupsByPrefix, groupRepeatsFolder, orderDisksInGroup } from "@/lib/disks/diskGrouping";
 import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { SHARED_DISK_LIBRARY_ID } from "@/lib/disks/diskStore";
@@ -1845,14 +1845,15 @@ export const HomeDiskManager = () => {
                 : configUiState === "declined"
                   ? "No CFG"
                   : null;
-        const groupMeta = disk.group ? (
-          <span className="flex items-center gap-1 min-w-0">
-            <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
-            <span className={cn(groupColor?.text, "break-words min-w-0")}>
-              Group: <NameWrap name={disk.group} />
+        const groupMeta =
+          disk.group && !groupRepeatsFolder(disk.group, folderPath) ? (
+            <span className="flex items-center gap-1 min-w-0">
+              <span className={cn("h-2 w-2 rounded-full border", groupColor?.chip)} aria-hidden="true" />
+              <span className={cn(groupColor?.text, "break-words min-w-0")}>
+                Group: <NameWrap name={disk.group} />
+              </span>
             </span>
-          </span>
-        ) : null;
+          ) : null;
         acc.push({
           id: disk.id,
           title: disk.name,
