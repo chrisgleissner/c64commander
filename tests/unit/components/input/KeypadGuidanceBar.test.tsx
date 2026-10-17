@@ -92,6 +92,19 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
+  it("shows a control's own verb on the OK key", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button data-key-nav-verb="Seek">Seek within the tune</button>
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    expect(actionText("keypad-guidance-center")).toBe("Seek");
+  });
+
   it("names what OK does on a card whose only control is its header: collapse, not open", () => {
     render(
       <FocusNavigationProvider enabled>
