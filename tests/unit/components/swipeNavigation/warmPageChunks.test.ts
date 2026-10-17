@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Capacitor } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loaded = vi.hoisted(() => [] as string[]);
@@ -117,6 +118,17 @@ describe("warmPageChunks", () => {
     expect(loaded).toEqual([]);
 
     online.mockReturnValue(true);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(loaded[0]).toBe("play");
+    online.mockRestore();
+  });
+
+  it("keeps warming on a native build while navigator.onLine is false", async () => {
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+    const warmPageChunks = await importWarm();
+    warmPageChunks();
+
     await vi.advanceTimersByTimeAsync(20_000);
     expect(loaded[0]).toBe("play");
     online.mockRestore();
