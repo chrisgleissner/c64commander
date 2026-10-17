@@ -162,7 +162,13 @@ class BackgroundExecutionServiceTest {
         return field.getInt(null)
     }
 
+    private fun flushNotificationCoalesceWindow() {
+        ShadowLooper.shadowMainLooper()
+                .idleFor(BackgroundExecutionService.NOTIFICATION_COALESCE_MS, TimeUnit.MILLISECONDS)
+    }
+
     private fun currentNotificationText(): String? {
+        flushNotificationCoalesceWindow()
         val manager = service.getSystemService(android.app.NotificationManager::class.java)
         val notification =
                 Shadows.shadowOf(manager).getNotification(notificationId())
@@ -910,7 +916,8 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(intent, 0, startId)
     }
 
-    private fun currentNotification(): android.app.Notification? {
+    private fun currentNotification(flushCoalesceWindow: Boolean = true): android.app.Notification? {
+        if (flushCoalesceWindow) flushNotificationCoalesceWindow()
         val manager = service.getSystemService(android.app.NotificationManager::class.java)
         return Shadows.shadowOf(manager).getNotification(notificationId())
                 ?: Shadows.shadowOf(service).lastForegroundNotification
@@ -961,6 +968,37 @@ class BackgroundExecutionServiceTest {
                 "Jeroen Tel",
                 notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)
                         ?.toString(),
+        )
+    }
+
+    @Test
+    fun aBurstOfTrackChangesPostsOnlyTheLatestNotificationAfterTheCoalesceWindow() {
+        // Skipping quickly posted one notification per track; Android sheds updates above about
+        // five per second, so the notification could end up naming an earlier tune.
+        controller.create()
+        startService()
+        flushNotificationCoalesceWindow()
+        setNowPlaying("Tune 0", "Artist", 100_000L)
+        flushNotificationCoalesceWindow()
+
+        for (index in 1..10) {
+            setNowPlaying("Tune $index", "Artist", 100_000L)
+        }
+
+        assertEquals(
+                "No update is posted inside the coalesce window",
+                "Tune 0",
+                currentNotification(flushCoalesceWindow = false)?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+        flushNotificationCoalesceWindow()
+        assertEquals(
+                "Tune 10",
+                currentNotification()?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString(),
+        )
+        assertEquals(
+                "The session metadata is not delayed",
+                "Tune 10",
+                RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_TITLE),
         )
     }
 

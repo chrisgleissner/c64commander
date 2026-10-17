@@ -63,6 +63,13 @@ class BackgroundExecutionService : Service() {
          */
         const val PAUSED_GRACE_PERIOD_MS = 10L * 60L * 1000L
 
+        /**
+         * Android sheds notification updates above about five per second per package. Skipping
+         * quickly posted one per track, so the notification refresh waits this long and posts the
+         * latest state once.
+         */
+        const val NOTIFICATION_COALESCE_MS = 250L
+
         /** The transport commands the session's PlaybackState advertises, in the web layer's own
          * vocabulary: the service does not interpret them, it relays them. */
         const val TRANSPORT_COMMAND_PLAY = "play"
@@ -348,6 +355,8 @@ class BackgroundExecutionService : Service() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
         updateDueAtInternal(null)
         cancelPausedExpiry()
+        handler.removeCallbacks(notificationRefreshRunnable)
+        notificationRefreshPending = false
         releaseMediaSession()
         releaseWakeLock()
         isRunning = false
@@ -509,9 +518,18 @@ class BackgroundExecutionService : Service() {
         pausedExpiryElapsedMs = null
     }
 
-    private fun refreshNotification() {
-        val manager = getSystemService(NotificationManager::class.java) ?: return
+    private var notificationRefreshPending = false
+
+    private val notificationRefreshRunnable = Runnable {
+        notificationRefreshPending = false
+        val manager = getSystemService(NotificationManager::class.java) ?: return@Runnable
         manager.notify(NOTIFICATION_ID, buildNotification())
+    }
+
+    private fun refreshNotification() {
+        if (notificationRefreshPending) return
+        notificationRefreshPending = true
+        handler.postDelayed(notificationRefreshRunnable, NOTIFICATION_COALESCE_MS)
     }
 
     private fun publishPlaybackState(state: Int) {
