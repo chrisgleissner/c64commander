@@ -637,7 +637,7 @@ export const PlaybackControlsCard = ({
                 <button
                   type="button"
                   data-key-nav-horizontal=""
-                  {...{ [CENTER_VERB_ATTR]: "Seek" }}
+                  {...{ [CENTER_VERB_ATTR]: "Adjust" }}
                   data-testid="playback-progress-seek"
                   aria-label="Seek within the tune"
                   className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"

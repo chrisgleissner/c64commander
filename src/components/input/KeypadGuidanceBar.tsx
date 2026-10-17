@@ -208,14 +208,9 @@ export const reserveGuidanceHeight = (reserved: boolean): void => {
 const isCompactProfile = (): boolean =>
   typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
 
-/**
- * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
- * and the word took the 60 px the breadcrumb needed to name the control at all. So is "Select" on an
- * entry of a soft-key menu, which cut "Close Remote Input" to "Close Remote…".
- */
+/** On the smallest screen "Select" on an entry of a soft-key menu is dropped: it cut "Close Remote Input" to "Close Remote…". */
 const wordTheCapSays = (label: string): boolean =>
-  label === "Activate" ||
-  (label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null);
+  label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null;
 
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
   const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
