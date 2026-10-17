@@ -213,7 +213,7 @@ describe("deviceCapabilities — probeMachineInputCapability", () => {
     let attempt = 0;
     const api = createApi(async () => {
       attempt += 1;
-      if (attempt === 1) throw new Error("timeout"); // no c64uHttpStatus - a network/timeout blip.
+      if (attempt <= 2) throw new Error("timeout"); // no c64uHttpStatus - a network/timeout blip, both attempts.
       return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
     });
     const input = { api, deviceId: "u64", firmwareVersion: "3.15 alpha", coreVersion: "1.4B" };
@@ -223,7 +223,37 @@ describe("deviceCapabilities — probeMachineInputCapability", () => {
 
     const second = await probeMachineInputCapability(input);
     expect(second.status).toBe("available");
-    expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries once with a longer timeout when the first answer is slow, and reports available", async () => {
+    let attempt = 0;
+    const api = createApi(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("The C64 did not answer within 1.5 s");
+      return { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+    });
+
+    const result = await probeMachineInputCapability({
+      api,
+      deviceId: "u64",
+      firmwareVersion: "3.15",
+      coreVersion: "1.4B",
+    });
+
+    expect(result.status).toBe("available");
+    expect(api.getMachineInputState).toHaveBeenNthCalledWith(1, expect.objectContaining({ timeoutMs: 1500 }));
+    expect(api.getMachineInputState).toHaveBeenNthCalledWith(2, expect.objectContaining({ timeoutMs: 5000 }));
+  });
+
+  it("does not retry a definitive firmware answer", async () => {
+    const api = createApi(async () => {
+      throw httpError(404);
+    });
+
+    await probeMachineInputCapability({ api, deviceId: "u64", firmwareVersion: "3.15", coreVersion: "1.4B" });
+
+    expect(api.getMachineInputState).toHaveBeenCalledTimes(1);
   });
 
   it("logs a probe the device did not answer at info, and a firmware refusal as a warning", async () => {

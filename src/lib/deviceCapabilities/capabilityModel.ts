@@ -229,6 +229,29 @@ export const clearMachineInputCapabilityCacheForTests = () => {
   machineInputProbeCache.clear();
 };
 
+const MACHINE_INPUT_PROBE_TIMEOUTS_MS = [1500, 5000] as const;
+
+const isTransportBlip = (error: unknown): boolean =>
+  getRestHttpStatus(error instanceof Error ? error : new Error(String(error))) === null;
+
+/** One slow answer is not a verdict: the second attempt waits longer before the probe reports "error". */
+const readMachineInputStateWithOneRetry = async (api: MachineInputProbeInput["api"]): Promise<void> => {
+  for (const [attempt, timeoutMs] of MACHINE_INPUT_PROBE_TIMEOUTS_MS.entries()) {
+    try {
+      await api.getMachineInputState({
+        timeoutMs,
+        __c64uIntent: "system",
+        __c64uExpectedFailure: true,
+        __c64uSuppressAuthChallenge: true,
+      });
+      return;
+    } catch (error) {
+      const lastAttempt = attempt === MACHINE_INPUT_PROBE_TIMEOUTS_MS.length - 1;
+      if (lastAttempt || !isTransportBlip(error)) throw error;
+    }
+  }
+};
+
 export const probeMachineInputCapability = async (
   input: MachineInputProbeInput,
 ): Promise<MachineInputCapabilityProbeResult> => {
@@ -241,12 +264,7 @@ export const probeMachineInputCapability = async (
     return result;
   }
   try {
-    await input.api.getMachineInputState({
-      timeoutMs: 1500,
-      __c64uIntent: "system",
-      __c64uExpectedFailure: true,
-      __c64uSuppressAuthChallenge: true,
-    });
+    await readMachineInputStateWithOneRetry(input.api);
     const result = buildMachineInputProbeResult("available", cacheKey, 200);
     machineInputProbeCache.set(cacheKey, result);
     return result;
