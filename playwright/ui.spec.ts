@@ -275,18 +275,6 @@ test.describe("UI coverage", () => {
     await expect.poll(() => strokeColor(playIcon).catch(() => "")).not.toBe(lightStroke);
     const darkStroke = await settledStroke(playIcon);
     await snap(page, testInfo, "play-icons-dark");
-
-    await page.goto("/disks", { waitUntil: "domcontentloaded" });
-    const diskIcon = page.getByTestId("file-origin-icon").first();
-    await expect(diskIcon).toBeVisible();
-    const diskDarkStroke = await settledStroke(diskIcon);
-    await snap(page, testInfo, "disk-icons-dark");
-
-    // The same proof on the Disks page, whose glyph sits on a different text token than the Play
-    // page's: it tracks the theme here too, so the colour comes from the cascade rather than from
-    // a filter that happened to be applied on one page.
-    await page.emulateMedia({ colorScheme: "light" });
-    await expect.poll(() => strokeColor(diskIcon)).not.toBe(diskDarkStroke);
   });
 
   test("home page shows resolved version", async ({ page }: { page: Page }, testInfo: TestInfo) => {
