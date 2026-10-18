@@ -52,6 +52,18 @@ const MIC_STAGES = ["av-clarity", "av-latency", "sid-remote", "sid-local", "cros
 const HANDSET_STAGES = ["input", "search-latency", "wire"];
 
 describe("resolveGatePlan", () => {
+  it("refuses a default plan when the ssh transport failed and no handset could be listed", () => {
+    const sshError = { transport: "ssh", message: "ssh.json is invalid: Unrecognized key(s): 'hostWindow'" };
+    expect(() => resolveGatePlan([pixel, tunnel], { transportErrors: [sshError] })).toThrow(
+      /ssh transport could not list the keypad handset: ssh\.json is invalid/,
+    );
+  });
+
+  it("ignores an ssh transport error when the handset is listed anyway", () => {
+    const sshError = { transport: "ssh", message: "one probe failed" };
+    expect(resolveGatePlan([pixel, handset], { transportErrors: [sshError] }).handset).not.toBeNull();
+  });
+
   it("uses the handset and the Pixel together when both are attached", () => {
     const plan = resolveGatePlan([pixel, handset, emulator]);
     expect(plan.handset).toMatchObject({ kind: "handset", packageName: HANDSET_PACKAGE });

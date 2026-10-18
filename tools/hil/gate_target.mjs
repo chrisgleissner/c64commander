@@ -67,8 +67,13 @@ const choosePixel = (targets) =>
  * - `handset`: the handset alone; stages it cannot run are skipped, by request (`handsetOnly`).
  * - `pixel`: the Pixel alone, chosen as before; a handset attached alongside never changes it.
  * - A serial picks one phone; a `--target` the serial contradicts is refused rather than guessed at.
+ * - An ssh transport that could not be probed (`transportErrors`) means the handset cannot be ruled
+ *   out, so the plan is refused instead of quietly grading the Pixel alone.
  */
-export const resolveGatePlan = (targets, { mode = "auto", modeExplicit = false, serial = "" } = {}) => {
+export const resolveGatePlan = (
+  targets,
+  { mode = "auto", modeExplicit = false, serial = "", transportErrors = [] } = {},
+) => {
   if (!GATE_TARGET_MODES.includes(mode)) {
     throw new Error(`--target must be one of ${GATE_TARGET_MODES.join(", ")} (got "${mode}")`);
   }
@@ -83,6 +88,12 @@ export const resolveGatePlan = (targets, { mode = "auto", modeExplicit = false, 
   }
   if (mode === "pixel") return { handset: null, pixel: describe(choosePixel(targets)), handsetOnly: false };
 
+  const sshErrors = transportErrors.filter((entry) => entry.transport === "ssh");
+  if (sshErrors.length && !targets.some(isDrivableHandset)) {
+    throw new Error(
+      `the ssh transport could not list the keypad handset: ${sshErrors.map((entry) => entry.message).join("; ")}`,
+    );
+  }
   const handsets = targets.filter(isDrivableHandset);
   if (handsets.length > 1) {
     throw new Error(`several handsets are attached (${handsets.map((t) => t.serial).join(", ")}); pass --serial`);
