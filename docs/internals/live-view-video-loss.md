@@ -101,9 +101,9 @@ the foreground, c64u on Ethernet) ran Watch for 30 minutes with no host membersh
 | Sender filter at the end                      | `rejectedPackets` 0, `senders` listing only the c64u              |
 
 Each loss was logged as "no video arrived for long enough to call the stream lost". The 8 s watchdog fired four times in
-30 minutes while Watch was wanted. Whether packets were still arriving at those moments is not known: the host was not
-listening, and the plugin does not count packets for a stream whose frames do not assemble. This is the evidence the
-issue was missing: on this phone the loss does occur, at intervals of 4 to 13 minutes.
+30 minutes while Watch was wanted. Whether packets were still arriving at those moments is not known, because the host
+was not listening and `readStreamDiagnostics` reports no packet count. This is the evidence the issue was missing: on
+this phone the loss does occur, at intervals of 4 to 14 minutes.
 
 A host that joined the video group changed the result on the same phone. With the host's membership in place, the stream
 was lost within about 8 s in three of three runs, and restarts by the app did not help (the loss recurred after each
