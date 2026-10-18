@@ -145,7 +145,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
 
   it("places the controller actions after the two station actions", () => {
     // All of them open a sheet, so they share one wrapping row. The controller actions come last
-    // because they leave the music behind, while SID Radio and Liked Tunes are about what plays
+    // because they leave the music behind, while SID Radio and Liked tunes are about what plays
     // next and belong nearer the controls that play it.
     const launcher = playFilesPageSource.indexOf('data-testid="sid-radio-launcher"');
     const likedTunes = playFilesPageSource.indexOf('data-testid="sid-radio-liked-tunes-open"');

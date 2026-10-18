@@ -39,7 +39,7 @@ describe("PlayFilesPage station seeding", () => {
 
   it("re-seeds from whatever is playing, in one tap and with no confirmation", () => {
     expect(pageSource).toMatch(
-      /data-testid="sid-radio-start"[\s\S]{0,400}?sidRadio\.startSongRadio\(currentSeedMd548,/,
+      /data-testid="sid-radio-start"[\s\S]{0,700}?sidRadio\.startSongRadio\(currentSeedMd548,/,
     );
   });
 
@@ -61,6 +61,12 @@ describe("PlayFilesPage station seeding", () => {
     // same track.
     expect(pageSource).toMatch(
       /if \(!currentSeedMd548\) return;\s*\n\s*void sidRadio\.startSongRadio\(currentSeedMd548,/,
+    );
+  });
+
+  it("disables the seed button, with a reason, for a tune that is not in the HVSC library", () => {
+    expect(pageSource).toMatch(
+      /data-testid="sid-radio-start"\s*disabled=\{!sidRadioSeedIsHvscTune\}[\s\S]{0,300}?not in the HVSC library/,
     );
   });
 });

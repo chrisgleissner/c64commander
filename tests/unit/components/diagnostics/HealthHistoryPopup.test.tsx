@@ -143,7 +143,7 @@ describe("HealthHistoryPopup", () => {
 
     render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
 
-    expect(screen.getByText("No data")).toBeInTheDocument();
+    expect(screen.getByText(/No health checks recorded yet/)).toBeInTheDocument();
     expect(screen.queryByTestId("health-history-track")).not.toBeInTheDocument();
   });
 

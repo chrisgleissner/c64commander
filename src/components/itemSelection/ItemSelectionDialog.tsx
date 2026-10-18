@@ -38,7 +38,7 @@ import { ItemSelectionSearch } from "./ItemSelectionSearch";
 import { ArchiveSelectionView, archiveResultKey } from "./ArchiveSelectionView";
 import type { ArchiveSearchResult, ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
@@ -109,7 +109,27 @@ export const ItemSelectionDialog = ({
   archiveConfigs,
   folderOptions,
 }: ItemSelectionDialogProps) => {
-  const { profile } = useDisplayProfile();
+  const { profile: displayProfile } = useDisplayProfile();
+  // A phone with the soft keyboard open has about 400 CSS px of height, the room the compact layout
+  // is made for, although its width says otherwise.
+  const shortViewport = useMediaQuery("(max-height: 520px)");
+  // Held until the dialog closes: tapping a result hides the keyboard, and without this the layout
+  // would flip back to the tall one under the user's finger and move the list. A change of display
+  // profile is a real resize, not a keyboard, and releases it.
+  const [keyboardSeen, setKeyboardSeen] = useState(false);
+  const profileWhenKeyboardSeen = useRef(displayProfile);
+  useEffect(() => {
+    if (shortViewport) {
+      profileWhenKeyboardSeen.current = displayProfile;
+      setKeyboardSeen(true);
+    } else if (profileWhenKeyboardSeen.current !== displayProfile) {
+      setKeyboardSeen(false);
+    }
+  }, [shortViewport, displayProfile]);
+  useEffect(() => {
+    if (!open) setKeyboardSeen(false);
+  }, [open]);
+  const profile = displayProfile === "compact" || shortViewport || keyboardSeen ? "compact" : displayProfile;
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [archiveSelection, setArchiveSelection] = useState<Map<string, ArchiveSearchResult>>(new Map());
@@ -431,7 +451,7 @@ export const ItemSelectionDialog = ({
    * One wrapping row on every profile. Without `flex` the folder options and the buttons stacked as
    * blocks with no gap, the checkbox row flush on the buttons. Compact fits both on one row, since its
    * confirm button is up in the title bar; elsewhere the buttons wrap below, and the scan progress
-   * line or the archive notice still take their own line.
+   * line still takes its own line.
    */
   const footerLayoutClassName = "flex flex-row flex-wrap items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row" : "flex-row ml-auto";
@@ -451,11 +471,16 @@ export const ItemSelectionDialog = ({
           : SOURCE_LABELS.commoserve
     : null;
   const selectedSourceOrigin = source?.type ?? null;
-  const showArchiveLegalNotice = source?.type === "commoserve";
-  const showCompactHeaderConfirm = profile === "compact" && !showArchiveLegalNotice;
+  const showCompactHeaderConfirm = profile === "compact" && !isArchiveSource;
   const interstitialOptionContentClassName = "flex min-w-0 w-full items-center justify-start gap-3";
-  const interstitialIconSlotClassName = "flex h-12 w-12 shrink-0 items-center justify-center self-center";
-  const interstitialIconClassName = "h-8 w-8 shrink-0 self-center text-[1.75rem]";
+  const interstitialIconSlotClassName = cn(
+    "flex shrink-0 items-center justify-center self-center",
+    profile === "compact" ? "h-9 w-9" : "h-12 w-12",
+  );
+  const interstitialIconClassName = cn(
+    "shrink-0 self-center",
+    profile === "compact" ? "h-6 w-6 text-[1.25rem]" : "h-8 w-8 text-[1.75rem]",
+  );
   const selectionHeadingIconClassName = "h-5 w-5 shrink-0 text-[1.25rem]";
   const resolveInterstitialIconClassName = (origin: SourceLocation["type"]) =>
     cn(interstitialIconClassName, origin === "commoserve" && "h-12 w-12 text-[4rem]");
@@ -466,12 +491,12 @@ export const ItemSelectionDialog = ({
       <AppDialog open={open} onOpenChange={onOpenChange}>
         <AppDialogContent className="max-w-md">
           <AppDialogHeader>
-            <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
+            <AppDialogTitle>{title}</AppDialogTitle>
             <AppDialogDescription>Choose a source.</AppDialogDescription>
           </AppDialogHeader>
           <AppDialogBody className={bodyPaddingClassName}>
-            <div className="space-y-5">
-              <p className="text-lg font-semibold text-foreground">Choose source</p>
+            <div className="space-y-2">
+              <p className="sr-only">Choose source</p>
               <div className={cn("grid gap-2", interstitialGridClassName)} data-testid="import-selection-interstitial">
                 <Button
                   variant="outline"
@@ -706,41 +731,38 @@ export const ItemSelectionDialog = ({
             </AppSheetHeader>
           )}
 
-          <div
-            className={cn(
-              "shrink-0 border-b border-border",
-              compactHeader ? "space-y-2" : "space-y-3",
-              bodyPaddingClassName,
-              compactHeader && "py-0",
-            )}
-          >
-            {compactHeader ? null : (
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  {selectionHeading}
-                  {selectionCount}
-                </div>
+          <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
+            {isArchiveSource && compactHeader ? null : (
+              <div
+                className={cn("border-b border-border pb-2", compactHeader ? "mb-2 space-y-2" : "mb-3 space-y-3")}
+                data-testid="add-items-filter-block"
+              >
+                {compactHeader ? null : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      {selectionHeading}
+                      {selectionCount}
+                    </div>
+                  </div>
+                )}
+
+                {!isArchiveSource ? (
+                  <ItemSelectionSearch
+                    browser={browser}
+                    compact={profile === "compact"}
+                    searchText={searchText}
+                    onSearchTextChange={(nextValue) => {
+                      if (usesNavigatorQuery) {
+                        browser.setQuery?.(nextValue);
+                        return;
+                      }
+                      setFilterText(nextValue);
+                    }}
+                    selectedSourceLabel={selectedSourceLabel}
+                  />
+                ) : null}
               </div>
             )}
-
-            {!isArchiveSource ? (
-              <ItemSelectionSearch
-                browser={browser}
-                compact={profile === "compact"}
-                searchText={searchText}
-                onSearchTextChange={(nextValue) => {
-                  if (usesNavigatorQuery) {
-                    browser.setQuery?.(nextValue);
-                    return;
-                  }
-                  setFilterText(nextValue);
-                }}
-                selectedSourceLabel={selectedSourceLabel}
-              />
-            ) : null}
-          </div>
-
-          <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
             <div
               className={sourceContentClassName}
               data-testid={
@@ -842,11 +864,6 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
-            {showArchiveLegalNotice ? (
-              <p className="text-xs leading-snug text-muted-foreground" data-testid="archive-legal-notice">
-                {LEGAL_NOTICE}
-              </p>
-            ) : null}
             {/* Not on an archive search: its results are individual files, so there are no folders for
                 this to say anything about. */}
             {folderOptions && allowFolderSelection && source && !isArchiveSource ? (
@@ -868,7 +885,7 @@ export const ItemSelectionDialog = ({
               >
                 {progress?.status === "scanning" && onCancelScan ? "Cancel scan" : "Cancel"}
               </Button>
-              {source && (profile !== "compact" || showArchiveLegalNotice) && (
+              {source && (profile !== "compact" || isArchiveSource) && (
                 <Button
                   variant="default"
                   size="default"

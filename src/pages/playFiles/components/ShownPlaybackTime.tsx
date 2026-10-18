@@ -24,7 +24,7 @@ export const ShownPlaybackTime = ({
   field,
 }: {
   timeline: PlaybackTimeline;
-  field: Exclude<keyof PlaybackTimeDisplay, "progressPercent">;
+  field: Exclude<keyof PlaybackTimeDisplay, "progressPercent" | "playlistCountersShown">;
 }) => <>{useShownPlaybackTime(timeline)[field]}</>;
 
 export const ShownPlaybackProgress = ({
@@ -33,3 +33,18 @@ export const ShownPlaybackProgress = ({
 }: { timeline: PlaybackTimeline } & Omit<ComponentProps<typeof Progress>, "value">) => (
   <Progress {...props} value={useShownPlaybackTime(timeline).progressPercent} />
 );
+
+export const ShownPlaybackCounters = ({
+  timeline,
+  ...props
+}: { timeline: PlaybackTimeline } & ComponentProps<"div">) =>
+  useShownPlaybackTime(timeline).playlistCountersShown ? (
+    <div {...props}>
+      <span className="whitespace-nowrap">
+        Total: <ShownPlaybackTime timeline={timeline} field="totalLabel" />
+      </span>
+      <span className="whitespace-nowrap">
+        Remaining: <ShownPlaybackTime timeline={timeline} field="remainingTotalLabel" />
+      </span>
+    </div>
+  ) : null;

@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArchiveSelectionView, type ArchiveSelectionViewProps } from "@/components/itemSelection/ArchiveSelectionView";
 import type { ArchiveSearchResult } from "@/lib/archive/types";
 import type { OnlineArchiveState } from "@/hooks/useOnlineArchive";
+import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
+import { setDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 
 vi.mock("@/hooks/useOnlineArchive", () => ({
   useOnlineArchive: vi.fn(),
@@ -101,14 +103,17 @@ describe("ArchiveSelectionView", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the archive config info (name, host)", () => {
+  it("renders the archive config info (name, host) once About this archive is opened", () => {
     renderView();
+    expect(screen.queryByTestId("archive-selection-config")).toBeNull();
+    fireEvent.click(screen.getByTestId("archive-about-toggle"));
     expect(screen.getByTestId("archive-selection-config")).toHaveTextContent("CommoServe");
     expect(screen.getByTestId("archive-selection-config")).toHaveTextContent("commoserve.files.commodore.net");
   });
 
   it("does not show override host notice when host matches default", () => {
     renderView();
+    fireEvent.click(screen.getByTestId("archive-about-toggle"));
     expect(screen.queryByText(/Override host active/i)).toBeNull();
   });
 
@@ -130,7 +135,14 @@ describe("ArchiveSelectionView", () => {
         onClearSelection={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByTestId("archive-about-toggle"));
     expect(screen.getByText(/Override host active/i)).toBeInTheDocument();
+  });
+
+  it("always shows the license sentence, as small text, without opening About this archive", () => {
+    renderView();
+    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
+    expect(screen.getByTestId("archive-legal-notice")).toHaveClass("text-xs");
   });
 
   it("shows placeholder text when form is empty and no query preview", () => {
@@ -139,7 +151,22 @@ describe("ArchiveSelectionView", () => {
     expect(screen.queryByTestId("archive-query-preview")).toBeNull();
   });
 
-  it("shows query preview when name field is not empty", () => {
+  it("describes the filters in plain words and hides the query syntax outside developer mode", () => {
+    setDeveloperModeEnabled(false);
+    try {
+      renderView();
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "joyride" } });
+      fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "demos" } });
+      expect(screen.getByTestId("archive-filter-summary")).toHaveTextContent("Name joyride, Category Demos");
+      expect(screen.queryByTestId("archive-query-preview")).toBeNull();
+      expect(screen.queryByText(/\(name:/)).toBeNull();
+    } finally {
+      setDeveloperModeEnabled(true);
+    }
+  });
+
+  it("shows the raw query in developer mode", () => {
+    setDeveloperModeEnabled(true);
     renderView();
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "joyride" } });
     expect(screen.getByTestId("archive-query-preview")).toHaveTextContent('(name:"joyride")');

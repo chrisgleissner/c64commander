@@ -222,7 +222,7 @@ test.describe("CTA highlight proof", () => {
     await page.goto("/play");
 
     const playButton = page.getByTestId("playlist-play");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await expect(playButton).toHaveAttribute("aria-label", "Play");
 
     await playButton.click();

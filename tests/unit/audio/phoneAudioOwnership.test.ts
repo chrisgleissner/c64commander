@@ -8,12 +8,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+
 vi.mock("@/lib/logging", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/logging")>()),
   addLog: vi.fn(),
 }));
 
 import { addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
 
 import {
   __resetPhoneAudioOwnership,
@@ -35,6 +38,19 @@ describe("phone audio ownership", () => {
   beforeEach(() => {
     __resetPhoneAudioOwnership();
     vi.mocked(addLog).mockClear();
+    vi.mocked(toast).mockClear();
+  });
+
+  it("tells the listener when a local tune takes the speaker from Listen, and not the other way round", () => {
+    const mirror = {};
+    const local = {};
+    claimPhoneAudio("av-mirror", mirror, vi.fn());
+    claimPhoneAudio("local-sid", local, vi.fn());
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Listen stopped", alwaysVisible: true }));
+
+    vi.mocked(toast).mockClear();
+    claimPhoneAudio("av-mirror", {}, vi.fn());
+    expect(toast).not.toHaveBeenCalled();
   });
 
   // Starting a local tune with Live View sound on is an ordinary hand-over, yet every one was logged as a warning.

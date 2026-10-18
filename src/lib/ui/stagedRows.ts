@@ -38,7 +38,7 @@ const NEAR_ROWS_PER_TASK = 24;
  * The script time one background task may spend building rows. A task builds at least a few: each
  * task ends in a layout of the whole page, which costs the same for one row as for eight.
  */
-const TASK_BUDGET_MS = 16;
+const TASK_BUDGET_MS = 8;
 const MIN_ROWS_PER_TASK = 6;
 const MAX_ROWS_PER_TASK = 32;
 
@@ -107,10 +107,22 @@ const isAboveScreen = (marker: HTMLElement) => marker.getBoundingClientRect().to
 const isNearScreen = (marker: HTMLElement) =>
   typeof window === "undefined" || marker.getBoundingClientRect().top < window.innerHeight * NEAR_VIEWPORT;
 
-const inDocumentOrder = () =>
-  [...pending]
-    .sort(([, a], [, b]) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+let priorityScope: Element | null = null;
+
+/** Builds the lists inside `scope` first, in the background tasks that already build them. */
+export const buildStagedRowsFirstIn = (scope: Element): void => {
+  priorityScope = scope;
+};
+
+const inDocumentOrder = () => {
+  const inPriorityScope = (marker: HTMLElement) => priorityScope?.contains(marker) === true;
+  return [...pending]
+    .sort(([, a], [, b]) => {
+      if (inPriorityScope(a) !== inPriorityScope(b)) return inPriorityScope(a) ? -1 : 1;
+      return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    })
     .map(([list]) => list);
+};
 
 const runSettleCallbacks = () => {
   if (pending.size > 0) return;
@@ -303,6 +315,7 @@ export const useStagedRows = (total: number, demandedIndex = -1): StagedRows => 
 
 export const resetStagedRowsForTests = () => {
   pending.clear();
+  priorityScope = null;
   settleCallbacks.splice(0);
   initialRowsLeft = INITIAL_ROWS_PER_COMMIT;
   nearRowsLeft = NEAR_ROWS_PER_TASK;

@@ -7,7 +7,7 @@
  */
 
 import { ReactNode } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFocusGroup, useFocusItem } from "@/hooks/useFocusNavigation";
@@ -82,7 +82,7 @@ export function SummaryConfigCard({
       data-testid={testId}
       tabIndex={focusId ? -1 : undefined}
     >
-      {hideTitle ? null : <p className="text-xs font-semibold text-primary uppercase tracking-wider">{title}</p>}
+      {hideTitle ? null : <p className="text-xs font-semibold text-primary">{title}</p>}
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );
@@ -130,20 +130,14 @@ export function SummaryConfigControlRow({
     const checked = normalizeOptionToken(value) === normalizeOptionToken(enabledValue);
 
     return (
-      // The whole row is the target, not just the box. A 16px checkbox is under 3mm
-      // across on a small phone panel, which is hard to hit and gives the keypad focus
-      // ring almost nothing to draw around. Wrapping the row in a label means a press
-      // anywhere along it toggles the checkbox, using the browser's own label
-      // behaviour rather than a second click handler that could drift out of step.
-      // `min-h-11` is the 44px WCAG 2.5.5 target size.
+      // The label wraps the row so a press anywhere on it toggles the switch; min-h-11 is the 44px target.
       <label className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2">
         <span className="text-muted-foreground">{label}</span>
-        <Checkbox
+        <Switch
           ref={focusRef}
           checked={checked}
           onCheckedChange={(nextValue) => onValueChange(nextValue === true ? enabledValue : disabledValue)}
           disabled={disabled}
-          className="h-5 w-5"
           aria-label={label}
           data-testid={testId}
         />

@@ -885,6 +885,7 @@ describe("HomePage SID status", () => {
       },
     };
 
+    audioMixerPayloadRef.current = { "Audio Mixer": { items: {} } };
     const { rerender } = renderHomePage();
 
     expect(within(screen.getByTestId("home-sid-status")).getAllByText("SID").length).toBeGreaterThan(0);
@@ -897,8 +898,8 @@ describe("HomePage SID status", () => {
     expect(ultiSid1).toBeTruthy();
     expect(ultiSid2).toBeTruthy();
 
-    expect(screen.getByTestId("home-sid-toggle-socket1").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-socket2").textContent).toBe("OFF");
+    expect(screen.getByTestId("home-sid-toggle-socket1")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-socket2")).not.toBeChecked();
 
     sidSocketsPayloadRef.current = {
       "SID Sockets Configuration": {
@@ -927,10 +928,10 @@ describe("HomePage SID status", () => {
       />,
     );
 
-    expect(screen.getByTestId("home-sid-toggle-socket1").textContent).toBe("OFF");
-    expect(screen.getByTestId("home-sid-toggle-socket2").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-ultiSid1").textContent).toBe("ON");
-    expect(screen.getByTestId("home-sid-toggle-ultiSid2").textContent).toBe("OFF");
+    expect(screen.getByTestId("home-sid-toggle-socket1")).not.toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-socket2")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-ultiSid1")).toBeChecked();
+    expect(screen.getByTestId("home-sid-toggle-ultiSid2")).not.toBeChecked();
   });
 
   it("renders stream rows with full IP:PORT endpoint values from Data Streams config", () => {
@@ -1113,11 +1114,12 @@ describe("HomePage SID status", () => {
     expect(within(drivesGroup).getByTestId("home-drive-row-a")).toBeTruthy();
     expect(within(drivesGroup).getByTestId("home-drive-row-b")).toBeTruthy();
     expect(within(drivesGroup).getByTestId("home-drive-row-soft-iec")).toBeTruthy();
-    expect(within(drivesGroup).getByText("Drive A")).toBeTruthy();
-    expect(within(drivesGroup).getByText("Drive B")).toBeTruthy();
-    // By accessible name: the visible wording is whichever of "Soft IEC Drive" / "IEC Drive" /
-    // "Soft IEC" / "IEC" fits the header, while the name announced stays the drive's own label.
-    expect(within(drivesGroup).getByLabelText("Soft IEC")).toBeTruthy();
+    for (const suffix of ["a", "b", "soft-iec"]) {
+      fireEvent.click(within(drivesGroup).getByTestId(`home-drive-details-toggle-${suffix}`));
+    }
+    expect(within(drivesGroup).getByTestId("home-drive-link-a")).toHaveTextContent(/^A\s·\s#8\s·\s1541/);
+    expect(within(drivesGroup).getByTestId("home-drive-link-b")).toHaveTextContent(/^B\s·\s#9\s·\s1571/);
+    expect(within(drivesGroup).getByTestId("home-drive-link-soft-iec")).toHaveTextContent(/^IEC\s·\s#11/);
     expect(within(drivesGroup).getAllByText("Bus ID").length).toBeGreaterThanOrEqual(3);
     expect(within(drivesGroup).getAllByText("Type").length).toBeGreaterThanOrEqual(2);
     expect(within(drivesGroup).getByText("Path")).toBeTruthy();
@@ -1162,6 +1164,8 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-a"));
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-soft-iec"));
     expect(screen.getByTestId("home-drive-status-a")).toHaveTextContent("DRIVE NOT READY");
     expect(screen.getByTestId("home-drive-status-soft-iec").textContent).toMatch(/^(OK|DOS MISMATCH)$/);
   });
@@ -1219,7 +1223,7 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-system-firmware").textContent).toContain("1.0.0");
     expect(screen.getByTestId("home-system-git").textContent).toContain("deadbeef");
     expect(screen.getByTestId("home-system-build-time").textContent).toContain("2024-03-20 12:34:00 UTC");
-    expect(screen.getByText("Quick Actions")).toBeTruthy();
+    expect(screen.getByText("Quick actions")).toBeTruthy();
     expect(screen.queryByTestId("home-drive-summary")).toBeNull();
     openSaveRamDialog();
     expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM folder:");
@@ -1238,7 +1242,9 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    expect(screen.getAllByText("No disk mounted").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("home-drive-link-a")).toHaveTextContent(/No disk$/);
+    fireEvent.click(screen.getByTestId("home-drive-details-toggle-a"));
+    expect(screen.getByTestId("home-drive-mounted-a")).toHaveTextContent("No disk mounted");
   });
 
   it("handles machine actions and reports errors", async () => {
@@ -1885,7 +1891,7 @@ describe("HomePage SID status", () => {
 
     // The RAM folder row is no longer a Quick Action: it is shown inside the Save RAM and Load RAM
     // dialogs, where the folder it names is about to be used.
-    const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
+    const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick actions"]');
     expect(machineSection).toBeTruthy();
     // Not opened here: this test is about the order of the cards on the page, and a dialog left
     // open changes the scroll-lock state a later assertion reads. That the row is inside the
@@ -2516,12 +2522,12 @@ describe("HomePage offline arrangement", () => {
     }
   });
 
-  it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
+  it("keeps the Live View tile listed, disabled and without a connection sentence, like the other greyed tiles", () => {
     featureFlagsRef.current.live_view_enabled = true;
     renderWithRouter(<HomePage />);
     const tile = screen.getByTestId("home-tile-home.section.live-view");
     expect(tile).toBeDisabled();
-    expect(tile.textContent).toContain("Needs a connected C64 Ultimate");
+    expect(tile.textContent).toBe("Live");
   });
 
   it("names the switch on the Live View tile when Live View itself is turned off", () => {

@@ -51,10 +51,12 @@ import type { AppStyle, AppStyleColors, AppStyleMode } from "@/generated/appStyl
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { AddSavedDeviceDialog } from "@/components/devices/AddSavedDeviceDialog";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { AboutLicenseNotice } from "@/pages/settings/AboutLicenseNotice";
+import { ArchiveOverrideField } from "@/pages/settings/ArchiveOverrideField";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { requestTourStart } from "@/lib/tour/tourState";
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
@@ -278,12 +280,15 @@ const resolveAppStyleSwatchColors = (style: AppStyle, preferredMode: AppStyleMod
   return mode === "dark" ? style.dark?.colors : style.light?.colors;
 };
 
-const AppStyleSwatch = ({ colors }: { colors: AppStyleColors }) => (
+const AppStyleSwatch = ({ colors, selected = false }: { colors: AppStyleColors; selected?: boolean }) => (
   <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
     {[colors.background, colors.primary, colors.accent].map((hsl, index) => (
       <span
         key={index}
-        className="h-4 w-4 rounded-full border border-border/60"
+        className={cn(
+          "h-4 w-4 rounded-full border",
+          selected ? "border-2 border-primary-foreground" : "border-border/60",
+        )}
         style={{ backgroundColor: `hsl(${hsl})` }}
       />
     ))}
@@ -760,8 +765,8 @@ export default function SettingsPage() {
     if (!treeUri) {
       reportUserError({
         operation: "SAF_DIAGNOSTICS",
-        title: "SAF diagnostics",
-        description: "No persisted SAF permissions found.",
+        title: "Folder access diagnostics",
+        description: "No folders have been granted to the app yet.",
       });
       return;
     }
@@ -1325,7 +1330,7 @@ export default function SettingsPage() {
                         isCompactProfile ? "p-2" : "p-4",
                       )}
                     >
-                      <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                      <Icon className={`h-6 w-6 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                       {/* break-normal here too: the global :where(span) rule (src/index.css) matches
                           this span directly, so the button's own break-normal above does not cascade
                           to it — a real device wrapped "Light" as "Ligh"/"t" without this. */}
@@ -1381,12 +1386,12 @@ export default function SettingsPage() {
                             /* text-[11px] is the smallest size the compact profile compensates
                                (to 0.9rem); anything smaller falls below the 14px legibility floor
                                on a 320px screen. */
-                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                               Dark only
                             </span>
                           ) : null}
                         </span>
-                        {swatchColors ? <AppStyleSwatch colors={swatchColors} /> : null}
+                        {swatchColors ? <AppStyleSwatch colors={swatchColors} selected={isActive} /> : null}
                       </Button>
                     );
                   })}
@@ -1408,7 +1413,7 @@ export default function SettingsPage() {
                       >
                         <span className="break-normal text-sm font-medium">Match my device</span>
                         {swatchColors ? (
-                          <AppStyleSwatch colors={swatchColors} />
+                          <AppStyleSwatch colors={swatchColors} selected={isMatchMyDevice} />
                         ) : (
                           <span className="shrink-0 text-xs text-muted-foreground">?</span>
                         )}
@@ -1486,7 +1491,7 @@ export default function SettingsPage() {
                       Off by default — it costs about half the height of every closed card on a small screen.
                     </p>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="show-section-descriptions"
                     data-testid="settings-show-section-descriptions"
                     checked={showSectionDescriptions}
@@ -1557,7 +1562,6 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
-                  <HelperText>Portrait stays upright, Landscape stays wide, Auto follows the phone.</HelperText>
                 </div>
                 {isAndroid ? (
                   <div className="space-y-2 pt-2" data-testid="settings-full-screen">
@@ -1569,7 +1573,7 @@ export default function SettingsPage() {
                         </Label>
                         <HelperText>Extend the app over the top status bar (clock, battery, signal).</HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="full-screen-hide-status-bar"
                         data-testid="settings-hide-status-bar"
                         checked={hideStatusBar}
@@ -1585,7 +1589,7 @@ export default function SettingsPage() {
                           Hide navigation bar
                         </Label>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="full-screen-hide-navigation-bar"
                         data-testid="settings-hide-navigation-bar"
                         checked={hideNavigationBar}
@@ -1610,7 +1614,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap min-w-0">
                     <div className="min-w-[9rem] flex-1">
                       <Label className="text-sm font-medium">Saved devices</Label>
-                      <HelperText>Manage devices here. Long press the header badge to switch quickly.</HelperText>
+                      <HelperText>Long press the header badge to switch quickly.</HelperText>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
@@ -1822,7 +1826,7 @@ export default function SettingsPage() {
                       </Label>
                       <HelperText>Offer the built-in simulated device after real-device discovery fails.</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id="demo-mode-enabled"
                       checked={demoModeEnabled}
                       onCheckedChange={(checked) => {
@@ -2034,7 +2038,7 @@ export default function SettingsPage() {
                   }}
                 >
                   <AlertDialogContent>
-                    <AlertDialogHeader>
+                    <AlertDialogHeader hideClose>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
                       {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
                       <AlertDialogDescription className={deleteReferenceCount > 0 ? undefined : "not-sr-only"}>
@@ -2068,6 +2072,8 @@ export default function SettingsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
                       <AlertDialogAction
+                        className={buttonVariants({ variant: "destructive" })}
+                        data-testid="settings-delete-device-confirm"
                         onClick={() => {
                           void confirmDeleteDevice();
                         }}
@@ -2111,7 +2117,7 @@ export default function SettingsPage() {
                   data-testid="diagnostics-open-dialog"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Diagnostics
+                  Open diagnostics
                 </Button>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
@@ -2119,9 +2125,11 @@ export default function SettingsPage() {
                     <Label htmlFor="debug-logging" className="flex min-h-11 items-center font-medium">
                       Enable debug logging
                     </Label>
-                    <HelperText>Emits all debug-level logs for diagnostics, including SAF and REST events.</HelperText>
+                    <HelperText>
+                      Records extra detail in the diagnostics log, including file access and device requests.
+                    </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="debug-logging"
                     checked={debugLoggingEnabled}
                     onCheckedChange={(checked) => {
@@ -2135,8 +2143,8 @@ export default function SettingsPage() {
                 {debugLoggingEnabled && isAndroid ? (
                   <div className="space-y-2 rounded-lg border border-border/70 p-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold">SAF diagnostics</p>
-                      <HelperText>Manual checks for persisted SAF permissions and enumeration.</HelperText>
+                      <p className="text-sm font-semibold">Folder access diagnostics</p>
+                      <HelperText>Check which folders the app is still allowed to read.</HelperText>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -2145,7 +2153,7 @@ export default function SettingsPage() {
                         onClick={() => void refreshSafPermissions()}
                         disabled={safBusy}
                       >
-                        List persisted URIs
+                        List allowed folders
                       </Button>
                       <Button
                         variant="outline"
@@ -2153,7 +2161,7 @@ export default function SettingsPage() {
                         onClick={() => void enumerateSafRoot()}
                         disabled={safBusy || safUris.length === 0}
                       >
-                        Enumerate first root
+                        List first folder contents
                       </Button>
                     </div>
                     {safError ? <p className="text-xs text-destructive">{safError}</p> : null}
@@ -2206,10 +2214,10 @@ export default function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* 4. Play and Disk */}
+            {/* 4. Play and disk */}
             <SettingsSection
               id="play-and-disk"
-              title="Play and Disk"
+              title="Play and disk"
               summary="Launching, Live View streaming, Remote Input"
               icon={Play}
             >
@@ -2244,7 +2252,7 @@ export default function SettingsPage() {
                       Shows SID tunes as “Bossa in Do” instead of the raw filename, badged with chip count.
                     </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="settings-friendly-sid-names"
                     data-testid="settings-friendly-sid-names"
                     checked={friendlySidNames}
@@ -2296,7 +2304,7 @@ export default function SettingsPage() {
                       </Label>
                       <HelperText>Also matches programs inside .d64/.d71/.d81 images, not just filenames.</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id="settings-search-inside-disks"
                       data-testid="settings-search-inside-disks"
                       checked={searchInsideDisks}
@@ -2321,7 +2329,7 @@ export default function SettingsPage() {
                           doesn&apos;t swallow the typed LOAD. Leave off unless you run such a cartridge.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-boot-menu-answer"
                         data-testid="settings-boot-menu-answer"
                         checked={bootMenuAnswerEnabled}
@@ -2450,7 +2458,7 @@ export default function SettingsPage() {
                         </Label>
                         <HelperText>Full frame rate (50 fps PAL / 60 fps NTSC). Leave on; Android only.</HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-native-assembly"
                         data-testid="settings-stream-native-assembly"
                         checked={streamNativeVideoAssembly}
@@ -2474,7 +2482,7 @@ export default function SettingsPage() {
                           unobstructed screen.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-video-badges"
                         data-testid="settings-stream-video-badges"
                         checked={streamVideoBadges}
@@ -2498,7 +2506,7 @@ export default function SettingsPage() {
                           Leave on.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-input-priority"
                         data-testid="settings-stream-input-priority"
                         checked={streamInputPriority}
@@ -2521,7 +2529,7 @@ export default function SettingsPage() {
                           Cuts keypress-to-sound delay vs. the browser engine. Leave on; Android only.
                         </HelperText>
                       </div>
-                      <Checkbox
+                      <Switch
                         id="settings-stream-native-audio"
                         data-testid="settings-stream-native-audio"
                         checked={streamNativeAudio}
@@ -2548,7 +2556,7 @@ export default function SettingsPage() {
                       Rarely needed, so it&apos;s hidden by default in Remote Input and Game Mode.
                     </HelperText>
                   </div>
-                  <Checkbox
+                  <Switch
                     id="settings-show-autofire"
                     data-testid="settings-show-autofire"
                     checked={showAutofireButton}
@@ -2619,10 +2627,10 @@ export default function SettingsPage() {
                   // Label because a label may not nest inside another label.
                   <label
                     key={feature.id}
-                    className="flex min-h-11 cursor-pointer items-start justify-between gap-3 min-w-0"
+                    className="flex min-h-11 cursor-pointer items-center justify-between gap-3 min-w-0"
                   >
                     <div className="space-y-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col items-start gap-1">
                         <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
                           <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
@@ -2632,7 +2640,7 @@ export default function SettingsPage() {
                       </div>
                       <HelperText>{feature.definition.description}</HelperText>
                     </div>
-                    <Checkbox
+                    <Switch
                       id={`feature-flag-${feature.id}`}
                       checked={feature.value}
                       disabled={!feature.editable}
@@ -2721,80 +2729,54 @@ export default function SettingsPage() {
               <div className="space-y-3">
                 <HelperText>Host and header overrides below are independent settings.</HelperText>
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-host-override" className="text-sm font-medium">
-                    Host override
-                  </Label>
-                  <Input
-                    id="archive-host-override"
-                    value={archiveHostOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveHostOverride(next);
-                      setArchiveHostError(validateArchiveHost(next));
-                      saveArchiveHostOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.host}
-                    aria-describedby={archiveHostError ? "archive-host-override-error" : undefined}
-                    aria-invalid={archiveHostError ? true : undefined}
-                    data-testid="archive-host-override"
-                  />
-                  {archiveHostError ? (
-                    <p id="archive-host-override-error" className="text-xs text-destructive" role="alert">
-                      {archiveHostError}
-                    </p>
-                  ) : null}
+                <ArchiveOverrideField
+                  id="archive-host-override"
+                  label="Host override"
+                  value={archiveHostOverride}
+                  onChange={(next) => {
+                    setArchiveHostOverride(next);
+                    setArchiveHostError(validateArchiveHost(next));
+                    saveArchiveHostOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.host}
+                  error={archiveHostError}
+                >
                   <HelperText>Hostname only — an invalid value falls back to the default immediately.</HelperText>
-                </div>
+                </ArchiveOverrideField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-client-id-override" className="text-sm font-medium">
-                    Client-Id override
-                  </Label>
-                  <Input
-                    id="archive-client-id-override"
-                    value={archiveClientIdOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveClientIdOverride(next);
-                      saveArchiveClientIdOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.clientId}
-                    data-testid="archive-client-id-override"
-                  />
-                </div>
+                <ArchiveOverrideField
+                  id="archive-client-id-override"
+                  label="Archive client ID"
+                  value={archiveClientIdOverride}
+                  onChange={(next) => {
+                    setArchiveClientIdOverride(next);
+                    saveArchiveClientIdOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.clientId}
+                />
 
-                <div className="space-y-2">
-                  <Label htmlFor="archive-user-agent-override" className="text-sm font-medium">
-                    User-Agent override
-                  </Label>
-                  <Input
-                    id="archive-user-agent-override"
-                    value={archiveUserAgentOverride}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      setArchiveUserAgentOverride(next);
-                      saveArchiveUserAgentOverride(next);
-                    }}
-                    placeholder={resolvedArchiveConfig.userAgent}
-                    data-testid="archive-user-agent-override"
-                  />
-                </div>
+                <ArchiveOverrideField
+                  id="archive-user-agent-override"
+                  label="Archive user agent"
+                  value={archiveUserAgentOverride}
+                  onChange={(next) => {
+                    setArchiveUserAgentOverride(next);
+                    saveArchiveUserAgentOverride(next);
+                  }}
+                  effectiveValue={resolvedArchiveConfig.userAgent}
+                />
 
                 <div className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground">
                   <div>
-                    Resolved host: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
+                    Host in use: <span className="font-sans text-foreground">{resolvedArchiveConfig.host}</span>
                   </div>
                   <div>
-                    Resolved Client-Id: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
+                    Client ID in use: <span className="text-foreground">{resolvedArchiveConfig.clientId}</span>
                   </div>
                   <div>
-                    Resolved User-Agent: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
+                    User agent in use: <span className="text-foreground">{resolvedArchiveConfig.userAgent}</span>
                   </div>
-                  <div className="mt-2">
-                    Native apps allow the default cleartext hosts. Override hosts can be blocked by platform security,
-                    especially on iOS, until the native allow-list is updated.
-                  </div>
+                  <div className="mt-2">The phone may block a custom host for security reasons, especially on iOS.</div>
                 </div>
 
                 <Button
@@ -2832,7 +2814,7 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select safety mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="AUTO">Auto (Conservative for C64U, Balanced for others) - recommended</SelectItem>
+                  <SelectItem value="AUTO">Auto (follows the device and its firmware) - recommended</SelectItem>
                   <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
                   <SelectItem value="BALANCED">Balanced</SelectItem>
                   <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
@@ -2860,7 +2842,7 @@ export default function SettingsPage() {
                     survives a power cycle, same as saving from the C64&apos;s own menu.
                   </HelperText>
                 </div>
-                <Checkbox
+                <Switch
                   id="settings-persist-config-to-flash"
                   data-testid="settings-persist-config-to-flash"
                   checked={persistConfigToFlash}
@@ -3306,8 +3288,8 @@ export default function SettingsPage() {
                     }}
                   />
                   <HelperText>
-                    How often drag previews are sent for device-backed sliders (CPU, volume, lighting). Default 200 ms,
-                    range 100–500 ms.
+                    How often the app sends updates to the C64 while you drag a slider (CPU, volume, lighting). Default
+                    200 ms, range 100–500 ms.
                   </HelperText>
                 </div>
 
@@ -3315,9 +3297,9 @@ export default function SettingsPage() {
                   {/* A label, so the whole row toggles the checkbox rather than only the
                       16px box, and so the control has an accessible name at all. */}
                   <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
-                    <span className="text-sm font-medium">Allow circuit override</span>
-                    <Checkbox
-                      aria-label="Allow circuit override"
+                    <span className="text-sm font-medium">Allow manual retry while paused</span>
+                    <Switch
+                      aria-label="Allow manual retry while paused"
                       data-testid="settings-allow-circuit-override"
                       checked={allowCircuitOverride}
                       onCheckedChange={(checked) => {
@@ -3450,6 +3432,7 @@ export default function SettingsPage() {
               <FileText className="h-4 w-4" />
               Open source licenses
             </button>
+            <AboutLicenseNotice />
           </SettingsSection>
         </PageStack>
       </PageContainer>
@@ -3470,7 +3453,7 @@ export default function SettingsPage() {
       <ScreenActivityWatch onChange={rereadFullScreenSettingsOnReturn} />
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader hideClose>
             <DialogTitle>Enable relaxed safety mode?</DialogTitle>
             <DialogDescription>
               Relaxed mode increases FTP concurrency and reduces protection. This can overload or destabilize real

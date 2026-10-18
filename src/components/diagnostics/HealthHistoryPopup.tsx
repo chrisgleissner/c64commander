@@ -41,10 +41,10 @@ const ZOOM_LABELS: Record<number, string> = {
 const PROBE_PRESENTATION = [
   { key: "rest", label: "REST" },
   { key: "ftp", label: "FTP" },
-  { key: "telnet", label: "TELNET" },
-  { key: "config", label: "CONFIG" },
-  { key: "raster", label: "RASTER" },
-  { key: "jiffy", label: "JIFFY" },
+  { key: "telnet", label: "Telnet" },
+  { key: "config", label: "Config" },
+  { key: "raster", label: "Raster" },
+  { key: "jiffy", label: "Jiffy" },
 ] as const satisfies ReadonlyArray<{
   key: keyof HealthHistoryEntry["probes"];
   label: string;
@@ -182,7 +182,9 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
         </div>
 
         {history.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
+          <div className="flex flex-1 items-center justify-center text-sm px-4 text-center text-muted-foreground">
+            No health checks recorded yet. Only checks you run from Diagnostics are kept here.
+          </div>
         ) : (
           <>
             <div

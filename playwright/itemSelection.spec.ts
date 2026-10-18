@@ -518,7 +518,10 @@ test.describe("Item Selection Dialog UX", () => {
     });
     await expect(page.getByTestId("playlist-list")).toBeVisible();
     await expect(
-      page.getByTestId("playlist-item").filter({ hasText: "Super-Long-Local-Track-Name-For-Return-Flow.sid" }).first(),
+      page
+        .getByTestId("playlist-item")
+        .filter({ hasText: /^Super.Long.Local.Track.Name.For.Return.Flow/i })
+        .first(),
     ).toBeVisible();
     await snap(page, testInfo, "playlist-returned");
   });
@@ -613,7 +616,7 @@ test.describe("Item Selection Dialog UX", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "play-folder-added");
 
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
     await snap(page, testInfo, "playlist-populated");
   });
 

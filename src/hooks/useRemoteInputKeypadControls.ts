@@ -32,6 +32,9 @@ export interface RemoteInputKeypadControlsOptions {
   immersive: boolean;
   /** Whether the sheet folds its joystick options behind an Options button. */
   optionsFolded: boolean;
+  /** Whether the picture is on screen, so there is a view to pan and zoom. */
+  viewAdjustable: boolean;
+  onAdjustView: () => void;
   onOutputModeChange: (mode: RemoteInputOutputMode) => void;
   onOpenOptions: () => void;
   onEnterGameMode: () => void;
@@ -53,8 +56,16 @@ export interface RemoteInputKeypadControlsOptions {
  * overlay navigation walks the sheet's controls and OK presses them. Back returns to driving.
  */
 export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsOptions) => {
-  const { open, outputMode, keypadDrivesTheC64, joystickAvailable, gameModeAvailable, immersive, optionsFolded } =
-    options;
+  const {
+    open,
+    outputMode,
+    keypadDrivesTheC64,
+    joystickAvailable,
+    gameModeAvailable,
+    immersive,
+    optionsFolded,
+    viewAdjustable,
+  } = options;
   const [driving, setDriving] = useState(true);
   const keysGoToTheC64 = driving && keypadDrivesTheC64;
   const menuKey: SoftKeyMenuKey = keysGoToTheC64 && outputMode === "type" ? "back" : "softRight";
@@ -113,6 +124,7 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
         : { id: "game", label: "Game Mode", onSelect: options.onEnterGameMode },
     );
   }
+  if (viewAdjustable) items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
   items.push({ id: "controls", label: "Other controls", onSelect: () => operateTheSheet("first-control") });
   if (!inGameMode) items.push({ id: "release-all", label: "Release all", onSelect: options.onReleaseAll });
   items.push({ id: "close", label: "Close Remote Input", onSelect: options.onClose });
@@ -120,8 +132,9 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   /** True when the key is the sheet's to handle here and must not reach the C64. */
   const interceptKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>): boolean => {
-      if (resolveSemanticAction(resolveInputProfile("keypad"), event) === "softRight") {
-        if (menuKey === "back" && !menuOpen) return false;
+      const action = resolveSemanticAction(resolveInputProfile("keypad"), event);
+      if (action === "softRight" || action === "openMenu") {
+        if (action === "softRight" && menuKey === "back" && !menuOpen) return false;
         event.preventDefault();
         setMenuOpen((wasOpen) => !wasOpen);
         return true;

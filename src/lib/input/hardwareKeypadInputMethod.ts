@@ -58,6 +58,23 @@ export const keepPlatformInputMethodAway = (target: EventTarget | null): void =>
   if (isT9Field(target)) target.setAttribute("inputmode", "none");
 };
 
+/**
+ * Withholds the input method before ANY programmatic focus of a field, not only the ring's own.
+ *
+ * Radix focus scopes, field frames and dialog autofocus call `focus()` themselves, and the
+ * `focusin` that follows is too late: the platform has already decided to open its keyboard.
+ */
+export const installInputMethodFocusGuard = (): (() => void) => {
+  const original = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function guardedFocus(this: HTMLElement, options?: FocusOptions) {
+    keepPlatformInputMethodAway(this);
+    original.call(this, options);
+  };
+  return () => {
+    HTMLElement.prototype.focus = original;
+  };
+};
+
 export const resetHardwareKeypadUseForTests = (): void => {
   hardwareKeypadUsed = false;
 };

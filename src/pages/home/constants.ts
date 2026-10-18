@@ -34,6 +34,7 @@ export const resolveHomeConfigOptions = (
 export const HOME_SUMMARY_QUERY_OPTIONS = {
   ...VISIBLE_C64_QUERY_OPTIONS,
   skipEnrichment: true,
+  retry: 3,
 } as const;
 
 export const DRIVE_A_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;

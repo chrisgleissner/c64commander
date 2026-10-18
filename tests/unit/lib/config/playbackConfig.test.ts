@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  describeAttachedConfigRows,
   areConfigReferencesEqual,
   buildConfigReferenceKey,
   buildPlaybackConfigSignature,
@@ -405,5 +406,18 @@ describe("buildPlaybackConfigSignature", () => {
     const sig = JSON.parse(buildPlaybackConfigSignature(ultimateRef("/Configs/Demo.cfg"), null));
     expect(sig.configRef).not.toBeNull();
     expect(sig.configRef.fileName).toBe("Demo.cfg");
+  });
+});
+
+describe("describeAttachedConfigRows", () => {
+  it("reports no origin for a disk without an attached config file", () => {
+    expect(describeAttachedConfigRows(undefined, "none")).toEqual([{ label: "Config file", value: "None attached" }]);
+  });
+
+  it("reports the file name and how it was found when one is attached", () => {
+    expect(describeAttachedConfigRows("game.cfg", "auto-exact")).toEqual([
+      { label: "Config file", value: "game.cfg" },
+      { label: "Origin", value: "Auto: same name" },
+    ]);
   });
 });

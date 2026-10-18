@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useC64Categories, useC64ConfigItems } from "@/hooks/useC64Connection";
-import { useSidData } from "@/pages/home/hooks/useSidData";
+import { resolveSidAudioStatus, useSidData } from "@/pages/home/hooks/useSidData";
 
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: {
@@ -69,5 +69,49 @@ describe("useSidData", () => {
     expect(result.current.sidAudioMissing).toBe(true);
     expect(result.current.sidControlEntries).toEqual([]);
     expect(vi.mocked(useC64ConfigItems).mock.calls.every(([, , enabled]) => enabled === false)).toBe(true);
+  });
+});
+
+describe("Audio read status", () => {
+  const answered = { data: {}, isError: false };
+
+  it("is loading while any category has no data and none has failed", () => {
+    expect(resolveSidAudioStatus([answered, { data: undefined, isError: false }])).toBe("loading");
+  });
+
+  it("is error when a category without data has failed", () => {
+    expect(resolveSidAudioStatus([answered, { data: undefined, isError: true }])).toBe("error");
+  });
+
+  it("stays ready when a refetch fails but earlier data is still held", () => {
+    expect(resolveSidAudioStatus([{ data: {}, isError: true }, answered])).toBe("ready");
+  });
+
+  it("is ready only when every category has data, and reports loading through useSidData", () => {
+    expect(resolveSidAudioStatus([answered, answered])).toBe("ready");
+    vi.mocked(useC64Categories).mockReturnValue({ data: undefined, isPlaceholderData: false } as never);
+    vi.mocked(useC64ConfigItems).mockReturnValue({ data: undefined, isError: false, refetch: vi.fn() } as never);
+    const { result } = renderHook(() => useSidData(true, {}));
+    expect(result.current.sidAudioStatus).toBe("loading");
+    vi.mocked(useC64ConfigItems).mockReturnValue({ data: undefined, isError: true, refetch: vi.fn() } as never);
+    expect(renderHook(() => useSidData(true, {})).result.current.sidAudioStatus).toBe("error");
+  });
+
+  it("refetches only the categories that have no data when asked to retry", () => {
+    vi.mocked(useC64Categories).mockReturnValue({ data: undefined, isPlaceholderData: false } as never);
+    const refetchEmpty = vi.fn();
+    const refetchLoaded = vi.fn();
+    vi.mocked(useC64ConfigItems)
+      .mockReturnValueOnce({ data: undefined, isError: true, refetch: refetchEmpty } as never)
+      .mockReturnValueOnce({ data: {}, isError: false, refetch: refetchLoaded } as never)
+      .mockReturnValue({ data: {}, isError: false, refetch: refetchLoaded } as never);
+    const { result } = renderHook(() => useSidData(true, {}));
+    refetchEmpty.mockClear();
+    refetchLoaded.mockClear();
+
+    act(() => result.current.refetchSidAudio());
+
+    expect(refetchEmpty).toHaveBeenCalledTimes(1);
+    expect(refetchLoaded).not.toHaveBeenCalled();
   });
 });

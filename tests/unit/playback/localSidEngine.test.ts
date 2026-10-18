@@ -371,6 +371,61 @@ describe("LocalSidEngine — overlapping seeks", () => {
 });
 
 /**
+ * A seek the render worker answers by replaying the tune is silent for as long as the replay takes
+ * (about two minutes for 97% of a 20-minute tune on a Pixel 4). The engine publishes it as a pending
+ * seek so the progress bar can say what is happening; the worker reports no position meanwhile.
+ */
+describe("LocalSidEngine — worker seek status", () => {
+  const startPlaying = async () => {
+    const made = makeEngine({ chunkSeconds: 0.5, targetBufferSeconds: 1.0 });
+    const play = made.engine.play(new ArrayBuffer(120), 0, {});
+    await completeOpen(made.worker);
+    await play;
+    return made;
+  };
+
+  it("publishes the seek in the same turn it is made, before the worker answers", async () => {
+    const { engine } = await startPlaying();
+
+    const before = Date.now();
+    void engine.seekTo(1163);
+
+    const pending = engine.getPendingSeek();
+    expect(pending).toMatchObject({ targetSeconds: 1163, renderedAtRequestSeconds: 0 });
+    expect(pending?.replayStartedAtMs).toBeGreaterThanOrEqual(before);
+    expect(engine.isSeeking()).toBe(true);
+  });
+
+  it("clears the status when the worker acknowledges the seek", async () => {
+    const { engine, worker } = await startPlaying();
+    const seek = engine.seekTo(1163);
+
+    worker.emit({ type: "seeked", id: worker.sentOfType("seek")[0].id, positionSeconds: 1163 });
+    await seek;
+
+    expect(engine.getPendingSeek()).toBeNull();
+    expect(engine.isSeeking()).toBe(false);
+  });
+
+  it("replaces the status when a newer seek supersedes it", async () => {
+    const { engine } = await startPlaying();
+    void engine.seekTo(600);
+    void engine.seekTo(900);
+
+    expect(engine.getPendingSeek()?.targetSeconds).toBe(900);
+  });
+
+  it("does not carry the status over to the next tune or past a stop", async () => {
+    const { engine } = await startPlaying();
+    void engine.seekTo(1163);
+
+    engine.stopPlayback();
+
+    expect(engine.getPendingSeek()).toBeNull();
+  });
+});
+
+/**
  * Skipping quickly through a playlist overlaps opens: `play()` awaits `load()` before it registers
  * `openPending`, so a second press gets there while the first is still waiting. The slot is single
  * and `onOpened` only settles a reply whose id is still `activeId`, so the first play's resolver

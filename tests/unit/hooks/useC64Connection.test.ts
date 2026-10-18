@@ -914,6 +914,8 @@ describe("useC64Connection", () => {
       });
 
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-categories"] });
     } finally {
       vi.useRealTimers();
     }

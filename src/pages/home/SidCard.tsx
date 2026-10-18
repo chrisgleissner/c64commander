@@ -7,7 +7,6 @@
  */
 
 import React from "react";
-import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -16,7 +15,7 @@ import {
   useDeviceBoundSlider,
 } from "@/hooks/useDeviceBoundSlider";
 import { cn } from "@/lib/utils";
-import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { Switch } from "@/components/ui/switch";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "./inlineControlStyles";
 import { SID_SLIDER_KEYBOARD_STEP } from "./constants";
@@ -161,30 +160,22 @@ export function SidCard({
     >
       {/* Row 1: Name and Power */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
+        <p className="text-xs font-semibold text-primary">{name}</p>
         {onPowerToggle ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onPowerToggle}
+          <Switch
+            checked={power}
+            onCheckedChange={() => onPowerToggle()}
             disabled={!isConnected || powerPending}
-            className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
             aria-label={`${name} power: ${power ? "on" : "off"}`}
-          >
-            {power ? "ON" : "OFF"}
-          </Button>
+          />
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
+          <Switch
+            checked={power}
             disabled={true}
-            className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
             aria-label={`${name} power: ${power ? "on" : "off"}`}
-          >
-            {power ? "ON" : "OFF"}
-          </Button>
+          />
         )}
       </div>
 
@@ -202,7 +193,7 @@ export function SidCard({
           <span id={`${labelId}-identity`} className="shrink-0 text-muted-foreground whitespace-nowrap">
             {identityLabel}
           </span>
-          {isIdentityReadOnly ? (
+          {isIdentityReadOnly || !identityOptions?.length ? (
             <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
             </span>
@@ -262,7 +253,7 @@ export function SidCard({
             <span id={`${labelId}-shaping-${index}`} className="shrink-0 text-muted-foreground whitespace-nowrap">
               {control.label}
             </span>
-            {control.options && control.onChange ? (
+            {control.options?.length && control.onChange ? (
               <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
                 <SelectTrigger
                   className={inlineSelectTriggerClass}

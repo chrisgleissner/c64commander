@@ -9,7 +9,7 @@
 /**
  * Ambient ranking store — the user's Like ♥ / Not-for-me ✕ signal (spec §5.1),
  * keyed by **full MD5** so a rating follows a tune across HVSC/local/Ultimate
- * sources and survives re-indexing. It backs Liked Tunes (§5.5) and seeds Taste
+ * sources and survives re-indexing. It backs Liked tunes (§5.5) and seeds Taste
  * stations, and steers every station.
  *
  * Durability: a single small blob persisted to **IndexedDB** when available,
@@ -204,7 +204,7 @@ const broadcast = () => {
  * Hydrate the in-memory cache from durable storage (idempotent).
  *
  * Broadcasts when hydration actually brought ratings in, so surfaces that read the cache
- * synchronously — the ♥/✕ affordance, Liked Tunes — re-read it instead of showing an unrated app
+ * synchronously — the ♥/✕ affordance, Liked tunes — re-read it instead of showing an unrated app
  * until the first write of the session hydrates it as a side effect.
  */
 export const loadRankings = async (): Promise<void> => {

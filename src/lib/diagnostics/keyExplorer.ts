@@ -87,5 +87,5 @@ export const formatObservations = (observations: readonly KeyObservation[]): str
       .filter(Boolean)
       .join(" ");
   });
-  return ["Key Explorer — newest first", ...rows].join("\n");
+  return ["Key explorer — newest first", ...rows].join("\n");
 };

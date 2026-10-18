@@ -95,7 +95,7 @@ export const DiagnosticsListItem = ({
         {isActionMode ? (
           <div
             data-testid="diagnostics-action-expanded-header"
-            className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold uppercase tracking-wide"
+            className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold"
           >
             <div className="min-w-0 flex flex-wrap items-center gap-2">
               <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
@@ -109,7 +109,7 @@ export const DiagnosticsListItem = ({
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+            <div className="flex items-center gap-2 text-xs font-semibold">
               <span
                 className={cn("inline-flex w-4 items-center justify-center", severityMeta.colorClass)}
                 aria-hidden="true"

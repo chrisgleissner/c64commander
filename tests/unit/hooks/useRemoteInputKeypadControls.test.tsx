@@ -27,6 +27,8 @@ const baseOptions: RemoteInputKeypadControlsOptions = {
   gameModeAvailable: true,
   immersive: false,
   optionsFolded: false,
+  viewAdjustable: false,
+  onAdjustView: vi.fn(),
   onOutputModeChange: vi.fn(),
   onOpenOptions: vi.fn(),
   onEnterGameMode: vi.fn(),
@@ -103,5 +105,22 @@ describe("useRemoteInputKeypadControls", () => {
     rerender({ ...baseOptions, outputMode: "type", keypadDrivesTheC64: false });
     expect(result.current.sheetProps).toMatchObject({ [SOFT_KEY_MENU]: "softRight" });
     expect(result.current.sheetProps).not.toHaveProperty(OWNS_KEYS);
+  });
+
+  it("opens the controls menu on the menu key too, and offers Adjust view only while the picture is on", () => {
+    const onAdjustView = vi.fn();
+    const menuKey = { key: "ContextMenu", code: "ContextMenu", preventDefault: vi.fn() };
+    const { result, rerender } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: baseOptions },
+    );
+    expect(result.current.menu.items.map((item) => item.id)).not.toContain("adjust-view");
+
+    act(() => void result.current.interceptKeyDown(menuKey as unknown as ReactKeyboardEvent<HTMLElement>));
+    expect(result.current.menu.open).toBe(true);
+
+    rerender({ ...baseOptions, viewAdjustable: true, onAdjustView });
+    choose(result.current.menu.items, "adjust-view");
+    expect(onAdjustView).toHaveBeenCalledTimes(1);
   });
 });

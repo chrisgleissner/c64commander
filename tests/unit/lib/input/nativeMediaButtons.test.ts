@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   isNativePlatform: vi.fn(() => true),
   getPlatform: vi.fn(() => "android"),
   onBackgroundTransportCommand: vi.fn(),
+  takeLaunchCommand: vi.fn(async (): Promise<{ command: TransportCommand | null }> => ({ command: null })),
   addLog: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/native/platform", () => ({
   getPlatform: mocks.getPlatform,
 }));
 vi.mock("@/lib/native/backgroundExecution", () => ({
+  BackgroundExecution: { takeLaunchCommand: mocks.takeLaunchCommand },
   onBackgroundTransportCommand: mocks.onBackgroundTransportCommand,
 }));
 vi.mock("@/lib/logging", () => ({ addLog: mocks.addLog }));
@@ -47,6 +49,7 @@ describe("native media buttons", () => {
     transportCommandBus.reset();
     mocks.isNativePlatform.mockReturnValue(true);
     mocks.getPlatform.mockReturnValue("android");
+    mocks.takeLaunchCommand.mockResolvedValue({ command: null });
   });
 
   it("does not subscribe off native Android", () => {
@@ -84,5 +87,69 @@ describe("native media buttons", () => {
     const { cleanup } = await installAndCaptureListener(vi.fn(), () => "/play");
     cleanup();
     await vi.waitFor(() => expect(remove).toHaveBeenCalled());
+  });
+
+  describe("resume request the activity was launched with (issue 504)", () => {
+    it("publishes the launch command on the transport bus and navigates to Play", async () => {
+      mocks.takeLaunchCommand.mockResolvedValueOnce({ command: "play" });
+      const navigate = vi.fn();
+      const { cleanup } = await installAndCaptureListener(navigate, () => "/");
+
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/play"));
+      expect(transportCommandBus.takePending()).toBe("play");
+      cleanup();
+    });
+
+    it("is acted on once when the app installs the handler again, as native hands the request over only once", async () => {
+      mocks.takeLaunchCommand.mockResolvedValueOnce({ command: "play" }).mockResolvedValue({ command: null });
+      const navigate = vi.fn();
+      const first = await installAndCaptureListener(navigate, () => "/");
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+      expect(transportCommandBus.takePending()).toBe("play");
+
+      const second = await installAndCaptureListener(navigate, () => "/");
+      await vi.waitFor(() => expect(mocks.takeLaunchCommand).toHaveBeenCalledTimes(2));
+
+      expect(navigate).toHaveBeenCalledTimes(1);
+      expect(transportCommandBus.takePending()).toBeNull();
+      first.cleanup();
+      second.cleanup();
+    });
+
+    it("does nothing when the activity was not launched with a request", async () => {
+      const navigate = vi.fn();
+      const { cleanup } = await installAndCaptureListener(navigate, () => "/");
+
+      await vi.waitFor(() => expect(mocks.takeLaunchCommand).toHaveBeenCalledTimes(1));
+      expect(navigate).not.toHaveBeenCalled();
+      expect(transportCommandBus.takePending()).toBeNull();
+      cleanup();
+    });
+
+    it("acts on a request taken by an install that was cleaned up before it arrived", async () => {
+      let deliver: (value: { command: TransportCommand | null }) => void = () => undefined;
+      mocks.takeLaunchCommand.mockReturnValueOnce(new Promise((resolve) => (deliver = resolve)));
+      const navigate = vi.fn();
+      const { cleanup } = await installAndCaptureListener(navigate, () => "/");
+      cleanup();
+
+      deliver({ command: "play" });
+
+      await vi.waitFor(() => expect(transportCommandBus.takePending()).toBe("play"));
+    });
+
+    it("logs and carries on when native cannot hand the request over", async () => {
+      mocks.takeLaunchCommand.mockRejectedValueOnce(new Error("bridge gone"));
+      const { cleanup } = await installAndCaptureListener(vi.fn(), () => "/");
+
+      await vi.waitFor(() =>
+        expect(mocks.addLog).toHaveBeenCalledWith(
+          "warn",
+          "Failed to read the launch resume request",
+          expect.objectContaining({ error: "bridge gone" }),
+        ),
+      );
+      cleanup();
+    });
   });
 });

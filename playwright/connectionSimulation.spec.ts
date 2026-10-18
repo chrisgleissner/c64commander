@@ -661,9 +661,12 @@ test.describe("Deterministic Connectivity Simulation", () => {
         timeout: 15000,
       })
       .toBe("DEMO_ACTIVE");
-    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText(/demo/i);
 
-    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+    const demoRow = page
+      .getByTestId("playlist-item")
+      .filter({ hasText: /^demo\s?SID/i })
+      .first();
     if (await demoRow.isVisible().catch(() => false)) {
       await demoRow.click();
     }
@@ -704,7 +707,10 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await clearTraces(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    const realRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
+    const realRow = page
+      .getByTestId("playlist-item")
+      .filter({ hasText: /^demo\s?SID/i })
+      .first();
     if (await realRow.isVisible().catch(() => false)) {
       await realRow.click();
     }

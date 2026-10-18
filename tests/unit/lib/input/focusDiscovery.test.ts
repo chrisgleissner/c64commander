@@ -489,8 +489,8 @@ describe("FocusDiscoveryEngine", () => {
   describe("a selected control that is disabled or removed", () => {
     const mountGroup = () => {
       mount(`
-        <section data-section-label="Quick Actions" id="card">
-          <button id="toggle">Quick Actions</button>
+        <section data-section-label="Quick actions" id="card">
+          <button id="toggle">Quick actions</button>
           <button id="game">Game</button>
           <button id="pause">Pause</button>
           <button id="backup">Backup</button>

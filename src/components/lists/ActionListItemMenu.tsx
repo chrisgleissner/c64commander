@@ -63,6 +63,23 @@ export const groupItemMenuEntries = (entries: readonly ActionListMenuItem[]): It
   return blocks.filter((block) => (block.kind === "details" ? block.rows.length > 0 : block.entries.length > 0));
 };
 
+const withoutStraySeparators = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] =>
+  entries.filter((entry, index) => {
+    if (entry.type !== "separator") return true;
+    const previous = entries[index - 1];
+    const next = entries[index + 1];
+    return previous !== undefined && previous.type !== "separator" && next !== undefined;
+  });
+
+/** Actions come first: on a short screen the details are read by scrolling, the actions are what the reader came for. */
+export const orderActionsFirst = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] => {
+  const actions = entries.filter((entry) => entry.type === "action");
+  const details = withoutStraySeparators(entries.filter((entry) => entry.type !== "action"));
+  return actions.length > 0 && details.length > 0
+    ? [...actions, { type: "separator" }, ...details]
+    : [...actions, ...details];
+};
+
 const keepMenuOpen = (event: Event) => event.preventDefault();
 
 /** Events from the sheet's portal still bubble through React to the row, whose click plays the item. */
@@ -87,9 +104,13 @@ const ItemDetailsSheet = ({
   onOpenChange: (open: boolean) => void;
   returnFocusTo: React.RefObject<HTMLButtonElement | null>;
 }) => {
-  const blocks = groupItemMenuEntries(item.menuItems ?? []);
-  const firstDetails = blocks.findIndex((block) => block.kind === "details");
+  const grouped = groupItemMenuEntries(item.menuItems ?? []);
+  const blocks = [
+    ...grouped.filter((block) => block.kind === "actions"),
+    ...grouped.filter((block) => block.kind === "details"),
+  ];
   const unavailable = Boolean(item.isDimmed || item.disableActions);
+  const opensOnPrimary = Boolean(item.onAction) && !unavailable;
   const run = (action: () => void) => {
     action();
     onOpenChange(false);
@@ -117,6 +138,7 @@ const ItemDetailsSheet = ({
                 onClick={() => run(() => item.onAction?.())}
                 aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
                 data-testid="action-list-item-sheet-primary"
+                {...(opensOnPrimary ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
               >
                 {item.actionIcon ?? <Play aria-hidden="true" />}
                 {item.actionLabel}
@@ -124,33 +146,43 @@ const ItemDetailsSheet = ({
             ) : null}
             {blocks.map((block, index) =>
               block.kind === "details" ? (
-                // A keypad stop of its own, so stepping through the sheet scrolls every detail into view.
-                // The sheet opens on the first one, as the menu it replaces did: OK twice reads, not plays.
                 <section
                   key={`details-${index}`}
-                  tabIndex={0}
-                  {...(index === firstDetails ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
                   aria-label={block.label ?? "Details"}
-                  className="rounded-md border border-border/70 px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-md border border-border/70 px-3 py-2"
                   data-testid="action-list-item-sheet-details"
                 >
                   {block.label ? <h3 className="text-sm font-semibold">{block.label}</h3> : null}
-                  <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+                  <dl className="mt-1 flex flex-col">
                     {block.rows.map((row, rowIndex) => (
-                      <React.Fragment key={`${row.label}-${rowIndex}`}>
+                      // Each row is a keypad stop, so stepping through the sheet scrolls every detail into view
+                      // even when one block is taller than the sheet.
+                      <div
+                        key={`${row.label}-${rowIndex}`}
+                        tabIndex={0}
+                        {...(index === 0 &&
+                        rowIndex === 0 &&
+                        !opensOnPrimary &&
+                        !blocks.some((entry) => entry.kind === "actions")
+                          ? { [OPEN_FOCUS_ATTR]: "true" }
+                          : {})}
+                        className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] content-center gap-x-3 rounded-sm py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        data-testid="action-list-item-sheet-detail-row"
+                      >
                         <dt className="text-sm text-muted-foreground">{row.label}</dt>
                         <dd className="text-base [overflow-wrap:anywhere]" data-detail-label={row.label}>
                           <PathWrap path={row.value} />
                         </dd>
-                      </React.Fragment>
+                      </div>
                     ))}
                   </dl>
                 </section>
               ) : (
                 <div key={`actions-${index}`} className="flex flex-col gap-2">
-                  {block.entries.map((entry) => (
+                  {block.entries.map((entry, entryIndex) => (
                     <Button
                       key={entry.label}
+                      {...(index === 0 && entryIndex === 0 && !opensOnPrimary ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
                       variant="outline"
                       className={cn(
                         "w-full justify-start whitespace-normal text-left",
@@ -179,6 +211,7 @@ const ItemDetailsSheet = ({
  */
 export const ActionListItemMenu = ({ item, testId, presentation }: ActionListItemMenuProps) => {
   const [open, setOpen] = useState(false);
+  const [sheetBuilt, setSheetBuilt] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   if (presentation === "sheet") {
@@ -190,11 +223,13 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
           size="icon"
           className={triggerClassName}
           aria-label="Item actions"
+          data-key-nav-menu=""
           aria-haspopup="dialog"
           aria-expanded={open}
           disabled={item.disableActions}
           onClick={(event) => {
             event.stopPropagation();
+            setSheetBuilt(true);
             setOpen(true);
           }}
           id={testId}
@@ -202,7 +237,9 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
         >
           <MoreVertical className="h-4 w-4" />
         </Button>
-        <ItemDetailsSheet item={item} open={open} onOpenChange={setOpen} returnFocusTo={triggerRef} />
+        {sheetBuilt ? (
+          <ItemDetailsSheet item={item} open={open} onOpenChange={setOpen} returnFocusTo={triggerRef} />
+        ) : null}
       </>
     );
   }
@@ -230,7 +267,7 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {item.menuItems?.length
-          ? item.menuItems.map((entry, index) => {
+          ? orderActionsFirst(item.menuItems).map((entry, index) => {
               if (entry.type === "separator") return <DropdownMenuSeparator key={`sep-${index}`} />;
               if (entry.type === "label") {
                 return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;

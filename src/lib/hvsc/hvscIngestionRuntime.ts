@@ -44,7 +44,11 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
-import { applyIngestedSidHeaders, discardIngestedSidHeaderIndex } from "./hvscIngestedSidHeaders";
+import {
+  applyIngestedSidHeaders,
+  discardIngestedSidHeaderIndex,
+  hydrationProgressReporter,
+} from "./hvscIngestedSidHeaders";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -88,6 +92,7 @@ import {
   reportCacheStatFailure,
   resetCacheStatFailure,
 } from "./hvscIngestionRuntimeSupport";
+import { reloadSonglengthsAfterNativeIngest } from "./hvscSonglengthReload";
 import { finishIngestionRun, prepareIngestionStorage } from "./hvscIngestionStoragePrep";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
@@ -829,31 +834,18 @@ const ingestArchivePathNative = async (options: {
         await browseIndex.finalize();
       }
 
-      resetSonglengthsCache();
-      const nativeSonglengthsPerfScope = beginHvscPerfScope("ingest:songlengths", {
+      emitProgress({ stage: "songlengths", message: "Loading song lengths…", archiveName });
+      await reloadSonglengthsAfterNativeIngest({
         archiveName,
         archiveType: plan.type,
         archiveVersion: plan.version,
-        mode: "native",
       });
-      let nativeSonglengthsPerfError: Error | null = null;
-      try {
-        // force: see ingestArchiveBuffer — installedVersion is set in applyIngestionSuccess()
-        // below, after this reload, so discovery must bypass the install-state gate.
-        await reloadHvscSonglengthsOnConfigChange({ force: true });
-      } catch (error) {
-        nativeSonglengthsPerfError = error as Error;
-        throw error;
-      } finally {
-        endHvscPerfScope(
-          nativeSonglengthsPerfScope,
-          nativeSonglengthsPerfError
-            ? { outcome: "error", errorMessage: nativeSonglengthsPerfError.message }
-            : { outcome: "success" },
-        );
-      }
       if (result.sidHeaderIndexPath) {
-        await applyIngestedSidHeaders(result.sidHeaderIndexPath, () => ensureNotCancelled(cancelToken));
+        await applyIngestedSidHeaders(
+          result.sidHeaderIndexPath,
+          () => ensureNotCancelled(cancelToken),
+          hydrationProgressReporter(emitProgress, archiveName),
+        );
       }
     } finally {
       if (result.sidHeaderIndexPath) await discardIngestedSidHeaderIndex(result.sidHeaderIndexPath);

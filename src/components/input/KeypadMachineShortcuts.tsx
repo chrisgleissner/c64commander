@@ -21,7 +21,7 @@ import { toast } from "@/hooks/use-toast";
 /**
  * The machine controls the keypad's `8` and `9` keys reach, from whatever page is open.
  *
- * Home's Quick Actions grid is where these live on screen and it is not moving: it reads well and
+ * Home's Quick actions grid is where these live on screen and it is not moving: it reads well and
  * a pointer user finds them there. What it is not is close, for someone holding a keypad — Pause
  * was ten presses away and Reset eight, and both are among the things this user opens the app to
  * do. This answers the same two actions on their own keys, through the same implementations the

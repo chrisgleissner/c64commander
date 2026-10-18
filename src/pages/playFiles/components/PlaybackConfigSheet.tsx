@@ -13,7 +13,6 @@ import {
   AppSheetBody,
   AppSheetContent,
   AppSheetDescription,
-  AppSheetFooter,
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
@@ -221,11 +220,6 @@ export const PlaybackConfigSheet = ({
             </>
           ) : null}
         </AppSheetBody>
-        <AppSheetFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </AppSheetFooter>
       </AppSheetContent>
     </AppSheet>
   );

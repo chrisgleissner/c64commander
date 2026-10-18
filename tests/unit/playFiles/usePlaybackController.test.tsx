@@ -12,6 +12,7 @@ import {
   tryFetchUltimateSidBlob,
 } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { NextTunePrefetcher } from "@/pages/playFiles/nextTunePrefetch";
 import { CROSSFADE_START_MARGIN_MS } from "@/pages/playFiles/crossfadeLead";
 import {
   __setSidplayEzAvailabilityForTests,
@@ -3405,6 +3406,87 @@ describe("usePlaybackController", () => {
       expect(controller.play.mock.calls[0][1]).toBe(2);
     });
 
+    describe("next tune prefetch target", () => {
+      const threeSids = () => [sidItem(psid, 1, "sid-1"), sidItem(psid, 1, "sid-2"), sidItem(psid, 1, "sid-3")];
+      const lastScheduled = (schedule: { mock: { calls: unknown[][] } }) => schedule.mock.calls.at(-1);
+
+      it("prefetches the successor of the tune being started, not of the tune it replaces", async () => {
+        enableLocal();
+        const schedule = vi.spyOn(NextTunePrefetcher.prototype, "schedule");
+        const playlist = threeSids();
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: fakeController(),
+          currentIndex: 0,
+        });
+
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+
+        expect((lastScheduled(schedule)?.[0] as PlaylistItem).id).toBe("sid-3");
+        expect(lastScheduled(schedule)?.[1]).toBe(120_000);
+      });
+
+      it("prefetches the tune that follows in shuffled order", async () => {
+        enableLocal();
+        const schedule = vi.spyOn(NextTunePrefetcher.prototype, "schedule");
+        const playlist = threeSids();
+        const seed = 4242;
+        const order = seededShuffleIds(
+          playlist.map((item) => item.id),
+          seed,
+        );
+        const startIndex = playlist.findIndex((item) => item.id === order[0]);
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: fakeController(),
+          shuffleEnabled: true,
+          shuffleSeed: seed,
+        });
+
+        await result.current.playItem(playlist[startIndex], { playlistIndex: startIndex });
+
+        expect(order[1]).not.toBe(playlist[(startIndex + 1) % 3].id);
+        expect((lastScheduled(schedule)?.[0] as PlaylistItem).id).toBe(order[1]);
+      });
+
+      it("wraps to the first tune when repeat is on and schedules nothing after the last tune otherwise", async () => {
+        enableLocal();
+        const schedule = vi.spyOn(NextTunePrefetcher.prototype, "schedule");
+        const playlist = threeSids();
+        const repeating = renderPlaybackController(playlist, {
+          localSidPlaybackController: fakeController(),
+          repeatEnabled: true,
+        });
+        await repeating.result.current.playItem(playlist[2], { playlistIndex: 2 });
+        expect((lastScheduled(schedule)?.[0] as PlaylistItem).id).toBe("sid-1");
+
+        const once = renderPlaybackController(playlist, { localSidPlaybackController: fakeController() });
+        await once.result.current.playItem(playlist[2], { playlistIndex: 2 });
+        expect(lastScheduled(schedule)?.[0]).toBeNull();
+      });
+
+      it("schedules the prefetch again on resume from the time the tune has left", async () => {
+        enableLocal();
+        const schedule = vi.spyOn(NextTunePrefetcher.prototype, "schedule");
+        const playlist = threeSids();
+        vi.spyOn(LocalSidPlaybackController.prototype, "isActive").mockReturnValue(true);
+        const controller = fakeController();
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          isPaused: true,
+          durationMs: 120_000,
+          elapsedMs: 50_000,
+        } as any);
+
+        await act(async () => {
+          await result.current.handlePauseResume();
+        });
+
+        expect(schedule).toHaveBeenCalledTimes(1);
+        expect((lastScheduled(schedule)?.[0] as PlaylistItem).id).toBe("sid-2");
+        expect(lastScheduled(schedule)?.[1]).toBe(70_000);
+      });
+    });
+
     it("keys the pre-render by the renderer the probe settles on, not the one assumed before it answers", async () => {
       enableLocal();
       __setSidplayEzAvailabilityForTests(null);
@@ -3467,6 +3549,52 @@ describe("usePlaybackController", () => {
 
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("starts the next Ultimate-hosted tune from the bytes read ahead instead of reading them again", async () => {
+      enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
+      const deviceState = await import("@/lib/deviceInteraction/deviceStateStore");
+      deviceState.updateDeviceConnectionState("REAL_CONNECTED");
+      deviceState.markDeviceRequestStart();
+      deviceState.markDeviceRequestEnd({ success: true });
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const controller = fakeController();
+        vi.mocked(tryFetchUltimateSidBlob).mockClear();
+        vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(new Blob([psid()]) as never);
+        const next = createPlaylistItem({
+          id: "sid-2",
+          category: "sid",
+          label: "next.sid",
+          path: "/Usb0/Demos/next.sid",
+          durationMs: 120_000,
+          subsongCount: 1,
+          request: { source: "ultimate", path: "/Usb0/Demos/next.sid", songNr: 1 },
+        });
+        const playlist = [sidItem(psid, 1, "sid-1"), next];
+        const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        expect(tryFetchUltimateSidBlob).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(80_000);
+
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledTimes(1);
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledWith(
+          "/Usb0/Demos/next.sid",
+          undefined,
+          expect.objectContaining({ intent: "background" }),
+        );
+        expect(controller.warmLeadIn.mock.calls.some((call) => String(call[0]).startsWith("sid-2#"))).toBe(true);
+
+        await result.current.playItem(next, { playlistIndex: 1 });
+
+        expect(controller.play).toHaveBeenCalledTimes(2);
+        expect(tryFetchUltimateSidBlob).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+        connectionStateOverride.current = null;
+      }
     });
 
     it("says so when a tune set to play on this device cannot be read off the Ultimate", async () => {

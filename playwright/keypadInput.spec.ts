@@ -271,7 +271,7 @@ test.describe("Keypad / T9 input", () => {
     // arrival, every later key became an editable target, and the global handler
     // returned before any navigation ran — the ring could never leave the field.
     // On the keypad-only target device that is unescapable.
-    const search = page.getByPlaceholder("Search categories...");
+    const search = page.getByPlaceholder("Search categories");
     await expect(search).toBeVisible();
     const reached = await ringFocus(page, search, 90);
     expect(reached).toBe(true);

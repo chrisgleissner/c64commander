@@ -1087,7 +1087,7 @@ jobs:
       - name: Run HIL analysis tests
         run: |
           start=$(date +%s)
-          python3 -m pip install numpy
+          python3 -m pip install numpy scipy
           python3 -m pytest tools/hil/tests/ tools/sid-engines/tests/
           end=$(date +%s)
           echo "- hil analysis tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY

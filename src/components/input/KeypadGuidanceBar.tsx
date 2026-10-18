@@ -36,11 +36,14 @@ import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
   guidanceLabelFor,
+  CENTER_VERB_ATTR,
   classifyFocusKind,
   getInputModality,
   hasContextMenu,
   openOverlayOffersSoftKeyMenu,
   resolveGuidanceLabels,
+  resolveSearchOverlayLabels,
+  SEARCH_OVERLAY_ATTR,
   resolveSoftKeyMenuOverlayLabels,
   resolveSoftKeyMenuPanelLabels,
   SKIP_ATTR,
@@ -53,6 +56,7 @@ import { isAnyOverlayOpen, isSingleLineField, OPEN_OVERLAY_ANCESTOR_SELECTOR } f
 import { isT9Field } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { getKeyLabels } from "@/lib/variant/keyLabels";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
 const buildGuidanceState = (
@@ -76,15 +80,16 @@ const buildGuidanceState = (
   // OK on a card with a single control presses that control, so the bar names what it does.
   const children = current && isGroup ? focus.enabledChildrenOf(current.id) : [];
   const onlyControl = children.length === 1 && !focus.hasEnabledChildren(children[0].id) ? children[0] : null;
-  const currentKind = onlyControl
-    ? classifyFocusKind(engine.elementForId(onlyControl.id), false)
-    : classifyFocusKind(currentElement, isGroup);
+  const kindElement = onlyControl ? engine.elementForId(onlyControl.id) : currentElement;
+  const currentKind = classifyFocusKind(kindElement, onlyControl ? false : isGroup);
+  const centerVerb = kindElement?.getAttribute(CENTER_VERB_ATTR) ?? null;
 
   return {
     enabled,
     modality: getInputModality(),
     hasCurrent: current !== null,
     currentKind,
+    centerVerb,
     breadcrumb,
     atRoot: focus.currentScopeParentId() === null,
     fieldEngaged: controller.isFieldEngaged || isPageTextField(document.activeElement),
@@ -138,6 +143,7 @@ const softKeyMenuOverlayLabels = (visible: boolean): GuidanceLabels | null => {
     const entry = focused !== panel ? accessibleLabelFor(focused) : null;
     return resolveSoftKeyMenuPanelLabels(visible, dialogTitle(panel), entry);
   }
+  if (focused?.closest(`[role="dialog"][${SEARCH_OVERLAY_ATTR}]`)) return resolveSearchOverlayLabels(visible);
   const overlay = focused?.closest(`[role="dialog"][${SKIP_ATTR}][${SOFT_KEY_MENU_ATTR}]`);
   if (!overlay) return null;
   const menuKey = overlay.getAttribute(SOFT_KEY_MENU_ATTR) === "back" ? "back" : "softRight";
@@ -205,14 +211,9 @@ export const reserveGuidanceHeight = (reserved: boolean): void => {
 const isCompactProfile = (): boolean =>
   typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
 
-/**
- * On the smallest screen "Activate" is dropped as well: OK on a button presses it, which the cap says,
- * and the word took the 60 px the breadcrumb needed to name the control at all. So is "Select" on an
- * entry of a soft-key menu, which cut "Close Remote Input" to "Close Remote…".
- */
+/** On the smallest screen "Select" on an entry of a soft-key menu is dropped: it cut "Close Remote Input" to "Close Remote…". */
 const wordTheCapSays = (label: string): boolean =>
-  label === "Activate" ||
-  (label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null);
+  label === "Select" && document.activeElement?.closest(`[${SOFT_KEY_MENU_PANEL_ATTR}]`) != null;
 
 const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
   const repeatsCap = label.trim().toLowerCase() === cap.toLowerCase();
@@ -293,9 +294,10 @@ export const KeypadGuidanceBar = () => {
     // chrome that mirrors on-screen text, so a single string keeps it out of
     // role/text queries for the real controls behind it.
     setTextIfChanged(breadcrumbRef.current, formatBreadcrumb(labels.breadcrumb));
-    setActionText(leftActionRef.current, "Back", labels.left);
-    applySlot(centerSlotRef.current, centerActionRef.current, labels.center, "OK");
-    applySlot(rightSlotRef.current, rightActionRef.current, labels.right, "Menu");
+    const caps = getKeyLabels();
+    setActionText(leftActionRef.current, caps.leftCap, labels.left);
+    applySlot(centerSlotRef.current, centerActionRef.current, labels.center, caps.centerCap);
+    applySlot(rightSlotRef.current, rightActionRef.current, labels.right, caps.rightCap);
     applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
   }, [context, gameModeAvailable, t9Enabled]);
 
@@ -325,6 +327,7 @@ export const KeypadGuidanceBar = () => {
 
   if (!context) return null;
 
+  const caps = getKeyLabels();
   return (
     // aria-hidden: the focused element already conveys position/role to assistive
     // tech (it carries real DOM focus), so the bar is redundant chrome for AT and
@@ -342,7 +345,7 @@ export const KeypadGuidanceBar = () => {
       </div>
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
-          <kbd className="keypad-guidance-cap">Back</kbd>
+          <kbd className="keypad-guidance-cap">{caps.leftCap}</kbd>
           <span ref={leftActionRef} className="keypad-guidance-action" />
         </span>
         <span
@@ -351,7 +354,7 @@ export const KeypadGuidanceBar = () => {
           data-soft="center"
           data-testid="keypad-guidance-center"
         >
-          <kbd className="keypad-guidance-cap">OK</kbd>
+          <kbd className="keypad-guidance-cap">{caps.centerCap}</kbd>
           <span ref={centerActionRef} className="keypad-guidance-action" />
         </span>
         <span
@@ -361,7 +364,7 @@ export const KeypadGuidanceBar = () => {
           data-testid="keypad-guidance-right"
           hidden
         >
-          <kbd className="keypad-guidance-cap">Menu</kbd>
+          <kbd className="keypad-guidance-cap">{caps.rightCap}</kbd>
           <span ref={rightActionRef} className="keypad-guidance-action" />
         </span>
         <span

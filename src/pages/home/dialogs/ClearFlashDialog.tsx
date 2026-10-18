@@ -27,7 +27,7 @@ export function ClearFlashDialog({ open, onOpenChange, onConfirm, isPending }: C
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader hideClose>
           <DialogTitle>Clear flash configuration?</DialogTitle>
           <DialogDescription>
             This will reset all saved settings to factory defaults. This cannot be undone.

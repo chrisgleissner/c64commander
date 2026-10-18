@@ -41,3 +41,17 @@ export const connectedDeviceLabel = (deviceName?: string | null): string => devi
  * disks list; the Play page used to say "This device".
  */
 export const LOCAL_DEVICE_LABEL = SOURCE_LABELS.local;
+
+/** Where a playlist item or disk comes from, in the words the source picker uses. */
+export const describeContentSource = (source: "local" | "ultimate" | "hvsc" | "commoserve"): string => {
+  switch (source) {
+    case "local":
+      return LOCAL_DEVICE_LABEL;
+    case "ultimate":
+      return connectedDeviceLabel();
+    case "hvsc":
+      return SOURCE_LABELS.hvsc;
+    case "commoserve":
+      return SOURCE_LABELS.commoserve;
+  }
+};

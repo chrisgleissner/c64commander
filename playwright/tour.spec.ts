@@ -169,6 +169,25 @@ test.describe("first-run tour", () => {
     expect(spotlight!.y + spotlight!.height).toBeGreaterThanOrEqual(field!.y + field!.height);
   });
 
+  test("spotlights the playlist Add button, not a Home tile, on the playlist step", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+    const playlistIndex = TOUR_STEPS.findIndex((step) => step.id === "playlists");
+    for (let step = 0; step < playlistIndex; step += 1) await page.getByTestId("tour-next").click();
+    await expect(page.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "playlists");
+    await expect(page.getByTestId("tour-spotlight")).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(1_500);
+
+    const spotlight = await page.getByTestId("tour-spotlight").boundingBox();
+    const add = await page.getByTestId("add-items-to-playlist").boundingBox();
+    expect(spotlight).not.toBeNull();
+    expect(add).not.toBeNull();
+    expect(spotlight!.x).toBeLessThanOrEqual(add!.x);
+    expect(spotlight!.y).toBeLessThanOrEqual(add!.y);
+    expect(spotlight!.x + spotlight!.width).toBeGreaterThanOrEqual(add!.x + add!.width);
+    expect(spotlight!.y + spotlight!.height).toBeGreaterThanOrEqual(add!.y + add!.height);
+  });
+
   test("can be skipped at any step, and does not come back", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });

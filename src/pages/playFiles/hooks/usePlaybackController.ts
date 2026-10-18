@@ -95,7 +95,8 @@ import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlay
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
-import { resolveUltimateSidDurationByMd5, warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
+import { useNextTunePrefetch } from "@/pages/playFiles/hooks/useNextTunePrefetch";
+import { resolveUltimateSidDurationByMd5 } from "@/pages/playFiles/sidBytesAhead";
 import { autoAdvanceDelayMs, crossfadeLeadMs, deferralToTuneEndMs } from "@/pages/playFiles/crossfadeLead";
 import { resumedTrackStartedAtMs, usePlaylistEnded } from "@/pages/playFiles/hooks/usePlaylistEnded";
 import { resolveLocalSidMetadata } from "@/pages/playFiles/resolveLocalSidMetadata";
@@ -675,16 +676,13 @@ export function usePlaybackController({
     ],
   );
 
-  const warmNeighbouringTracks = useCallback(
-    () =>
-      warmNeighbouringLeadIns(
-        playlistRef.current,
-        currentIndexRef.current,
-        resolveHvscRuntimeRequest,
-        getLocalSidPlayback(),
-      ),
-    [],
-  );
+  const { prefetcher: nextTunePrefetch, warmNeighbours: warmNeighbouringTracks } = useNextTunePrefetch({
+    playlistRef,
+    currentIndexRef,
+    resolveHvscRuntimeRequest,
+    getLocalSidPlayback,
+  });
+  const scheduleNextTunePrefetchRef = useRef<(fromIndex: number, remainingMs: number | null) => void>(() => undefined);
 
   const playItem = useCallback(
     async (
@@ -708,6 +706,7 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
+        nextTunePrefetch.cancel();
         if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
         // post-launch state writes below, and the launch is corrected with a follow-up reset.
@@ -872,7 +871,10 @@ export function usePlaybackController({
               noDeviceConnected || deviceOutOfReach
                 ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
                 : null;
-            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath, effectiveRequest.origin));
+            const blob =
+              remembered ??
+              nextTunePrefetch.take(item.id) ??
+              (await tryFetchUltimateSidBlob(effectivePath, effectiveRequest.origin));
             if (blob) {
               effectiveRequest = {
                 ...effectiveRequest,
@@ -1153,6 +1155,10 @@ export function usePlaybackController({
           // of memory while the renderer catches up, instead of having to out-run the speaker from a
           // standing start — which it only just manages, and audibly failed to a second or two in.
           void warmNeighbouringTracks();
+          scheduleNextTunePrefetchRef.current(
+            resolveLaunchedItemIndex(playlistRef.current, item.id, options?.playlistIndex ?? -1),
+            resolvedDuration ?? null,
+          );
         } else {
           await executePlayPlan(api, plan, executionOptions).catch((error) => {
             if (!(error instanceof PlaybackLaunchOvertakenError)) throw error;
@@ -1505,6 +1511,7 @@ export function usePlaybackController({
       // row-tap) sees itself superseded once its own async work resolves.
       playGenerationRef.current += 1;
       stopCountRef.current += 1;
+      nextTunePrefetch.clear();
       cancelPendingUserSkip();
       const currentItem = playlist[currentIndex];
       const shouldReboot = stopRequiresReboot(currentItem?.category);
@@ -1666,6 +1673,7 @@ export function usePlaybackController({
       // App-wide, not this page's own state: `isPlaying` starts false on a Play page mounted mid-tune,
       // and Pause did nothing at all on a button the UI had (correctly) enabled.
       if (!isPlaying && !isAnyPlaybackActive()) return;
+      nextTunePrefetch.cancel();
       if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("pause or resume");
       const restartedItemId = isPaused && !isAnyPlaybackActive() ? takeRestartedPhoneTune() : null;
       const item = playlistRef.current[currentIndexRef.current];
@@ -1698,6 +1706,10 @@ export function usePlaybackController({
           setIsPaused(false);
           writeMachineExecutionFromPlay("running");
           const { elapsedMs } = playbackTime.read();
+          scheduleNextTunePrefetchRef.current(
+            currentIndexRef.current,
+            typeof durationMs === "number" ? durationMs - elapsedMs : null,
+          );
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
@@ -2019,6 +2031,12 @@ export function usePlaybackController({
     },
     [traversalOrdering, shuffleSeed],
   );
+
+  scheduleNextTunePrefetchRef.current = (fromIndex, remainingMs) => {
+    const reachableIndex =
+      fromIndex < 0 ? null : resolveReachableNextIndex(playlistRef.current, fromIndex).reachableIndex;
+    nextTunePrefetch.schedule(reachableIndex === null ? null : playlistRef.current[reachableIndex], remainingMs);
+  };
 
   // With nothing playing a skip only chooses the track, which showed the last tune's length and a full bar.
   const showChosenTrackWhileStopped = useCallback(

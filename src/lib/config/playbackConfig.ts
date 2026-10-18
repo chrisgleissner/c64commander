@@ -183,6 +183,15 @@ export const describeConfigOrigin = (origin: ConfigResolutionOrigin) => {
   }
 };
 
+// A disk with no attached config file has no origin to report; "Unresolved" read as a fault on a mounted disk.
+export const describeAttachedConfigRows = (
+  fileName: string | null | undefined,
+  origin: ConfigResolutionOrigin | null | undefined,
+): Array<{ label: string; value: string }> => [
+  { label: "Config file", value: fileName ?? "None attached" },
+  ...(fileName ? [{ label: "Origin", value: describeConfigOrigin(origin ?? "none") }] : []),
+];
+
 export const summarizeConfigChangeCategories = (overrides: ConfigValueOverride[] | null | undefined) => {
   if (!overrides?.length) return [] as string[];
   return [...new Set(overrides.map((override) => override.category))];

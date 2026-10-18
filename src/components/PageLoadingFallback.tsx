@@ -8,6 +8,7 @@
 
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { t } from "@/lib/i18n";
+import { PAGE_LOADING_STOP_ID } from "@/lib/input/pageLoadingStop";
 
 const ignoreActivation = () => {};
 
@@ -16,7 +17,7 @@ const ignoreActivation = () => {};
  * Home tab for as long as the page took to load, the guidance bar said "Home", and OK went there.
  */
 export const PageLoadingFallback = () => {
-  const focusRef = useFocusItem<HTMLDivElement>({ id: "page-loading", order: 0, onActivate: ignoreActivation });
+  const focusRef = useFocusItem<HTMLDivElement>({ id: PAGE_LOADING_STOP_ID, order: 0, onActivate: ignoreActivation });
   return (
     <div
       ref={focusRef}

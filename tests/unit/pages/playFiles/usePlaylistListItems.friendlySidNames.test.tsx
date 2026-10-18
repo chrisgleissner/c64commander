@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePlaylistListItems, type PlaylistListItemsOptions } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import { saveFriendlySidNames } from "@/lib/config/appSettings";
+import { formatPlayCategory as realFormatPlayCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const sidItem: PlaylistItem = {
@@ -69,12 +70,39 @@ describe("usePlaylistListItems friendly SID names", () => {
 
     const [row] = rowsOf(result.current);
     expect(row.title).toBe("Bossa in Do");
-    // The raw path is still what the row carries underneath, so nothing that keys off it moves.
-    expect(row.subtitle).toBe("/MUSICIANS/H/Hubbard_Rob/Bossa_in_Do_2SID.sid");
+    expect(row.subtitle).toBeNull();
     expect(row.id).toBe(sidItem.id);
 
     render(<>{row.meta}</>);
     expect(screen.getByTestId("sid-chip-badge-2")).toHaveTextContent("2SID");
+  });
+
+  it("puts a short type tag and the duration on the title line of every row, whatever the type", () => {
+    const withCategory = (category: PlaylistItem["category"], name: string): PlaylistItem => ({
+      ...prgItem,
+      id: `id-${name}`,
+      category,
+      label: name,
+      path: `/Mixed/${name}`,
+    });
+    const items = [
+      sidItem,
+      withCategory("prg", "Game.prg"),
+      withCategory("disk", "Game.d64"),
+      withCategory("mod", "Song.mod"),
+      withCategory("crt", "Cart.crt"),
+    ];
+    const { result } = renderHook(() =>
+      usePlaylistListItems({ ...buildOptions(items), formatPlayCategory: realFormatPlayCategory }),
+    );
+
+    expect(rowsOf(result.current).map((row) => row.titleSuffix)).toEqual([
+      "SID 3:00",
+      "PRG 3:00",
+      "Disk 3:00",
+      "MOD 3:00",
+      "CRT 3:00",
+    ]);
   });
 
   it("title-cases a shouted name and draws no badge for a single-chip tune", () => {

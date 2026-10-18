@@ -177,7 +177,7 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
   return (
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent data-testid="settings-add-device-dialog">
-        <AppDialogHeader>
+        <AppDialogHeader hideClose>
           <AppDialogTitle>Add device</AppDialogTitle>
           <AppDialogDescription>The app connects to it once it answers.</AppDialogDescription>
         </AppDialogHeader>

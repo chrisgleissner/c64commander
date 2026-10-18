@@ -84,7 +84,7 @@ describe("PlayFilesPage auto-advance wiring", () => {
     const trackEndHandlerStart = pageSource.indexOf("const advanceOnTrackEnd = useCallback(");
     const trackEndHandlerEnd = pageSource.indexOf("const advanceOnTrackEndRef", trackEndHandlerStart);
     const trackEndHandler = pageSource.slice(trackEndHandlerStart, trackEndHandlerEnd);
-    const rearmStart = pageSource.indexOf("if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current)");
+    const rearmStart = pageSource.indexOf("shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)");
     const rearmEnd = pageSource.indexOf("setPlayedMs(playedClockRef.current.current(now));", rearmStart);
     const rearm = pageSource.slice(rearmStart, rearmEnd);
 
@@ -95,6 +95,11 @@ describe("PlayFilesPage auto-advance wiring", () => {
       trackEndHandler.indexOf("sleepTimerRef.current.notifyTuneEnded(trackInstanceId)"),
     );
     expect(rearm).toContain("guard.deferredToEnd = false;");
+  });
+
+  it("keeps the deadline ahead of the clock while the engine is still rendering a seek", () => {
+    expect(pageSource).toContain("const awaitingSeek = localActive && controller.isSeeking();");
+    expect(pageSource).toContain("shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)");
   });
 });
 

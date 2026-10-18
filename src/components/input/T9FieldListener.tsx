@@ -10,7 +10,11 @@ import { useEffect } from "react";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { setInputModality } from "@/lib/input/inputModality";
-import { keepPlatformInputMethodAway, noteHardwareKeypadKey } from "@/lib/input/hardwareKeypadInputMethod";
+import {
+  installInputMethodFocusGuard,
+  keepPlatformInputMethodAway,
+  noteHardwareKeypadKey,
+} from "@/lib/input/hardwareKeypadInputMethod";
 import { composeT9Key, endT9Composition } from "@/lib/input/t9FieldComposer";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 
@@ -27,11 +31,13 @@ export const T9FieldListener = () => {
     };
     const onFocusOut = (event: FocusEvent) => endT9Composition(event.target);
     const onFocusIn = (event: FocusEvent) => keepPlatformInputMethodAway(event.target);
+    const removeFocusGuard = installInputMethodFocusGuard();
     window.addEventListener("keydown", noteHardwareKeypadKey, true);
     document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("focusout", onFocusOut);
     return () => {
+      removeFocusGuard();
       window.removeEventListener("keydown", noteHardwareKeypadKey, true);
       document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("keydown", onKeyDown);

@@ -165,12 +165,12 @@ describe("useSidRadio — a Song station constrained to one mood", () => {
 
       const admissible = mayServe(tile.bit);
       if (admissible.size === 0) {
-        // Two different empty conditions, and both must be reported rather than widened: Game Themes
-        // has no members at all, Deep Cuts has members the seed cannot reach.
+        // Two different empty conditions, and both must be reported rather than widened: Game themes
+        // has no members at all, Deep cuts has members the seed cannot reach.
         expect(result.current.active).toBe(false);
         expect(params.startPlaylist).not.toHaveBeenCalled();
         expect(result.current.notice).toBe(
-          everyTrackWithMood(bundle, tile.bit).length === 0 ? "no-radio-for-style" : "no-radio-for-tune",
+          everyTrackWithMood(bundle, tile.bit).length === 0 ? "no-radio-for-style" : "no-radio-for-tune-in-style",
         );
         return;
       }
@@ -243,7 +243,7 @@ describe("useSidRadio — a Song station constrained to one mood", () => {
 
 /**
  * Changing the mood keeps the tune the station was seeded by, and supersedes everything the previous
- * constraint had in flight. The two moods used here are deliberately disjoint — Fast-Paced is every
+ * constraint had in flight. The two moods used here are deliberately disjoint — Fast-paced is every
  * even ordinal and Chill / Ambient every odd one — so a single leaked track is unambiguous.
  */
 describe("useSidRadio — changing the mood of a running Song station", () => {
@@ -316,7 +316,7 @@ describe("useSidRadio — changing the mood of a running Song station", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // Fast-Paced is every even ordinal, so a single even one appended after the change is a leak.
+    // Fast-paced is every even ordinal, so a single even one appended after the change is a leak.
     const appended = ordinalsOf(params.appendItems as ReturnType<typeof vi.fn>);
     for (const ordinal of appended) {
       expect(bundle.styleMask[ordinal] & (1 << MOOD.slowAmbient)).not.toBe(0);
@@ -358,16 +358,16 @@ describe("useSidRadio — changing the mood of a running Song station", () => {
     const params = baseParams(client);
     const { result } = await startFastPaced(client, params);
 
-    // Deep Cuts is carried by the seed itself and by the isolated component, so nothing the walk can
+    // Deep cuts is carried by the seed itself and by the isolated component, so nothing the walk can
     // reach qualifies — an empty intersection over a mood that is not empty at all.
     await act(async () => {
       await result.current.setSongStationStyleFilter(MOOD.deepDiscovery);
     });
 
-    expect(result.current.notice).toBe("no-radio-for-tune");
+    expect(result.current.notice).toBe("no-radio-for-tune-in-style");
     expect(result.current.active).toBe(false);
     expect(result.current.station).toBeNull();
-    expect(params.startPlaylist).toHaveBeenCalledTimes(1); // the Fast-Paced batch, and nothing since
+    expect(params.startPlaylist).toHaveBeenCalledTimes(1); // the Fast-paced batch, and nothing since
     expect(params.appendItems).not.toHaveBeenCalled();
     expect(everyTrackWithMood(bundle, MOOD.deepDiscovery).length).toBeGreaterThan(1);
   });
@@ -388,7 +388,7 @@ describe("useSidRadio — changing the mood of a running Song station", () => {
     expect(params.startPlaylist).toHaveBeenCalledTimes(1);
 
     // Still a working station, not just a chip that is still on screen: the refusal must happen
-    // before anything is torn down, so the Fast-Paced station keeps refilling.
+    // before anything is torn down, so the Fast-paced station keeps refilling.
     await act(async () => {
       rerender({ ...params, currentIndex: 8, playlistLength: 10 });
     });

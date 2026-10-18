@@ -6,14 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Info, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildArchiveQuery } from "@/lib/archive/queryBuilder";
+import { describeArchiveFilters } from "@/lib/archive/filterSummary";
+import { LEGAL_NOTICE } from "@/components/archive/OnlineArchiveDialog";
+import { useDeveloperMode } from "@/hooks/useDeveloperMode";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { cn } from "@/lib/utils";
 import { DEFAULT_ARCHIVE_SOURCE_CONFIG, resolveArchiveClientConfig } from "@/lib/archive/config";
 import type { ArchivePreset, ArchivePresetType, ArchiveSearchParams, ArchiveSearchResult } from "@/lib/archive/types";
 import { useOnlineArchive } from "@/hooks/useOnlineArchive";
@@ -78,6 +83,10 @@ export const ArchiveSelectionView = ({
   const [form, setForm] = useState<ArchiveSearchParams>(EMPTY_SEARCH);
   const { presets, presetsLoading, resolvedConfig, state, clearError, search } = useOnlineArchive(config);
   const presetMap = useMemo(() => getPresetMap(presets), [presets]);
+  const { isDeveloperModeEnabled } = useDeveloperMode();
+  const { profile } = useDisplayProfile();
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (state.phase === "error") {
@@ -103,7 +112,15 @@ export const ArchiveSelectionView = ({
     }
   }, [form]);
 
+  const filterSummary = useMemo(() => describeArchiveFilters(form, presets), [form, presets]);
+
   const resultRows = "results" in state ? state.results : [];
+
+  // The Search button is pinned below the form, so the results arrive out of sight unless brought up.
+  const searchFinished = state.phase === "results";
+  useEffect(() => {
+    if (searchFinished) resultsRef.current?.scrollIntoView({ block: "start" });
+  }, [searchFinished]);
 
   const handleSearch = useCallback(async () => {
     await search(form);
@@ -113,19 +130,6 @@ export const ArchiveSelectionView = ({
 
   return (
     <div className="space-y-3" data-testid="archive-selection-view">
-      <div
-        className="rounded-lg border border-border/70 p-3 text-xs text-muted-foreground"
-        data-testid="archive-selection-config"
-      >
-        <div>
-          Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
-        </div>
-        <div>
-          Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
-        </div>
-        {resolvedConfig.host !== currentDefaults.host ? <p className="mt-1">Override host active.</p> : null}
-      </div>
-
       <div className="grid gap-2">
         {TEXT_FIELDS.map((field) => (
           <div key={field.key} className="space-y-1">
@@ -136,7 +140,7 @@ export const ArchiveSelectionView = ({
               id={`archive-sel-${field.key}`}
               value={form[field.key] ?? ""}
               placeholder={field.placeholder}
-              className="h-8 text-sm"
+              className="text-sm"
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
@@ -162,7 +166,7 @@ export const ArchiveSelectionView = ({
                 }
                 disabled={presetsLoading || !preset}
               >
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className="text-sm">
                   <SelectValue placeholder={presetsLoading ? "Loading…" : "Any"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -179,10 +183,59 @@ export const ArchiveSelectionView = ({
         })}
       </div>
 
-      <div className="flex gap-2">
+      <div className="space-y-1">
         <Button
-          className="flex-1"
-          size="sm"
+          variant="ghost"
+          className="min-h-11 w-full justify-between px-2"
+          onClick={() => setAboutOpen((open) => !open)}
+          aria-expanded={aboutOpen}
+          aria-controls="archive-about"
+          data-testid="archive-about-toggle"
+        >
+          <span className="flex items-center gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            About this archive
+          </span>
+          {aboutOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+        </Button>
+        {aboutOpen ? (
+          <div
+            id="archive-about"
+            className="space-y-1 rounded-lg border border-border/70 p-3 text-sm text-muted-foreground"
+            data-testid="archive-selection-config"
+          >
+            <div>
+              Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
+            </div>
+            <div>
+              Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
+            </div>
+            {resolvedConfig.host !== currentDefaults.host ? <p>Override host active.</p> : null}
+          </div>
+        ) : null}
+        <p className="px-2 text-xs text-muted-foreground" data-testid="archive-legal-notice">
+          {LEGAL_NOTICE}
+        </p>
+      </div>
+
+      {isDeveloperModeEnabled && queryPreview ? (
+        <p className="break-all text-sm text-muted-foreground" data-testid="archive-query-preview">
+          {queryPreview}
+        </p>
+      ) : null}
+
+      <div
+        className={cn(
+          "sticky bottom-0 z-10 flex items-center gap-2 border-t border-border bg-background py-1",
+          profile === "compact" ? "-mx-3 px-3" : "-mx-6 px-6",
+        )}
+        data-testid="archive-search-bar"
+      >
+        <p className="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground" data-testid="archive-filter-summary">
+          {filterSummary || "Enter at least one search term."}
+        </p>
+        <Button
+          className="shrink-0"
           onClick={() => void handleSearch()}
           disabled={!queryPreview || presetsLoading || state.phase === "searching"}
           data-testid="archive-search-button"
@@ -195,14 +248,6 @@ export const ArchiveSelectionView = ({
           Search
         </Button>
       </div>
-
-      {queryPreview ? (
-        <p className="text-xs text-muted-foreground" data-testid="archive-query-preview">
-          {queryPreview}
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Enter at least one search term.</p>
-      )}
 
       {resultRows.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +262,7 @@ export const ArchiveSelectionView = ({
         </div>
       ) : null}
 
-      <div className="space-y-2" data-testid="archive-selection-results">
+      <div ref={resultsRef} className="space-y-2" data-testid="archive-selection-results">
         {state.phase !== "searching" && resultRows.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {state.phase === "idle" ? "Search results appear here." : "No results found."}

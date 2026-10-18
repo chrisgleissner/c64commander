@@ -22,7 +22,10 @@ import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { loadFriendlySidNames } from "@/lib/config/appSettings";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
+import { NEEDS_CONNECTED_DEVICE_REASON } from "@/lib/search/requirements";
 
 /**
  * The four capabilities that were hardest to reach, one action from Home (spec.md section 6.3).
@@ -70,11 +73,17 @@ interface StoredTileState {
   readonly hvscReady: boolean;
 }
 
+/** The item title the Play page shows, so the tile names the tune rather than printing its file name. */
+export const resolveSessionTileLabel = (fileLabel: string, friendlyNames: boolean): string => {
+  const category = /\.sid$/i.test(fileLabel) ? "sid" : "prg";
+  const display = resolveTrackDisplayName({ label: fileLabel, category, friendlyNames });
+  return display.title.replace(/\.[a-z0-9]{1,4}$/i, "");
+};
+
 const readSessionLabel = (session: ReturnType<typeof readStoredPlaybackSession>): string | null => {
   if (!session?.currentItemId) return null;
-  // "Chess", not "Chess.sid": in a 64 px tile the extension broke the name mid-word onto a second line.
   return typeof session.currentItemLabel === "string"
-    ? session.currentItemLabel.replace(/\.[a-z0-9]{1,4}$/i, "")
+    ? resolveSessionTileLabel(session.currentItemLabel, loadFriendlySidNames())
     : null;
 };
 
@@ -87,6 +96,13 @@ const readStoredTileState = (): StoredTileState => {
     hvscReady: isHvscInstalled(),
   };
 };
+
+/**
+ * "Needs a connected C64 Ultimate" is true of most of Home and is already shown once, by the connection
+ * badge, so it is not repeated on one tile. A reason particular to the tile — a switch, a model — is.
+ */
+const disabledTileReason = (reason: string | null): string | null =>
+  reason === NEEDS_CONNECTED_DEVICE_REASON ? null : reason;
 
 export const useListenActions = (): ListenAction[] => {
   const navigate = useStableNavigate();
@@ -184,7 +200,7 @@ export const useListenActions = (): ListenAction[] => {
    * This app is a remote control first and a standalone player second — it is what it is named
    * for — so a banner headed "Needs no C64 attached" over-weighted the second and, with Live View
    * among the four, was not even true: Live View requires a connected machine and streaming
-   * support. They are now four tiles in Quick Actions, keeping the ids the tour spotlights and the
+   * support. They are now four tiles in Quick actions, keeping the ids the tour spotlights and the
    * screenshot corpus names.
    */
   return useMemo(
@@ -215,8 +231,8 @@ export const useListenActions = (): ListenAction[] => {
                 : // The tile is about 68 CSS px wide and its grid row is as tall as its tallest
                   // tile, so the short form is taken wherever there is one. "This model cannot
                   // stream picture or sound" under the greyed Live tile wrapped to six lines and
-                  // took the whole top row of Quick Actions from 91 px to 204 px on a cartridge.
-                  (entry.shortDisabledReason ?? entry.disabledReason ?? null),
+                  // took the whole top row of Quick actions from 91 px to 204 px on a cartridge.
+                  disabledTileReason(entry.shortDisabledReason ?? entry.disabledReason ?? null),
             disabled: !enabled,
             onSelect: () => void activate(entry),
             testId: `home-tile-${tile.entryId}`,

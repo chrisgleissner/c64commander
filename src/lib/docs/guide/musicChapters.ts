@@ -106,7 +106,7 @@ export const findTuneChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
   id: "playlist",
   title: "Build and order a playlist",
-  navLabel: "Playlist",
+  navLabel: "Build a playlist",
   icon: ListMusic,
   blocks: [
     {
@@ -166,7 +166,7 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
       kind: "steps",
       items: [
         "Install HVSC first, as in **Play a tune from HVSC**.",
-        "On **Play**, choose **SID Radio**, or **Radio** in Home's Quick Actions.",
+        "On **Play**, choose **SID Radio**, or **Radio** in Home's Quick actions.",
         "Pick a mood such as **Chill / Ambient** or **Melodic**, a collection, or **Surprise me**.",
         "While a tune plays, choose the heart to like it, or the cross to skip it and hear less like it.",
         "Choose **More like this** to follow the tune that is playing now.",
@@ -187,7 +187,7 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const audioOutputChapter = ({ variantId }: GuideContext): GuideChapter => ({
   id: "audio-output",
   title: "Listen here or on your C64",
-  navLabel: "Here or C64",
+  navLabel: "Listen here or on C64",
   icon: Headphones,
   blocks: [
     {

@@ -438,7 +438,7 @@ describe("useSidRadio", () => {
       await result.current.startSurpriseRadio();
     });
     expect(result.current.station?.styleBit).not.toBe(8);
-    expect(result.current.station?.seedLabel).not.toBe("Game Themes");
+    expect(result.current.station?.seedLabel).not.toBe("Game themes");
   });
 
   it("Surprise says so rather than starting nothing when no style has members", async () => {
@@ -484,7 +484,7 @@ describe("useSidRadio", () => {
       expect.objectContaining({ description: expect.stringContaining("No HVSC music is installed yet") }),
     );
     expect(addLog).toHaveBeenCalledWith(
-      "warn",
+      "info",
       "SID Radio: the station did not start",
       expect.objectContaining({ notice: "no-hvsc", seedKind: "style" }),
     );
@@ -580,7 +580,7 @@ describe("useSidRadio", () => {
   it("resumes the chip from a saved session on mount (D15)", () => {
     saveSidRadioSession({
       seedKind: "style",
-      seedLabel: "Fast-Paced",
+      seedLabel: "Fast-paced",
       seed: { kind: "style", styleBit: 0 },
       styleFilter: 0,
       shuffleSeed: 777,
@@ -591,7 +591,7 @@ describe("useSidRadio", () => {
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     expect(result.current.active).toBe(true);
-    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced", shuffleSeed: 777 });
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-paced", shuffleSeed: 777 });
     // Resume rebuilds the chip only — it does not auto-replace the playlist.
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
@@ -637,7 +637,7 @@ describe("useSidRadio", () => {
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
-      await result.current.startStyleRadio(0, "Fast-Paced");
+      await result.current.startStyleRadio(0, "Fast-paced");
     });
     expect(result.current.notice).toBe("no-radio-for-style");
   });
@@ -663,7 +663,7 @@ describe("useSidRadio", () => {
     const { result } = renderHook(() => useSidRadio(params));
     expect(result.current.stylePopulations).toBeNull();
     await act(async () => {
-      await result.current.startStyleRadio(8, "Game Themes");
+      await result.current.startStyleRadio(8, "Game themes");
     });
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-radio-for-style");
@@ -676,7 +676,7 @@ describe("useSidRadio", () => {
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
-      await result.current.startStyleRadio(8, "Game Themes", true);
+      await result.current.startStyleRadio(8, "Game themes", true);
     });
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-radio-for-style");
@@ -750,14 +750,14 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
 
     await act(async () => {
       const preload = result.current.ensureStylePopulations();
-      const started = result.current.startStyleRadio(0, "Fast-Paced");
+      const started = result.current.startStyleRadio(0, "Fast-paced");
       expect(worker.loads).toBe(1);
       worker.releaseReady(readyStats());
       const [populations] = await Promise.all([preload, started]);
       expect(populations).toMatchObject({ fast_paced: 1000 });
     });
 
-    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-Paced" });
+    expect(result.current.station).toMatchObject({ seedKind: "style", seedLabel: "Fast-paced" });
     expect(params.startPlaylist).toHaveBeenCalledTimes(1);
     // The preload resolved on its own load rather than timing out into a warning.
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringContaining("style populations"), expect.anything());

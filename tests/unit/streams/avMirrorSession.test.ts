@@ -30,6 +30,7 @@ interface Captured {
     renderAudio?: (samples: Int16Array) => void;
     renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
     schedulePresent?: (present: () => void) => void;
+    onStreamLost?: (info: { liveForMs: number }) => boolean;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -69,6 +70,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
     adoptSender = vi.fn(async () => {});
+    abandonReconnect = vi.fn();
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       videoInstances.push(this as unknown as Captured);
@@ -87,6 +89,7 @@ vi.mock("@/lib/streams/streamReceiver", async (importOriginal) => ({
 import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { addLog } from "@/lib/logging";
+import { getC64API } from "@/lib/c64api";
 
 vi.mock("@/lib/logging", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/logging")>();
@@ -617,6 +620,82 @@ describe("AvMirrorSession", () => {
           error: "streams:stop refused",
         });
       });
+    });
+  });
+
+  describe("restarting a lost video stream", () => {
+    const lose = (video: Captured, liveForMs = 5000) => {
+      video.deps.onChange({ state: "error", error: "lost" });
+      return video.deps.onStreamLost!({ liveForMs });
+    };
+
+    let infoSpy: { mockRejectedValue: (error: Error) => unknown };
+    beforeEach(() => {
+      vi.useFakeTimers();
+      infoSpy = vi.spyOn(getC64API(), "getInfo").mockResolvedValue({} as never);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("restarts the video once after the backoff while Watch is wanted and the device answers", async () => {
+      const { session, video } = makeSession();
+      await session.startVideo();
+      expect(video.start).toHaveBeenCalledTimes(1);
+
+      expect(lose(video)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(video.start).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not restart, and says so, after Watch was turned off", async () => {
+      const { session, video } = makeSession();
+      await session.startVideo();
+      await session.stopVideo();
+
+      expect(lose(video)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(video.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("cancels a pending restart when Watch is turned off during the backoff", async () => {
+      const { session, video } = makeSession();
+      await session.startVideo();
+      expect(lose(video)).toBe(true);
+      await session.stopVideo();
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(video.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops restarting after the bounded number of attempts when the stream keeps dying", async () => {
+      const { session, video } = makeSession();
+      await session.startVideo();
+
+      expect(lose(video, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lose(video, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(lose(video, 1000)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(video.start).toHaveBeenCalledTimes(3);
+    });
+
+    it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
+      infoSpy.mockRejectedValue(new Error("timeout"));
+      const { session, video } = makeSession();
+      await session.startVideo();
+
+      expect(lose(video)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(video.start).toHaveBeenCalledTimes(1);
+      expect((video as unknown as { abandonReconnect: ReturnType<typeof vi.fn> }).abandonReconnect).toHaveBeenCalled();
     });
   });
 });

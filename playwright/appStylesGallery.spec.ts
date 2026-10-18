@@ -136,6 +136,28 @@ test.describe("Appearance style gallery screenshots", () => {
     }
   });
 
+  test("the switch thumb sits inside the track's border at both ends", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_feature_flag:app_styles_gallery_enabled", "1");
+      sessionStorage.setItem("c64u_feature_flag:app_styles_gallery_enabled", "1");
+    });
+    await page.setViewportSize({ width: 500, height: 1200 });
+    await page.goto("/dev/styles?style=breadbin-beige&mode=light", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    const sw = page.locator("#gallery-switch");
+    for (const state of ["checked", "unchecked"]) {
+      const edges = await sw.evaluate((root) => {
+        const track = root.getBoundingClientRect();
+        const thumb = (root.firstElementChild as HTMLElement).getBoundingClientRect();
+        return { left: thumb.left - track.left, right: track.right - thumb.right };
+      });
+      expect(edges.left, `${state}: thumb left inset`).toBeGreaterThanOrEqual(2);
+      expect(edges.right, `${state}: thumb right inset`).toBeGreaterThanOrEqual(2);
+      await sw.click();
+    }
+  });
+
   for (const palette of PALETTES) {
     test(`${palette.styleId} (${palette.mode})`, async ({ page }) => {
       await seedUiMocks(page, server.baseUrl);

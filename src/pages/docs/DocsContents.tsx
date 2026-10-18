@@ -45,17 +45,18 @@ export const DocsContents = ({ chapters }: { chapters: readonly GuideChapter[] }
     defaultOpen
   >
     <nav aria-label="Docs contents">
-      <ul className="grid grid-cols-2 gap-2">
+      <ul className="grid grid-cols-1 gap-2">
         {chapters.map((chapter) => (
           <li key={chapter.id} className="min-w-0">
             <button
               type="button"
-              className="flex min-h-11 w-full items-center rounded-md border border-border px-2 py-1 text-left text-sm hover:bg-muted"
+              className="flex min-h-11 w-full items-center rounded-md border border-border px-3 py-1 text-left text-sm hover:bg-muted"
               data-testid={`docs-contents-link-${chapter.id}`}
               aria-label={chapter.title}
               onClick={() => void jumpToChapter(chapter.id)}
             >
-              <span className="min-w-0 break-words">{chapter.navLabel}</span>
+              <chapter.icon className="mr-2 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <span className="min-w-0">{chapter.navLabel}</span>
             </button>
           </li>
         ))}

@@ -95,7 +95,9 @@ test.describe("Disk names get room to read", () => {
       const title = row.getByRole("button", { name: DISK_NAME, exact: true });
       const titleLayout = await measureText(title);
       const titleColumnWidth = await widthOf(title.locator(".."));
-      expect.soft(titleColumnWidth, "disk name column width vs row width").toBeGreaterThanOrEqual(rowWidth * 0.5);
+      expect
+        .soft(titleColumnWidth, "disk name column width vs row width")
+        .toBeGreaterThanOrEqual(rowWidth * (profile === "compact" ? 0.38 : 0.5));
       expect.soft(titleLayout.midWordBreaks, "disk name breaks inside a word").toEqual([]);
       const groupLayout = await measureText(row.getByText(`Group: ${GROUP_NAME}`, { exact: true }));
       expect.soft(groupLayout.midWordBreaks, "group label breaks inside a word").toEqual([]);
@@ -132,4 +134,77 @@ test.describe("Disk names get room to read", () => {
       expect.soft(mountedLayout.midWordBreaks, "mounted disk name breaks inside a word").toEqual([]);
     });
   }
+});
+
+test.describe("Compact disk rows", () => {
+  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+
+  test.beforeEach(async ({ page }) => {
+    server = await createMockC64Server({}, {}, { timingMode: "fast" });
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      const disks = ["Sisters", "Chronicle"].map((name, index) => ({
+        id: `ultimate:/Usb0/Sample Arcade/Sample ${name}.d64`,
+        name: `Sample ${name}.d64`,
+        path: `/Usb0/Sample Arcade/Sample ${name}.d64`,
+        location: "ultimate",
+        group: "Sample Arcade",
+        importOrder: index + 1,
+        importedAt: new Date().toISOString(),
+      }));
+      localStorage.setItem("c64u_disk_library:TEST-123", JSON.stringify({ disks }));
+    });
+  });
+
+  test.afterEach(async () => {
+    await server.close();
+  });
+
+  test("drive card headers keep the pill and the mount button beside the title, and the fields stay whole @layout", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+    await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByTestId("drive-card-a")).toBeVisible({ timeout: 20_000 });
+    for (const id of ["disks-section-toggle-drive-b", "disks-section-toggle-drive-soft-iec"]) {
+      const toggle = page.getByTestId(id);
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
+    for (const id of ["drive-card-a", "drive-card-b", "drive-soft-iec-row"]) {
+      const card = page.getByTestId(id);
+      await card.scrollIntoViewIfNeeded();
+      await expect
+        .poll(
+          async () => {
+            const boxes = await Promise.all([
+              card.getByRole("heading").first().boundingBox(),
+              card.locator('[data-testid^="drive-status-toggle-"]').boundingBox(),
+              card.locator('[data-testid^="drive-mount-toggle-"]').boundingBox(),
+            ]);
+            const centers = boxes.map((box) => (box ? box.y + box.height / 2 : Number.NaN));
+            return Math.max(...centers) - Math.min(...centers);
+          },
+          { message: `${id}: title, pill and mount button share a row` },
+        )
+        .toBeLessThan(24);
+    }
+    await expect(page.getByTestId("drive-power-toggle-a")).toHaveCount(0);
+    await expect(page.getByTestId("drive-power-toggle-b")).toHaveCount(0);
+  });
+
+  test("a disk row is one compact block that does not repeat the folder as a group @layout", async ({ page }) => {
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.documentElement.dataset.displayProfile === "compact");
+    await expect(page.getByTestId("startup-launch-sequence")).toHaveCount(0, { timeout: 15_000 });
+    const row = page.getByTestId("disk-list").getByTestId("disk-row").first();
+    await row.scrollIntoViewIfNeeded();
+    await capture(page, "compact-disk-row");
+    const height = await row.evaluate((element) => element.getBoundingClientRect().height);
+    expect(height, "row height with select, name, mount and menu").toBeLessThanOrEqual(60);
+    await expect(row.getByText("Group:")).toHaveCount(0);
+    await expect(row.getByRole("button", { name: /^Mount / })).toBeVisible();
+  });
 });

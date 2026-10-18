@@ -15,7 +15,6 @@ import { AvMirrorControls } from "./AvMirrorControls";
 import { AvMirrorPreview } from "./AvMirrorPreview";
 import { AvSyncPanel } from "./AvSyncPanel";
 import { StreamStatsPanel } from "./StreamStatsPanel";
-import { HelperText } from "@/components/ui/HelperText";
 
 export interface LiveViewCardProps {
   /**
@@ -105,10 +104,6 @@ export function LiveViewCard({
       {anyLive && <StreamStatsPanel />}
 
       {showPreview && showAvSyncTests && <AvSyncPanel />}
-
-      <HelperText>
-        Hear{videoEnabled ? " and see" : ""} the running machine. Open Remote Input for the full zoomable screen.
-      </HelperText>
     </CollapsibleSection>
   );
 }

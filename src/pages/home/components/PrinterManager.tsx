@@ -31,7 +31,7 @@ import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { Switch } from "@/components/ui/switch";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { TelnetActionId } from "@/lib/telnet/telnetTypes";
 import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
@@ -43,7 +43,7 @@ const buildPrinterTelnetActions = (enabled: boolean) => {
         { actionId: "printerFlush", label: "Flush/Eject", loadingLabel: "Flushing…", testId: "home-printer-flush" },
         { actionId: "printerReset", label: "Reset", loadingLabel: "Resetting…", testId: "home-printer-telnet-reset" },
       ]
-    : [{ actionId: "printerTurnOn", label: "Turn On", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
+    : [{ actionId: "printerTurnOn", label: "Turn on", loadingLabel: "Turning on…", testId: "home-printer-turn-on" }];
 };
 
 interface PrinterManagerProps {
@@ -216,18 +216,15 @@ export function PrinterManager({
       <div className="space-y-2" data-testid="home-printer-group">
         <div className="bg-card border border-border rounded-panel p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
-            <Button
+            <p className="text-xs font-semibold text-primary">Printer</p>
+            <Switch
               ref={printerToggleFocusRef}
-              variant="outline"
-              size="sm"
-              onClick={() => void handleEnabledToggle("Printer", PRINTER_CONTROL_SPEC, printerEnabled)}
+              checked={printerEnabled}
+              onCheckedChange={() => void handleEnabledToggle("Printer", PRINTER_CONTROL_SPEC, printerEnabled)}
               disabled={!isConnected || printerEnabledPending}
               data-testid="home-printer-toggle"
-              className={cn("px-3 text-xs", getOnOffButtonClass(printerEnabled), "min-h-11 min-w-11")}
-            >
-              {printerEnabled ? "ON" : "OFF"}
-            </Button>
+              aria-label="Printer power"
+            />
           </div>
           <div
             className={cn(

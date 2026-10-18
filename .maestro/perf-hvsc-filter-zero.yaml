@@ -15,7 +15,7 @@ env:
     visible: "Playlist"
     timeout: ${LONG_TIMEOUT}
 - tapOn:
-    text: "Filter files..."
+    text: "Filter files"
 - eraseText
 - inputText: "xyzzy123"
 - waitForAnimationToEnd

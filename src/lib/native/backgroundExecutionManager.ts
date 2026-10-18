@@ -10,6 +10,7 @@ import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "@/lib/playback/playbackActivitySignal";
 import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroundExecution";
 import { getLifecycleState } from "@/lib/appLifecycle";
+import { getPlatform } from "@/lib/native/platform";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 
 type BackgroundExecutionLogContext = {
@@ -35,6 +36,38 @@ const keepPageAwake = (wanted: boolean) => {
     if (keepAliveWanted) startWebViewKeepAlive();
     else stopWebViewKeepAlive();
   });
+};
+
+/** Well inside the native liveness timeout (15 s), so one late tick does not mark the session paused. */
+export const BACKGROUND_HEARTBEAT_INTERVAL_MS = 5_000;
+
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let heartbeatFailureLogged = false;
+
+const sendHeartbeat = () => {
+  BackgroundExecution.heartbeat().then(
+    () => {
+      heartbeatFailureLogged = false;
+    },
+    (error: unknown) => {
+      if (heartbeatFailureLogged) return;
+      heartbeatFailureLogged = true;
+      addLog("warn", "Background execution heartbeat failed", { source: "background-execution", error: String(error) });
+    },
+  );
+};
+
+const stopHeartbeat = () => {
+  if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+};
+
+/** Only the Android service has a notification to keep honest; the beat is sent at once, then on a timer. */
+const startHeartbeat = () => {
+  stopHeartbeat();
+  if (getPlatform() !== "android") return;
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, BACKGROUND_HEARTBEAT_INTERVAL_MS);
 };
 
 const toError = (value: unknown) => (value instanceof Error ? value : new Error(String(value)));
@@ -92,7 +125,10 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
-  keepPageAwake(true);
+  if (!publishedPaused) {
+    keepPageAwake(true);
+    startHeartbeat();
+  }
   // The service is new and carries no metadata, and an update the page issued while this start was
   // in flight was dropped by the native side (metadata must never start a service on its own). So
   // this publish is not deduped against that dropped attempt.
@@ -109,6 +145,7 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   publishedPaused = false;
   currentNowPlaying = null;
   publishedNowPlaying = null;
+  stopHeartbeat();
   keepPageAwake(false);
   // A playlist that ends on its own stops only this service; audio kept for it while hidden must hear that.
   notifyPlaybackActivityChanged();
@@ -134,11 +171,15 @@ export const setBackgroundExecutionPaused = async (paused: boolean, logContext: 
   publishedPaused = paused;
   // Nothing has to run while paused, so the page may freeze as the native service may sleep.
   keepPageAwake(!paused);
+  if (paused) stopHeartbeat();
+  else startHeartbeat();
   try {
     await BackgroundExecution.setPlaybackState({ paused });
   } catch (error) {
     // A failed publish must stay retryable, or the dedupe above would swallow the next attempt.
     publishedPaused = previouslyPublished;
+    if (previouslyPublished) stopHeartbeat();
+    else startHeartbeat();
     addLog("error", "Background execution playback state update failed", buildFailureDetails(error, logContext));
     throw buildOperationError("playback-state", error);
   }
@@ -159,6 +200,7 @@ export const setBackgroundExecutionNowPlaying = async (
 };
 
 export const resetBackgroundExecutionState = () => {
+  stopHeartbeat();
   if (keepAliveWanted) keepPageAwake(false);
   activeCount = 0;
   publishedPaused = false;

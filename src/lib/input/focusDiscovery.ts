@@ -34,6 +34,7 @@ import {
   SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
   createDiscoveryScan,
+  createScanWarmer,
   sortIntoReadingOrder,
   discoverInteractiveElements,
   isFocusDisabled,
@@ -144,6 +145,8 @@ const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
 
 /** How long a return to an overlay's opener may wait for the opener to become enabled again. */
 const RETURN_TO_OPENER_WINDOW_MS = 5000;
+const WARM_SLICE_BUDGET_MS = 8;
+const MAX_WARM_RESTARTS = 3;
 
 const labellingElements = (element: Element): HTMLElement[] =>
   (element.getAttribute("aria-labelledby")?.split(/\s+/).filter(Boolean) ?? [])
@@ -191,6 +194,9 @@ const RING_STRUCTURE_SELECTOR = [
   "[data-slot-active]",
 ].join(",");
 
+const holdsOverlay = (node: Node): boolean =>
+  node instanceof Element && (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null);
+
 const holdsRingStructure = (node: Node): boolean =>
   node instanceof Element &&
   (node.matches(RING_STRUCTURE_SELECTOR) || node.querySelector(RING_STRUCTURE_SELECTOR) !== null);
@@ -208,6 +214,20 @@ const rewritesAttributeWithSameValue = (record: MutationRecord): boolean =>
   record.target instanceof Element &&
   record.oldValue === record.target.getAttribute(record.attributeName);
 
+/** Every element that has at least one of `elements` below it, found by climbing once from each. */
+const properAncestorsOf = (elements: Iterable<Element>): Set<Element> => {
+  const holding = new Set<Element>();
+  for (const element of elements) {
+    for (let node = element.parentElement; node && !holding.has(node); node = node.parentElement) holding.add(node);
+  }
+  return holding;
+};
+
+const hasAncestorIn = (element: Element, ancestors: ReadonlySet<Element>): boolean => {
+  for (let node = element.parentElement; node; node = node.parentElement) if (ancestors.has(node)) return true;
+  return false;
+};
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -216,7 +236,11 @@ export class FocusDiscoveryEngine {
   private readonly onSelectionMovedByScan?: (id: string) => void;
   private readonly doc: Document;
   private observer: MutationObserver | null = null;
+  /** Counts observed changes that can alter the ring, so measurements taken across one are discarded. */
+  private pageChangeCount = 0;
   private scheduled = false;
+  /** True while every change since the last scan only added content inside cards; see flushPendingRefresh. */
+  private staleTolerable = false;
   private started = false;
   private shimmed = new Set<HTMLElement>();
   private resolvers = new Map<string, () => HTMLElement | null>();
@@ -249,11 +273,7 @@ export class FocusDiscoveryEngine {
   }
 
   private addsAnOverlay(record: MutationRecord): boolean {
-    for (const node of record.addedNodes) {
-      if (!(node instanceof Element)) continue;
-      if (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null) return true;
-    }
-    return false;
+    return Array.from(record.addedNodes).some(holdsOverlay);
   }
 
   /** Attaches the observer and performs the first scan. Idempotent. */
@@ -267,7 +287,13 @@ export class FocusDiscoveryEngine {
           if (records.some((record) => this.relabelsCurrent(record))) this.onAfterAssemble?.();
           return;
         }
-        this.scheduleRefresh(records.some((record) => !isInsidePendingList(record.target)));
+        this.pageChangeCount += 1;
+        this.scheduleRefresh(
+          records.some((record) => !isInsidePendingList(record.target)),
+          records
+            .filter((record) => !this.cannotChangeRing(record))
+            .every((record) => this.onlyAddsContentToOpenSection(record)),
+        );
       });
       this.observer.observe(this.doc.body, {
         childList: true,
@@ -277,8 +303,13 @@ export class FocusDiscoveryEngine {
         attributeFilter: OBSERVED_ATTRIBUTES,
       });
     }
+    this.doc.defaultView?.addEventListener("resize", this.countPageChange);
     this.refresh();
   }
+
+  private readonly countPageChange = () => {
+    this.pageChangeCount += 1;
+  };
 
   /** Detaches the observer, removes every `tabindex` shim, and clears the ring. */
   stop(): void {
@@ -287,6 +318,7 @@ export class FocusDiscoveryEngine {
     this.scheduled = false;
     this.observer?.disconnect();
     this.observer = null;
+    this.doc.defaultView?.removeEventListener("resize", this.countPageChange);
     this.lastScope = null;
     this.pendingReturn = null;
     this.standingWhenRingEmptied = null;
@@ -297,6 +329,15 @@ export class FocusDiscoveryEngine {
     this.groupLabelElements = [];
     this.groupElements.clear();
     this.controller.clear();
+  }
+
+  /** A change to the children of a card inside the scanned scope that adds or removes no overlay. */
+  private onlyAddsContentToOpenSection(record: MutationRecord): boolean {
+    if (record.type !== "childList" || this.lastScope === null) return false;
+    const target = record.target;
+    if (!(target instanceof Element) || !this.lastScope.contains(target)) return false;
+    if (target.closest(SECTION_SCOPE_SELECTOR) === null) return false;
+    return !this.addsAnOverlay(record) && !Array.from(record.removedNodes).some(holdsOverlay);
   }
 
   private relabelsCurrent(record: MutationRecord): boolean {
@@ -343,12 +384,47 @@ export class FocusDiscoveryEngine {
    * only by a list still building its rows a few per task waits until the list is finished; any other
    * change, such as an overlay or a route change, is scanned after the next paint as before.
    */
-  scheduleRefresh(urgent = false): void {
-    if (!this.started || (this.scheduled && !urgent)) return;
+  scheduleRefresh(urgent = false, staleTolerable = false): void {
+    if (!this.started) return;
+    this.staleTolerable = this.scheduled ? this.staleTolerable && staleTolerable : staleTolerable;
+    if (this.scheduled && !urgent) return;
     this.scheduled = true;
     afterNextPaint(() =>
-      urgent ? this.flushPendingRefresh() : afterStagedRowsSettle(() => this.flushPendingRefresh()),
+      urgent
+        ? this.refreshInSlices(MAX_WARM_RESTARTS)
+        : afterStagedRowsSettle(() => this.refreshInSlices(MAX_WARM_RESTARTS)),
     );
+  }
+
+  /**
+   * Measures the page in slices of {@link WARM_SLICE_BUDGET_MS}, then scans once on the measurements. A key press
+   * between slices acts on the last ring, or runs the scan itself and ends the slicing. A change to the page
+   * while measuring discards the measurements; after {@link MAX_WARM_RESTARTS} discards the scan runs unwarmed.
+   */
+  private refreshInSlices(restartsLeft: number): void {
+    if (!this.scheduled || !this.started) return;
+    const scan = createDiscoveryScan();
+    const scope = resolveActiveScope(this.doc, scan);
+    if (scope.kind === "overlay" || restartsLeft <= 0) {
+      this.flushPendingRefresh();
+      return;
+    }
+    const warmer = createScanWarmer(scope.element, scan);
+    const generation = this.pageChangeCount;
+    const step = () => {
+      if (!this.scheduled || !this.started) return;
+      if (!warmer.step(WARM_SLICE_BUDGET_MS)) {
+        setTimeout(step, 0);
+        return;
+      }
+      if (generation !== this.pageChangeCount) {
+        this.refreshInSlices(restartsLeft - 1);
+        return;
+      }
+      this.scheduled = false;
+      this.refresh(scan);
+    };
+    step();
   }
 
   /** Re-scans now, for a caller that has just changed the DOM itself; any scheduled re-scan is dropped. */
@@ -357,11 +433,33 @@ export class FocusDiscoveryEngine {
     if (this.started) this.refresh();
   }
 
-  /** Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM. */
-  flushPendingRefresh(): void {
+  /**
+   * Runs a scheduled re-scan now, so a key never acts on a ring that is older than the DOM.
+   * `allowStaleRing` lets a key act on the last ring while the pending change only added content
+   * inside cards and every stop of that ring is still attached; the scheduled re-scan then runs after
+   * the next paint instead of inside the key press, where it cost 400 ms on the keypad handset.
+   */
+  flushPendingRefresh(options: { allowStaleRing?: boolean } = {}): void {
     if (!this.scheduled) return;
+    if (options.allowStaleRing && this.staleTolerable && this.everyStopIsAttached() && !this.standsOnLastSibling()) {
+      return;
+    }
     this.scheduled = false;
     if (this.started) this.refresh();
+  }
+
+  /** A key on the last known stop of its group would wrap past rows the pending change added after it. */
+  private standsOnLastSibling(): boolean {
+    const current = this.controller.current();
+    if (!current) return false;
+    const items = this.controller.list();
+    const at = items.findIndex((item) => item.id === current.id);
+    return !items.slice(at + 1).some((item) => (item.parentId ?? null) === (current.parentId ?? null));
+  }
+
+  private everyStopIsAttached(): boolean {
+    for (const resolve of this.resolvers.values()) if (!resolve()?.isConnected) return false;
+    return this.resolvers.size > 0;
   }
 
   /** The live DOM element for a ring id (explicit resolver or captured element). */
@@ -386,14 +484,15 @@ export class FocusDiscoveryEngine {
   }
 
   /** Re-scans the active scope and rebuilds the ring in one batch. */
-  refresh(): void {
+  refresh(warmedScan?: DiscoveryScan): void {
     if (!this.started) return;
+    this.staleTolerable = false;
     if (this.freezeDuringTransientLayer()) {
       this.observer?.takeRecords();
       this.onAfterAssemble?.();
       return;
     }
-    const scan = createDiscoveryScan();
+    const scan = warmedScan ?? createDiscoveryScan();
     const scope = resolveActiveScope(this.doc, scan);
     const previousScope = this.lastScope;
     const scopeChanged = previousScope !== scope.element;
@@ -568,6 +667,12 @@ export class FocusDiscoveryEngine {
     const discovered = discoverInteractiveElements(scopeEl, { excludeSubtrees, scan });
     const discoveredSet = new Set<HTMLElement>(discovered);
     const elements: HTMLElement[] = [...discovered];
+    const inRing = new Set<HTMLElement>(discovered);
+    const addToRing = (element: HTMLElement) => {
+      if (inRing.has(element)) return;
+      inRing.add(element);
+      elements.push(element);
+    };
 
     // The persistent tab bar is its own scope, appended after page content.
     const tabbar = scope.kind === "page" ? this.doc.querySelector(TABBAR_SCOPE_SELECTOR) : null;
@@ -581,8 +686,8 @@ export class FocusDiscoveryEngine {
       heldWhileDisabled !== null &&
       inScope(heldWhileDisabled) &&
       isFocusVisible(heldWhileDisabled, scan) &&
-      !isSkipped(heldWhileDisabled, scopeEl);
-    if (holdsDisabledSelection && !elements.includes(heldWhileDisabled)) elements.push(heldWhileDisabled);
+      !isSkipped(heldWhileDisabled, scopeEl, scan);
+    if (holdsDisabledSelection) addToRing(heldWhileDisabled);
 
     const registrationByElement = new Map<HTMLElement, ExplicitRegistration>();
     const groupElements = new Set<Element>();
@@ -595,12 +700,12 @@ export class FocusDiscoveryEngine {
         skipElements.add(element);
         continue;
       }
-      if (!inScope(element) || !isFocusVisible(element, scan) || isSkipped(element, scopeEl)) continue;
+      if (!inScope(element) || !isFocusVisible(element, scan) || isSkipped(element, scopeEl, scan)) continue;
       registrationByElement.set(element, registration);
       if (registration.descriptor.kind === "group") groupElements.add(element);
       // An explicitly-registered element that discovery missed (e.g. a non-
       // interactive group <div>) still joins the ring.
-      if (!elements.includes(element)) elements.push(element);
+      addToRing(element);
     }
     // Explicit `useFocusGroup` registrations captured above are always honoured.
     const explicitGroupElements = new Set<Element>(groupElements);
@@ -609,7 +714,7 @@ export class FocusDiscoveryEngine {
       ...Array.from(scopeEl.querySelectorAll(GROUP_CONTAINER_SELECTOR)),
     ].filter(
       (element): element is HTMLElement =>
-        element instanceof HTMLElement && isFocusVisible(element, scan) && !isSkipped(element, scopeEl),
+        element instanceof HTMLElement && isFocusVisible(element, scan) && !isSkipped(element, scopeEl, scan),
     );
     // A labelled container becomes a group only when it is the INNERMOST group
     // container — it must not contain another group container (explicit or
@@ -620,13 +725,11 @@ export class FocusDiscoveryEngine {
     // shallow — page → card → control — instead of page → section → card →
     // control. Explicit `useFocusGroup` nesting is left untouched (intentional).
     const groupCandidatePool = new Set<Element>([...explicitGroupElements, ...implicitGroupCandidates]);
+    const holdingAnotherGroupContainer = properAncestorsOf(groupCandidatePool);
     for (const element of implicitGroupCandidates) {
-      const containsAnotherGroupContainer = [...groupCandidatePool].some(
-        (other) => other !== element && element.contains(other),
-      );
-      if (containsAnotherGroupContainer) continue;
+      if (holdingAnotherGroupContainer.has(element)) continue;
       groupElements.add(element);
-      if (!elements.includes(element)) elements.push(element);
+      addToRing(element);
     }
 
     // The "field row" pattern: an explicit ITEM (not a group) that wraps
@@ -638,9 +741,9 @@ export class FocusDiscoveryEngine {
     const explicitItemContainers = [...registrationByElement.entries()]
       .filter(([, registration]) => registration.descriptor.kind !== "group")
       .map(([element]) => element);
+    const holdingExplicitItem = new Set<Element>(explicitItemContainers);
     const ownedByExplicitItem = (element: HTMLElement): boolean =>
-      !registrationByElement.has(element) &&
-      explicitItemContainers.some((container) => container !== element && container.contains(element));
+      !registrationByElement.has(element) && hasAncestorIn(element, holdingExplicitItem);
 
     // Sort the union into reading order, then drop groups that ended up empty and
     // non-interactive (a decorative container with no controls is not a ring stop).
@@ -671,6 +774,7 @@ export class FocusDiscoveryEngine {
       ...sortIntoReadingOrder(kept.filter(inTabbar), scan),
     ];
 
+    let holdingRingNode: Set<Element> | undefined;
     return ordered
       .map((element) => {
         const registration = registrationByElement.get(element);
@@ -686,7 +790,8 @@ export class FocusDiscoveryEngine {
       })
       .map((node, _index, all): RingNode | null => {
         if (!node.isGroup) return node;
-        if (all.some((other) => other !== node && node.element.contains(other.element))) return node;
+        holdingRingNode ??= properAncestorsOf(all.map((other) => other.element));
+        if (holdingRingNode.has(node.element)) return node;
         // A group with no in-scope descendant is either empty chrome, which is not a ring stop, or
         // a control that happens to carry a section label and has no interactive children of its
         // own. Dropping both took Home's System info button out of the ring entirely, with no key

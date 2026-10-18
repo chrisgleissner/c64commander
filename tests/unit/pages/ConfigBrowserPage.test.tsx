@@ -83,6 +83,7 @@ vi.mock("@/components/UnifiedHealthBadge", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  CONFIG_BROWSER_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: false },
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
     refetchOnMount: "always",
@@ -1605,11 +1606,16 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     await act(() => afterRingRescan());
     const resetButton = screen.getByRole("button", { name: /^reset$/i });
     const refreshButton = screen.getByRole("button", { name: /refresh/i });
+    expect(refreshButton).toHaveAccessibleName("Refresh");
+    expect(refreshButton).toHaveAccessibleDescription(/audio mixer/i);
     expect(focusContext.current?.engine.sourceForId("config-category-action-audio-mixer")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("config-refresh-audio-mixer")).toBe("dom+explicit");
 
     expect(focusContext.current?.engine.elementForId("config-category-action-audio-mixer")).toBe(resetButton);
     expect(focusContext.current?.engine.elementForId("config-refresh-audio-mixer")).toBe(refreshButton);
+    expect(refreshButton.closest('[data-testid="config-group-actions"]')).toBeNull();
+    expect(refreshButton).toHaveAccessibleName("Refresh");
+    expect(refreshButton).toHaveAttribute("title", "Refresh Audio Mixer");
   });
 
   it("center-activates Clock Settings' Sync clock group action", async () => {

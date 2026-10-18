@@ -27,6 +27,7 @@ export interface AvMirrorControlsProps {
   showAudio?: boolean;
   showVideo?: boolean;
   size?: "sm" | "default";
+  iconOnly?: boolean;
   session?: AvMirrorSession;
   className?: string;
 }
@@ -40,6 +41,7 @@ export function AvMirrorControls({
   showAudio = true,
   showVideo = true,
   size = "sm",
+  iconOnly = false,
   session,
   className,
 }: AvMirrorControlsProps) {
@@ -70,13 +72,20 @@ export function AvMirrorControls({
   // offered it rather than sent to check the C64 and the cable.
   const mismatch = video.senderMismatch ?? audio.senderMismatch;
 
+  const buttonSize = iconOnly ? "icon" : size;
+  const iconGap = iconOnly ? "" : "mr-1.5";
+  const audioLabel = audio.state === "connecting" ? "Connecting…" : audioLive ? "Listening" : "Listen";
+  const videoLabel = video.state === "connecting" ? "Connecting…" : videoLive ? "Watching" : "Watch";
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} data-testid="av-mirror-controls">
       {showAudio && (
         <Button
-          size={size}
+          size={buttonSize}
           variant={audioLive ? "default" : "outline"}
           aria-pressed={audioLive}
+          aria-label={iconOnly ? `Listen: ${audioLabel}` : undefined}
+          title={iconOnly ? audioLabel : undefined}
           onClick={() => {
             // The same question the Play page's "Listen on" asks, so it records the same answer.
             // Turning listening off here and having the next track switch it back on again is the
@@ -88,19 +97,21 @@ export function AvMirrorControls({
           data-state={audio.state}
         >
           {audioLive ? (
-            <Volume2 className="mr-1.5 h-4 w-4" aria-hidden />
+            <Volume2 className={cn(iconGap, "h-4 w-4")} aria-hidden />
           ) : (
-            <VolumeX className="mr-1.5 h-4 w-4" aria-hidden />
+            <VolumeX className={cn(iconGap, "h-4 w-4")} aria-hidden />
           )}
-          {audio.state === "connecting" ? "Connecting…" : audioLive ? "Listening" : "Listen"}
-          {audioLive && <LiveDot className="ml-1.5" />}
+          {iconOnly ? null : audioLabel}
+          {audioLive && <LiveDot className={iconOnly ? "ml-0.5" : "ml-1.5"} />}
         </Button>
       )}
       {showVideo && (
         <Button
-          size={size}
+          size={buttonSize}
           variant={videoLive ? "default" : "outline"}
           aria-pressed={videoLive}
+          aria-label={iconOnly ? `Watch: ${videoLabel}` : undefined}
+          title={iconOnly ? videoLabel : undefined}
           onClick={() => {
             // The same record Listen keeps, for the same reason: a C64 wired to a television
             // needs Watch turned off once, not at every Game Mode launch.
@@ -111,16 +122,20 @@ export function AvMirrorControls({
           data-state={video.state}
         >
           {videoLive ? (
-            <Tv className="mr-1.5 h-4 w-4" aria-hidden />
+            <Tv className={cn(iconGap, "h-4 w-4")} aria-hidden />
           ) : (
-            <TvMinimal className="mr-1.5 h-4 w-4" aria-hidden />
+            <TvMinimal className={cn(iconGap, "h-4 w-4")} aria-hidden />
           )}
-          {video.state === "connecting" ? "Connecting…" : videoLive ? "Watching" : "Watch"}
-          {videoLive && <LiveDot className="ml-1.5" />}
+          {iconOnly ? null : videoLabel}
+          {videoLive && <LiveDot className={iconOnly ? "ml-0.5" : "ml-1.5"} />}
         </Button>
       )}
       {error && (
-        <span role="alert" className="text-xs text-destructive" data-testid="av-mirror-error">
+        <span
+          role="alert"
+          className={cn("text-xs", video.reconnecting ? "text-warning" : "text-destructive")}
+          data-testid="av-mirror-error"
+        >
           {error}
         </span>
       )}

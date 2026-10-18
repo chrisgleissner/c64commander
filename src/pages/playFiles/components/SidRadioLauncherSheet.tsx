@@ -12,7 +12,14 @@ import { Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import type { StilCollectionId } from "@/lib/hvsc";
 import { sidRadioCollectionsFor } from "@/lib/sidRadio/stilCollectionCatalog";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
@@ -21,6 +28,8 @@ import {
   SID_RADIO_TASTE_UNLOCK_LIKES,
   isStylePopulated,
 } from "@/pages/playFiles/hooks/useSidRadio";
+import { readableSeedLabel } from "@/pages/playFiles/sidRadioSeedLabel";
+import { cn } from "@/lib/utils";
 
 export type SidRadioLauncherSheetProps = {
   open: boolean;
@@ -38,6 +47,8 @@ export type SidRadioLauncherSheetProps = {
    * entirely, because a mood on its own is what the style tiles below already offer.
    */
   songSeedLabel?: string | null;
+  /** False when the tune is not an HVSC tune, so no station can be built from it. Defaults to true. */
+  songSeedInHvsc?: boolean;
   /** The mood the active Song station is constrained to; `null` is all moods. */
   songStyleBit?: number | null;
   /** Start the Song station, or re-aim the active one, at this mood; `null` is all moods. */
@@ -89,6 +100,7 @@ export const SidRadioLauncherSheet = ({
   onSurprise,
   songSeedLabel = null,
   songStyleBit = null,
+  songSeedInHvsc = true,
   onStartSong,
   hvscMissing = false,
   onInstallHvsc,
@@ -109,106 +121,114 @@ export const SidRadioLauncherSheet = ({
   const close = () => onOpenChange(false);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="overflow-y-auto" data-testid="sid-radio-launcher-sheet">
-        <SheetHeader>
-          <SheetTitle>SID Radio</SheetTitle>
-          <SheetDescription>
-            Endless stations of SIDs — pick a mood, your taste, or a collection from the HVSC tune notes.
-          </SheetDescription>
-        </SheetHeader>
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="sid-radio-launcher-sheet">
+        <AppSheetHeader>
+          <AppSheetTitle>SID Radio</AppSheetTitle>
+          <AppSheetDescription>Endless stations: pick a mood, your taste or a collection.</AppSheetDescription>
+        </AppSheetHeader>
 
-        <div className="flex flex-col gap-4 pt-3">
-          {hvscMissing ? (
-            <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-              {/* Focusable so the keypad ring lands on the reason before the disabled stations. */}
-              <p role="note" tabIndex={0} className="min-h-11 text-base" data-testid="sid-radio-needs-hvsc">
-                SID Radio plays tunes from the HVSC music collection, and none is installed yet. Install HVSC, then any
-                station will play.
-              </p>
-              {onInstallHvsc ? (
-                <Button
-                  type="button"
-                  data-testid="sid-radio-install-hvsc"
-                  onClick={() => {
-                    close();
-                    onInstallHvsc();
-                  }}
-                >
-                  Install HVSC
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-          {songSeedLabel && onStartSong ? (
-            <div className="flex flex-col gap-2" data-testid="sid-radio-song-section">
-              <Label className="font-medium">Similar to {songSeedLabel}</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {songMoodOptions.map((option) => {
-                  // A mood with no members admits nothing, so the intersection with any seed is
-                  // empty before the walk starts — the same reason the style tiles disable it.
-                  const populated = option.key === null || isStylePopulated(stylePopulations, option.key);
-                  const selected = songStyleBit === option.bit;
-                  return (
-                    <Button
-                      key={option.key ?? "all"}
-                      type="button"
-                      size="sm"
-                      variant={selected ? "default" : "outline"}
-                      className="h-auto whitespace-normal py-1.5 text-xs"
-                      data-testid={`sid-radio-song-mood-${option.bit ?? "all"}`}
-                      aria-pressed={selected}
-                      disabled={hvscMissing || !populated}
-                      onClick={() => {
-                        close();
-                        onStartSong(option.bit);
-                      }}
-                    >
-                      {option.label}
-                    </Button>
-                  );
-                })}
+        <AppSheetBody className="px-3 pt-3 pb-[calc(0.75rem+var(--safe-area-inset-bottom))]">
+          <div className="flex flex-col gap-4">
+            {hvscMissing ? (
+              <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+                {/* Focusable so the keypad ring lands on the reason before the disabled stations. */}
+                <p role="note" tabIndex={0} className="min-h-11 text-base" data-testid="sid-radio-needs-hvsc">
+                  SID Radio plays tunes from the HVSC music collection, and none is installed yet. Install HVSC, then
+                  any station will play.
+                </p>
+                {onInstallHvsc ? (
+                  <Button
+                    type="button"
+                    data-testid="sid-radio-install-hvsc"
+                    onClick={() => {
+                      close();
+                      onInstallHvsc();
+                    }}
+                  >
+                    Install HVSC
+                  </Button>
+                ) : null}
               </div>
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-0.5">
-            <h3 className="text-base font-medium">Moods</h3>
-            <p className="text-base text-muted-foreground">Tunes that sound like the mood you pick.</p>
-          </div>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <Checkbox
-              data-testid="sid-radio-likes-toggle"
-              disabled={hvscMissing}
-              checked={fromLikes}
-              onCheckedChange={(value) => setFromLikes(value === true)}
-            />
-            <Label className="font-medium">Based on my likes</Label>
-          </label>
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {SID_RADIO_STYLE_TILES.map((tile) => {
-              const population = stylePopulations?.[tile.key];
-              const populated = isStylePopulated(stylePopulations, tile.key);
-              return (
-                <Button
-                  key={tile.bit}
-                  type="button"
-                  variant="outline"
-                  // `px-2` rather than the button default `px-4`: two columns at 320px leave each
-                  // tile a 108px content box, and "Experimental" is 113px, so the global
-                  // `overflow-wrap: anywhere` in `index.css` split it after "Experiment".
-                  className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
-                  data-testid={`sid-radio-style-${tile.bit}`}
-                  disabled={hvscMissing || !populated}
-                  onClick={() => {
-                    close();
-                    onStartStyle(tile.bit, tile.label, fromLikes);
-                  }}
+            ) : null}
+            {songSeedLabel && onStartSong ? (
+              <div
+                className="flex flex-col gap-2 rounded-md border border-primary/40 p-3"
+                data-testid="sid-radio-song-section"
+              >
+                <h3 className="text-sm font-semibold">Similar to {readableSeedLabel(songSeedLabel)}</h3>
+                <p
+                  className={cn("text-xs text-muted-foreground", !songSeedInHvsc && "flex min-h-11 items-center")}
+                  data-testid="sid-radio-song-hint"
+                  tabIndex={songSeedInHvsc ? undefined : 0}
                 >
-                  <span className="text-sm font-medium">{tile.label}</span>
-                  <span className="text-xs text-muted-foreground">{tile.blurb}</span>
-                  {/* No track count.
+                  {songSeedInHvsc
+                    ? "Start a station from this tune, then pick a mood."
+                    : "This tune is not in HVSC, so no station can be built from it."}
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {songMoodOptions.map((option) => {
+                    // A mood with no members admits nothing, so the intersection with any seed is
+                    // empty before the walk starts — the same reason the style tiles disable it.
+                    const populated = option.key === null || isStylePopulated(stylePopulations, option.key);
+                    const selected = songStyleBit === option.bit;
+                    return (
+                      <Button
+                        key={option.key ?? "all"}
+                        type="button"
+                        size="sm"
+                        variant={selected ? "default" : "outline"}
+                        className="h-auto whitespace-normal py-1.5 text-xs"
+                        data-testid={`sid-radio-song-mood-${option.bit ?? "all"}`}
+                        aria-pressed={selected}
+                        disabled={hvscMissing || !populated || !songSeedInHvsc}
+                        onClick={() => {
+                          close();
+                          onStartSong(option.bit);
+                        }}
+                      >
+                        {option.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <h3 className="text-sm font-semibold">Moods</h3>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <Checkbox
+                data-testid="sid-radio-likes-toggle"
+                disabled={hvscMissing}
+                checked={fromLikes}
+                onCheckedChange={(value) => setFromLikes(value === true)}
+              />
+              <Label className="font-medium">Based on my likes</Label>
+            </label>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {SID_RADIO_STYLE_TILES.map((tile) => {
+                const population = stylePopulations?.[tile.key];
+                const populated = isStylePopulated(stylePopulations, tile.key);
+                return (
+                  <Button
+                    key={tile.bit}
+                    type="button"
+                    variant="outline"
+                    // `px-2` rather than the button default `px-4`: two columns at 320px leave each
+                    // tile a 108px content box, and "Experimental" is 113px, so the global
+                    // `overflow-wrap: anywhere` in `index.css` split it after "Experiment".
+                    className="h-auto flex-col items-start justify-start gap-0.5 whitespace-normal px-2 py-2 text-left"
+                    data-testid={`sid-radio-style-${tile.bit}`}
+                    disabled={hvscMissing || !populated}
+                    onClick={() => {
+                      close();
+                      onStartStyle(tile.bit, tile.label, fromLikes);
+                    }}
+                  >
+                    <span className="text-sm font-medium">{tile.label}</span>
+                    <span className="text-xs text-muted-foreground">{tile.blurb}</span>
+                    {/* No track count.
                       Every mood draws on tens of thousands of tunes and the numbers
                       sat within a few per cent of each other, so the figure told a
                       listener nothing about which mood to pick — it only added a
@@ -217,92 +237,88 @@ export const SidRadioLauncherSheet = ({
                       see `assertStylePopulations` in `scripts/fetch-sidcorr.mjs`.
                       The empty state is still spelled out, because a greyed tile
                       with no explanation is worse than one with a reason. */}
-                  {population !== undefined && !populated ? (
-                    <span className="text-xs text-muted-foreground" data-testid={`sid-radio-style-${tile.bit}-size`}>
-                      None in this release
-                    </span>
-                  ) : null}
-                </Button>
-              );
-            })}
-          </div>
-
-          {onStartCollection ? (
-            <div className="flex flex-col gap-2" data-testid="sid-radio-collections">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-base font-medium">Collections</h3>
-                <p className="text-base text-muted-foreground">
-                  Only tunes from the collection, as listed in the HVSC tune notes.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {sidRadioCollectionsFor(today ?? new Date()).map((collection) => {
-                  const count = collectionCounts?.[collection.id];
-                  const empty = count === 0;
-                  return (
-                    <Button
-                      key={collection.id}
-                      type="button"
-                      variant="outline"
-                      className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
-                      data-testid={`sid-radio-collection-${collection.id}`}
-                      disabled={hvscMissing || empty}
-                      onClick={() => {
-                        close();
-                        onStartCollection(collection.id);
-                      }}
-                    >
-                      <span className="text-sm font-medium">{collection.label}</span>
-                      <span className="text-xs text-muted-foreground">{collection.blurb}</span>
-                      {count !== undefined ? (
-                        <span
-                          className="text-xs text-muted-foreground"
-                          data-testid={`sid-radio-collection-${collection.id}-size`}
-                        >
-                          {empty ? "None installed" : `${count.toLocaleString("en-US")} tunes`}
-                        </span>
-                      ) : null}
-                    </Button>
-                  );
-                })}
-              </div>
+                    {population !== undefined && !populated ? (
+                      <span className="text-xs text-muted-foreground" data-testid={`sid-radio-style-${tile.bit}-size`}>
+                        None in this release
+                      </span>
+                    ) : null}
+                  </Button>
+                );
+              })}
             </div>
-          ) : null}
 
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              data-testid="sid-radio-taste"
-              disabled={hvscMissing || !tasteUnlocked}
-              onClick={() => {
-                close();
-                onStartTaste();
-              }}
-            >
-              From tunes you like
-            </Button>
-            {!tasteUnlocked ? (
-              <p className="text-xs text-muted-foreground" data-testid="sid-radio-taste-hint">
-                Like a few tunes to unlock ({likeCount}/{SID_RADIO_TASTE_UNLOCK_LIKES}).
-              </p>
+            {onStartCollection ? (
+              <div className="flex flex-col gap-2" data-testid="sid-radio-collections">
+                <h3 className="text-sm font-semibold">Collections</h3>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {sidRadioCollectionsFor(today ?? new Date()).map((collection) => {
+                    const count = collectionCounts?.[collection.id];
+                    const empty = count === 0;
+                    return (
+                      <Button
+                        key={collection.id}
+                        type="button"
+                        variant="outline"
+                        className="h-auto flex-col items-start justify-start gap-0.5 whitespace-normal px-2 py-2 text-left"
+                        data-testid={`sid-radio-collection-${collection.id}`}
+                        disabled={hvscMissing || empty}
+                        onClick={() => {
+                          close();
+                          onStartCollection(collection.id);
+                        }}
+                      >
+                        <span className="text-sm font-medium">{collection.label}</span>
+                        <span className="text-xs text-muted-foreground">{collection.blurb}</span>
+                        {count !== undefined ? (
+                          <span
+                            className="text-xs text-muted-foreground"
+                            data-testid={`sid-radio-collection-${collection.id}-size`}
+                          >
+                            {empty ? "None installed" : `${count.toLocaleString("en-US")} tunes`}
+                          </span>
+                        ) : null}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
             ) : null}
 
-            <Button
-              type="button"
-              variant="ghost"
-              data-testid="sid-radio-surprise"
-              disabled={hvscMissing}
-              onClick={() => {
-                close();
-                onSurprise();
-              }}
-            >
-              <Shuffle className="mr-1.5 h-4 w-4" /> Surprise me
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                data-testid="sid-radio-taste"
+                disabled={hvscMissing || !tasteUnlocked}
+                onClick={() => {
+                  close();
+                  onStartTaste();
+                }}
+              >
+                From tunes you like
+              </Button>
+              {!tasteUnlocked ? (
+                <p className="text-xs text-muted-foreground" data-testid="sid-radio-taste-hint">
+                  Like a few tunes to unlock ({likeCount}/{SID_RADIO_TASTE_UNLOCK_LIKES}).
+                </p>
+              ) : null}
+
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="sid-radio-surprise"
+                disabled={hvscMissing}
+                onClick={() => {
+                  close();
+                  onSurprise();
+                }}
+              >
+                <Shuffle className="mr-1.5 h-4 w-4" /> Surprise me
+              </Button>
+            </div>
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </AppSheetBody>
+      </AppSheetContent>
+    </AppSheet>
   );
 };

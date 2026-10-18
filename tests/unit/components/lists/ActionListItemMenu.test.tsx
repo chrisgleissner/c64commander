@@ -9,7 +9,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { groupItemMenuEntries } from "@/components/lists/ActionListItemMenu";
+import { groupItemMenuEntries, orderActionsFirst } from "@/components/lists/ActionListItemMenu";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
@@ -82,6 +82,29 @@ describe("groupItemMenuEntries", () => {
   });
 });
 
+describe("orderActionsFirst", () => {
+  it("moves actions ahead of every details block and keeps the details together", () => {
+    const ordered = orderActionsFirst(buildItem().menuItems!);
+    expect(
+      ordered.map((entry) => (entry.type === "action" || entry.type === "label" ? entry.label : entry.type)),
+    ).toEqual([
+      "Review playback config",
+      "Attach local .cfg",
+      "separator",
+      "Details",
+      "info",
+      "info",
+      "separator",
+      "Config",
+      "info",
+    ]);
+  });
+
+  it("adds no leading separator when there are no actions", () => {
+    expect(orderActionsFirst([{ type: "info", label: "Type", value: "SID" }])[0]).toMatchObject({ type: "info" });
+  });
+});
+
 describe("a list row's item actions on the compact profile", () => {
   it("open as a sheet titled with the item's name rather than as a menu", async () => {
     renderList(buildItem(), 320);
@@ -104,13 +127,45 @@ describe("a list row's item actions on the compact profile", () => {
     expect(sheet.getByRole("button", { name: "Attach local .cfg" })).toBeInTheDocument();
   });
 
-  it("make each details block a stop the keypad can step to, and open on the first", async () => {
+  it("list the actions before the details so a short sheet shows them without scrolling", async () => {
     renderList(buildItem(), 320);
     const sheet = await openSheet();
-    const [details, config] = sheet.getAllByTestId("action-list-item-sheet-details");
-    expect(details).toHaveAttribute("tabindex", "0");
-    expect(config).toHaveAttribute("tabindex", "0");
-    await waitFor(() => expect(details).toHaveFocus());
+    const action = sheet.getByRole("button", { name: "Review playback config" });
+    const details = sheet.getAllByTestId("action-list-item-sheet-details")[0];
+    expect(action.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("make each detail row a stop the keypad can step to", async () => {
+    renderList(buildItem(), 320);
+    const sheet = await openSheet();
+    const rows = sheet.getAllByTestId("action-list-item-sheet-detail-row");
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(row).toHaveAttribute("tabindex", "0");
+  });
+
+  it("open on the play button, the first control shown, not on the first menu action below it", async () => {
+    renderList(buildItem(), 320);
+    const sheet = await openSheet();
+    await waitFor(() => expect(sheet.getByTestId("action-list-item-sheet-primary")).toHaveFocus());
+  });
+
+  it("open on the first action when the play button is unavailable", async () => {
+    renderList(buildItem({ isDimmed: true }), 320);
+    const sheet = await openSheet();
+    await waitFor(() => expect(sheet.getByRole("button", { name: "Review playback config" })).toHaveFocus());
+  });
+
+  it("open on the first detail row when the item has neither a play button nor actions", async () => {
+    const item = buildItem({
+      onAction: undefined,
+      menuItems: [
+        { type: "label", label: "Details" },
+        { type: "info", label: "Type", value: "SID music" },
+      ],
+    });
+    renderList(item, 320);
+    const sheet = await openSheet();
+    await waitFor(() => expect(sheet.getByTestId("action-list-item-sheet-detail-row")).toHaveFocus());
   });
 
   it("play the item from the sheet in one press, and close the sheet", async () => {
@@ -169,5 +224,9 @@ describe("a list row's item actions on larger profiles", () => {
     });
     expect(screen.queryByTestId("action-list-item-sheet")).not.toBeInTheDocument();
     expect(document.body.textContent).toContain("Review playback config");
+    const items = screen.getAllByRole("menuitem").map((entry) => entry.textContent ?? "");
+    expect(items.findIndex((text) => text.includes("Review playback config"))).toBeLessThan(
+      items.findIndex((text) => text.startsWith("Type")),
+    );
   });
 });

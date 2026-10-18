@@ -8,13 +8,13 @@
 
 import { Disc, Gamepad2, Keyboard as KeyboardIcon, MonitorPlay, Save, Sliders } from "lucide-react";
 import { appDeviceName, isKeypadEdition } from "@/lib/docs/deviceNames";
-import { backKeyName } from "@/lib/docs/guide/keyNames";
+import { backKeyName, menuKeyName } from "@/lib/docs/guide/keyNames";
 import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/types";
 
 export const diskChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
   id: "disks",
   title: "Mount and run a disk",
-  navLabel: "Disks",
+  navLabel: "Mount a disk",
   icon: Disc,
   blocks: [
     {
@@ -79,7 +79,7 @@ export const remoteInputChapter = ({ variantId }: GuideContext): GuideChapter =>
     {
       kind: "steps",
       items: [
-        "On **Home**, choose **Input** in **Quick Actions**. On **Play**, choose **Remote Input** while something plays.",
+        "On **Home**, choose **Input** in **Quick actions**. On **Play**, choose **Remote Input** while something plays.",
         "Choose **Keys** at the top for the C64 keyboard, with its SHIFT, CTRL, C= and function keys.",
         "Tap a modifier once to apply it to the next key, or hold it while you press another.",
         "Choose **Release all** at any time to let go of every key.",
@@ -97,8 +97,8 @@ export const remoteInputChapter = ({ variantId }: GuideContext): GuideChapter =>
               { key: "`#`", action: "Switch between letters and digits" },
               { key: "OK", action: "RETURN" },
               { key: "D-pad", action: "The cursor keys" },
-              { key: "Right Soft Key", action: "Delete" },
-              { key: "Left Soft Key", action: "The menu, with **Close Remote Input**" },
+              { key: menuKeyName(variantId), action: "Delete" },
+              { key: backKeyName(variantId), action: "The menu, with **Close Remote Input**" },
             ],
           } satisfies GuideBlock,
         ]
@@ -127,8 +127,8 @@ export const gameModeChapter = ({ variantId }: GuideContext): GuideChapter => {
         items: [
           "Start a game on **Play**.",
           keypad
-            ? "Game Mode opens by itself while Settings → **Play and Disk** → **Enter Game Mode when a game starts** is on. Otherwise press `0`, or choose **Game** in Home's **Quick Actions**."
-            : "Press `0`, choose **Game** in Home's **Quick Actions**, or **Game Mode** on **Play**.",
+            ? "Game Mode opens by itself while Settings → **Play and disk** → **Enter Game Mode when a game starts** is on. Otherwise press `0`, or choose **Game** in Home's **Quick actions**."
+            : "Press `0`, choose **Game** in Home's **Quick actions**, or **Game Mode** on **Play**.",
           "Steer with the number keys or the D-pad, and fire as shown below.",
           "Press `#` to show or hide RETURN, SPACE, the other quick keys, and **Watch** and **Listen**.",
           `Press the ${backKeyName(variantId)} to leave. Everything you held is let go.`,
@@ -159,7 +159,7 @@ export const gameModeChapter = ({ variantId }: GuideContext): GuideChapter => {
       },
       {
         kind: "text",
-        text: "Settings → **Play and Disk** → **Joystick keys** offers **Diamond (8-centered)**, **Classic T9** and **Custom**.",
+        text: "Settings → **Play and disk** → **Joystick keys** offers **Diamond (8-centered)**, **Classic T9** and **Custom**.",
       },
     ],
   };
@@ -178,7 +178,7 @@ export const liveViewChapter = ({ variantId }: GuideContext): GuideChapter => ({
     {
       kind: "steps",
       items: [
-        "On **Home**, choose **Live** in **Quick Actions**, or open the **Live View** card below them.",
+        "On **Home**, choose **Live** in **Quick actions**, or open the **Live View** card below them.",
         "Choose **Watch** for the picture, **Listen** for the sound, or both.",
         "Choose the chevron beside the preview to make it bigger.",
         "For the full screen you can zoom, open **Remote Input** while **Watch** is on.",
@@ -209,7 +209,7 @@ export const liveViewChapter = ({ variantId }: GuideContext): GuideChapter => ({
 export const configChapter = (): GuideChapter => ({
   id: "config",
   title: "Change a setting in Config",
-  navLabel: "Config",
+  navLabel: "Change a setting",
   icon: Sliders,
   blocks: [
     {
@@ -275,8 +275,8 @@ export const saveRestoreChapter = ({ variantId, flags }: GuideContext): GuideCha
             kind: "steps",
             heading: "Save the C64's memory",
             items: [
-              "On **Home**, choose **Backup** in **Quick Actions**.",
-              "Choose what to keep. **Program Snapshot** suits most programs.",
+              "On **Home**, choose **Backup** in **Quick actions**.",
+              "Choose what to keep. **Program snapshot** suits most programs.",
               `Later, choose **Restore**, pick the snapshot, and confirm with **Restore**. Snapshots stay on your ${appDeviceName(variantId)}.`,
             ],
           } satisfies GuideBlock,

@@ -19,7 +19,7 @@ type Props = {
   onBack: () => void;
 };
 
-type LoadState = "idle" | "loading" | "done" | "error";
+type LoadState = "idle" | "loading" | "done" | "error" | "unavailable";
 
 export function ConfigDriftView({ onBack }: Props) {
   const [state, setState] = useState<LoadState>("idle");
@@ -30,7 +30,7 @@ export function ConfigDriftView({ onBack }: Props) {
     try {
       const r = await computeConfigDrift();
       setResult(r);
-      setState(r.error ? "error" : "done");
+      setState(r.unavailable ? "unavailable" : r.error ? "error" : "done");
     } catch (error) {
       setResult({
         timestamp: new Date().toISOString(),
@@ -68,10 +68,7 @@ export function ConfigDriftView({ onBack }: Props) {
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">Config drift</h3>
-          <p className="text-xs text-muted-foreground">Compares runtime vs saved config.</p>
-        </div>
+        <p className="min-w-0 text-xs text-muted-foreground">Compares runtime vs saved config.</p>
         <Button
           size="sm"
           variant="ghost"
@@ -88,6 +85,12 @@ export function ConfigDriftView({ onBack }: Props) {
       {state === "loading" && (
         <p className="text-xs text-muted-foreground" data-testid="config-drift-loading">
           Comparing runtime and persisted config…
+        </p>
+      )}
+
+      {state === "unavailable" && (
+        <p className="text-xs text-muted-foreground" data-testid="config-drift-unavailable">
+          {result?.error}
         </p>
       )}
 

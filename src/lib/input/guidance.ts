@@ -29,6 +29,7 @@
 import type { InputModality } from "./inputModality";
 import { selectorPresence } from "./selectorPresence";
 import { READING_STOP_ATTR } from "./discovery";
+import { getKeyLabels } from "@/lib/variant/keyLabels";
 
 /** What the current ring item is, for choosing the OK-key label. */
 export type FocusKind =
@@ -37,6 +38,7 @@ export type FocusKind =
   | "expand"
   | "collapse"
   | "link"
+  | "menu"
   | "field"
   | "select"
   | "switch"
@@ -55,6 +57,8 @@ export interface GuidanceState {
   readonly hasCurrent: boolean;
   /** Classification of the current item (group / control type). */
   readonly currentKind: FocusKind;
+  /** The current control's own OK-key verb ({@link CENTER_VERB_ATTR}), which wins over its kind's label. */
+  readonly centerVerb?: string | null;
   /** Root→current scope labels, e.g. `["Audio Mixer", "Volume"]`. */
   readonly breadcrumb: readonly string[];
   /** True when the ring is at the top level (no parent scope to ascend to). */
@@ -83,7 +87,7 @@ export interface GuidanceLabels {
   readonly breadcrumb: readonly string[];
   /** Left soft key — Back / Exit / Close / Done depending on the back chain. */
   readonly left: string;
-  /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Activate, or null. */
+  /** Center / OK key — Open / Edit / Select / Toggle / Adjust / Press, or null. */
   readonly center: string | null;
   /** Right soft key — "Delete" in a T9 field with text, "Menu" when a context menu exists, else hidden (null). */
   readonly right: string | null;
@@ -94,18 +98,38 @@ export interface GuidanceLabels {
 /** OK-key label per control kind (CONFIRMED DECISION 3). */
 const CENTER_LABEL_BY_KIND: Record<FocusKind, string> = {
   group: "Open",
-  button: "Activate",
+  button: "Press",
   expand: "Expand",
   collapse: "Collapse",
   link: "Open",
+  menu: "Open menu",
   field: "Edit",
   select: "Select",
   switch: "Toggle",
   slider: "Adjust",
-  tab: "Switch",
+  tab: "Open",
   status: "",
   none: "",
 };
+
+/** Every word the OK key can read on a control, in the order the guides list them. */
+export const OK_KEY_WORDS: readonly string[] = [
+  "Open",
+  "Press",
+  "Edit",
+  "Select",
+  "Toggle",
+  "Adjust",
+  "Expand",
+  "Collapse",
+  "Open menu",
+];
+
+/** What OK reads on a control of no kind the table above names, so the key never shows without a word. */
+const GENERIC_CENTER_LABEL = "Press";
+
+/** Set on a control whose OK-key label is a verb of its own, such as a seek bar that Left/Right moves. */
+export const CENTER_VERB_ATTR = "data-key-nav-verb";
 
 /** The compact 480×640 profile only has room for the last few breadcrumb segments. */
 export const MAX_BREADCRUMB_SEGMENTS = 3;
@@ -134,12 +158,28 @@ export const resolveSoftKeyMenuOverlayLabels = (
   visible: boolean,
   overlayTitle: string | null,
   menuKey: SoftKeyMenuKey,
-): GuidanceLabels => ({
+): GuidanceLabels => {
+  const words = getKeyLabels();
+  return {
+    visible,
+    breadcrumb: overlayTitle ? [overlayTitle] : [],
+    left: menuKey === "back" ? words.menuWord : words.closeWord,
+    center: menuKey === "back" ? "Return" : null,
+    right: menuKey === "back" ? words.deleteWord : words.menuWord,
+    shortcut: null,
+  };
+};
+
+/** Set on the search overlay, which handles its own keys: Up and Down pick a result, OK opens it, Back closes. */
+export const SEARCH_OVERLAY_ATTR = "data-key-nav-search-overlay";
+
+/** PURE: the labels while the search overlay is up. */
+export const resolveSearchOverlayLabels = (visible: boolean): GuidanceLabels => ({
   visible,
-  breadcrumb: overlayTitle ? [overlayTitle] : [],
-  left: menuKey === "back" ? "Menu" : "Close",
-  center: menuKey === "back" ? "Return" : null,
-  right: menuKey === "back" ? "Delete" : "Menu",
+  breadcrumb: ["Search"],
+  left: getKeyLabels().closeWord,
+  center: "Open",
+  right: null,
   shortcut: null,
 });
 
@@ -151,7 +191,7 @@ export const resolveSoftKeyMenuPanelLabels = (
 ): GuidanceLabels => ({
   visible,
   breadcrumb: [menuTitle, entryLabel].filter((segment): segment is string => Boolean(segment)),
-  left: "Close",
+  left: getKeyLabels().closeWord,
   center: "Select",
   right: null,
   shortcut: null,
@@ -171,21 +211,22 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   const visible = state.enabled && state.modality === "key-navigation";
   const breadcrumb = state.breadcrumb.slice(-MAX_BREADCRUMB_SEGMENTS);
 
+  const words = getKeyLabels();
   let left: string;
-  if (state.layerOpen) left = "Close";
+  if (state.layerOpen) left = words.closeWord;
   else if (state.fieldEngaged) left = "Done";
   else if (!state.atRoot) left = "Exit";
-  else left = "Back";
+  else left = words.backWord;
 
   let center: string | null;
   if (state.layerOpen) center = "Select";
   else if (state.fieldEngaged) center = "Done";
   else if (!state.hasCurrent || state.currentKind === "status") center = null;
-  else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
+  else center = state.centerVerb || CENTER_LABEL_BY_KIND[state.currentKind] || GENERIC_CENTER_LABEL;
 
   let right: string | null = null;
-  if (state.fieldDeletes) right = "Delete";
-  else if (state.hasMenu) right = "Menu";
+  if (state.fieldDeletes) right = words.deleteWord;
+  else if (state.hasMenu) right = words.menuWord;
   const shortcut = state.gameModeShortcut ? "Game Mode" : null;
 
   return { visible, breadcrumb, left, center, right, shortcut };
@@ -215,6 +256,10 @@ export const classifyFocusKind = (element: Element | null, isGroup: boolean): Fo
   )
     return "switch";
   if (role === "combobox" || element.getAttribute("aria-haspopup") === "listbox") return "select";
+  const popup = element.getAttribute("aria-haspopup");
+  if (popup === "menu" || popup === "true") return "menu";
+  if (popup === "dialog") return "link";
+  if (element.getAttribute("aria-pressed") !== null) return "switch";
   if (tag === "SELECT") return "select";
   if (tag === "INPUT") {
     const type = (element as HTMLInputElement).type;
@@ -246,7 +291,7 @@ const tidyLabel = (raw: string): string => {
  * Key caps and hidden glyphs are lines of their own in a flex row and never the control's name:
  * the Quick menu's "6 Docs" entry read "6", and its close button read "×".
  */
-const renderedFirstLine = (element: Element): string | null => {
+const firstLineOf = (element: Element): string | null => {
   const rendered = element instanceof HTMLElement ? element.innerText : undefined;
   const text = typeof rendered === "string" ? rendered : element.textContent;
   const decorations = new Set(
@@ -256,6 +301,21 @@ const renderedFirstLine = (element: Element): string | null => {
   return (
     lines.find((line) => line.length > 0 && !decorations.has(line)) ?? lines.find((line) => line.length > 0) ?? null
   );
+};
+
+/*
+ * `innerText` lays the page out, and the bar asks for the selected control's name after every ring scan. A scan
+ * that finds the same text under the same element reuses the answer: 91 ms on the keypad phone for a tall card.
+ */
+const firstLineCache = new WeakMap<Element, { content: string; line: string | null }>();
+
+const renderedFirstLine = (element: Element): string | null => {
+  const content = `${element.ownerDocument.documentElement.dataset.displayProfile ?? ""}|${element.textContent ?? ""}`;
+  const cached = firstLineCache.get(element);
+  if (cached?.content === content) return cached.line;
+  const line = firstLineOf(element);
+  firstLineCache.set(element, { content, line });
+  return line;
 };
 
 const nonBlank = (value: string | null | undefined): string | null => (value && value.trim() ? value : null);

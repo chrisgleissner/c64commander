@@ -301,7 +301,7 @@ export function LightingSummaryCard({
       data-section-label={sectionLabel}
       data-testid={`${testIdPrefix}-summary`}
     >
-      <p className="text-xs font-semibold text-primary uppercase tracking-wider">{sectionLabel}</p>
+      <p className="text-xs font-semibold text-primary">{sectionLabel}</p>
       <div className="space-y-2 text-xs">
         <div className="inline-summary-label-value-pair flex flex-wrap items-center justify-between gap-2">
           <span id={`${labelId}-mode`} className="text-muted-foreground">

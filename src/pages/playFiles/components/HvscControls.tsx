@@ -43,6 +43,8 @@ export type HvscControlsProps = {
   hvscStageTotal?: number | null;
   hvscPreparationFailedPhase?: HvscPreparationPhase;
   hvscPreparationThroughputLabel: string | null;
+  /** Ready to use, with the pass that reads every tune again still running. */
+  hvscAnalyzing?: boolean;
   hvscPreparationErrorReason: string | null;
   hvscReadySongCount: number;
   hvscSummaryFilesExtracted?: number | null;
@@ -75,6 +77,7 @@ export const HvscControls = ({
   hvscStageTotal = null,
   hvscPreparationFailedPhase = null,
   hvscPreparationThroughputLabel,
+  hvscAnalyzing = false,
   hvscPreparationErrorReason,
   hvscReadySongCount,
   hvscSummaryFilesExtracted,
@@ -95,6 +98,10 @@ export const HvscControls = ({
   const isReady = hvscPreparationState === "READY";
   const isError = hvscPreparationState === "ERROR";
   const working = hvscPreparationState !== "NOT_PRESENT" && hvscPreparationState !== "READY";
+  // The library can be browsed once it is ready, but the pass that reads every tune again for its
+  // name, composer and year starts then and runs for minutes. It is a step of the install, so its
+  // progress stays on screen instead of the panel saying "ready" and going quiet.
+  const analyzing = isReady && hvscAnalyzing;
 
   // Keep the steps up for a moment once everything is done. The bar this replaced hid itself the
   // instant the state left DOWNLOADING/INGESTING, so the completion the user had been waiting for was
@@ -121,7 +128,7 @@ export const HvscControls = ({
   // Two different questions, which used to share one answer. The steps are shown whenever there is
   // something to show, including the moment everything finishes and after a failure; Stop belongs
   // only to work that is actually running. Conflating them left Stop on screen after a cancel.
-  const isPreparing = working || justCompleted;
+  const isPreparing = working || justCompleted || analyzing;
   const isRunning = hvscInProgress || hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
   const isDownloaded = hvscPreparationState === "DOWNLOADED";
   const canDownload = hvscAvailable && !hvscUpdating;
@@ -217,12 +224,12 @@ export const HvscControls = ({
         {isPreparing ? (
           <div className="space-y-2" data-testid="hvsc-progress">
             <div className="flex items-center justify-between gap-2">
-              <span>{hvscPreparationStatusLabel}</span>
+              <span>{analyzing ? "Analyzing songs" : hvscPreparationStatusLabel}</span>
             </div>
             <HvscStageSteps
-              state={hvscPreparationState}
+              state={analyzing ? "INGESTING" : hvscPreparationState}
               stage={hvscStage}
-              step={hvscStageStep}
+              step={analyzing ? "analyze" : hvscStageStep}
               failedPhase={hvscPreparationFailedPhase}
               stagePercent={hvscStagePercent}
               stageDone={hvscStageDone}

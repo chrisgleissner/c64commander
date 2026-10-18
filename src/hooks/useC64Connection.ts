@@ -42,6 +42,7 @@ export type C64QueryOptions = {
   staleTime?: number;
   skipEnrichment?: boolean;
   timeoutMs?: number;
+  retry?: number;
 };
 
 export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
@@ -49,6 +50,15 @@ export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
   refetchOnMount: "always",
 };
 
+export const CONFIG_READ_STALE_TIME_MS = 300_000;
+
+export const CONFIG_BROWSER_C64_QUERY_OPTIONS: C64QueryOptions = {
+  intent: "user",
+  refetchOnMount: false,
+  staleTime: CONFIG_READ_STALE_TIME_MS,
+};
+
+export const CONFIG_RETRY_DELAY_MS = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000);
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
 const BACKGROUND_QUERY_PREFIXES = [
   ["c64-info"],
@@ -399,7 +409,7 @@ export function useC64Categories(options: C64QueryOptions = {}) {
       return api.getCategories({ __c64uIntent: intent, timeoutMs: options.timeoutMs });
     },
     enabled: queryActive && connectionActive,
-    staleTime: 60000,
+    staleTime: options.staleTime ?? 60000,
     refetchOnMount: options.refetchOnMount,
     placeholderData: (previousData) => previousData,
   });
@@ -498,6 +508,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     placeholderData: (previousData) => previousData ?? snapshotPlaceholder(),
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
+    ...(options.retry === undefined ? {} : { retry: options.retry, retryDelay: CONFIG_RETRY_DELAY_MS }),
   });
 }
 
@@ -676,6 +687,7 @@ export function useC64MachineControl() {
       onSuccess: () => {
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: ["c64"] });
+          BACKGROUND_QUERY_PREFIXES.forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
         }, 3000);
       },
     }),

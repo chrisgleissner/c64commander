@@ -11,14 +11,15 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
-import { Search, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
+import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
 import {
   useC64Categories,
   useC64Category,
   useC64SetConfig,
   useC64Connection,
   useConnectionRoutingEpoch,
-  VISIBLE_C64_QUERY_OPTIONS,
+  CONFIG_BROWSER_C64_QUERY_OPTIONS,
 } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
@@ -74,6 +75,7 @@ import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { useRowChangeCallbacks, useStagedConfigRows } from "@/pages/config/stagedConfigRows";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
+import { configCategoryIcon } from "@/pages/config/configCategoryIcon";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
@@ -137,7 +139,7 @@ function configListItemsEqual(a: ConfigListItem[], b: ConfigListItem[]): boolean
 const CONFIG_CATEGORY_FOCUS_ORDER_BASE = 100;
 const CONFIG_CATEGORY_FOCUS_ORDER_STEP = 10;
 const CONFIG_BROWSER_QUERY_OPTIONS = {
-  ...VISIBLE_C64_QUERY_OPTIONS,
+  ...CONFIG_BROWSER_C64_QUERY_OPTIONS,
   timeoutMs: BACKGROUND_REQUEST_TIMEOUT_MS,
 };
 
@@ -235,12 +237,6 @@ const CategorySection = memo(function CategorySection({
   // out-of-band device change reconciles instead of being masked (BUG-033).
   const resyncPendingRef = useRef(false);
   const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
-
-  useEffect(() => {
-    if (isOpen) {
-      void refetch();
-    }
-  }, [isOpen, refetch]);
 
   useEffect(() => {
     onOpenChange(isOpen);
@@ -824,16 +820,18 @@ const CategorySection = memo(function CategorySection({
       id={configCategorySectionId(categoryName)}
       title={displayTitle ?? categoryName}
       summary={groupLabel ?? undefined}
-      icon={FolderOpen}
+      icon={configCategoryIcon(categoryName)}
       headerRef={categoryHeaderFocusRef}
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
+      plainIcon
+      actions={configRefreshAction(isOpen, refreshFocusRef, displayTitle ?? categoryName, categorySlug, handleRefresh)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
       {isAudioMixer ? <ScreenActivityWatch onChange={restoreSoloWhenPageLeft} /> : null}
-      <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
-        <div className="flex items-center gap-2">
+      {hasCategoryGroupAction ? (
+        <div className="flex items-center gap-2 py-2" data-testid="config-group-actions">
           {categoryName === "Audio Mixer" && (
             <Button
               ref={categoryActionFocusRef}
@@ -859,11 +857,7 @@ const CategorySection = memo(function CategorySection({
             </Button>
           )}
         </div>
-        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Refresh
-        </Button>
-      </div>
+      ) : null}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
@@ -893,7 +887,7 @@ const CategorySection = memo(function CategorySection({
               <div className="flex items-center gap-3">
                 {isMutedBySolo && <span className="text-xs font-medium text-muted-foreground">Muted</span>}
                 <div className="flex items-center gap-2">
-                  <Label htmlFor={`solo-${item.name}`} className="text-xs uppercase tracking-wide">
+                  <Label htmlFor={`solo-${item.name}`} className="text-xs">
                     Solo
                   </Label>
                   <Switch
@@ -1058,7 +1052,7 @@ export default function ConfigBrowserPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search categories..."
+            placeholder="Search categories"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

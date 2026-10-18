@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { focusRingElement } from "@/lib/input/ringDom";
+import { focusRingElement, revealRingElementAfterLayout } from "@/lib/input/ringDom";
 
 const WINDOW_HEIGHT = 426;
 const APP_BAR_BOTTOM = 49;
@@ -61,5 +61,162 @@ describe("focusRingElement", () => {
     focusRingElement(element);
 
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "end", inline: "nearest" });
+  });
+});
+
+describe("revealRingElementAfterLayout", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("scrolls the element back into view when a layout change moved it below the scroll container", () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    scrollIntoView.mockClear();
+    element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(500);
+
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("leaves an element that is still on screen alone", () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    scrollIntoView.mockClear();
+
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(500);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("does nothing once cancelled", () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    scrollIntoView.mockClear();
+    element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+    revealRingElementAfterLayout(element)();
+    vi.advanceTimersByTime(500);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+  it("reveals the element when the layout changes after the timed checks, as a late size change does", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(1000);
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("reveals the ring's current element when the pressed one was replaced during the watch", async () => {
+    const { element } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    const replacement = document.createElement("button");
+    replacement.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    const replacementScroll = vi.fn();
+    replacement.scrollIntoView = replacementScroll;
+
+    element.replaceWith(replacement);
+    focusRingElement(replacement);
+    replacementScroll.mockClear();
+    await Promise.resolve();
+
+    expect(replacementScroll).toHaveBeenCalled();
+  });
+
+  it("stops watching at the next key press", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+    vi.advanceTimersByTime(2000);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("stops watching after the watch window", async () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    revealRingElementAfterLayout(element);
+    vi.advanceTimersByTime(2000);
+    scrollIntoView.mockClear();
+
+    element.getBoundingClientRect = () => ({ top: 403, bottom: 451, height: 48 }) as DOMRect;
+    element.parentElement!.append(document.createElement("span"));
+    await Promise.resolve();
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("returns a no-op canceller when there is no element to watch", () => {
+    const cancel = revealRingElementAfterLayout(null);
+
+    expect(() => cancel()).not.toThrow();
+  });
+
+  it("can be cancelled twice, and the second call leaves the first cancellation in effect", () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    scrollIntoView.mockClear();
+    element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+    const cancel = revealRingElementAfterLayout(element);
+    cancel();
+    cancel();
+    vi.advanceTimersByTime(2000);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("still re-checks on timers and mutations when ResizeObserver is unavailable", async () => {
+    vi.stubGlobal("ResizeObserver", undefined);
+    try {
+      const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+      focusRingElement(element);
+      scrollIntoView.mockClear();
+      element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+      revealRingElementAfterLayout(element);
+      vi.advanceTimersByTime(500);
+
+      expect(scrollIntoView).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("watches the document body when the page itself is the scroll container", () => {
+    const element = document.createElement("button");
+    element.scrollIntoView = vi.fn();
+    document.body.append(element);
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = observe;
+        disconnect = vi.fn();
+      },
+    );
+    try {
+      revealRingElementAfterLayout(element)();
+
+      expect(observe).toHaveBeenCalledWith(document.body);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

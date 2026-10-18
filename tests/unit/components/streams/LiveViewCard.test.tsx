@@ -47,7 +47,7 @@ describe("LiveViewCard", () => {
     mirror.state = { video: { state: "off" } };
   });
 
-  it("renders controls and a hint, with no preview or Stats while nothing is live", () => {
+  it("renders controls without an introductory sentence, with no preview or Stats while nothing is live", () => {
     render(<LiveViewCard />);
     openAllCards();
     expect(screen.getByTestId("live-view-card")).toBeInTheDocument();
@@ -55,7 +55,6 @@ describe("LiveViewCard", () => {
     expect(screen.queryByTestId("preview")).toBeNull();
     expect(screen.queryByTestId("live-view-expand")).toBeNull();
     expect(screen.queryByTestId("stream-stats")).toBeNull();
-    expect(screen.getByText(/Hear and see the running machine/)).toBeInTheDocument();
   });
 
   it("mounts the Stats panel while a stream is live", () => {
@@ -65,13 +64,12 @@ describe("LiveViewCard", () => {
     expect(screen.getByTestId("stream-stats")).toBeInTheDocument();
   });
 
-  it("passes audio/video enablement to the controls and drops 'see' from the hint", () => {
+  it("passes audio/video enablement to the controls", () => {
     render(<LiveViewCard audioEnabled videoEnabled={false} />);
     openAllCards();
     const controls = screen.getByTestId("controls");
     expect(controls).toHaveAttribute("data-audio", "true");
     expect(controls).toHaveAttribute("data-video", "false");
-    expect(screen.getByText(/^Hear the running machine\./)).toBeInTheDocument();
   });
 
   it("shows a collapsible check preview once video is active and expands to immersive", () => {

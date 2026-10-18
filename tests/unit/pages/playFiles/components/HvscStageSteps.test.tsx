@@ -17,7 +17,7 @@ describe("HvscStageSteps", () => {
   it("names all four stages so the user can see what is left", () => {
     render(<HvscStageSteps state="DOWNLOADING" stage="download" />);
 
-    for (const label of ["Download", "Unpack", "Find songs", "Song details"]) {
+    for (const label of ["Fetch", "Unpack", "Find songs", "Song details", "Analyze"]) {
       expect(screen.getByText(label)).toBeVisible();
     }
   });
@@ -25,7 +25,7 @@ describe("HvscStageSteps", () => {
   it("wraps a stage label between words only", () => {
     // The global overflow-wrap:anywhere rule drew "Downloa" over "d" beneath a failed first stage.
     render(<HvscStageSteps state="ERROR" stage="download" />);
-    expect(screen.getByText("Download").className).toContain("break-normal");
+    expect(screen.getByText("Fetch").className).toContain("break-normal");
   });
 
   it("marks the running stage and credits the finished ones", () => {
@@ -59,7 +59,8 @@ describe("HvscStageSteps", () => {
 
     expect(screen.getByTestId("hvsc-stage-steps-detail")).toHaveTextContent("128 / 61,157 · 15 items/s");
     expect(screen.getByTestId("hvsc-stage-steps-detail")).not.toHaveTextContent("0%");
-    expect(statusOf("details")).toBe("active");
+    expect(statusOf("details")).toBe("done");
+    expect(statusOf("analyze")).toBe("active");
   });
 
   it("omits the detail line entirely when there is nothing to report", () => {
@@ -72,7 +73,7 @@ describe("HvscStageSteps", () => {
     // The bar it replaced hid itself at exactly this moment, so its 100% was never seen.
     render(<HvscStageSteps state="READY" />);
 
-    for (const id of ["download", "unpack", "scan", "details"]) {
+    for (const id of ["download", "unpack", "scan", "details", "analyze"]) {
       expect(statusOf(id)).toBe("done");
     }
   });
@@ -88,11 +89,18 @@ describe("HvscStageSteps", () => {
 
 describe("HvscStageSteps explanations", () => {
   it("says what the running step is actually doing", () => {
-    // The label under the circle is "Song details", which does not explain why a first install sits
+    // The label under the circle is "Analyze", which does not explain why a first install sits
     // here for minutes. This is the line that does.
     render(<HvscStageSteps state="INGESTING" stage="sid_metadata_hydration" />);
     expect(screen.getByTestId("hvsc-stage-steps-explains")).toHaveTextContent(
-      "Reading each tune's name, composer and length.",
+      "Reading every tune again for its name, composer and year.",
+    );
+  });
+
+  it("explains the archive step that precedes the final analysis separately", () => {
+    render(<HvscStageSteps state="INGESTING" stage="sid_metadata_parsing" />);
+    expect(screen.getByTestId("hvsc-stage-steps-explains")).toHaveTextContent(
+      "Loading song lengths and reading the tune headers in the archive.",
     );
   });
 

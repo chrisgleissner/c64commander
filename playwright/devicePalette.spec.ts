@@ -175,7 +175,7 @@ test.describe("device VIC palette", () => {
 
     // The row names the device's palette and says where the name came from.
     await expect(screenColorsRow(page)).toContainText(DEVICE_VPL_NAME);
-    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(followingLine(page)).toHaveText("Set on the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
 
     // The regression: `Palette Definition` is a filename, and only `/Flash/data/<filename>` reads it.
@@ -190,7 +190,7 @@ test.describe("device VIC palette", () => {
     await page.goto("/");
 
     await expect(screenColorsRow(page)).toContainText("Default");
-    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(followingLine(page)).toHaveText("Set on the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
     expect(requests.ftpReadPaths).toEqual([]);
   });
@@ -208,7 +208,7 @@ test.describe("device VIC palette", () => {
     await page.goto("/");
 
     await expect(screenColorsRow(page)).toContainText("Default");
-    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(followingLine(page)).toHaveText("Set on the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
     await expect.poll(() => requests.ftpReadPaths).toContain("/Flash/data/missing-palette.vpl");
   });
@@ -262,7 +262,7 @@ test.describe("device VIC palette", () => {
     // it now finds there is the one it just uploaded.
     await closeSheet(page);
     await expect(screenColorsRow(page)).toContainText("Monochrome");
-    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(followingLine(page)).toHaveText("Set on the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", MONOCHROME_COLOUR_2);
     expect(requests.ftpReadPaths).toContain("/Flash/data/monochrome.vpl");
   });

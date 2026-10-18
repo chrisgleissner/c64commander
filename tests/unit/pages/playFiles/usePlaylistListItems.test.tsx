@@ -6,11 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { LOCAL_DEVICE_LABEL } from "@/lib/sourceNavigation/sourceTerms";
 
@@ -93,7 +92,7 @@ describe("usePlaylistListItems", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("does not include source-kind labels in playlist item details", () => {
+  it("shows where each item lives in its details, not in the row", () => {
     const playlist = [
       buildItem("ultimate", "/USB0/Music/track1.sid"),
       buildItem("local", "/Music/track2.sid"),
@@ -124,20 +123,19 @@ describe("usePlaylistListItems", () => {
     const listItems = result.current.filter((entry) => entry.variant !== "header");
     expect(listItems).toHaveLength(3);
 
-    listItems.forEach((entry) => {
-      const sourceInfo = entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source");
-      expect(sourceInfo).toBeUndefined();
-      expect(entry.subtitle).toBeTruthy();
-      expect(entry.subtitle).not.toContain("This device");
-      expect(entry.subtitle).not.toContain("C64 Ultimate");
-      expect(entry.subtitle).not.toContain("HVSC");
-      const metaChildren = Array.isArray((entry.meta as any)?.props?.children)
-        ? (entry.meta as any).props.children
-        : [(entry.meta as any)?.props?.children];
-      expect(metaChildren.some((child: any) => child?.type === FileOriginIcon)).toBe(true);
-    });
+    const sourceValues = listItems.map(
+      (entry) =>
+        entry.menuItems?.find((menu) => menu.type === "info" && menu.label === "Source") as
+          { value: string } | undefined,
+    );
+    expect(sourceValues.map((row) => row?.value)).toEqual(["C64U", "Local", "HVSC"]);
 
-    expect(listItems[2]?.subtitle).toBe("/MUSICIANS/Hubbard_Rob/Commando.sid");
+    listItems.forEach((entry) => {
+      expect(entry.subtitle).toBeNull();
+      expect(entry.titleSuffix).not.toContain("This device");
+      expect(entry.titleSuffix).not.toContain("C64 Ultimate");
+      expect(entry.titleSuffix).not.toContain("HVSC");
+    });
   });
 
   it("uses generic unavailable status metadata", () => {
@@ -382,9 +380,7 @@ describe("usePlaylistListItems", () => {
     expect(startPlaylist).toHaveBeenNthCalledWith(2, playlist, 0);
     expect(startPlaylist).toHaveBeenNthCalledWith(3, playlist, 1);
 
-    const candidateMetaChildren = Array.isArray((candidateRow?.meta as any)?.props?.children)
-      ? (candidateRow?.meta as any).props.children
-      : [(candidateRow?.meta as any)?.props?.children];
-    expect(candidateMetaChildren[0]?.props?.origin).toBe("commoserve");
+    expect(candidateRow?.secondaryActionLabel).toBe("CFG?");
+    expect(candidateRow?.titleSuffix).not.toContain("CFG");
   });
 });

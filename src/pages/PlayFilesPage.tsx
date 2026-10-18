@@ -108,7 +108,8 @@ import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
-import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { LikedTunesSheetHost } from "@/pages/playFiles/components/LikedTunesSheet";
+import { useExternalOpenState } from "@/hooks/useExternalOpenState";
 import {
   PlayDeepLinks,
   useTransportCommands,
@@ -131,7 +132,7 @@ import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
-import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import { isMd548InHvsc, md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import type { RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 import { useRecordRecentlyPlayed } from "@/pages/playFiles/hooks/useRecordRecentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
@@ -225,8 +226,11 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
-import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
+import { resolvePlayheadAnchor, seekAwareDelayMs, shouldRefreshDeadline } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
+
+/** Buttons that open a sheet from the Play page share rows: short labels that grow to fill the row. */
+const SHEET_OPENER_CLASS = "flex-auto whitespace-nowrap px-2";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
   "scanning",
@@ -377,7 +381,7 @@ export default function PlayFilesPage() {
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   // Claimed here as well as on Home: search publishes without navigating when Play is on screen.
   useRemoteInputOpenRequest(() => setRemoteInputSheetOpen(true));
-  const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
+  const likedTunesSheet = useExternalOpenState();
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
   /**
@@ -666,7 +670,7 @@ export default function PlayFilesPage() {
       setHvscSearchSeed(seed ?? null);
       setHvscSearchOpen(true);
     },
-    openLikedTunes: () => setLikedTunesSheetOpen(true),
+    openLikedTunes: () => likedTunesSheet.set(true),
     resumeSession: () => transportCommandBus.publish("play"),
   };
 
@@ -1500,6 +1504,7 @@ export default function PlayFilesPage() {
       // auto-advance deadline computed from a clock that ran ahead cuts the tune off before its end.
       const controller = getSharedLocalSidPlaybackController();
       const localActive = controller.isActive();
+      const awaitingSeek = localActive && controller.isSeeking();
       const anchor = resolvePlayheadAnchor({
         enginePositionMs: localActive ? controller.positionSeconds() * 1000 : null,
         trackStartedAtMs: trackStartedAtRef.current,
@@ -1508,7 +1513,7 @@ export default function PlayFilesPage() {
         // worker is silent and unannounced but every bit as deliberate, and letting the deadline run
         // down through it would skip the track the listener is waiting to hear.
         previousElapsedMs: anchoredElapsedRef.current,
-        awaitingSeek: localActive && controller.isSeeking(),
+        awaitingSeek,
       });
       if (anchor) {
         trackStartedAtRef.current = anchor.trackStartedAtMs;
@@ -1519,15 +1524,23 @@ export default function PlayFilesPage() {
         // would be constant bridge traffic for nothing. The second is the important one: the
         // deadline is what rescues a tune that has stopped producing audio, and re-deriving it from
         // a frozen playhead would push it into the future for ever — see `stalled`.
-        if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current) {
-          const guard = autoAdvanceGuardRef.current;
-          if (guard && !guard.userCancelled) {
-            const dueAtMs = now + autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive);
-            guard.dueAtMs = dueAtMs;
-            guard.autoFired = false;
-            guard.deferredToEnd = false;
-            setAutoAdvanceDueAtMs(dueAtMs);
-          }
+        const guard = autoAdvanceGuardRef.current;
+        if (
+          guard &&
+          !guard.userCancelled &&
+          currentDurationMsRef.current &&
+          shouldRefreshDeadline(anchor, awaitingSeek, guard.dueAtMs - now)
+        ) {
+          const dueAtMs =
+            now +
+            seekAwareDelayMs(
+              autoAdvanceDelayMs(currentDurationMsRef.current, anchor.elapsedMs, localActive),
+              awaitingSeek,
+            );
+          guard.dueAtMs = dueAtMs;
+          guard.autoFired = false;
+          guard.deferredToEnd = false;
+          setAutoAdvanceDueAtMs(dueAtMs);
         }
       }
       setPlayedMs(playedClockRef.current.current(now));
@@ -1703,6 +1716,7 @@ export default function PlayFilesPage() {
       : !sidRadio.active && currentSeedMd548 && currentItem?.category === "sid"
         ? (currentItem.label ?? "this tune")
         : null;
+  const sidRadioSeedIsHvscTune = isMd548InHvsc(currentSeedMd548);
   const startSidRadioSongMood = (styleBit: number | null) => {
     // Re-aim rather than restart while a Song station is running, so the seed survives the change of
     // mood; the hook holds the seed, which is also what makes this work for a resumed station.
@@ -1949,7 +1963,7 @@ export default function PlayFilesPage() {
     // stopped. Forgetting the last reading here is what keeps that from reading as a stall.
     anchoredElapsedRef.current = null;
   }, [localEngineActive, currentItem?.id]);
-  const { renderedSeconds, pendingSeekState } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
+  const { renderedSeconds, pendingSeekState, nowMs } = useLocalPendingSeek(localEngineActive, currentItem?.id, () =>
     syncPlaybackTimelineRef.current(),
   );
   const pendingSeek =
@@ -1958,6 +1972,7 @@ export default function PlayFilesPage() {
           state: pendingSeekState,
           renderedSeconds: renderedSeconds ?? pendingSeekState.renderedAtRequestSeconds,
           durationMs: currentDurationMs ?? 0,
+          nowMs,
         }) ?? undefined)
       : undefined;
   const renderedPercent =
@@ -2044,7 +2059,13 @@ export default function PlayFilesPage() {
   // wider profiles keep "Game Mode".
   const playGameModeLabel = displayProfile === "compact" ? "Game" : "Game Mode";
   const playGameModeButton = (
-    <Button variant="outline" size="sm" data-testid="play-open-game-mode" onClick={() => void startGameMode()}>
+    <Button
+      variant="outline"
+      size="sm"
+      className={SHEET_OPENER_CLASS}
+      data-testid="play-open-game-mode"
+      onClick={() => void startGameMode()}
+    >
       <Joystick className="mr-1.5 h-4 w-4" /> {playGameModeLabel}
     </Button>
   );
@@ -2052,10 +2073,12 @@ export default function PlayFilesPage() {
     <Button
       variant="outline"
       size="sm"
+      className={SHEET_OPENER_CLASS}
+      aria-label="Remote Input"
       data-testid="play-open-controller"
       onClick={() => setRemoteInputSheetOpen(true)}
     >
-      <Keyboard className="mr-1.5 h-4 w-4" /> Remote Input
+      <Keyboard className="mr-1.5 h-4 w-4" /> Input
     </Button>
   );
   /**
@@ -2403,6 +2426,7 @@ export default function PlayFilesPage() {
   const timeline = usePlaybackTimeline(shownNowPlaying.time, {
     durationMs: shownNowPlaying.durationMs,
     launching: chosenTrackLaunching && shownNowPlaying.index === currentIndex,
+    idle: !playbackRunning && !isPaused && shownNowPlaying.index === currentIndex,
     scrubTargetMs: shownScrubTargetMs,
     heldAtMs: pendingSeek?.audibleMs,
     playlistTotalsAt,
@@ -2559,6 +2583,7 @@ export default function PlayFilesPage() {
                 })}
                 isScrubbing={isScrubbing}
                 timeline={timeline}
+                seekDurationMs={currentDurationMs}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
                 volumeControls={
@@ -2630,13 +2655,20 @@ export default function PlayFilesPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className={SHEET_OPENER_CLASS}
+                        aria-label="More like this"
                         data-testid="sid-radio-start"
-                        title={`Start a station from ${currentDisplay?.title ?? "this tune"}`}
+                        disabled={!sidRadioSeedIsHvscTune}
+                        title={
+                          sidRadioSeedIsHvscTune
+                            ? `Start a station from ${currentDisplay?.title ?? "this tune"}`
+                            : "Not available: this tune is not in the HVSC library."
+                        }
                         onClick={() =>
                           void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
                         }
                       >
-                        <RadioIcon className="mr-1.5 h-4 w-4" /> More like this
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> Similar
                       </Button>
                     ) : null}
                     {/*
@@ -2650,13 +2682,15 @@ export default function PlayFilesPage() {
                           variant="outline"
                           size="sm"
                           id="sid-radio-launcher"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="SID Radio"
                           data-testid="sid-radio-launcher"
                           onClick={() => {
                             void sidRadio.ensureStylePopulations();
                             setSidRadioLauncherOpen(true);
                           }}
                         >
-                          <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                          <RadioIcon className="mr-1.5 h-4 w-4" /> Radio
                         </Button>
                         {/* A station chooses for you, which is the point of it right up until you
                             want one specific tune. Without this the only way to hear it was to stop
@@ -2666,19 +2700,23 @@ export default function PlayFilesPage() {
                           variant="outline"
                           size="sm"
                           id="hvsc-search-open"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="Find a tune"
                           data-testid="hvsc-search-open"
                           onClick={() => setHvscSearchOpen(true)}
                         >
-                          <Search className="mr-1.5 h-4 w-4" /> Find a tune
+                          <Search className="mr-1.5 h-4 w-4" /> Find
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           id="sid-radio-liked-tunes-open"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="Liked tunes"
                           data-testid="sid-radio-liked-tunes-open"
-                          onClick={() => setLikedTunesSheetOpen(true)}
+                          onClick={() => likedTunesSheet.set(true)}
                         >
-                          <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                          <Heart className="mr-1.5 h-4 w-4" /> Liked
                         </Button>
                       </>
                     ) : null}
@@ -2906,6 +2944,7 @@ export default function PlayFilesPage() {
             stageDone={hvsc.hvscStageDone}
             stageTotal={hvsc.hvscStageTotal}
             throughputLabel={hvsc.hvscPreparationThroughputLabel}
+            analyzing={hvsc.hvscAnalyzing}
             readySongCount={hvsc.hvscReadySongCount}
             errorReason={hvsc.hvscPreparationErrorReason}
             onBrowse={handleBrowsePreparedHvsc}
@@ -2957,9 +2996,8 @@ export default function PlayFilesPage() {
             <RemoteInputSheet open={remoteInputSheetOpen} onOpenChange={setRemoteInputSheetOpen} />
           ) : null}
 
-          <LikedTunesSheet
-            open={likedTunesSheetOpen}
-            onOpenChange={setLikedTunesSheetOpen}
+          <LikedTunesSheetHost
+            state={likedTunesSheet}
             onPlay={(items, startIndex) => void startPlaylist(items, startIndex)}
           />
           <SidRadioLauncherSheet
@@ -2975,6 +3013,7 @@ export default function PlayFilesPage() {
             onStartCollection={(id) => void sidRadio.startCollectionRadio(id)}
             songSeedLabel={sidRadioSongSeedLabel}
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
+            songSeedInHvsc={sidRadio.station?.seedKind === "song" || sidRadioSeedIsHvscTune}
             onStartSong={startSidRadioSongMood}
             hvscMissing={!hvsc.hvscInstalled}
             onInstallHvsc={
@@ -3022,7 +3061,7 @@ export default function PlayFilesPage() {
             }}
           >
             <AlertDialogContent>
-              <AlertDialogHeader>
+              <AlertDialogHeader hideClose>
                 <AlertDialogTitle>Clear custom edits?</AlertDialogTitle>
                 <AlertDialogDescription>
                   Changing the config file will clear this item&apos;s custom value edits. Continue only if you want to
@@ -3058,7 +3097,7 @@ export default function PlayFilesPage() {
             }}
           >
             <AlertDialogContent>
-              <AlertDialogHeader>
+              <AlertDialogHeader hideClose>
                 <AlertDialogTitle>Config unavailable</AlertDialogTitle>
                 <AlertDialogDescription>
                   {unavailableConfigPrompt

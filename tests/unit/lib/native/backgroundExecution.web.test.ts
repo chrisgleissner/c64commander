@@ -40,6 +40,13 @@ describe("BackgroundExecutionWeb", () => {
     await expect(plugin.setNowPlaying({ title: null, artist: null, durationMs: null })).resolves.toBeUndefined();
   });
 
+  it("accepts a heartbeat and has no launch command to hand over", async () => {
+    const plugin = new BackgroundExecutionWeb();
+
+    await expect(plugin.heartbeat()).resolves.toBeUndefined();
+    await expect(plugin.takeLaunchCommand()).resolves.toEqual({ command: null });
+  });
+
   it("logs when wake lock is unavailable", async () => {
     const plugin = new BackgroundExecutionWeb();
     await plugin.start();

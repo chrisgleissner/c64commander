@@ -72,7 +72,7 @@ export interface RequirementVerdict {
   /**
    * The same verdict in two or three words, for a surface that has no room for `reason`.
    *
-   * A Home Quick Actions tile is about 68 CSS px wide and its grid row stretches to its tallest
+   * A Home Quick actions tile is about 68 CSS px wide and its grid row stretches to its tallest
    * tile, so one 41-character sentence under one greyed tile took that row from 91 px to 204 px on
    * an Ultimate II+L. Present only where a reason names a fixed property of the device or the
    * build; a reason that tells the user what to go and do keeps its sentence everywhere.

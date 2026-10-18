@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
+import { CENTER_VERB_ATTR } from "@/lib/input";
 import {
   nextPoliteAnnouncement,
   PENDING_ANNOUNCEMENT_INTERVAL_MS,
@@ -33,7 +34,12 @@ import {
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { TuneDetails } from "./TuneDetails";
-import { readShownPlaybackTime, ShownPlaybackProgress, ShownPlaybackTime } from "./ShownPlaybackTime";
+import {
+  readShownPlaybackTime,
+  ShownPlaybackCounters,
+  ShownPlaybackProgress,
+  ShownPlaybackTime,
+} from "./ShownPlaybackTime";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -110,6 +116,8 @@ export type PlaybackControlsCardProps = {
    * on-device engine — the C64 renders the SID itself and cannot be positioned.
    */
   onSeekToFraction?: (fraction: number) => void;
+  /** Length of the tune, which turns a key press on the seek bar into seconds. */
+  seekDurationMs?: number;
   /** The progress bar and the time labels follow it, so the clock moving re-renders only them. */
   timeline: PlaybackTimeline;
   /**
@@ -167,6 +175,14 @@ const SEEK_HOLD_MS = 450;
 /** How often it scrubs while held, and by how much. */
 const SEEK_REPEAT_MS = 200;
 const SEEK_STEP_SECONDS = 5;
+const SEEK_KEY_REPEAT_STEP_SECONDS = 15;
+const SEEK_KEY_FALLBACK_FRACTION = 0.02;
+
+/** How far one Left/Right press on the focused seek bar moves it, as a fraction of the tune; a held key moves further. */
+export const seekKeyStepFraction = (durationMs: number | undefined, repeat: boolean): number => {
+  const seconds = repeat ? SEEK_KEY_REPEAT_STEP_SECONDS : SEEK_STEP_SECONDS;
+  return durationMs ? (seconds * 1000) / durationMs : SEEK_KEY_FALLBACK_FRACTION * (seconds / SEEK_STEP_SECONDS);
+};
 
 /**
  * Hold Previous/Next to scrub the current tune; tap to change track.
@@ -338,6 +354,7 @@ export const PlaybackControlsCard = ({
   onScrubEnd,
   isScrubbing = false,
   onSeekToFraction,
+  seekDurationMs,
   timeline,
   renderedPercent,
   pendingSeek,
@@ -356,6 +373,8 @@ export const PlaybackControlsCard = ({
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
+  // The composer link grows upward by up to 44px, so the details need room above it that no control occupies.
+  const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
   const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
   /**
@@ -449,10 +468,11 @@ export const PlaybackControlsCard = ({
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
       {stationIndicator}
-      <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
-        {hasCurrentItem ? (
-          <>
-            {/* The title now has the full width of the card to itself.
+      <div className="w-full" data-testid="playback-current-track">
+        <div className="mb-3 text-xs text-muted-foreground">
+          {hasCurrentItem ? (
+            <>
+              {/* The title now has the full width of the card to itself.
 
                 It is still truncated rather than wrapped, so the card is exactly as tall for a
                 forty-character HVSC name as for a short one and nothing below it — the metadata, the
@@ -462,17 +482,391 @@ export const PlaybackControlsCard = ({
 
                 The title starts at the left edge of the card, level with the metadata line under it.
                 There used to be a small file-origin glyph in front of it, which indented it by its
-                own width and left the two lines misaligned; where a tune came from is already shown
-                against every row of the playlist. */}
-            <div className="flex w-full flex-nowrap items-center">
+                own width and left the two lines misaligned; where an item came from is in its
+                playlist menu under Details. */}
+              <div className="flex w-full flex-nowrap items-center">
+                <span
+                  className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
+                  data-testid="playback-current-title"
+                  title={currentItemLabel ?? undefined}
+                >
+                  {currentItemLabel}
+                </span>
+              </div>
+            </>
+          ) : (
+            "Select a playlist item to start"
+          )}
+        </div>
+        <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
+          {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
+            44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
+            were, and the row stopped 33 px short of the right edge — visibly ragged against the
+            ranking pair directly above it, which is flush, and against the progress bar and the
+            metadata line, which are flush too. Distributing them puts the first and last on the
+            card's own edges, so every row of this card now starts and ends on the same two lines. */}
+          {/*
+          Centred, with only Play carrying a fill.
+          Four equally-outlined buttons spread across the row gave the card no focal point: squinted
+          at from a distance every one of them read the same, and the thing you press most was
+          indistinguishable from the three you press rarely. Play is now a filled circle and the
+          other three are ghosts, which is the media-player idiom and what the squint test rewards.
+        */}
+          <div className="flex items-center justify-center gap-1.5" data-testid="playback-transport-row">
+            <Button
+              ref={previousFocusRef}
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // A hold already scrubbed; do not also change track.
+                if (holdRewind.consumedClick()) return;
+                onPrevious();
+              }}
+              onPointerDown={holdRewind.start}
+              onPointerUp={holdRewind.stop}
+              onPointerLeave={holdRewind.stop}
+              onPointerCancel={holdRewind.stop}
+              disabled={(!canTransport || !hasPrev) && !onSeek}
+              id="playlist-prev"
+              data-testid="playlist-prev"
+              // Without this, Android hands a long press to the scroller and fires
+              // pointercancel at roughly the hold threshold, so the gesture died on
+              // a real finger while working under synthetic events.
+              style={onSeek ? { touchAction: "none" } : undefined}
+              aria-label="Previous"
+              title={onSeek ? "Previous (hold to rewind)" : "Previous"}
+            >
+              <SkipBack className="h-4 w-4" />
+            </Button>
+            <Button
+              ref={playFocusRef}
+              variant={stopping || stopAvailable ? "destructive" : "default"}
+              size="icon"
+              className="size-14 rounded-full"
+              // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
+              onClick={stopping || stopPending ? undefined : stopAvailable ? onStop : onPlay}
+              disabled={!hasPlaylist}
+              aria-disabled={stopping || stopPending || undefined}
+              data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
+              data-stopping={stopping ? "true" : undefined}
+              id="playlist-play"
+              data-testid="playlist-play"
+              aria-label={playButtonLabel}
+              title={playButtonLabel}
+            >
+              {stopping ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : stopAvailable ? (
+                <Square className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5" />
+              )}
+            </Button>
+            <Button
+              ref={pauseFocusRef}
+              variant="ghost"
+              size="icon"
+              onClick={onPauseResume}
+              disabled={!canPause || isPlaylistLoading}
+              id="playlist-pause"
+              data-testid="playlist-pause"
+              aria-label={isPaused ? "Resume" : "Pause"}
+              title={isPaused ? "Resume" : "Pause"}
+            >
+              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </Button>
+            <Button
+              ref={nextFocusRef}
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                // A hold already scrubbed; do not also change track.
+                if (holdForward.consumedClick()) return;
+                onNext();
+              }}
+              onPointerDown={holdForward.start}
+              onPointerUp={holdForward.stop}
+              onPointerLeave={holdForward.stop}
+              onPointerCancel={holdForward.stop}
+              disabled={(!canTransport || !hasNext) && !onSeek}
+              id="playlist-next"
+              data-testid="playlist-next"
+              // Without this, Android hands a long press to the scroller and fires
+              // pointercancel at roughly the hold threshold, so the gesture died on
+              // a real finger while working under synthetic events.
+              style={onSeek ? { touchAction: "none" } : undefined}
+              aria-label="Next"
+              title={onSeek ? "Next (hold to fast forward)" : "Next"}
+            >
+              <SkipForward className="h-4 w-4" />
+            </Button>
+          </div>
+          {stopping ? (
+            <p
+              role="status"
+              className="text-center text-sm font-medium text-foreground"
+              data-testid="playback-stop-status"
+            >
+              Stopping…
+            </p>
+          ) : null}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span
-                className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
-                data-testid="playback-current-title"
-                title={currentItemLabel ?? undefined}
+                className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "text-foreground")}
+                data-testid="playback-elapsed"
+                // Held, not merely lagging. While the renderer works towards a target the engine is
+                // silent, and this clock stays at the last position that was genuinely audible. A
+                // clock ticking on through that silence is the single thing this whole state exists
+                // to prevent — it is indistinguishable from playback that has died.
+                data-elapsed-held={pendingSeek ? "true" : undefined}
               >
-                {currentItemLabel}
+                {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
+                <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
+                <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
+              </span>
+              {onSeekToFraction ? (
+                // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
+                // button so it is reachable by keyboard and by the keypad-first C64U Remote variant,
+                // where there is no pointer at all.
+                //
+                // Every pointer move is reported, and that is deliberate rather than an oversight of
+                // "never seek on a gesture sample": the handler this calls does NOT seek per sample.
+                // It moves the displayed target — which is what makes the bar follow the finger — and
+                // debounces a single seek to where the finger came to rest. Withholding the samples
+                // here would only make the bar lag the finger; the coalescing has to live where the
+                // engine is driven, and it does.
+                <button
+                  type="button"
+                  data-key-nav-horizontal=""
+                  {...{ [CENTER_VERB_ATTR]: "Adjust" }}
+                  data-testid="playback-progress-seek"
+                  aria-label="Seek within the tune"
+                  className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"
+                  onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    onSeekToFraction(fractionFromPointer(event));
+                  }}
+                  onPointerMove={(event) => {
+                    // Only while the finger is actually down on this control.
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      onSeekToFraction(fractionFromPointer(event));
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                    if (direction === 0) return;
+                    event.preventDefault();
+                    // The shown position follows the pending target, so held keys accumulate and the
+                    // controller seeks once, after the keys stop.
+                    const { progressPercent } = readShownPlaybackTime(timeline);
+                    const step = direction * seekKeyStepFraction(seekDurationMs, event.repeat);
+                    onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
+                  }}
+                >
+                  <div className="relative w-full">
+                    {/* The empty track, always drawn: the progress element is transparent so the rendered
+                      span can show through it, which left nothing visible to aim at while a tune was
+                      still being rendered. */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-full border border-border bg-secondary"
+                      data-testid="playback-track"
+                    />
+                    {/* Behind the played portion, so the two read as one bar: solid where the tune has
+                      played, translucent as far as it is rendered. */}
+                    {/* Shown whenever the tune is not fully rendered — including, and especially, when
+                      rendering is BEHIND the playhead. Hiding it then was backwards: that is exactly
+                      the moment the listener needs to see the renderer catching up rather than wonder
+                      whether playback has died. */}
+                    {renderedPercent !== undefined && renderedPercent < 100 ? (
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 left-0 rounded-full bg-primary/25"
+                        style={{ width: `${Math.min(100, Math.max(0, renderedPercent))}%` }}
+                        data-testid="playback-rendered-ahead"
+                        data-rendered-percent={Math.round(renderedPercent)}
+                      />
+                    ) : null}
+                    {/* The span still to be rendered, from the render head towards the target.
+                      Striped as well as tinted: this app is read at arm's length, and one
+                      translucent fill beside a slightly different translucent fill is not a
+                      distinction anybody can make. The stripes march while the renderer works, and
+                      stop under `prefers-reduced-motion` leaving the texture behind. */}
+                    {pendingSeek ? (
+                      <div
+                        aria-hidden
+                        className="playback-pending-region pointer-events-none absolute inset-y-0 rounded-full"
+                        style={{
+                          left: `${clampPercent(pendingSeek.renderedPercent)}%`,
+                          width: `${Math.max(0, clampPercent(pendingSeek.targetPercent) - clampPercent(pendingSeek.renderedPercent))}%`,
+                        }}
+                        data-testid="playback-pending-region"
+                        data-pending-progress={pendingSeek.progressPercent}
+                        // Where the render head stood when the target was accepted — the denominator
+                        // of the percentage beside it, and the one number a HIL session needs to tell
+                        // a progress figure that is going somewhere from one that only looks like it.
+                        data-started-percent={Math.round(pendingSeek.startedAtPercent)}
+                      />
+                    ) : null}
+                    {/* Where the drag landed, while the renderer works towards it.
+                      Named and dated rather than a bare line: a 2 px rule with no label is the one
+                      element on this bar that a listener cannot interpret, and the position it
+                      stands for is exactly the thing they are waiting to hear. */}
+                    {pendingSeek ? (
+                      <div
+                        role="img"
+                        aria-label={pendingSeek.markerLabel}
+                        className="pointer-events-none absolute inset-y-0"
+                        style={{ left: `${clampPercent(pendingSeek.targetPercent)}%` }}
+                        data-testid="playback-awaited-marker"
+                        data-awaited-percent={Math.round(pendingSeek.targetPercent)}
+                      >
+                        <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 -translate-x-1/2 bg-primary" />
+                        {/* A distinct cap, so the target is a shape and not only a colour. */}
+                        <span
+                          aria-hidden
+                          className="absolute -top-1 left-0 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-primary"
+                        />
+                        <span
+                          aria-hidden
+                          className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded-sm bg-primary px-1 text-xs font-medium leading-4 tabular-nums text-primary-foreground"
+                          data-testid="playback-awaited-timestamp"
+                        >
+                          {pendingSeek.targetLabel}
+                        </span>
+                      </div>
+                    ) : null}
+                    <ShownPlaybackProgress
+                      timeline={timeline}
+                      className={cn(
+                        "relative w-full bg-transparent transition-none",
+                        isScrubbing && "ring-2 ring-primary/60",
+                      )}
+                      aria-label="Playback progress"
+                      data-testid="playback-progress"
+                      data-scrubbing={isScrubbing ? "true" : undefined}
+                    />
+                  </div>
+                </button>
+              ) : (
+                <ShownPlaybackProgress
+                  timeline={timeline}
+                  // Scrubbing gets its own look so the moving bar reads as "you are
+                  // dragging this", not as playback that has suddenly sped up.
+                  className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
+                  aria-label="Playback progress"
+                  data-testid="playback-progress"
+                  data-scrubbing={isScrubbing ? "true" : undefined}
+                />
+              )}
+              <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
+                <ShownPlaybackTime timeline={timeline} field="remainingLabel" />
               </span>
             </div>
+            {/* Inline and always visible, never a tooltip: there is no hover on a phone, and this is
+              the only place that says why the tune has gone quiet. Determinate — a percentage and,
+              once the device's render rate has actually been measured, a duration. */}
+            {pendingSeek ? (
+              <p
+                // Hidden from assistive technology on purpose: the live region below says the same
+                // thing in sentences, and exposing both makes a screen reader read the wait twice.
+                aria-hidden
+                className="text-xs font-medium text-foreground"
+                data-testid="playback-pending-status"
+                data-pending-progress={pendingSeek.progressPercent}
+                data-pending-eta={pendingSeek.etaSeconds ?? undefined}
+              >
+                {pendingSeek.statusText}
+              </p>
+            ) : null}
+            {/* Present whether or not anything is pending: a live region added to the DOM at the same
+              moment as its content is frequently not announced at all. */}
+            <span className="sr-only" aria-live="polite" data-testid="playback-pending-announcement">
+              {pendingAnnouncement}
+            </span>
+            {/* Wraps, and each counter stays whole. At the largest Text size the two counters no
+              longer fit one row, and the break landed inside the duration itself: an em dash is a
+              break opportunity, so "—:—" was drawn as "—:" then "—". Stacking them keeps each
+              reading as one value. */}
+            <ShownPlaybackCounters
+              timeline={timeline}
+              className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
+              data-testid="playback-counters"
+            />
+          </div>
+          {volumeControls}
+          {/* The whole order row goes while a station drives the queue — removed, not greyed.
+
+            A station is a mode, not a passing unavailability. The rule is to disable what will come
+            back on its own and to remove what has no meaning in the current mode, and nothing the
+            listener can do brings Shuffle, Repeat or Reshuffle back while a station runs: the
+            station owns the order by definition, so they return only by stopping it. Greying is
+            usually defended as teaching that a control exists, but that argument is paid for here by
+            the source line at the top of the card, which names the station and carries Stop — and it
+            was never actually being made, because the only explanation these controls carried was a
+            `title` tooltip and there is no hover on the phone this ships to.
+
+            The row holds nothing else. Recurse used to sit here and would have been left alone in an
+            otherwise empty row; it is now in the Add items sheet, next to the folders it applies to.
+            A radio station is something you listen to, so what is left on this card during one is
+            the transport and the ranking pair, and the vertical space is given back rather than
+            spent on controls that do nothing.
+
+            Nothing above this moves: the row is the last thing in the card, so dropping it only
+            shortens the card from the bottom. */}
+          {stationActive ? null : (
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex min-h-11 items-center gap-2 text-xs">
+                <Checkbox
+                  checked={shuffleEnabled}
+                  onCheckedChange={(value) => onShuffleChange(Boolean(value))}
+                  aria-label="Shuffle"
+                  data-testid="playback-shuffle"
+                />
+                <span className="flex items-center gap-1">
+                  <Shuffle className="h-3.5 w-3.5" /> Shuffle
+                </span>
+              </label>
+              <label className="flex min-h-11 items-center gap-2 text-xs">
+                <Checkbox
+                  checked={repeatEnabled}
+                  onCheckedChange={(value) => onRepeatChange(Boolean(value))}
+                  aria-label="Repeat"
+                  data-testid="playback-repeat"
+                />
+                <span className="flex items-center gap-1">
+                  <Repeat className="h-3.5 w-3.5" /> Repeat
+                </span>
+              </label>
+              <Button
+                ref={reshuffleFocusRef}
+                variant="outline"
+                size="sm"
+                onClick={onReshuffle}
+                disabled={reshuffleDisabled}
+                id="playlist-reshuffle"
+                data-testid="playlist-reshuffle"
+                data-active={reshuffleActive ? "true" : "false"}
+                // Non-destructive shuffle (HARD9-007) never reorders the visible
+                // playlist, so the live seed of the next/prev order layer is
+                // surfaced here as a diagnostic: a changed value proves Reshuffle
+                // re-seeded the traversal without disturbing the curated list.
+                data-shuffle-seed={shuffleSeed ?? ""}
+                className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
+              >
+                <Shuffle className="h-4 w-4 mr-1" />
+                Reshuffle
+              </Button>
+            </div>
+          )}
+        </div>
+        {/* Below the transport: credits, facts and STIL change height between tunes, and the buttons must not. */}
+        {hasCurrentItem ? (
+          <div
+            className={cn("text-xs text-muted-foreground", hasComposerLink ? "mt-7" : "mt-3")}
+            data-testid="playback-current-details"
+          >
             {/* Two metadata lines, and the actions sit on the second one rather than on a row of
                 their own.
 
@@ -522,366 +916,8 @@ export const PlaybackControlsCard = ({
                 `TuneDetails` for the measurement. Nothing renders at all for the majority of the
                 archive, which STIL does not cover. */}
             <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
-          </>
-        ) : (
-          "Select a playlist item to start"
-        )}
-      </div>
-      <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
-        {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
-            44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
-            were, and the row stopped 33 px short of the right edge — visibly ragged against the
-            ranking pair directly above it, which is flush, and against the progress bar and the
-            metadata line, which are flush too. Distributing them puts the first and last on the
-            card's own edges, so every row of this card now starts and ends on the same two lines. */}
-        {/*
-          Centred, with only Play carrying a fill.
-          Four equally-outlined buttons spread across the row gave the card no focal point: squinted
-          at from a distance every one of them read the same, and the thing you press most was
-          indistinguishable from the three you press rarely. Play is now a filled circle and the
-          other three are ghosts, which is the media-player idiom and what the squint test rewards.
-        */}
-        <div className="flex items-center justify-center gap-1.5" data-testid="playback-transport-row">
-          <Button
-            ref={previousFocusRef}
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              // A hold already scrubbed; do not also change track.
-              if (holdRewind.consumedClick()) return;
-              onPrevious();
-            }}
-            onPointerDown={holdRewind.start}
-            onPointerUp={holdRewind.stop}
-            onPointerLeave={holdRewind.stop}
-            onPointerCancel={holdRewind.stop}
-            disabled={(!canTransport || !hasPrev) && !onSeek}
-            id="playlist-prev"
-            data-testid="playlist-prev"
-            // Without this, Android hands a long press to the scroller and fires
-            // pointercancel at roughly the hold threshold, so the gesture died on
-            // a real finger while working under synthetic events.
-            style={onSeek ? { touchAction: "none" } : undefined}
-            aria-label="Previous"
-            title={onSeek ? "Previous (hold to rewind)" : "Previous"}
-          >
-            <SkipBack className="h-4 w-4" />
-          </Button>
-          <Button
-            ref={playFocusRef}
-            variant={stopping || stopAvailable ? "destructive" : "default"}
-            size="icon"
-            className="size-14 rounded-full"
-            // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
-            onClick={stopping || stopPending ? undefined : stopAvailable ? onStop : onPlay}
-            disabled={!hasPlaylist}
-            aria-disabled={stopping || stopPending || undefined}
-            data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
-            data-stopping={stopping ? "true" : undefined}
-            id="playlist-play"
-            data-testid="playlist-play"
-            aria-label={playButtonLabel}
-            title={playButtonLabel}
-          >
-            {stopping ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : stopAvailable ? (
-              <Square className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-          </Button>
-          <Button
-            ref={pauseFocusRef}
-            variant="ghost"
-            size="icon"
-            onClick={onPauseResume}
-            disabled={!canPause || isPlaylistLoading}
-            id="playlist-pause"
-            data-testid="playlist-pause"
-            aria-label={isPaused ? "Resume" : "Pause"}
-            title={isPaused ? "Resume" : "Pause"}
-          >
-            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </Button>
-          <Button
-            ref={nextFocusRef}
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              // A hold already scrubbed; do not also change track.
-              if (holdForward.consumedClick()) return;
-              onNext();
-            }}
-            onPointerDown={holdForward.start}
-            onPointerUp={holdForward.stop}
-            onPointerLeave={holdForward.stop}
-            onPointerCancel={holdForward.stop}
-            disabled={(!canTransport || !hasNext) && !onSeek}
-            id="playlist-next"
-            data-testid="playlist-next"
-            // Without this, Android hands a long press to the scroller and fires
-            // pointercancel at roughly the hold threshold, so the gesture died on
-            // a real finger while working under synthetic events.
-            style={onSeek ? { touchAction: "none" } : undefined}
-            aria-label="Next"
-            title={onSeek ? "Next (hold to fast forward)" : "Next"}
-          >
-            <SkipForward className="h-4 w-4" />
-          </Button>
-        </div>
-        {stopping ? (
-          <p
-            role="status"
-            className="text-center text-sm font-medium text-foreground"
-            data-testid="playback-stop-status"
-          >
-            Stopping…
-          </p>
+          </div>
         ) : null}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span
-              className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "text-foreground")}
-              data-testid="playback-elapsed"
-              // Held, not merely lagging. While the renderer works towards a target the engine is
-              // silent, and this clock stays at the last position that was genuinely audible. A
-              // clock ticking on through that silence is the single thing this whole state exists
-              // to prevent — it is indistinguishable from playback that has died.
-              data-elapsed-held={pendingSeek ? "true" : undefined}
-            >
-              {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
-              <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
-              <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
-            </span>
-            {onSeekToFraction ? (
-              // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
-              // button so it is reachable by keyboard and by the keypad-first C64U Remote variant,
-              // where there is no pointer at all.
-              //
-              // Every pointer move is reported, and that is deliberate rather than an oversight of
-              // "never seek on a gesture sample": the handler this calls does NOT seek per sample.
-              // It moves the displayed target — which is what makes the bar follow the finger — and
-              // debounces a single seek to where the finger came to rest. Withholding the samples
-              // here would only make the bar lag the finger; the coalescing has to live where the
-              // engine is driven, and it does.
-              <button
-                type="button"
-                data-testid="playback-progress-seek"
-                aria-label="Seek within the tune"
-                className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"
-                onPointerDown={(event) => {
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  onSeekToFraction(fractionFromPointer(event));
-                }}
-                onPointerMove={(event) => {
-                  // Only while the finger is actually down on this control.
-                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    onSeekToFraction(fractionFromPointer(event));
-                  }
-                }}
-                onKeyDown={(event) => {
-                  const step = event.key === "ArrowRight" ? 0.02 : event.key === "ArrowLeft" ? -0.02 : 0;
-                  if (step === 0) return;
-                  event.preventDefault();
-                  const { progressPercent } = readShownPlaybackTime(timeline);
-                  onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
-                }}
-              >
-                <div className="relative w-full">
-                  {/* Behind the played portion, so the two read as one bar: solid where the tune has
-                      played, translucent as far as it is rendered. */}
-                  {/* Shown whenever the tune is not fully rendered — including, and especially, when
-                      rendering is BEHIND the playhead. Hiding it then was backwards: that is exactly
-                      the moment the listener needs to see the renderer catching up rather than wonder
-                      whether playback has died. */}
-                  {renderedPercent !== undefined && renderedPercent < 100 ? (
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-y-0 left-0 rounded-full bg-primary/25"
-                      style={{ width: `${Math.min(100, Math.max(0, renderedPercent))}%` }}
-                      data-testid="playback-rendered-ahead"
-                      data-rendered-percent={Math.round(renderedPercent)}
-                    />
-                  ) : null}
-                  {/* The span still to be rendered, from the render head towards the target.
-                      Striped as well as tinted: this app is read at arm's length, and one
-                      translucent fill beside a slightly different translucent fill is not a
-                      distinction anybody can make. The stripes march while the renderer works, and
-                      stop under `prefers-reduced-motion` leaving the texture behind. */}
-                  {pendingSeek ? (
-                    <div
-                      aria-hidden
-                      className="playback-pending-region pointer-events-none absolute inset-y-0 rounded-full"
-                      style={{
-                        left: `${clampPercent(pendingSeek.renderedPercent)}%`,
-                        width: `${Math.max(0, clampPercent(pendingSeek.targetPercent) - clampPercent(pendingSeek.renderedPercent))}%`,
-                      }}
-                      data-testid="playback-pending-region"
-                      data-pending-progress={pendingSeek.progressPercent}
-                      // Where the render head stood when the target was accepted — the denominator
-                      // of the percentage beside it, and the one number a HIL session needs to tell
-                      // a progress figure that is going somewhere from one that only looks like it.
-                      data-started-percent={Math.round(pendingSeek.startedAtPercent)}
-                    />
-                  ) : null}
-                  {/* Where the drag landed, while the renderer works towards it.
-                      Named and dated rather than a bare line: a 2 px rule with no label is the one
-                      element on this bar that a listener cannot interpret, and the position it
-                      stands for is exactly the thing they are waiting to hear. */}
-                  {pendingSeek ? (
-                    <div
-                      role="img"
-                      aria-label={`Waiting to continue at ${pendingSeek.targetLabel}, ${pendingSeek.progressPercent}% ready`}
-                      className="pointer-events-none absolute inset-y-0"
-                      style={{ left: `${clampPercent(pendingSeek.targetPercent)}%` }}
-                      data-testid="playback-awaited-marker"
-                      data-awaited-percent={Math.round(pendingSeek.targetPercent)}
-                    >
-                      <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 -translate-x-1/2 bg-primary" />
-                      {/* A distinct cap, so the target is a shape and not only a colour. */}
-                      <span
-                        aria-hidden
-                        className="absolute -top-1 left-0 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-primary"
-                      />
-                      <span
-                        aria-hidden
-                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded-sm bg-primary px-1 text-xs font-medium leading-4 tabular-nums text-primary-foreground"
-                        data-testid="playback-awaited-timestamp"
-                      >
-                        {pendingSeek.targetLabel}
-                      </span>
-                    </div>
-                  ) : null}
-                  <ShownPlaybackProgress
-                    timeline={timeline}
-                    className={cn(
-                      "relative w-full bg-transparent transition-none",
-                      isScrubbing && "ring-2 ring-primary/60",
-                    )}
-                    aria-label="Playback progress"
-                    data-testid="playback-progress"
-                    data-scrubbing={isScrubbing ? "true" : undefined}
-                  />
-                </div>
-              </button>
-            ) : (
-              <ShownPlaybackProgress
-                timeline={timeline}
-                // Scrubbing gets its own look so the moving bar reads as "you are
-                // dragging this", not as playback that has suddenly sped up.
-                className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
-                aria-label="Playback progress"
-                data-testid="playback-progress"
-                data-scrubbing={isScrubbing ? "true" : undefined}
-              />
-            )}
-            <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
-              <ShownPlaybackTime timeline={timeline} field="remainingLabel" />
-            </span>
-          </div>
-          {/* Inline and always visible, never a tooltip: there is no hover on a phone, and this is
-              the only place that says why the tune has gone quiet. Determinate — a percentage and,
-              once the device's render rate has actually been measured, a duration. */}
-          {pendingSeek ? (
-            <p
-              // Hidden from assistive technology on purpose: the live region below says the same
-              // thing in sentences, and exposing both makes a screen reader read the wait twice.
-              aria-hidden
-              className="text-xs font-medium text-foreground"
-              data-testid="playback-pending-status"
-              data-pending-progress={pendingSeek.progressPercent}
-              data-pending-eta={pendingSeek.etaSeconds ?? undefined}
-            >
-              {pendingSeek.statusText}
-            </p>
-          ) : null}
-          {/* Present whether or not anything is pending: a live region added to the DOM at the same
-              moment as its content is frequently not announced at all. */}
-          <span className="sr-only" aria-live="polite" data-testid="playback-pending-announcement">
-            {pendingAnnouncement}
-          </span>
-          {/* Wraps, and each counter stays whole. At the largest Text size the two counters no
-              longer fit one row, and the break landed inside the duration itself: an em dash is a
-              break opportunity, so "—:—" was drawn as "—:" then "—". Stacking them keeps each
-              reading as one value. */}
-          <div
-            className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
-            data-testid="playback-counters"
-          >
-            <span className="whitespace-nowrap">
-              Total: <ShownPlaybackTime timeline={timeline} field="totalLabel" />
-            </span>
-            <span className="whitespace-nowrap">
-              Remaining: <ShownPlaybackTime timeline={timeline} field="remainingTotalLabel" />
-            </span>
-          </div>
-        </div>
-        {volumeControls}
-        {/* The whole order row goes while a station drives the queue — removed, not greyed.
-
-            A station is a mode, not a passing unavailability. The rule is to disable what will come
-            back on its own and to remove what has no meaning in the current mode, and nothing the
-            listener can do brings Shuffle, Repeat or Reshuffle back while a station runs: the
-            station owns the order by definition, so they return only by stopping it. Greying is
-            usually defended as teaching that a control exists, but that argument is paid for here by
-            the source line at the top of the card, which names the station and carries Stop — and it
-            was never actually being made, because the only explanation these controls carried was a
-            `title` tooltip and there is no hover on the phone this ships to.
-
-            The row holds nothing else. Recurse used to sit here and would have been left alone in an
-            otherwise empty row; it is now in the Add items sheet, next to the folders it applies to.
-            A radio station is something you listen to, so what is left on this card during one is
-            the transport and the ranking pair, and the vertical space is given back rather than
-            spent on controls that do nothing.
-
-            Nothing above this moves: the row is the last thing in the card, so dropping it only
-            shortens the card from the bottom. */}
-        {stationActive ? null : (
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex min-h-11 items-center gap-2 text-xs">
-              <Checkbox
-                checked={shuffleEnabled}
-                onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-                aria-label="Shuffle"
-                data-testid="playback-shuffle"
-              />
-              <span className="flex items-center gap-1">
-                <Shuffle className="h-3.5 w-3.5" /> Shuffle
-              </span>
-            </label>
-            <label className="flex min-h-11 items-center gap-2 text-xs">
-              <Checkbox
-                checked={repeatEnabled}
-                onCheckedChange={(value) => onRepeatChange(Boolean(value))}
-                aria-label="Repeat"
-                data-testid="playback-repeat"
-              />
-              <span className="flex items-center gap-1">
-                <Repeat className="h-3.5 w-3.5" /> Repeat
-              </span>
-            </label>
-            <Button
-              ref={reshuffleFocusRef}
-              variant="outline"
-              size="sm"
-              onClick={onReshuffle}
-              disabled={reshuffleDisabled}
-              id="playlist-reshuffle"
-              data-testid="playlist-reshuffle"
-              data-active={reshuffleActive ? "true" : "false"}
-              // Non-destructive shuffle (HARD9-007) never reorders the visible
-              // playlist, so the live seed of the next/prev order layer is
-              // surfaced here as a diagnostic: a changed value proves Reshuffle
-              // re-seeded the traversal without disturbing the curated list.
-              data-shuffle-seed={shuffleSeed ?? ""}
-              className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
-            >
-              <Shuffle className="h-4 w-4 mr-1" />
-              Reshuffle
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

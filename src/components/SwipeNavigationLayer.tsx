@@ -28,7 +28,7 @@ import {
 } from "@/lib/navigation/swipeNavigationModel";
 import { subscribePageReset } from "@/lib/navigation/pageReset";
 import { forgetPagePosition } from "@/lib/navigation/pagePositions";
-import { PageSlotBody } from "@/components/swipeNavigation/PageSlotBody";
+import { PageSlotBody, warmPageChunks } from "@/components/swipeNavigation/PageSlotBody";
 import { useSettingsPageStaleness } from "@/components/swipeNavigation/useSettingsPageStaleness";
 import { rememberedSlotAppBarHeight } from "@/lib/navigation/slotAppBarHeights";
 
@@ -198,6 +198,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     [resetContainerScroll],
   );
 
+  useEffect(() => warmPageChunks(), []);
+
   useEffect(() => {
     const handleSettingsUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
@@ -210,9 +212,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   }, []);
 
   useLayoutEffect(() => {
-    resetContainerScroll("state-sync");
     scheduleContainerScrollReset("state-sync-frame");
-  }, [resetContainerScroll, routeIndex, runway.phase, scheduleContainerScrollReset]);
+  }, [routeIndex, runway.phase, scheduleContainerScrollReset]);
 
   useEffect(() => {
     const container = containerRef.current;

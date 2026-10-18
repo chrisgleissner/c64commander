@@ -113,6 +113,33 @@ test.describe("Playlist filter and item actions on the smallest screen", () => {
     await expect(active(page).getByTestId("playlist-type-songs")).toBeVisible();
   });
 
+  test("a playlist row is one compact block and does not repeat its folder @layout", async ({ page }) => {
+    await openPlay(page);
+    const row = firstRow(page);
+    await row.scrollIntoViewIfNeeded();
+    const measured = await row.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const controls = Array.from(element.querySelectorAll("button:not(label button), label")).map((control) => {
+        const rect = control.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, right: rect.right };
+      });
+      return { height: box.height, right: box.right, text: element.textContent ?? "", controls };
+    });
+    expect(measured.height, "row height (was 150 to 165 px)").toBeLessThanOrEqual(60);
+    expect(measured.text, "the folder is on the group header only").not.toContain("Long_Directory_Name");
+    expect(measured.text, "the file name is on the details menu only").not.toMatch(/\.sid/i);
+    const second = await active(page).getByTestId("playlist-item").nth(1).boundingBox();
+    const first = await row.boundingBox();
+    expect(second!.y - first!.y, "distance from one row to the next").toBeLessThanOrEqual(60);
+    for (const control of measured.controls) {
+      expect(control.width).toBeGreaterThanOrEqual(43.5);
+      expect(control.height).toBeGreaterThanOrEqual(43.5);
+      expect(control.right).toBeLessThanOrEqual(measured.right + 0.5);
+    }
+    await expect(row.getByRole("button", { name: /^Play /u })).toBeVisible();
+    await expect(row.getByRole("checkbox")).toBeVisible();
+  });
+
   test("the type filters fit on one line at the default text size @layout", async ({ page }) => {
     await openPlay(page);
     await filterToggle(page).click();

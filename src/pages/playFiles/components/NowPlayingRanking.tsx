@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { CircleX, Heart, X } from "lucide-react";
+import { Heart, ThumbsDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ export type NowPlayingRankingProps = {
   /**
    * Called when the user *newly* marks the tune Not-for-me while a station is
    * active — the station skips immediately (spec §5.1, D8). Omitted (or no
-   * active station) → ✕ only records the dislike.
+   * active station) → the thumbs-down only records the dislike.
    *
    * Its presence is therefore also how this component knows a station is
    * driving the queue, which is what decides whether ✕ says it will skip.
@@ -29,12 +29,12 @@ export type NowPlayingRankingProps = {
 };
 
 /**
- * The ♥ / ✕ ranking pair on the Now Playing card (spec §5.1) — two primary CTAs, not decoration.
+ * The thumbs-down / ♥ ranking pair on the Now Playing card (spec §5.1) — two primary CTAs, not decoration.
  *
- * **Order: ✕ then ♥, with ♥ outermost.** The pair is right-aligned, so the outermost button is the
+ * **Order: thumbs-down then ♥, with ♥ outermost.** The pair is right-aligned, so the outermost button is the
  * easiest one to hit on the row — and it shares its right edge with the Next button one row below,
  * which is where an overshooting thumb ends up. ♥ takes that seat because it is the safe half of
- * the pair: a stray ♥ fills a heart you can see and untap, whereas a stray ✕ skips the tune out
+ * the pair: a stray ♥ fills a heart you can see and untap, whereas a stray thumbs-down skips the tune out
  * from under you *and* biases every future refill, and the tune it was about has left the card
  * before you can undo it. Left-to-right this reads reject-then-like, matching the
  * swipe-left-to-reject / swipe-right-to-like mapping that mobile has taught everyone for
@@ -42,12 +42,12 @@ export type NowPlayingRankingProps = {
  *
  * **Weight: the same 44 px outline button as the transport.** These were 32 px ghost glyphs, which
  * put them under the project's own 40 px hit-target floor and made them read as decoration beside
- * four chromed transport buttons. Chrome does a second job for the ✕: `docs/ux-guidelines.md`
- * defines the app's shared close control as a plain × with *no* button chrome, so putting this ×
- * in a bordered button is what stops it being read as "dismiss this card".
+ * four chromed transport buttons. A thumbs-down glyph, not an ✕, because
+ * `docs/ux-guidelines.md` defines the app's shared close control as a plain × and an unlabeled ✕
+ * beside the ♥ read as "dismiss this card".
  *
- * **State is never carried by colour alone.** ♥ fills its glyph solid and tints its surface; ✕
- * swaps to a circled glyph and takes the same filled-surface treatment the Reshuffle toggle uses
+ * **State is never carried by colour alone.** ♥ fills its glyph solid and tints its surface; the
+ * thumbs-down fills solid and takes the same filled-surface treatment the Reshuffle toggle uses
  * for "on". Both survive greyscale, and `aria-pressed` plus a label that changes carry it to
  * assistive technology.
  *
@@ -89,7 +89,7 @@ export const NowPlayingRanking = ({ md5, enabled, onNotForMe }: NowPlayingRankin
           if (nowMarked) onNotForMe?.();
         }}
       >
-        {isNotForMe ? <CircleX /> : <X />}
+        <ThumbsDown className={cn("transition-colors", isNotForMe && "fill-current")} />
       </Button>
       <Button
         type="button"

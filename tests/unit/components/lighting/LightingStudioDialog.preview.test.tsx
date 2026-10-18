@@ -157,6 +157,8 @@ const buildStudioMock = () => ({
     fallbackActive: false,
     resolvedLocation: { label: "Tokyo" },
   },
+  connectionSentinelState: "connected",
+  playbackContext: { sourceBucket: null, activeItemLabel: null },
   manualLockEnabled: false,
   lockCurrentLook: vi.fn(),
   unlockCurrentLook: vi.fn(),

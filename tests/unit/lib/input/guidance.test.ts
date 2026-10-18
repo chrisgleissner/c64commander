@@ -89,11 +89,17 @@ describe("resolveGuidanceLabels — center / OK key", () => {
     ["select", "Select"],
     ["switch", "Toggle"],
     ["slider", "Adjust"],
-    ["tab", "Switch"],
+    ["tab", "Open"],
     ["link", "Open"],
-    ["button", "Activate"],
+    ["menu", "Open menu"],
+    ["button", "Press"],
+    ["none", "Press"],
   ] as const)("'%s' control → OK label '%s'", (kind, label) => {
     expect(resolveGuidanceLabels(state({ currentKind: kind })).center).toBe(label);
+  });
+
+  it("names a control's own verb in place of its kind's label", () => {
+    expect(resolveGuidanceLabels(state({ currentKind: "button", centerVerb: "Seek" })).center).toBe("Seek");
   });
 
   it("offers no OK action on a status, such as a page that is still loading", () => {
@@ -175,7 +181,9 @@ describe("classifyFocusKind", () => {
     ['<div role="button"></div>', "button"],
     ['<button aria-expanded="true">Spectrum</button>', "collapse"],
     ['<button aria-expanded="false">Spectrum</button>', "expand"],
-    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "button"],
+    ['<button aria-expanded="false" aria-haspopup="menu">More</button>', "menu"],
+    ['<button aria-haspopup="dialog">Edit</button>', "link"],
+    ['<button aria-pressed="false">Watch</button>', "switch"],
   ] as const)("%s → %s", (html, kind) => {
     expect(classifyFocusKind(el(html), false)).toBe(kind);
   });
@@ -406,5 +414,40 @@ describe("resolveSoftKeyMenuPanelLabels", () => {
       "Remote Input",
       "Release all",
     ]);
+  });
+});
+
+describe("accessibleLabelFor — rendered text reads", () => {
+  const withRenderedTextCounter = (html: string) => {
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const element = host.firstElementChild as HTMLElement;
+    let reads = 0;
+    Object.defineProperty(element, "innerText", {
+      get: () => {
+        reads += 1;
+        return element.textContent;
+      },
+    });
+    return { element, reads: () => reads };
+  };
+
+  it("reads the laid-out text once while the element's text stays the same", () => {
+    const { element, reads } = withRenderedTextCounter("<section>Connection</section>");
+
+    expect(accessibleLabelFor(element)).toBe("Connection");
+    expect(accessibleLabelFor(element)).toBe("Connection");
+
+    expect(reads()).toBe(1);
+  });
+
+  it("reads the laid-out text again once the element's text changes", () => {
+    const { element, reads } = withRenderedTextCounter("<section>Connection</section>");
+
+    accessibleLabelFor(element);
+    element.textContent = "Devices";
+
+    expect(accessibleLabelFor(element)).toBe("Devices");
+    expect(reads()).toBe(2);
   });
 });

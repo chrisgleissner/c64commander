@@ -60,11 +60,11 @@ export default function DocsPage() {
           kept where the page was tuned; on compact the profile's padding applies again. */}
       <PageContainer className={profile === "compact" ? undefined : "py-6"}>
         <PageStack className={profile === "compact" ? "gap-2" : "gap-4"}>
-          {/* First, because someone on Docs is looking for a way in and the tour is the shortest
-            one. Restartable at any time, which is the point of section 8's D10. */}
-          <TourRestartCard />
-
+          {/* The contents come first: someone on Docs is looking for a chapter. The tour sits below
+            them and stays restartable at any time (section 8's D10). */}
           <DocsContents chapters={chapters} />
+
+          <TourRestartCard />
 
           {chapters.map((chapter, index) => (
             <motion.div

@@ -8,7 +8,7 @@
 
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Play } from "lucide-react";
+import { Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -109,6 +109,8 @@ export type SelectableActionListProps = {
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
   stackTitleProfiles?: readonly DisplayProfile[];
+  /** Profiles on which a row is a three-column grid: select, name with details, and play above the item menu. */
+  denseRowProfiles?: readonly DisplayProfile[];
   /** The whole list for the view-all letter rail when `viewAllItems` is paged. */
   letterIndexSource?: LetterIndexSource;
   /** Profiles on which the filter folds into one summary row once the reader moves on to the list. */
@@ -118,7 +120,11 @@ export type SelectableActionListProps = {
 };
 
 const DEFAULT_STACK_TITLE_PROFILES: readonly DisplayProfile[] = ["compact"];
+const DEFAULT_DENSE_ROW_PROFILES: readonly DisplayProfile[] = ["compact", "medium"];
 const NO_PROFILES: readonly DisplayProfile[] = [];
+const LIST_OVERSCAN_PX = 500;
+// Every row built beyond the viewport is built again after each jump, and a 320 px screen held about 11 of them.
+const COMPACT_LIST_OVERSCAN_PX = 200;
 
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
@@ -134,6 +140,7 @@ type ActionListRowProps = {
   item: ActionListItem;
   rowTestId?: string;
   stackTitle: boolean;
+  dense: boolean;
   menuPresentation: "dropdown" | "sheet";
 };
 
@@ -144,13 +151,17 @@ const ActionListRow = React.memo(function ActionListRow({
   item,
   rowTestId,
   stackTitle,
+  dense,
   menuPresentation,
 }: ActionListRowProps) {
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
       <div
-        className="flex items-start gap-2 rounded-md bg-muted/30 px-2 py-[0.44rem] min-w-0 max-w-full"
+        className={cn(
+          "flex items-start gap-2 rounded-md bg-muted/30 px-2 min-w-0 max-w-full",
+          dense ? "py-1" : "py-[0.44rem]",
+        )}
         data-testid={headerTestId}
         data-row-id={item.id}
       >
@@ -169,10 +180,15 @@ const ActionListRow = React.memo(function ActionListRow({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-2 rounded-md px-1 min-w-0 max-w-full",
-        // The stacked title is a 44 px target on its own line, so the row gives back its own
-        // vertical padding and line gap to stay the height it was.
-        stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
+        "items-center rounded-md min-w-0 max-w-full",
+        dense
+          ? "grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem_2.75rem] py-0.5"
+          : cn(
+              "flex flex-wrap gap-x-2 px-1",
+              // The stacked title is a 44 px target on its own line, so the row gives back its own
+              // vertical padding and line gap to stay the height it was.
+              stackTitle ? "gap-y-0 py-0" : "gap-y-2 py-[0.44rem]",
+            ),
         item.isDimmed
           ? "opacity-40"
           : isPlaying
@@ -200,13 +216,17 @@ const ActionListRow = React.memo(function ActionListRow({
       data-testid={rowTestId}
       data-row-id={item.id}
       data-playing={isPlaying ? "true" : "false"}
+      data-key-nav-menu-host={item.showMenu === false ? undefined : ""}
     >
-      <div className="flex items-center gap-1 shrink-0">
+      <div className={dense ? "contents" : "flex items-center gap-1 shrink-0"}>
         {item.showSelection !== false ? (
           // A 44 px label around the 16 px box takes the tap. The margins keep the row's layout close
           // to the bare box and stop short of the actions button, so the two targets do not overlap.
           <label
-            className="-ml-[14px] -mr-1 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center"
+            className={cn(
+              "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center",
+              dense ? "col-start-1 row-start-1" : "-ml-[14px] -mr-1",
+            )}
             onClick={(event) => event.stopPropagation()}
           >
             <Checkbox
@@ -220,17 +240,25 @@ const ActionListRow = React.memo(function ActionListRow({
           </label>
         ) : null}
         {item.showMenu === false ? null : (
-          <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
+          <div className={dense ? "col-start-4 row-start-1 flex justify-center" : "contents"}>
+            <ActionListItemMenu item={item} testId={actionMenuTestId} presentation={menuPresentation} />
+          </div>
         )}
       </div>
       <div
-        className={cn("flex items-center gap-2 min-w-0 max-w-full", stackTitle ? "order-first basis-full" : "flex-1")}
+        className={cn(
+          "flex items-center gap-2 min-w-0 max-w-full",
+          dense ? "col-start-2 row-start-1" : stackTitle ? "order-first basis-full" : "flex-1",
+        )}
       >
-        {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
+        {item.icon && !dense ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex items-center gap-1"
+            className={cn(
+              "text-sm font-medium text-left hover:underline max-w-full min-w-11 min-h-11 flex",
+              dense ? "flex-col items-start justify-center" : "items-center gap-1",
+            )}
             data-row-title="true"
             onClick={wrapUserEvent(
               (event) => {
@@ -244,7 +272,10 @@ const ActionListRow = React.memo(function ActionListRow({
             )}
             disabled={item.isDimmed || item.disableActions}
           >
-            <NameWrap name={item.title} className={cn(item.titleClassName, "min-w-0 whitespace-normal")} />
+            <NameWrap
+              name={item.title}
+              className={cn(item.titleClassName, "min-w-0 whitespace-normal [word-break:normal]")}
+            />
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
@@ -265,12 +296,13 @@ const ActionListRow = React.memo(function ActionListRow({
           ) : null}
         </div>
       </div>
-      <div className={cn("flex flex-col gap-1 shrink-0", stackTitle && "ml-auto")}>
+      <div className={dense ? "contents" : cn("flex flex-col gap-1 shrink-0", stackTitle && "ml-auto")}>
         <Button
           variant={isPlaying ? "secondary" : "ghost"}
           size="icon"
           className={cn(
             "h-9 w-9 min-h-[44px] min-w-[44px]",
+            dense && "col-start-3 row-start-1",
             isPlaying ? "text-primary border border-primary/30" : null,
           )}
           onClick={(event) => {
@@ -286,7 +318,10 @@ const ActionListRow = React.memo(function ActionListRow({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+            className={cn(
+              "h-7 px-2 text-xs text-destructive hover:text-destructive",
+              dense && "col-span-2 col-start-2 row-start-2 justify-self-start",
+            )}
             onClick={(event) => {
               event.stopPropagation();
               item.onSecondaryAction?.();
@@ -324,7 +359,7 @@ export const SelectableActionList = ({
   headerActions,
   filterHeader,
   viewAllFilterHeader,
-  filterPlaceholder = "Filter files...",
+  filterPlaceholder = "Filter files",
   filterValue,
   onFilterValueChange,
   viewAllFilterValue,
@@ -336,6 +371,7 @@ export const SelectableActionList = ({
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
+  denseRowProfiles = DEFAULT_DENSE_ROW_PROFILES,
   letterIndexSource,
   collapsibleFilterProfiles = NO_PROFILES,
   filterHeaderSummary = null,
@@ -343,6 +379,7 @@ export const SelectableActionList = ({
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const stackTitles = stackTitleProfiles.includes(profile);
+  const denseRows = denseRowProfiles.includes(profile);
   const collapsibleFilter = collapsibleFilterProfiles.includes(profile);
   const menuPresentation = isCompact ? "sheet" : "dropdown";
   const listRootRef = useRef<HTMLDivElement>(null);
@@ -365,8 +402,8 @@ export const SelectableActionList = ({
     const rootPx = Number.parseFloat(getDisplayProfileLayoutTokens(profile).rootFontSize);
     // 7.8 root-font-sizes: a row measured 140px against the phone profile's 18px root. Expressed
     // as a multiple of the root so it follows the profile rather than being re-measured per screen.
-    return Math.round(rootPx * 7.8);
-  }, [profile]);
+    return Math.round(rootPx * (denseRows ? 4.1 : 7.8));
+  }, [profile, denseRows]);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const effectiveViewAllItems = viewAllItems ?? items;
@@ -518,7 +555,7 @@ export const SelectableActionList = ({
   );
 
   const renderList = (list: ActionListItem[]) => (
-    <div className="space-y-2" data-testid={listTestId}>
+    <div className={denseRows ? "space-y-0.5" : "space-y-2"} data-testid={listTestId}>
       {list.length === 0 ? (
         <p className="text-xs text-muted-foreground">{inlineEmptyLabel}</p>
       ) : (
@@ -528,6 +565,7 @@ export const SelectableActionList = ({
             item={item}
             rowTestId={rowTestId}
             stackTitle={stackTitles}
+            dense={denseRows}
             menuPresentation={menuPresentation}
           />
         ))
@@ -582,7 +620,7 @@ export const SelectableActionList = ({
       )}
 
       {showSelectionControls ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+        <div className="flex items-center justify-between gap-2 text-xs min-w-0">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="text-muted-foreground min-w-0 break-words">
               {/* Empty says so once, in the list body; the count reads "1 item", not "1 items". */}
@@ -602,22 +640,34 @@ export const SelectableActionList = ({
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
           </div>
-          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+          {removeSelectedLabel && onRemoveSelected && (items.length > 0 || selectedCount > 0) ? (
+            // Always in the row and hidden while nothing is selected, so appearing on the first
+            // selection moves nothing; an icon, so the row keeps its single line at 320 px.
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={onRemoveSelected}
-              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              disabled={selectedCount === 0}
+              aria-hidden={selectedCount === 0 ? true : undefined}
+              aria-label={removeSelectedLabel}
+              title={removeSelectedLabel}
+              className={cn(
+                "size-11 shrink-0 text-destructive hover:text-destructive",
+                selectedCount === 0 && "invisible",
+              )}
               id={removeSelectedId}
               data-testid={removeSelectedId}
             >
-              {removeSelectedLabel}
+              <Trash2 className="h-5 w-5" aria-hidden />
             </Button>
           ) : null}
         </div>
       ) : null}
 
-      <div ref={inlineListRef} className="bg-card border border-border rounded-panel p-4 overflow-hidden">
+      <div
+        ref={inlineListRef}
+        className={cn("bg-card border border-border rounded-panel overflow-hidden", denseRows ? "p-2" : "p-4")}
+      >
         {renderList(visibleItems)}
       </div>
 
@@ -679,7 +729,7 @@ export const SelectableActionList = ({
                       style={{ height: "100%" }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
-                      overscan={500}
+                      overscan={isCompact ? COMPACT_LIST_OVERSCAN_PX : LIST_OVERSCAN_PX}
                       endReached={() => {
                         if (hasMoreViewAllItems) {
                           onViewAllEndReached?.();
@@ -687,11 +737,12 @@ export const SelectableActionList = ({
                       }}
                       scrollerRef={letterRail.setScroller}
                       itemContent={(index, item) => (
-                        <div className={cn("mb-2 last:mb-0", letterRailLaneClass)}>
+                        <div className={cn(denseRows ? "mb-0.5" : "mb-2", "last:mb-0", letterRailLaneClass)}>
                           <ActionListRow
                             item={item}
                             rowTestId={rowTestId}
                             stackTitle={stackTitles}
+                            dense={denseRows}
                             menuPresentation={menuPresentation}
                           />
                         </div>

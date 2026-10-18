@@ -125,6 +125,77 @@ describe("the Android Back key", () => {
     uninstall();
   });
 
+  describe("a Back press while an overlay is still closing", () => {
+    const closingOverlay = () => {
+      const overlay = document.createElement("div");
+      overlay.setAttribute("role", "listbox");
+      overlay.setAttribute("data-state", "closed");
+      document.body.appendChild(overlay);
+      return overlay;
+    };
+
+    it("waits for the closing overlay to leave, then reaches the page once", async () => {
+      const uninstall = installDeviceBackButton(vi.fn());
+      await flush();
+      vi.useFakeTimers();
+      const overlay = closingOverlay();
+      const seen: KeyboardEvent[] = [];
+      const handler = (event: Event) => seen.push(event as KeyboardEvent);
+      document.addEventListener("keydown", handler);
+
+      appListener.backButton?.();
+      expect(seen).toHaveLength(0);
+      vi.advanceTimersByTime(100);
+      expect(seen).toHaveLength(0);
+      overlay.remove();
+      vi.advanceTimersByTime(100);
+
+      document.removeEventListener("keydown", handler);
+      vi.useRealTimers();
+      expect(seen).toHaveLength(1);
+      uninstall();
+    });
+
+    it("delivers every queued press, one per closing overlay, in order", async () => {
+      const uninstall = installDeviceBackButton(vi.fn());
+      await flush();
+      vi.useFakeTimers();
+      const overlay = closingOverlay();
+      const seen: KeyboardEvent[] = [];
+      const handler = (event: Event) => seen.push(event as KeyboardEvent);
+      document.addEventListener("keydown", handler);
+
+      appListener.backButton?.();
+      appListener.backButton?.();
+      overlay.remove();
+      vi.advanceTimersByTime(200);
+
+      document.removeEventListener("keydown", handler);
+      vi.useRealTimers();
+      expect(seen).toHaveLength(2);
+      uninstall();
+    });
+
+    it("gives up waiting after a bounded time so a stuck overlay cannot swallow Back", async () => {
+      const uninstall = installDeviceBackButton(vi.fn());
+      await flush();
+      vi.useFakeTimers();
+      const overlay = closingOverlay();
+      const seen: KeyboardEvent[] = [];
+      const handler = (event: Event) => seen.push(event as KeyboardEvent);
+      document.addEventListener("keydown", handler);
+
+      appListener.backButton?.();
+      vi.advanceTimersByTime(1000);
+
+      document.removeEventListener("keydown", handler);
+      overlay.remove();
+      vi.useRealTimers();
+      expect(seen).toHaveLength(1);
+      uninstall();
+    });
+  });
+
   it("registers exactly one listener and removes it again", async () => {
     const uninstall = installDeviceBackButton(vi.fn());
     await flush();

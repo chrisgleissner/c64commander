@@ -33,6 +33,13 @@ describe("modalPresentation", () => {
     expect(resolveModalPresentation("compact", "popover").mode).toBe("centered");
   });
 
+  it("trims the centered dialog's outer padding on the compact profile only, because its header and footer pad themselves", () => {
+    for (const surface of ["confirmation", "default"] as const) {
+      expect(resolveModalPresentation("compact", surface).contentClassName).toMatch(/(^| )p-2( |$)/);
+      expect(resolveModalPresentation("medium", surface).contentClassName).not.toMatch(/(^| )p-2( |$)/);
+    }
+  });
+
   it("keeps confirmation dialogs centered while allowing large browser surfaces", () => {
     expect(resolveModalPresentation("compact", "confirmation").mode).toBe("centered");
     expect(resolveModalPresentation("medium", "selection-browser").mode).toBe("large");

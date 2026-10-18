@@ -249,7 +249,7 @@ describe("iOS Maestro text anchors", () => {
   it("anchors the HVSC flag on the label row's whole text", () => {
     const name = featureFlagRowName("hvsc_enabled");
 
-    expect(name).toBe("HVSC downloads Show the HVSC source in Add Items.");
+    expect(name).toBe("HVSC downloads Show the HVSC source in Add items.");
     expect(matchesWholeText(HVSC_FLAG_ANCHOR, name)).toBe(true);
     expect(matchesWholeText("Enable HVSC downloads", name)).toBe(false);
 

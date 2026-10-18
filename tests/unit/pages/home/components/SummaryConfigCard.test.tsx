@@ -12,8 +12,8 @@ import { describe, expect, it, vi } from "vitest";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { SummaryConfigCard, SummaryConfigControlRow } from "@/pages/home/components/SummaryConfigCard";
 
-vi.mock("@/components/ui/checkbox", () => ({
-  Checkbox: React.forwardRef(
+vi.mock("@/components/ui/switch", () => ({
+  Switch: React.forwardRef(
     ({ checked, onCheckedChange, disabled, "aria-label": ariaLabel, "data-testid": testId }: any, ref: any) => (
       <input
         ref={ref}

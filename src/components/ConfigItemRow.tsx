@@ -9,7 +9,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createIndexedSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
@@ -454,24 +454,13 @@ export const ConfigItemRow = memo(function ConfigItemRow({
             {checked ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue}
           </span>
         </div>
-        {/* The 18 px box alone was the whole touch target; this 44 px square around it takes the tap too. */}
-        <div
-          className={cn(
-            "-m-[13px] flex h-11 w-11 shrink-0 items-center justify-center",
-            layout !== "horizontal" && "self-start",
-          )}
-          onClick={(event) => {
-            if ((event.target as HTMLElement).closest('[role="checkbox"]') || controlDisabled) return;
-            commitChecked(!checked);
-          }}
-        >
-          <Checkbox
-            checked={checked}
-            disabled={controlDisabled}
-            onCheckedChange={(next) => commitChecked(next === true)}
-            aria-label={`${displayLabel} checkbox`}
-          />
-        </div>
+        <Switch
+          checked={checked}
+          disabled={controlDisabled}
+          onCheckedChange={commitChecked}
+          aria-label={displayLabel}
+          className={cn(layout !== "horizontal" && "self-start")}
+        />
       </div>
     );
   }

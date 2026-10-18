@@ -663,7 +663,7 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("renders item with icon, titleSuffix, subtitle, and meta", () => {
+  it("renders titleSuffix, subtitle, and meta, and no leading icon in the dense row", () => {
     const items: ActionListItem[] = [
       {
         id: "track-1",
@@ -689,7 +689,8 @@ describe("SelectableActionList view-all wrapping", () => {
         maxVisible={10}
       />,
     );
-    expect(screen.getByTestId("row-icon")).toBeInTheDocument();
+    // The dense row drops the leading glyph: where an item lives is in its Details menu.
+    expect(screen.queryByTestId("row-icon")).not.toBeInTheDocument();
     expect(screen.getByText("(v2)")).toBeInTheDocument();
     expect(screen.getByTestId("item-subtitle")).toHaveTextContent("Artist Name");
     expect(screen.getByText("Extra info")).toBeInTheDocument();
@@ -780,6 +781,36 @@ describe("SelectableActionList view-all wrapping", () => {
     expect(removeBtn).toBeInTheDocument();
     fireEvent.click(removeBtn);
     expect(onRemoveSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the remove-selected button laid out but hidden and disabled while nothing is selected", () => {
+    const onRemoveSelected = vi.fn();
+    const renderList = (selectedCount: number) => (
+      <SelectableActionList
+        title="Playlist"
+        items={[
+          { id: "track-1", title: "Track One", selected: selectedCount > 0, actionLabel: "Play", onAction: vi.fn() },
+        ]}
+        emptyLabel="Empty"
+        selectedCount={selectedCount}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+        removeSelectedLabel="Remove selected"
+        onRemoveSelected={onRemoveSelected}
+        listTestId="list"
+      />
+    );
+    const { rerender } = render(renderList(0));
+    const removeBtn = screen.getByTestId("list-remove-selected");
+    expect(removeBtn).toBeDisabled();
+    expect(removeBtn).toHaveAttribute("aria-hidden", "true");
+    expect(removeBtn).toHaveClass("invisible");
+    rerender(renderList(1));
+    expect(screen.getByTestId("list-remove-selected")).toBe(removeBtn);
+    expect(removeBtn).toBeEnabled();
+    expect(removeBtn).not.toHaveAttribute("aria-hidden");
+    expect(removeBtn).not.toHaveClass("invisible");
   });
 
   it("renders headerActions slot", () => {

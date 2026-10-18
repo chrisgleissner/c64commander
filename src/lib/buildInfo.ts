@@ -78,7 +78,7 @@ export const getBuildInfoRows = (info: BuildInfo = getBuildInfo()): BuildInfoRow
     testId: "build-info-git",
   },
   {
-    label: "Build Time",
+    label: "Build time",
     value: info.buildTimeUtc,
     testId: "build-info-time",
   },

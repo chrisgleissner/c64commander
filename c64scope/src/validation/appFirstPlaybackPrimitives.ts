@@ -128,7 +128,7 @@ function pickerContentIsVisible(nodes: ReturnType<typeof parseUiNodes>): boolean
     readPickerPathFromNodes(nodes) !== null ||
     findVisibleText(nodes, "Select items") !== null ||
     readSelectedCount(nodes) !== null ||
-    findVisibleText(nodes, "Filter files…") !== null ||
+    findVisibleText(nodes, "Filter files") !== null ||
     findVisibleText(nodes, "Filter files...") !== null
   );
 }

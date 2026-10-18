@@ -49,7 +49,7 @@ vi.mock("@/hooks/useSearchResults", () => ({
 }));
 
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
-import { useListenActions, type ListenAction } from "@/pages/home/components/useListenActions";
+import { resolveSessionTileLabel, useListenActions, type ListenAction } from "@/pages/home/components/useListenActions";
 
 const renderTiles = (active: boolean) => {
   const result: { current: ListenAction[] } = { current: [] };
@@ -112,5 +112,19 @@ describe("useListenActions", () => {
 
     expect(tile("action.resume-session")?.description).toBe("Chess");
     expect(tile("action.recently-played")?.description).toBe("2");
+  });
+});
+
+describe("resolveSessionTileLabel", () => {
+  it("names the tune by its display title, so the tile wraps at word boundaries instead of inside a file name", () => {
+    expect(resolveSessionTileLabel("Probe_Long_20min.sid", true)).toBe("Probe Long 20min");
+  });
+
+  it("drops only the extension when friendly names are off", () => {
+    expect(resolveSessionTileLabel("Probe_Long_20min.sid", false)).toBe("Probe_Long_20min");
+  });
+
+  it("keeps a program's name as it is written instead of reading it as a SID title", () => {
+    expect(resolveSessionTileLabel("Space_Taxi.prg", true)).toBe("Space_Taxi");
   });
 });

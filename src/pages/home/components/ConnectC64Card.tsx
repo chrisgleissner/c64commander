@@ -15,7 +15,7 @@ import { t } from "@/lib/i18n";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 
 /**
- * What stands where the machine Quick Actions do while nothing is connected (spec.md section 6.1).
+ * What stands where the machine Quick actions do while nothing is connected (spec.md section 6.1).
  *
  * A wall of "Not available" reads as an app that is broken rather than one waiting for hardware, so
  * the offline arrangement puts the one thing there is to do in its place.

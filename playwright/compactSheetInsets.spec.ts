@@ -52,7 +52,13 @@ test.describe("compact bottom sheets and the system bars", () => {
 
     const box = (await sheet.boundingBox())!;
     expect(box.y, "the sheet starts under the status bar").toBeGreaterThanOrEqual(30 - 0.5);
-    expect(box.y + box.height, "the sheet runs under the navigation bar").toBeLessThanOrEqual(426 - 48 + 0.5);
+
+    // The sheet stands on the bottom edge and pads its scrolling body by the navigation bar's inset,
+    // so the last row clears the bar instead of being drawn under it.
+    const bodyPaddingBottom = await sheet
+      .locator('[data-surface-body="true"]')
+      .evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom));
+    expect(bodyPaddingBottom, "the body's last row runs under the navigation bar").toBeGreaterThanOrEqual(48);
 
     const close = (await sheet.getByRole("button", { name: "Close" }).last().boundingBox())!;
     expect(close.y, "Close sits under the status bar").toBeGreaterThanOrEqual(30);

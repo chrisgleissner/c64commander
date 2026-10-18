@@ -129,9 +129,18 @@ const FULL_SCREEN_AT_COMPACT: ReadonlySet<ModalSurface> = new Set([
   "command-palette",
 ]);
 
+/*
+ * The centered dialog's own 24 px padding sits outside the header and footer, which pad themselves, so
+ * on a 320 px panel a confirmation lost a third of its width and a fifth of its height to margins.
+ */
+const compactDialogClass = `${defaultDialogClass} p-2`;
+
 export const resolveModalPresentation = (profile: DisplayProfile, surface: ModalSurface): ModalPresentation => {
   if (profile === "compact" && FULL_SCREEN_AT_COMPACT.has(surface)) {
     return promoteToFullScreen(surface);
+  }
+  if (profile === "compact" && (surface === "confirmation" || surface === "default")) {
+    return { surface, mode: "centered", contentClassName: compactDialogClass, footerClassName: "" };
   }
 
   switch (surface) {

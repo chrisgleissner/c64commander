@@ -166,6 +166,9 @@ class LocalAudioFeedTest {
     return out
   }
 
+  /** Left and right swing apart, which is what the silence detector counts as sound; a constant is not. */
+  private fun audible(frames: Int) = Segment(LocalAudioFeed.bytesSource(pcm(frames, 5000, -5000)), 0, frames.toLong())
+
   private fun segment(frames: Int, value: Int) = Segment(LocalAudioFeed.bytesSource(pcm(frames, value)), 0, frames.toLong())
 
   /** Run the feeder until it has nothing more to do right now, advancing virtual time as it parks. */
@@ -663,7 +666,8 @@ class LocalAudioFeedTest {
   fun `judges silence by what has reached the speaker, not by what is still queued`() {
     feed.openSession(1, settings)
     var seq = 1L
-    repeat(26) { feed.enqueue(1, seq++, segment(rate / 2, 0)) }
+    feed.fade(1, seq++, 0.0, 0)
+    repeat(26) { feed.enqueue(1, seq++, audible(rate / 2)) }
     pump()
     assertTrue(feed.stats(1)!!.silentSeconds >= 12.0)
     assertFalse(feed.stats(1)!!.silentFault)
@@ -672,6 +676,18 @@ class LocalAudioFeedTest {
     feed.resetSilence(1)
     pump()
     assertEquals(0.0, feed.stats(1)!!.silentSeconds, 1e-9)
+  }
+
+  @Test
+  fun `a tune that is itself silent for a long stretch is not a fault`() {
+    feed.openSession(1, settings)
+    var seq = 1L
+    feed.enqueue(1, seq++, audible(rate))
+    repeat(40) { feed.enqueue(1, seq++, segment(rate / 2, 0)) }
+    pump()
+    advance(25_000, step = 50)
+    assertTrue(feed.stats(1)!!.silentSeconds >= 12.0)
+    assertFalse(feed.stats(1)!!.silentFault)
   }
 
   @Test

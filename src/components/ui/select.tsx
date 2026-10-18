@@ -115,7 +115,7 @@ const SelectTrigger = React.forwardRef<
         "flex h-10 min-h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
         /*
          * Two lines at compact, and a trigger that grows to hold them. Several config values read
-         * as short sentences - "Auto (Conservative for C64U, Balanced for U64)" is one - and on a
+         * as short sentences - "Auto (follows the device and its firmware)" is one - and on a
          * 320px screen a single clamped line shows the first word and an ellipsis, which does not
          * say which setting is in force.
          */

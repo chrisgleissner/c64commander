@@ -227,7 +227,7 @@ describe("SnapshotManagerDialog CPU + RAM snapshots", () => {
     renderDialog([cpuSnapshot, makeSnapshot("snap-ram", "program")]);
 
     expect(screen.getAllByText("CPU + RAM snapshot")).toHaveLength(1);
-    expect(screen.getAllByText("Program Snapshot")).toHaveLength(1);
+    expect(screen.getAllByText("Program snapshot")).toHaveLength(1);
   });
 
   it("falls back to the stored type name for a snapshot type this build does not know", () => {

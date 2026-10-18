@@ -77,6 +77,16 @@ describe("AvMirrorControls", () => {
     expect(mirror.adoptSender).toHaveBeenCalledWith("192.0.2.148");
   });
 
+  it("shows the reconnecting message in the warning color while the lost video is being restarted", () => {
+    mirror.state.video = { state: "error", error: "Video lost, reconnecting…", reconnecting: true } as never;
+    render(<AvMirrorControls />);
+
+    const message = screen.getByTestId("av-mirror-error");
+    expect(message).toHaveTextContent("Video lost, reconnecting…");
+    expect(message).toHaveClass("text-warning");
+    expect(message).not.toHaveClass("text-destructive");
+  });
+
   it("offers no recovery when no sender mismatch was diagnosed", () => {
     mirror.state.video = { state: "error", error: "The video stream stopped arriving.", senderMismatch: null };
     render(<AvMirrorControls />);
@@ -123,6 +133,19 @@ describe("AvMirrorControls", () => {
     expect(screen.getByTestId("av-audio-toggle")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("av-video-toggle")).toHaveTextContent("Connecting…");
     expect(screen.getByTestId("av-audio-toggle")).toHaveAttribute("data-state", "live");
+  });
+
+  it("labels the icon-only toggles with the current state, since they show no text", () => {
+    mirror.state.audio = { state: "connecting", error: null, foreignSenderNotice: null, senderMismatch: null };
+    mirror.state.videoLive = true;
+    mirror.state.video = { state: "live", error: null, senderMismatch: null };
+    render(<AvMirrorControls iconOnly />);
+
+    const audio = screen.getByTestId("av-audio-toggle");
+    const video = screen.getByTestId("av-video-toggle");
+    expect(audio).toHaveAttribute("aria-label", "Listen: Connecting…");
+    expect(audio).toHaveAttribute("title", "Connecting…");
+    expect(video).toHaveAttribute("aria-label", "Watch: Watching");
   });
 
   it("shows the Watching label and a live dot while video streams", () => {

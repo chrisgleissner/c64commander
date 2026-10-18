@@ -12,7 +12,7 @@ import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
 import { md548FromFullMd5, resolveVirtualPath, type ResolveVirtualPathOptions } from "@/lib/sidRadio/md5PathIndex";
 
 /**
- * Liked Tunes (spec §5.5) — a plain **playable collection** of everything the
+ * Liked tunes (spec §5.5) — a plain **playable collection** of everything the
  * user has ♥-liked, materialised from `rankingStore` likes → `md5PathIndex` →
  * `PlaylistItem`s. It is *not* a radio: it plays through the existing
  * `startPlaylist`, so normal Shuffle/Repeat apply. It is also the seed pool for

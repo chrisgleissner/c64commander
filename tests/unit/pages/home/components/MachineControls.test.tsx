@@ -174,7 +174,7 @@ describe("MachineControls", () => {
     expect(firstDestructive).toBeGreaterThan(lastSafe);
   });
 
-  // One word on the tile, on every profile. Quick Actions is two columns at 320 CSS px so
+  // One word on the tile, on every profile. Quick actions is two columns at 320 CSS px so
   // "Game Mode" wrapped there, and on a wider profile the second word only repeated what the
   // icon and the tile's position already say. The tile keeps its position and its handler.
   it("labels the Game Mode tile Game on every profile", () => {

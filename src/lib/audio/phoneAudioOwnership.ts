@@ -7,6 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
 
 /**
  * One owner of this phone's speaker, enforced rather than assumed.
@@ -90,6 +91,9 @@ export const claimPhoneAudio = (
           : "Only one source may drive this device's speaker, so the previous one was stopped.",
     });
     owner = null;
+    if (previous.source === "av-mirror" && source === "local-sid") {
+      toast({ title: "Listen stopped", description: "This phone started playing a tune.", alwaysVisible: true });
+    }
     // Stop AFTER clearing, so a stop() that releases ownership cannot wipe the
     // claim we are about to install.
     previous.stop();

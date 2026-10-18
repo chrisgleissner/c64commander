@@ -264,6 +264,8 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     requestStop,
     editedPrompt: {
       open: editedPromptOpen,
+      stationTuneCount: params.queue.playlist.length,
+      playlistTuneCount: handover?.items?.length ?? null,
       onKeepStationTunes: keepStationTunes,
       onReturnToPlaylist: returnToPlaylist,
       onDismiss: () => setEditedPromptOpen(false),

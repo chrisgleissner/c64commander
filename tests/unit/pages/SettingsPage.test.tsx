@@ -1288,7 +1288,7 @@ describe("SettingsPage", () => {
     expect(screen.getByTestId("settings-device-row-saved-wired")).toHaveTextContent("Same device as Desk wifi");
   });
 
-  it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
+  it("offers Friendly SID names in Play and disk, reflecting the stored preference and writing it back", () => {
     renderSettingsPage();
 
     const toggle = screen.getByTestId("settings-friendly-sid-names");
@@ -1706,6 +1706,17 @@ describe("SettingsPage", () => {
       await waitFor(() => expect(persistedDeviceIds()).toEqual(["saved-device-1"]));
     });
 
+    it("styles the confirm button as destructive", async () => {
+      await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
+      mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-delete-device"));
+      await screen.findByRole("alertdialog", { name: /delete device/i });
+
+      expect(screen.getByTestId("settings-delete-device-confirm").className).toContain("bg-destructive");
+    });
+
     it("counts a single referring item in the singular", async () => {
       await seedStore([savedDevicesRef.current.devices[0], placeholder], "saved-device-1");
       mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 1, playlistItemCount: 0, totalCount: 1 });
@@ -1944,6 +1955,9 @@ describe("SettingsPage", () => {
     const stableSection = screen.getByTestId("settings-feature-group-stable");
     const experimentalSection = screen.getByTestId("settings-feature-group-experimental");
     expect(within(stableSection).getByTestId("feature-flag-hvsc_enabled")).toBeInTheDocument();
+    const hvscRow = screen.getByTestId("feature-flag-hvsc_enabled").closest("label");
+    expect(hvscRow?.className).toContain("items-center");
+    expect(hvscRow?.querySelector(".flex-col")).not.toBeNull();
     expect(within(stableSection).getByTestId("feature-flag-commoserve_enabled")).toBeInTheDocument();
     expect(
       within(experimentalSection).getByTestId("feature-flag-home_telnet_config_actions_enabled"),
@@ -2040,7 +2054,7 @@ describe("SettingsPage", () => {
   it("hides the automatic demo-mode setting when the feature flag is disabled", () => {
     renderSettingsPage();
 
-    expect(screen.queryByRole("checkbox", { name: /automatic demo mode/i })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /automatic demo mode/i })).toBeNull();
   });
 
   it("persists automatic demo mode and debug logging toggles", () => {
@@ -2049,8 +2063,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /automatic demo mode/i }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /enable debug logging/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /automatic demo mode/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /enable debug logging/i }));
 
     expect(saveDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
@@ -2206,6 +2220,16 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("draws the selected theme icon in the on-primary color so it stays visible on the selected button", () => {
+    renderSettingsPage();
+
+    const [selected, other] = ["Light", "Dark"].map((name) =>
+      within(screen.getByRole("group", { name: "Theme" })).getByRole("button", { name }),
+    );
+    expect(selected.querySelector("svg")).toHaveClass("text-primary-foreground");
+    expect(other.querySelector("svg")).toHaveClass("text-muted-foreground");
+  });
+
   it("changes theme when selecting a new option", () => {
     renderSettingsPage();
 
@@ -2273,6 +2297,22 @@ describe("SettingsPage", () => {
 
       expect(screen.getByTestId("settings-app-style-cool-grey")).toHaveClass("bg-primary");
       expect(screen.getByTestId("settings-app-style-ocean-teal")).not.toHaveClass("bg-primary");
+    });
+
+    it("outlines the swatch dots of the selected style so they stay visible on the selected row", () => {
+      appStyleStateRef.current.storedStyleId = "cool-grey";
+      appStyleStateRef.current.styleId = "cool-grey";
+      renderSettingsPage();
+
+      const selectedDots = screen
+        .getByTestId("settings-app-style-cool-grey")
+        .querySelectorAll("span[aria-hidden] > span");
+      expect(selectedDots.length).toBe(3);
+      selectedDots.forEach((dot) => expect(dot).toHaveClass("border-primary-foreground"));
+      const otherDots = screen
+        .getByTestId("settings-app-style-ocean-teal")
+        .querySelectorAll("span[aria-hidden] > span");
+      otherDots.forEach((dot) => expect(dot).not.toHaveClass("border-primary-foreground"));
     });
 
     it("calls setStyleId when a style row is clicked", () => {
@@ -2522,13 +2562,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(FolderPicker.listChildren).toHaveBeenCalled();
@@ -2556,18 +2596,20 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
           operation: "SAF_DIAGNOSTICS",
+          title: "Folder access diagnostics",
+          description: "No folders have been granted to the app yet.",
         }),
       );
     });
@@ -2804,7 +2846,7 @@ describe("SettingsPage", () => {
   it("requests the global diagnostics overlay from the settings trigger", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open diagnostics" }));
 
     expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");
@@ -2819,7 +2861,7 @@ describe("SettingsPage", () => {
 
     expect(saveArchiveHostOverride).toHaveBeenCalledWith("http://bad-host");
     expect(screen.getByRole("alert")).toHaveTextContent(/hostname only/i);
-    expect(screen.getByText(/Resolved host:/i)).toHaveTextContent("commoserve.files.commodore.net");
+    expect(screen.getByText(/Host in use:/i)).toHaveTextContent("commoserve.files.commodore.net");
   });
 
   it("persists archive overrides and mounts the archive dialog only when opened", () => {
@@ -2827,10 +2869,10 @@ describe("SettingsPage", () => {
 
     expect(screen.queryByTestId("online-archive-dialog-mock")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Client-Id override"), {
+    fireEvent.change(screen.getByLabelText("Archive client ID"), {
       target: { value: "Custom Client" },
     });
-    fireEvent.change(screen.getByLabelText("User-Agent override"), {
+    fireEvent.change(screen.getByLabelText("Archive user agent"), {
       target: { value: "Custom Agent" },
     });
 
@@ -3308,7 +3350,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith("SAF persisted URI lookup failed", {
@@ -3325,13 +3367,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list allowed folders/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
+    fireEvent.click(screen.getByRole("button", { name: /list first folder contents/i }));
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith("SAF enumeration failed", {

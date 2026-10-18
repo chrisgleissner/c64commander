@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { PLAYHEAD_DRIFT_TOLERANCE_MS, resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
+import {
+  PLAYHEAD_DRIFT_TOLERANCE_MS,
+  SEEK_DEADLINE_MARGIN_MS,
+  resolvePlayheadAnchor,
+  seekAwareDelayMs,
+  shouldRefreshDeadline,
+} from "@/lib/playback/playheadAnchor";
 
 describe("resolvePlayheadAnchor", () => {
   it("keeps the wall clock when the route has no playhead of its own", () => {
@@ -186,5 +192,35 @@ describe("a stalled playhead", () => {
     });
 
     expect(result?.stalled).toBe(true);
+  });
+});
+
+describe("shouldRefreshDeadline", () => {
+  const steady = { drifted: false, stalled: false };
+
+  it("moves a deadline that is about to fire while a seek is still being rendered", () => {
+    expect(shouldRefreshDeadline(steady, true, 3_000)).toBe(true);
+  });
+
+  it("leaves a distant deadline alone during a seek, so the native watchdog is not rewritten every tick", () => {
+    expect(shouldRefreshDeadline(steady, true, SEEK_DEADLINE_MARGIN_MS + 1)).toBe(false);
+  });
+
+  it("leaves a steady playhead's deadline alone when no seek is outstanding", () => {
+    expect(shouldRefreshDeadline(steady, false, 3_000)).toBe(false);
+  });
+
+  it("still follows drift, and never moves the deadline of a stalled playhead", () => {
+    expect(shouldRefreshDeadline({ drifted: true, stalled: false }, false, 60_000)).toBe(true);
+    expect(shouldRefreshDeadline({ drifted: true, stalled: true }, false, 60_000)).toBe(false);
+    expect(shouldRefreshDeadline({ drifted: false, stalled: true }, true, 1_000)).toBe(false);
+  });
+});
+
+describe("seekAwareDelayMs", () => {
+  it("keeps a short delay from being rewritten every tick while a seek is outstanding", () => {
+    expect(seekAwareDelayMs(3_000, true)).toBe(2 * SEEK_DEADLINE_MARGIN_MS);
+    expect(seekAwareDelayMs(3_000, false)).toBe(3_000);
+    expect(seekAwareDelayMs(90_000, true)).toBe(90_000);
   });
 });

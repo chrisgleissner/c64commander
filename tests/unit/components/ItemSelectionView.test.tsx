@@ -96,6 +96,30 @@ describe("ItemSelectionView", () => {
     ]);
   });
 
+  it("shows one loading indicator and no empty-folder text while a folder is loading", () => {
+    render(
+      <ItemSelectionView
+        path="/music"
+        rootPath="/"
+        entries={[]}
+        isLoading
+        showLoadingIndicator
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onNavigateUp={vi.fn()}
+        onNavigateRoot={vi.fn()}
+        onRefresh={vi.fn()}
+        showFolderSelect
+        emptyLabel="No matching items in this folder."
+      />,
+    );
+
+    expect(screen.getAllByText("Loading…")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+    expect(screen.queryByText("No matching items in this folder.")).not.toBeInTheDocument();
+  });
+
   it("disables selection and navigation at root when loading", () => {
     const onToggleSelect = vi.fn();
     const onOpen = vi.fn();
@@ -119,7 +143,7 @@ describe("ItemSelectionView", () => {
 
     expect(screen.getByTestId("navigate-root")).toBeDisabled();
     expect(screen.getByRole("button", { name: /up/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /loading/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeDisabled();
 
     const [checkbox] = screen.getAllByRole("checkbox");
     expect(checkbox).toBeDisabled();

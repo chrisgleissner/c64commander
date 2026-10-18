@@ -28,6 +28,8 @@ type HvscPreparationSheetProps = {
   stageDone?: number | null;
   stageTotal?: number | null;
   throughputLabel: string | null;
+  /** Ready to browse, with the pass that reads every tune again still running. */
+  analyzing?: boolean;
   readySongCount: number;
   errorReason: string | null;
   onBrowse: () => void;
@@ -51,6 +53,7 @@ export const HvscPreparationSheet = ({
   stageDone = null,
   stageTotal = null,
   throughputLabel,
+  analyzing: analyzingWhileReady = false,
   readySongCount,
   errorReason,
   onBrowse,
@@ -61,6 +64,7 @@ export const HvscPreparationSheet = ({
   const isInProgress = state === "DOWNLOADING" || state === "INGESTING" || state === "DOWNLOADED";
   const isSuccess = state === "READY";
   const isError = state === "ERROR";
+  const analyzing = isSuccess && analyzingWhileReady;
 
   return (
     <AppSheet
@@ -77,7 +81,9 @@ export const HvscPreparationSheet = ({
           <AppSheetTitle>Preparing HVSC library</AppSheetTitle>
           <AppSheetDescription>
             {isSuccess
-              ? "The HVSC library is indexed and ready."
+              ? analyzing
+                ? "The HVSC library is ready to browse. Reading every tune again continues in the background."
+                : "The HVSC library is indexed and ready."
               : isError
                 ? "Preparation stopped before the HVSC library was ready."
                 : "Downloading the free HVSC music collection once, then indexing it on this device."}
@@ -88,7 +94,7 @@ export const HvscPreparationSheet = ({
           <div className="rounded-panel border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-foreground">{statusLabel}</p>
+                <p className="text-sm font-medium text-foreground">{analyzing ? "Analyzing songs" : statusLabel}</p>
                 {isError ? (
                   <p className="text-xs text-muted-foreground">
                     Failure phase: {failedPhase === "ingest" ? "Indexing" : "Downloading"}
@@ -101,9 +107,9 @@ export const HvscPreparationSheet = ({
                 different units and vanish at each handover, so a single figure could only ever be a
                 guess. It showed 73%, fell to 58%, then disappeared without reaching 100%. */}
             <HvscStageSteps
-              state={state}
+              state={analyzing ? "INGESTING" : state}
               stage={stage}
-              step={step}
+              step={analyzing ? "analyze" : step}
               failedPhase={failedPhase}
               stagePercent={stagePercent}
               stageDone={stageDone}
