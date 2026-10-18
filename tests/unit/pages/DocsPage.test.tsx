@@ -291,7 +291,7 @@ describe("DocsPage", () => {
     expect(screen.getByTestId("docs-external-resource-site")).toHaveAttribute("href", "https://ultimate64.com/");
   });
 
-  it("hides the External resources card on c64u-remote, whose only link is already on Settings -> About", () => {
+  it("hides the External resources card on c64u-remote, whose phone cannot open links", () => {
     variantRef.id = "c64u-remote";
     variantRef.displayName = "C64U Remote";
 

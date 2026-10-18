@@ -772,13 +772,12 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   compete with the section's own toggle ; Take the tour — button —
   `settings-about-take-the-tour` — R✅ I✅ ;
   REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
-  (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
-  — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
+  (absent on `c64u-remote`, whose phone cannot open links) ; Open source licenses — button — R✅ I✅ (sub-route
   `/settings/open-source-licenses`, a sheet `open-source-licenses-overlay` that leaves the
   guidance bar visible: Close — button — `open-source-licenses-close`; each package's
-  License and Source links — link — 44 px targets; Back closes it) ; the small GPL notice
+  License and Source links — link — 44 px targets, plain text on `c64u-remote`; Back closes it) ; the small GPL notice
   `settings-about-license-notice` names the app by variant and holds two inline links: GNU GPL v3
-  or later — `settings-about-license-text`, and Get the source code —
+  or later — `settings-about-license-text` (plain text on `c64u-remote`), and Get the source code —
   `settings-about-source-code`, followed by the repository address as plain text
   (`github.com/chrisgleissner/c64commander`, not a focus stop) — R✅ I✅
 

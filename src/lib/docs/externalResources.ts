@@ -15,8 +15,12 @@ export type ExternalResourceLink = {
   testId: string;
 };
 
-export const C64U_USER_GUIDE_URL =
-  "https://downloads.commodore-international.com/documentation/C64U/c64u-user-guide-1st-edition.pdf";
+/**
+ * The keypad edition runs on a phone whose launcher accepts a link and shows nothing: tapping one leaves the
+ * app in front with no page. Its screens therefore show an address as plain text where one is worth
+ * reading, and no other link.
+ */
+export const externalLinksOpen = (variantId: string = variant.id): boolean => variantId !== "c64u-remote";
 
 const defaultDocsExternalResourceLinks: readonly ExternalResourceLink[] = [
   {
@@ -39,15 +43,6 @@ const defaultDocsExternalResourceLinks: readonly ExternalResourceLink[] = [
   },
 ];
 
-const c64uRemoteDocsExternalResourceLinks: readonly ExternalResourceLink[] = [
-  {
-    id: "c64u-user-guide",
-    label: "C64U User Guide",
-    href: C64U_USER_GUIDE_URL,
-    testId: "docs-external-resource-c64u-user-guide",
-  },
-];
-
 const defaultSettingsDocumentationLink: ExternalResourceLink = {
   id: "rest-api",
   label: "Ultimate REST API documentation",
@@ -55,17 +50,10 @@ const defaultSettingsDocumentationLink: ExternalResourceLink = {
   testId: "settings-about-rest-api-docs",
 };
 
-const c64uRemoteSettingsDocumentationLink: ExternalResourceLink = {
-  id: "c64u-user-guide",
-  label: "C64U User Guide",
-  href: C64U_USER_GUIDE_URL,
-  testId: "settings-about-c64u-user-guide",
-};
-
 export function getDocsExternalResourceLinks(variantId: string = variant.id): readonly ExternalResourceLink[] {
-  return variantId === "c64u-remote" ? c64uRemoteDocsExternalResourceLinks : defaultDocsExternalResourceLinks;
+  return externalLinksOpen(variantId) ? defaultDocsExternalResourceLinks : [];
 }
 
-export function getSettingsDocumentationLink(variantId: string = variant.id): ExternalResourceLink {
-  return variantId === "c64u-remote" ? c64uRemoteSettingsDocumentationLink : defaultSettingsDocumentationLink;
+export function getSettingsDocumentationLink(variantId: string = variant.id): ExternalResourceLink | null {
+  return externalLinksOpen(variantId) ? defaultSettingsDocumentationLink : null;
 }

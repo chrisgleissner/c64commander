@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  C64U_USER_GUIDE_URL,
+  externalLinksOpen,
   getDocsExternalResourceLinks,
   getSettingsDocumentationLink,
 } from "@/lib/docs/externalResources";
@@ -30,20 +30,10 @@ describe("external resource links", () => {
     );
   });
 
-  it("replaces Ultimate links with the single C64U user guide for c64u-remote", () => {
-    expect(getDocsExternalResourceLinks("c64u-remote")).toEqual([
-      {
-        id: "c64u-user-guide",
-        label: "C64U User Guide",
-        href: C64U_USER_GUIDE_URL,
-        testId: "docs-external-resource-c64u-user-guide",
-      },
-    ]);
-    expect(getSettingsDocumentationLink("c64u-remote")).toEqual({
-      id: "c64u-user-guide",
-      label: "C64U User Guide",
-      href: C64U_USER_GUIDE_URL,
-      testId: "settings-about-c64u-user-guide",
-    });
+  it("offers no external links on c64u-remote, whose phone cannot open them", () => {
+    expect(externalLinksOpen("c64u-remote")).toBe(false);
+    expect(externalLinksOpen("c64commander")).toBe(true);
+    expect(getDocsExternalResourceLinks("c64u-remote")).toEqual([]);
+    expect(getSettingsDocumentationLink("c64u-remote")).toBeNull();
   });
 });

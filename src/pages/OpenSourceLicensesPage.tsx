@@ -7,6 +7,7 @@
  */
 
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from "react";
+import { externalLinksOpen } from "@/lib/docs/externalResources";
 import { addErrorLog } from "@/lib/logging";
 import { useNavigate } from "react-router-dom";
 import {
@@ -193,6 +194,12 @@ const renderInlineText = (value: string, linkClassName = INLINE_LINK_CLASS) => {
     }
 
     const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch && !externalLinksOpen()) {
+      nodes.push(<Fragment key={`link-${keyIndex}`}>{linkMatch[1]}</Fragment>);
+      keyIndex += 1;
+      cursor = start + token.length;
+      continue;
+    }
     if (linkMatch) {
       nodes.push(
         <a
