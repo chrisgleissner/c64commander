@@ -265,8 +265,7 @@ class StreamUdpPlugin : Plugin() {
       call.reject("name is required")
       return
     }
-    val result = streamDiagnostics(name, senderFilter, packetCounters, membershipRefresher, streamSenders[name])
-    call.resolve(result)
+    call.resolve(streamDiagnostics(name, senderFilter, packetCounters, membershipRefresher, streamSenders[name]))
   }
 
   /** Who a stream sender is, asked over ident so that no device password goes to an unknown address. */

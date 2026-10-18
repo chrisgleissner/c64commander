@@ -143,8 +143,8 @@ A/B on the keypad phone, Watch for 22 minutes, no host on the group, the same ha
 
 | Build                                  | Duration | Streams lost | Packets received |
 | -------------------------------------- | -------- | ------------ | ---------------- |
-| Before: no refresh                     | 25 min   | 2 sampled, 4 restarts in all (counter reset 6 times) | resets at each loss |
+| Before: no refresh                     | 25 min   | 2 seen in the 5 s samples, 6 counter resets in all | 135,907 at the end (reset by each restart) |
 | After: refresh every 60 s              | 22 min   | 0 (264 samples all live, no counter reset) | 4,472,478 with 22 refreshes |
 
-The 25 minute run before the change lost the stream about every 270 s, which matches 5 losses in 25 minutes.
+Six counter resets in 25 minutes is about one per 270 s. The run after the change had none.
 

@@ -42,7 +42,7 @@ log (`c64u_app_logs`) dumped every 45 s, so that the log ring cannot lose the pe
 | Run                         | Duration | Changes | Underruns | Lowest buffered audio | Java heap, highest of the samples |
 | --------------------------- | -------- | ------- | --------- | --------------------- | --------------------------------- |
 | 1, without microphone       | 28 min   | 67      | 0         | 11983 ms              | 152 MB                            |
-| 2, with microphone          | 32 min   | 77      | 0         | 11985 ms              | recorded in the run's meminfo log |
+| 2, with microphone          | 32 min   | 77      | 0         | 11985 ms              | 190 MB                            |
 
 The recording of run 2 (1925 s, 77 changes) has no gap of 20 ms or more, at a change or away from one
 (`tools/hil/tone_gaps.py`). The silences of 6 to 44 s from the first run did not occur again in either run, so the cause of
