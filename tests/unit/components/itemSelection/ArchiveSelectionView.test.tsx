@@ -145,6 +145,13 @@ describe("ArchiveSelectionView", () => {
     expect(screen.getByTestId("archive-legal-notice")).toHaveClass("text-xs");
   });
 
+  it("places the license sentence before the first filter so it is seen without scrolling past the form", () => {
+    renderView();
+    const notice = screen.getByTestId("archive-legal-notice");
+    const firstFilter = screen.getByLabelText("Name");
+    expect(notice.compareDocumentPosition(firstFilter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows placeholder text when form is empty and no query preview", () => {
     renderView();
     expect(screen.getByText("Enter at least one search term.")).toBeInTheDocument();

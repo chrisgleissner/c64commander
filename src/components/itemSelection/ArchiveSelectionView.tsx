@@ -130,6 +130,41 @@ export const ArchiveSelectionView = ({
 
   return (
     <div className="space-y-3" data-testid="archive-selection-view">
+      <div className="space-y-1">
+        <Button
+          variant="ghost"
+          className="min-h-11 w-full justify-between px-2"
+          onClick={() => setAboutOpen((open) => !open)}
+          aria-expanded={aboutOpen}
+          aria-controls="archive-about"
+          data-testid="archive-about-toggle"
+        >
+          <span className="flex items-center gap-2">
+            <Info className="h-4 w-4 shrink-0" aria-hidden />
+            About this archive
+          </span>
+          {aboutOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+        </Button>
+        {aboutOpen ? (
+          <div
+            id="archive-about"
+            className="space-y-1 rounded-lg border border-border/70 p-3 text-sm text-muted-foreground"
+            data-testid="archive-selection-config"
+          >
+            <div>
+              Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
+            </div>
+            <div>
+              Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
+            </div>
+            {resolvedConfig.host !== currentDefaults.host ? <p>Override host active.</p> : null}
+          </div>
+        ) : null}
+        <p className="px-2 text-xs text-muted-foreground" data-testid="archive-legal-notice">
+          {LEGAL_NOTICE}
+        </p>
+      </div>
+
       <div className="grid gap-2">
         {TEXT_FIELDS.map((field) => (
           <div key={field.key} className="space-y-1">
@@ -181,41 +216,6 @@ export const ArchiveSelectionView = ({
             </div>
           );
         })}
-      </div>
-
-      <div className="space-y-1">
-        <Button
-          variant="ghost"
-          className="min-h-11 w-full justify-between px-2"
-          onClick={() => setAboutOpen((open) => !open)}
-          aria-expanded={aboutOpen}
-          aria-controls="archive-about"
-          data-testid="archive-about-toggle"
-        >
-          <span className="flex items-center gap-2">
-            <Info className="h-4 w-4 shrink-0" aria-hidden />
-            About this archive
-          </span>
-          {aboutOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
-        </Button>
-        {aboutOpen ? (
-          <div
-            id="archive-about"
-            className="space-y-1 rounded-lg border border-border/70 p-3 text-sm text-muted-foreground"
-            data-testid="archive-selection-config"
-          >
-            <div>
-              Source: <span className="font-medium text-foreground">{resolvedConfig.name}</span>
-            </div>
-            <div>
-              Host: <span className="font-medium text-foreground break-all">{resolvedConfig.host}</span>
-            </div>
-            {resolvedConfig.host !== currentDefaults.host ? <p>Override host active.</p> : null}
-          </div>
-        ) : null}
-        <p className="px-2 text-xs text-muted-foreground" data-testid="archive-legal-notice">
-          {LEGAL_NOTICE}
-        </p>
       </div>
 
       {isDeveloperModeEnabled && queryPreview ? (

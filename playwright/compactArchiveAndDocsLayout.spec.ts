@@ -102,6 +102,15 @@ test.describe("compact Docs contents and archive search", () => {
       .toBeLessThanOrEqual(viewportHeight);
     expect((await searchBox()).height).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
 
+    const notice = await boxOf(page, "archive-legal-notice");
+    const body = await boxOf(page, "add-items-scroll");
+    expect(notice.y + notice.height, "the license sentence is on the first screen of the sheet").toBeLessThanOrEqual(
+      body.y + body.height,
+    );
+    expect(notice.y, "the license sentence precedes the filters").toBeLessThan(
+      (await picker.getByLabel("Name").boundingBox())!.y,
+    );
+
     await picker.getByLabel("Name").fill("joyride");
     await expect(picker.getByTestId("archive-filter-summary")).toHaveText("Name joyride");
     await expect(dialog).not.toContainText("(name:");
@@ -120,7 +129,6 @@ test.describe("compact Docs contents and archive search", () => {
     await page.keyboard.press("Enter");
     await expect(picker.getByTestId("archive-result-row")).toHaveCount(1);
     const row = await boxOf(page, "archive-result-row");
-    const body = await boxOf(page, "add-items-scroll");
     expect(row.y, "the first result is brought into view").toBeGreaterThanOrEqual(body.y);
     expect(row.y + row.height, "the first result is brought into view").toBeLessThanOrEqual(body.y + body.height);
   });
