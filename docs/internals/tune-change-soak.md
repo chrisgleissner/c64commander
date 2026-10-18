@@ -19,6 +19,11 @@ Eight Ultimate-hosted tunes of 21 s to 2 min 11 s, repeat on, local engine, app 
 
 The phone has no microphone at its speaker, so this is pipeline evidence, not a recording.
 
+## Keypad phone, Next every 25 s, 25 minutes
+
+The same playlist with Next pressed every 25 s (60 changes): 0 underruns, 0 ms concealed, lowest buffered audio 10.9 s.
+The Pixel dropouts below did not reproduce on the keypad phone with short tunes.
+
 ## Pixel 4 with microphone, Next every 25 s on two 20 minute tones, 30 minutes
 
 The first 15 minutes (36 changes) had no gap of 60 ms or more. From 925 s on, the recording shows silences of 6 to 44 s
