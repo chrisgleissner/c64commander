@@ -50,4 +50,19 @@ describe("OpenSourceLicensesPage on a phone that cannot open links", () => {
     expect(screen.getAllByText(/registry\.npmjs\.org\/left-pad/).length).toBeGreaterThan(0);
     expect(document.querySelectorAll('a[href^="http"]')).toHaveLength(0);
   });
+
+  it("makes each license card a reading stop, so the keypad ring can scroll through the list", async () => {
+    render(
+      <MemoryRouter initialEntries={["/settings/open-source-licenses"]}>
+        <Routes>
+          <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const card = await screen.findByTestId("open-source-license-card");
+
+    expect(card).toHaveAttribute("data-key-nav-reading", "true");
+    expect(card).toHaveAttribute("tabindex", "0");
+  });
 });

@@ -8,6 +8,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from "react";
 import { externalLinksOpen } from "@/lib/docs/externalResources";
+import { READING_STOP_ATTR } from "@/lib/input/discovery";
 import { addErrorLog } from "@/lib/logging";
 import { useNavigate } from "react-router-dom";
 import {
@@ -231,6 +232,8 @@ const renderInlineText = (value: string, linkClassName = INLINE_LINK_CLASS) => {
   return nodes;
 };
 
+const readingStopProps = () => (externalLinksOpen() ? {} : ({ tabIndex: 0, [READING_STOP_ATTR]: "true" } as const));
+
 export default function OpenSourceLicensesPage() {
   const navigate = useNavigate();
   const [noticeText, setNoticeText] = useState<string>("Loading open source licenses...");
@@ -306,7 +309,7 @@ export default function OpenSourceLicensesPage() {
 
                 if (block.type === "paragraph") {
                   return (
-                    <p key={`p-${blockIndex}`} className="break-words text-sm leading-6">
+                    <p key={`p-${blockIndex}`} className="break-words text-sm leading-6" {...readingStopProps()}>
                       {renderInlineText(block.text)}
                     </p>
                   );
@@ -314,7 +317,11 @@ export default function OpenSourceLicensesPage() {
 
                 if (block.type === "list") {
                   return (
-                    <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
+                    <ul
+                      key={`l-${blockIndex}`}
+                      className="list-disc space-y-2 pl-5 text-sm leading-6"
+                      {...readingStopProps()}
+                    >
                       {block.items.map((item, itemIndex) => (
                         <li key={`li-${itemIndex}`} className="min-w-0 break-words">
                           {renderInlineText(item)}
@@ -357,6 +364,7 @@ export default function OpenSourceLicensesPage() {
                             <article
                               key={`t-${blockIndex}-row-${rowIndex}`}
                               data-testid="open-source-license-card"
+                              {...readingStopProps()}
                               className="rounded-panel border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
                             >
                               <div className="flex flex-wrap items-start gap-2">

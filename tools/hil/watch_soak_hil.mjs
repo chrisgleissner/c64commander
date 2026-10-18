@@ -80,7 +80,9 @@ const wireTimer = setInterval(() => {
 const phone = await createDroidDevice({ serial: SERIAL });
 await phone.forwardWebview(PACKAGE, PORT);
 const pages = await (await fetch(`http://localhost:${PORT}/json`)).json();
-const cdp = await connect(pages.find((p) => p.type === "page" && p.webSocketDebuggerUrl).webSocketDebuggerUrl);
+const appPage = pages.find((p) => p.type === "page" && p.webSocketDebuggerUrl);
+if (!appPage) throw new Error(`no WebView page for ${PACKAGE} on port ${PORT}; is the app running?`);
+const cdp = await connect(appPage.webSocketDebuggerUrl);
 
 const READ = `(async () => {
   const button = document.querySelector('[data-testid="av-video-toggle"]');

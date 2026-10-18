@@ -14,12 +14,13 @@ vi.mock("@/lib/docs/externalResources", () => ({ externalLinksOpen: () => false 
 import { AboutLicenseNotice } from "@/pages/settings/AboutLicenseNotice";
 
 describe("AboutLicenseNotice on a phone that cannot open links", () => {
-  it("names the license as text and still links the source code with its address printed", () => {
+  it("names the license and the source code as text and prints the repository address", () => {
     render(<AboutLicenseNotice />);
 
     const license = screen.getByTestId("settings-about-license-text");
     expect(license.tagName).toBe("SPAN");
     expect(license).toHaveTextContent("GNU GPL v3 or later");
+    expect(screen.getByTestId("settings-about-source-code").tagName).toBe("SPAN");
     expect(screen.getByTestId("settings-about-license-notice")).toHaveTextContent(
       "github.com/chrisgleissner/c64commander",
     );

@@ -103,12 +103,13 @@ the foreground, c64u on Ethernet) ran Watch for 30 minutes with no host membersh
 Each loss was logged as "no video arrived for long enough to call the stream lost". The 8 s watchdog fired four times in
 30 minutes while Watch was wanted. Whether packets were still arriving at those moments is not known, because the host
 was not listening and `readStreamDiagnostics` reports no packet count. This is the evidence the issue was missing: on
-this phone the loss does occur, at intervals of 4 to 14 minutes.
+this phone the app declared a loss four times, at intervals of 4 to 14 minutes. Whether the stream really stopped
+in those moments, or frames stopped assembling while packets arrived, is not shown.
 
 A host that joined the video group changed the result on the same phone. With the host's membership in place, the stream
 was lost within about 8 s in three of three runs, and restarts by the app did not help (the loss recurred after each
-restart until the attempts were used up). Without the host's membership, six of six start attempts and the 30 minute run
-held. The router (192.168.1.1) is the IGMP querier and speaks IGMP version 2. The host sent version 2 reports. What the
+restart until the attempts were used up). Without the host's membership, six of six start attempts held for at least 24 s, and
+the 30 minute run above had four losses declared by the watchdog. The router is the IGMP querier and speaks IGMP version 2. The host sent version 2 reports. What the
 phone sends was not captured. This points at multicast delivery on the Wi-Fi leg, not at the app's watchdog, but the
 cause is not established. A second Ultimate sending into the group was not retested.
 

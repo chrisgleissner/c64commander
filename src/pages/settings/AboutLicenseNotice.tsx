@@ -30,15 +30,19 @@ export const AboutLicenseNotice = () => (
       <span data-testid="settings-about-license-text">GNU GPL v3 or later</span>
     )}
     , with no warranty.{" "}
-    <a
-      href={SOURCE_CODE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="hit-area-44 text-primary hover:underline"
-      data-testid="settings-about-source-code"
-    >
-      Get the source code
-    </a>{" "}
+    {externalLinksOpen() ? (
+      <a
+        href={SOURCE_CODE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hit-area-44 text-primary hover:underline"
+        data-testid="settings-about-source-code"
+      >
+        Get the source code
+      </a>
+    ) : (
+      <span data-testid="settings-about-source-code">Get the source code</span>
+    )}{" "}
     ({SOURCE_CODE_ADDRESS}).
   </p>
 );

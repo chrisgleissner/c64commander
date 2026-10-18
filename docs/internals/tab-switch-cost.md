@@ -48,5 +48,5 @@ is the structural change tracked in #502.
 ## Status
 
 Acceptance for #503 was no task over 200 ms in 20 consecutive switches. A warm app meets it (0 of 24 and 0 of 36). The
-first visits to Play and Disks after a launch do not (up to 473 ms), because of the HVSC index load and the snapshot
-copies. The Config floor is about 170 ms with a layout of the Config page as the largest part.
+first visit to Disks after a launch does not (up to 473 ms), because of the HVSC index load and the snapshot copies,
+and Config produced three of the four switches over 200 ms in run 1. The Config floor is about 170 ms with a layout of the Config page as the largest part.

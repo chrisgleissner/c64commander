@@ -15,7 +15,7 @@ Eight Ultimate-hosted tunes of 21 s to 2 min 11 s, repeat on, local engine, app 
 | Underruns                                           | 0            |
 | Concealed time                                      | 0 ms         |
 | Lowest buffered audio while a track was open        | 1830 ms      |
-| "Next tune prefetched" log entries in the window    | 14           |
+| "Next tune prefetched" log entries in the window    | 14, of at least 16 tune changes; the 500-entry log ring may have dropped older entries, and a tune whose bytes the phone already held is not prefetched |
 
 The phone has no microphone at its speaker, so this is pipeline evidence, not a recording.
 

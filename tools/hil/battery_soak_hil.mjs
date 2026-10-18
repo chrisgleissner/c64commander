@@ -40,7 +40,7 @@ const OUT = arg("json", `artifacts/battery-${LABEL}.json`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const READ = `B=/sys/class/power_supply/battery; echo "capacity=$(cat $B/capacity) charge_uah=$(cat $B/charge_counter) status=$(cat $B/status) temp_dc=$(cat $B/temp)";
-PID=$(pidof ${PACKAGE} | cut -d' ' -f1); if [ -n "$PID" ]; then echo "pid=$PID stat=$(cut -d')' -f2 /proc/$PID/stat | cut -d' ' -f12,13) rss_kb=$(grep VmRSS /proc/$PID/status | tr -s ' ' | cut -d' ' -f2)"; else echo "pid="; fi`;
+PID=$(pidof ${PACKAGE} | cut -d' ' -f1); if [ -n "$PID" ]; then echo "pid=$PID stat=$(cut -d')' -f2 /proc/$PID/stat | cut -d' ' -f13,14) rss_kb=$(grep VmRSS /proc/$PID/status | tr -s ' ' | cut -d' ' -f2)"; else echo "pid="; fi`;
 
 const parse = (text) => {
   const fields = {};
@@ -64,6 +64,7 @@ while (Date.now() < endAt) {
   try {
     samples.push({ t: Date.now(), ...parse(await device.shell(["sh", "-c", READ])) });
   } catch (error) {
+    console.error(`battery sample unreadable: ${error.message ?? error}`);
     samples.push({ t: Date.now(), error: String(error.message ?? error) });
   }
   await sleep(INTERVAL_S * 1000);

@@ -78,7 +78,15 @@ try {
     : spawn("arecord", ["-D", MIC, "-f", "S16_LE", "-r", "48000", "-c", "1", "-d", String(MINUTES * 60 + 5), WAV], {
         stdio: "ignore",
       });
-  const recorderDone = recorder ? new Promise((resolve) => recorder.on("exit", resolve)) : Promise.resolve();
+  const recorderDone = recorder
+    ? new Promise((resolve) => {
+        recorder.on("exit", resolve);
+        recorder.on("error", (error) => {
+          console.error(`the microphone recorder failed: ${error.message}`);
+          resolve(null);
+        });
+      })
+    : Promise.resolve();
   const startedAt = Date.now();
   while (Date.now() - startedAt < MINUTES * 60_000) {
     await sleep(INTERVAL_S * 1000);
@@ -89,6 +97,8 @@ try {
       result = await click("playlist-next");
     }
     stats.push({ at, click: result, audio: await readStats() });
+    if (stats.at(-1).audio?.error)
+      console.error(`audio stats unreadable at ${Math.round(at)} s: ${stats.at(-1).audio.error}`);
   }
   await sleep((INTERVAL_S * 1000) / 2);
   await click("playlist-pause");
