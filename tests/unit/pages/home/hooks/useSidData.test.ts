@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useC64Categories, useC64ConfigItems } from "@/hooks/useC64Connection";
 import { resolveSidAudioStatus, useSidData } from "@/pages/home/hooks/useSidData";
@@ -95,5 +95,23 @@ describe("Audio read status", () => {
     expect(result.current.sidAudioStatus).toBe("loading");
     vi.mocked(useC64ConfigItems).mockReturnValue({ data: undefined, isError: true, refetch: vi.fn() } as never);
     expect(renderHook(() => useSidData(true, {})).result.current.sidAudioStatus).toBe("error");
+  });
+
+  it("refetches only the categories that have no data when asked to retry", () => {
+    vi.mocked(useC64Categories).mockReturnValue({ data: undefined, isPlaceholderData: false } as never);
+    const refetchEmpty = vi.fn();
+    const refetchLoaded = vi.fn();
+    vi.mocked(useC64ConfigItems)
+      .mockReturnValueOnce({ data: undefined, isError: true, refetch: refetchEmpty } as never)
+      .mockReturnValueOnce({ data: {}, isError: false, refetch: refetchLoaded } as never)
+      .mockReturnValue({ data: {}, isError: false, refetch: refetchLoaded } as never);
+    const { result } = renderHook(() => useSidData(true, {}));
+    refetchEmpty.mockClear();
+    refetchLoaded.mockClear();
+
+    act(() => result.current.refetchSidAudio());
+
+    expect(refetchEmpty).toHaveBeenCalledTimes(1);
+    expect(refetchLoaded).not.toHaveBeenCalled();
   });
 });

@@ -101,6 +101,34 @@ describe("VideoLossRestarter", () => {
     expect(hooks.giveUp).toHaveBeenCalledTimes(1);
   });
 
+  it("does not touch the device when the video came back before the restart was due", async () => {
+    let lost = true;
+    const restarter = new VideoLossRestarter({ ...hooks, isLost: () => lost });
+    restarter.onLost(5000);
+    lost = false;
+
+    await vi.advanceTimersByTimeAsync(VIDEO_RECOVERY_BACKOFF_MS[0]);
+
+    expect(hooks.deviceAnswers).not.toHaveBeenCalled();
+    expect(hooks.restart).not.toHaveBeenCalled();
+  });
+
+  it("does not restart when Watch was stopped while the device was being asked", async () => {
+    let wanted = true;
+    hooks.deviceAnswers.mockImplementation(async () => {
+      wanted = false;
+      return true;
+    });
+    const restarter = new VideoLossRestarter({ ...hooks, isWanted: () => wanted });
+    restarter.onLost(5000);
+
+    await vi.advanceTimersByTimeAsync(VIDEO_RECOVERY_BACKOFF_MS[0]);
+
+    expect(hooks.deviceAnswers).toHaveBeenCalledTimes(1);
+    expect(hooks.restart).not.toHaveBeenCalled();
+    expect(hooks.giveUp).not.toHaveBeenCalled();
+  });
+
   it("cancel clears the pending restart", async () => {
     const restarter = new VideoLossRestarter(hooks);
     restarter.onLost(5000);

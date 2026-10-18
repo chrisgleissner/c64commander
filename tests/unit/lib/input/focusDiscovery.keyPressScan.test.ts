@@ -56,6 +56,18 @@ describe("a key press with a ring re-scan pending", () => {
     engine.stop();
   });
 
+  it("acts on the last ring without scanning when nothing is selected yet", async () => {
+    const { controller, engine, refresh } = startOnCards();
+    vi.spyOn(controller, "current").mockReturnValue(null);
+    document.getElementById("body-a")!.insertAdjacentHTML("beforeend", `<button id="a2">A2</button>`);
+    await afterObserver();
+
+    engine.flushPendingRefresh({ allowStaleRing: true });
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
   it("scans inside the press when the selection is the last known stop of its group and rows were added after it", async () => {
     const { controller, engine, refresh } = startOnCards();
     controller.setCurrent("a1");

@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatPlayCategory,
+  formatPlayCategoryTag,
   getFileExtension,
   getMountTypeForExtension,
   getPlayCategory,
@@ -52,5 +53,16 @@ describe("fileTypes", () => {
 
   it("returns File for unknown play category", () => {
     expect(formatPlayCategory("unknown" as Parameters<typeof formatPlayCategory>[0])).toBe("File");
+  });
+
+  it.each([
+    ["sid", "SID"],
+    ["mod", "MOD"],
+    ["prg", "PRG"],
+    ["crt", "CRT"],
+    ["disk", "Disk"],
+    ["unknown", "File"],
+  ])("tags a %s row as %s in the compact list", (category, tag) => {
+    expect(formatPlayCategoryTag(category as Parameters<typeof formatPlayCategoryTag>[0])).toBe(tag);
   });
 });

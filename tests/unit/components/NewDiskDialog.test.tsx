@@ -139,6 +139,34 @@ describe("NewDiskDialog", () => {
     expect(screen.getByTestId("new-disk-folder")).toHaveValue("/USB2/games");
   });
 
+  it.each([
+    ["lists the folders", (resolve: (roots: string[]) => void) => resolve(["USB2"])],
+    [
+      "fails to list the folders",
+      (_resolve: unknown, reject?: (error: Error) => void) => reject?.(new Error("offline")),
+    ],
+  ])("ignores a lookup that %s after the dialog was closed", async (_name, settle) => {
+    let resolveRoots: (roots: string[]) => void = () => undefined;
+    let rejectRoots: (error: Error) => void = () => undefined;
+    const listStorageRoots = vi.fn(
+      () =>
+        new Promise<string[]>((resolve, reject) => {
+          resolveRoots = resolve;
+          rejectRoots = reject;
+        }),
+    );
+    const props = { onOpenChange: vi.fn(), createDisk: vi.fn() as never, listStorageRoots };
+    const view = render(<NewDiskDialog open {...props} />);
+    await waitFor(() => expect(listStorageRoots).toHaveBeenCalledTimes(1));
+
+    view.rerender(<NewDiskDialog open={false} {...props} />);
+    await act(async () => settle(resolveRoots, rejectRoots));
+    view.rerender(<NewDiskDialog open {...props} />);
+
+    expect(screen.getByTestId("new-disk-folder")).toHaveAttribute("placeholder", "Looking up device storage…");
+    expect(screen.getByTestId("new-disk-folder")).toHaveValue("");
+  });
+
   it("offers the storage the device lists now, not a folder from an earlier visit, after a create and reopen", async () => {
     let roots = ["SD", "USB2"];
     const listStorageRoots = vi.fn(async () => roots);

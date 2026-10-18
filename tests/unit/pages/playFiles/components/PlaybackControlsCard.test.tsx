@@ -633,6 +633,85 @@ describe("PlaybackControlsCard", () => {
     });
   });
 
+  describe("pointer scrubbing on the seek bar", () => {
+    const renderBar = () => {
+      const onSeekToFraction = vi.fn();
+      render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, progressPercent: 50, onSeekToFraction })} />);
+      const bar = screen.getByTestId("playback-progress-seek");
+      bar.getBoundingClientRect = () => ({ left: 100, width: 200 }) as DOMRect;
+      let captured = false;
+      bar.setPointerCapture = vi.fn(() => {
+        captured = true;
+      });
+      bar.hasPointerCapture = vi.fn(() => captured);
+      return { bar, onSeekToFraction };
+    };
+
+    it("captures the pointer on press and seeks to where it landed", () => {
+      const { bar, onSeekToFraction } = renderBar();
+
+      fireEvent.pointerDown(bar, { pointerId: 3, clientX: 150 });
+
+      expect(bar.setPointerCapture).toHaveBeenCalledWith(3);
+      expect(onSeekToFraction).toHaveBeenCalledWith(0.25);
+    });
+
+    it("follows the pointer while it is captured and ignores moves made without a press", () => {
+      const { bar, onSeekToFraction } = renderBar();
+
+      fireEvent.pointerMove(bar, { pointerId: 3, clientX: 200 });
+      expect(onSeekToFraction).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(bar, { pointerId: 3, clientX: 100 });
+      fireEvent.pointerMove(bar, { pointerId: 3, clientX: 250 });
+
+      expect(onSeekToFraction.mock.calls.map(([fraction]) => fraction)).toEqual([0, 0.75]);
+    });
+  });
+
+  it("steps by a fixed fraction of the bar when the tune length is unknown", () => {
+    const onSeekToFraction = vi.fn();
+    render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, progressPercent: 50, onSeekToFraction })} />);
+
+    fireEvent.keyDown(screen.getByTestId("playback-progress-seek"), { key: "ArrowRight" });
+
+    expect(onSeekToFraction).toHaveBeenCalledWith(0.52);
+  });
+
+  it.each([
+    ["playlist-prev", "onPrevious"],
+    ["playlist-next", "onNext"],
+  ] as const)("does not change track with %s when the press was a hold that scrubbed", (testId, handler) => {
+    vi.useFakeTimers();
+    try {
+      const props = buildProps({ hasPrev: true, onSeek: vi.fn(), onScrubStart: vi.fn(), onScrubStep: vi.fn() });
+      render(<PlaybackControlsCard {...props} />);
+      const button = screen.getByTestId(testId);
+
+      fireEvent.pointerDown(button);
+      act(() => vi.advanceTimersByTime(450));
+      fireEvent.pointerUp(button);
+      fireEvent.click(button);
+
+      expect(props[handler]).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      act(() => vi.runOnlyPendingTimers());
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports the new state when Shuffle and Repeat are toggled", () => {
+    const props = buildProps();
+    render(<PlaybackControlsCard {...props} />);
+
+    fireEvent.click(screen.getByTestId("playback-shuffle"));
+    fireEvent.click(screen.getByTestId("playback-repeat"));
+
+    expect(props.onShuffleChange).toHaveBeenCalledWith(true);
+    expect(props.onRepeatChange).toHaveBeenCalledWith(true);
+  });
+
   it("omits the fill once the whole tune is rendered, since there is nothing left to report", () => {
     render(
       <PlaybackControlsCard

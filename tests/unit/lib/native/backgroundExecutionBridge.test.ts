@@ -15,6 +15,8 @@ const { plugin } = vi.hoisted(() => ({
     setPlaybackState: vi.fn(async () => undefined),
     setNowPlaying: vi.fn(async () => undefined),
     setDueAtMs: vi.fn(async () => undefined),
+    heartbeat: vi.fn(async () => undefined),
+    takeLaunchCommand: vi.fn(async () => ({ command: null })),
     checkPermissions: vi.fn(async () => ({ notifications: "granted" })),
     requestPermissions: vi.fn(async () => ({ notifications: "granted" })),
     addListener: vi.fn(async () => ({ remove: vi.fn() })),
@@ -69,5 +71,13 @@ describe("background execution bridge", () => {
     plugin.setPlaybackState.mockRejectedValueOnce(new Error("service gone"));
 
     await expect(BackgroundExecution.setPlaybackState({ paused: false })).rejects.toThrow("service gone");
+  });
+
+  it("forwards a heartbeat and a launch-command read to the plugin", async () => {
+    await BackgroundExecution.heartbeat();
+    await expect(BackgroundExecution.takeLaunchCommand()).resolves.toEqual({ command: null });
+
+    expect(plugin.heartbeat).toHaveBeenCalledTimes(1);
+    expect(plugin.takeLaunchCommand).toHaveBeenCalledTimes(1);
   });
 });

@@ -202,4 +202,24 @@ describe("hvscStageMetrics", () => {
     expect(stageRatePerSecond(m.unpack, 10_000)).toBe(100);
     expect(stageRatePerSecond(m.unpack, 28_000)).toBe(100);
   });
+
+  describe("remaining time guards", () => {
+    const base = { startedAtMs: 0, finishedAtMs: null, processed: 100, total: 1000 };
+
+    it.each([
+      ["no measurement", undefined],
+      ["a finished step", { ...base, finishedAtMs: 9_000 }],
+      ["no known total", { ...base, total: null }],
+      ["a total of one", { ...base, total: 1 }],
+      ["no processed count", { ...base, processed: null }],
+      ["everything processed", { ...base, processed: 1000 }],
+      ["nothing processed yet", { ...base, processed: 0 }],
+    ])("gives no remaining time for %s", (_name, measurement) => {
+      expect(stageRemainingMs(measurement, 10_000)).toBeNull();
+    });
+
+    it("gives a remaining time for a running step with progress", () => {
+      expect(stageRemainingMs(base, 10_000)).toBe(90_000);
+    });
+  });
 });

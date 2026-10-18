@@ -123,4 +123,8 @@ describe("resolveSessionTileLabel", () => {
   it("drops only the extension when friendly names are off", () => {
     expect(resolveSessionTileLabel("Probe_Long_20min.sid", false)).toBe("Probe_Long_20min");
   });
+
+  it("keeps a program's name as it is written instead of reading it as a SID title", () => {
+    expect(resolveSessionTileLabel("Space_Taxi.prg", true)).toBe("Space_Taxi");
+  });
 });

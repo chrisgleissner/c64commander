@@ -101,6 +101,22 @@ describe("a ring re-scan after a page change", () => {
     engine.stop();
   });
 
+  it("discards measurements taken before the window was resized and scans after it", async () => {
+    const { engine, refresh } = startOnButtons();
+    await addButtonAndReachFirstSlice();
+    const measuredScan = vi.fn();
+    window.addEventListener("resize", measuredScan);
+
+    window.dispatchEvent(new Event("resize"));
+    vi.advanceTimersByTime(500);
+    window.removeEventListener("resize", measuredScan);
+
+    expect(measuredScan).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(engine.isRingStop(document.getElementById("late")!)).toBe(true);
+    engine.stop();
+  });
+
   it("scans an open dialog in one task", async () => {
     const { engine, refresh } = startOnButtons();
     document.body.insertAdjacentHTML("beforeend", `<div role="dialog"><button id="in-dialog">Dialog</button></div>`);

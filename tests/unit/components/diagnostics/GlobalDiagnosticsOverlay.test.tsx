@@ -6,7 +6,7 @@ import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnos
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { reportUserError } from "@/lib/uiErrors";
-import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { getLogs, getErrorLogs } from "@/lib/logging";
 import { getTraceEvents } from "@/lib/tracing/traceSession";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
@@ -289,6 +289,17 @@ describe("GlobalDiagnosticsOverlay", () => {
         }),
       }),
     );
+  }, 10_000);
+
+  it("shares the filtered evidence as the actions export", async () => {
+    vi.mocked(shareDiagnosticsZip).mockResolvedValue(undefined);
+    renderOverlay();
+
+    const dialog = await screen.findByRole("dialog", {}, { timeout: 8000 });
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
+
+    await waitFor(() => expect(shareDiagnosticsZip).toHaveBeenCalledWith("actions", expect.any(Array)));
   }, 10_000);
 
   it("Android Back closes Diagnostics without changing the route", async () => {

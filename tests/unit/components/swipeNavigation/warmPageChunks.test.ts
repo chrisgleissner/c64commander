@@ -62,6 +62,25 @@ describe("warmPageChunks", () => {
     expect(loaded).toEqual(["play", "disks", "config", "settings"]);
   });
 
+  it("hands each load to the browser's idle callback when it has one", async () => {
+    const requestIdleCallback = vi.fn((callback: () => void) => {
+      callback();
+      return 1;
+    });
+    vi.stubGlobal("requestIdleCallback", requestIdleCallback);
+    try {
+      const warmPageChunks = await importWarm();
+      warmPageChunks();
+
+      await vi.advanceTimersByTimeAsync(2_600);
+
+      expect(requestIdleCallback).toHaveBeenCalledWith(expect.any(Function), { timeout: 3000 });
+      expect(loaded).toEqual(["play"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("stops loading when it is cancelled, as when the layer unmounts", async () => {
     const cancel = (await importWarm())();
 

@@ -112,6 +112,49 @@ describe("VirtualJoystick", () => {
     expect(large).toBeGreaterThan(small * 2);
   });
 
+  describe("measuring the room left in its surface", () => {
+    const renderInSurface = () =>
+      render(
+        <div data-surface-body="true" data-testid="surface-body">
+          <VirtualJoystick
+            port={2}
+            onSetPort={setPortMock}
+            heldInputs={EMPTY_HELD_JOYSTICK_INPUTS as never}
+            onHeldInputsChange={onHeldInputsChangeMock}
+            autofireEnabled={false}
+            onAutofireEnabledChange={setAutofireEnabledChangeMock}
+            autofireRateHz={5}
+            onAutofireRateHzChange={() => {}}
+          />
+        </div>,
+      );
+
+    it("watches the surface and the action zone's parent for size changes", () => {
+      const observe = vi.fn();
+      const disconnect = vi.fn();
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          observe = observe;
+          unobserve = vi.fn();
+          disconnect = disconnect;
+        },
+      );
+      try {
+        const view = renderInSurface();
+        const zone = screen.getByTestId("remote-input-joystick-action-zone");
+
+        expect(observe).toHaveBeenCalledWith(screen.getByTestId("surface-body"));
+        expect(observe).toHaveBeenCalledWith(zone.parentElement);
+
+        view.unmount();
+        expect(disconnect).toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
   it("resolves a drag past the dead zone to a direction and emits the held set", () => {
     renderStick();
     const zone = screen.getByTestId("remote-input-stick-zone");

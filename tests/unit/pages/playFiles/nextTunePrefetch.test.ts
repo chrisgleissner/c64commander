@@ -241,4 +241,71 @@ describe("prefetching the next tune's bytes from the Ultimate", () => {
     expect(prefetcher.peek("big")).toBeNull();
     expect(onStored).not.toHaveBeenCalled();
   });
+
+  it("reads right after the settle delay when the current tune has no known length", async () => {
+    prefetcher.schedule(item("next"), null);
+
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+
+    expect(fetchBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgets stored bytes when there is no next tune any more", async () => {
+    prefetcher.schedule(item("next"), 10_000);
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+    expect(prefetcher.peek("next")).not.toBeNull();
+
+    prefetcher.schedule(null, null);
+
+    expect(prefetcher.peek("next")).toBeNull();
+  });
+
+  it.each([
+    ["an Error", new Error("socket closed"), "socket closed"],
+    ["a plain string", "refused", "refused"],
+    ["null", null, "null"],
+  ])("logs the reason and retries once when the read rejects with %s", async (_name, rejection, reason) => {
+    fetchBlob.mockRejectedValue(rejection);
+    prefetcher.schedule(item("next"), 10_000);
+
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Next tune prefetch failed",
+      expect.objectContaining({ reason, willRetry: true }),
+    );
+    await vi.advanceTimersByTimeAsync(PREFETCH_RETRY_MS);
+    expect(fetchBlob).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays quiet when a rejected read belongs to a cancelled schedule", async () => {
+    let rejectRead: (reason: Error) => void = () => undefined;
+    fetchBlob.mockImplementation(() => new Promise<Blob | null>((_, reject) => (rejectRead = reject)));
+    prefetcher.schedule(item("next"), 10_000);
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+
+    prefetcher.cancel();
+    rejectRead(new Error("aborted"));
+    await vi.advanceTimersByTimeAsync(PREFETCH_RETRY_MS * 2);
+
+    expect(addLog).not.toHaveBeenCalled();
+    expect(fetchBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a queued read that was cancelled while it waited for the previous read to finish", async () => {
+    fetchBlob.mockImplementationOnce(
+      (_item: PlaylistItem, s: AbortSignal) =>
+        new Promise<Blob | null>((resolve) => s.addEventListener("abort", () => setTimeout(() => resolve(null), 8000))),
+    );
+    prefetcher.schedule(item("one"), 10_000);
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+    prefetcher.schedule(item("two"), 10_000);
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+
+    prefetcher.cancel();
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(fetchBlob).toHaveBeenCalledTimes(1);
+  });
 });

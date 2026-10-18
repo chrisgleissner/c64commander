@@ -163,6 +163,35 @@ describe("LightingStudioDialog", () => {
     expect(screen.getByTestId("lighting-use-device-location")).toHaveAccessibleName("Use device location");
   });
 
+  it.each([
+    ["lighting-connection-sentinel-toggle", "connectionSentinel"],
+    ["lighting-quiet-launch-toggle", "quietLaunch"],
+    ["lighting-source-identity-toggle", "sourceIdentityMap"],
+    ["lighting-circadian-toggle", "circadian"],
+  ])("flips only the %s rule's enabled flag in the automation state", (testId, ruleKey) => {
+    const value = buildHookValue();
+    mocks.useLightingStudio.mockReturnValue(value);
+    renderDialog();
+    const toggle = screen.getByTestId(testId);
+    const wasEnabled = toggle.getAttribute("aria-checked") === "true";
+
+    fireEvent.click(toggle);
+
+    const updater = value.updateAutomation.mock.calls.at(-1)![0] as (
+      state: Record<string, object>,
+    ) => Record<string, any>;
+    const before = {
+      connectionSentinel: {},
+      quietLaunch: {},
+      sourceIdentityMap: {},
+      circadian: {},
+      marker: { keep: 1 },
+    };
+    const after = updater(before);
+    expect(after[ruleKey].enabled).toBe(!wasEnabled);
+    expect(after.marker).toBe(before.marker);
+  });
+
   it("labels the save field and button without a duplicate placeholder", () => {
     renderDialog();
 

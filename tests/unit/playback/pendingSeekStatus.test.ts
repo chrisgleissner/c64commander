@@ -15,7 +15,7 @@
  * indistinguishable from a fault, which is the entire defect this state was added to remove.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ALMOST_READY_SECONDS,
@@ -280,6 +280,23 @@ describe("describePendingSeek for a worker replay", () => {
     expect(early.renderedPercent).toBe(0);
     expect(later.renderedPercent).toBeGreaterThan(40);
     expect(later.renderedPercent).toBeLessThan(later.targetPercent);
+  });
+
+  it("reads the wall clock when the caller gives no time", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(STARTED + 100_000);
+      const shown = describePendingSeek({
+        state: replay(),
+        renderedSeconds: 0,
+        durationMs: 1_200_000,
+        ratio: 10,
+      })!;
+
+      expect(shown.statusText).toBe("Seeking to 19:23 · about 16 s");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("holds the clock at the last audible position and names the marker after the seek", () => {

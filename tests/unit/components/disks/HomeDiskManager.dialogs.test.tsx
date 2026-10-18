@@ -400,6 +400,28 @@ describe("HomeDiskManager Dialogs", () => {
     expect(mockDiskLibrary.updateDiskName).toHaveBeenCalledWith("1", "Renamed.d64");
   });
 
+  it("closes the rename dialog on Cancel without renaming the disk", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(within(screen.getByTestId("disk-item-1")).getByText("Rename disk…"));
+    fireEvent.change(await screen.findByDisplayValue("DiskOne.d64"), { target: { value: "Other.d64" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByDisplayValue("Other.d64")).not.toBeInTheDocument());
+    expect(mockDiskLibrary.updateDiskName).not.toHaveBeenCalled();
+  });
+
+  it("closes the group dialog on Cancel without changing the disk's group", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(within(screen.getByTestId("disk-item-2")).getByText("Set group…"));
+    fireEvent.change(await screen.findByPlaceholderText("Enter a group name"), { target: { value: "Ignored" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByPlaceholderText("Enter a group name")).not.toBeInTheDocument());
+    expect(mockDiskLibrary.updateDiskGroup).not.toHaveBeenCalled();
+  });
+
   it("handles updating disk group (new group)", async () => {
     render(<HomeDiskManager />);
 

@@ -135,6 +135,19 @@ describe("AvMirrorControls", () => {
     expect(screen.getByTestId("av-audio-toggle")).toHaveAttribute("data-state", "live");
   });
 
+  it("labels the icon-only toggles with the current state, since they show no text", () => {
+    mirror.state.audio = { state: "connecting", error: null, foreignSenderNotice: null, senderMismatch: null };
+    mirror.state.videoLive = true;
+    mirror.state.video = { state: "live", error: null, senderMismatch: null };
+    render(<AvMirrorControls iconOnly />);
+
+    const audio = screen.getByTestId("av-audio-toggle");
+    const video = screen.getByTestId("av-video-toggle");
+    expect(audio).toHaveAttribute("aria-label", "Listen: Connecting…");
+    expect(audio).toHaveAttribute("title", "Connecting…");
+    expect(video).toHaveAttribute("aria-label", "Watch: Watching");
+  });
+
   it("shows the Watching label and a live dot while video streams", () => {
     mirror.state.videoLive = true;
     mirror.state.video = { state: "live", error: null, senderMismatch: null };

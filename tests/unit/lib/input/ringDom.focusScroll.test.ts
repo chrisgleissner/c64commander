@@ -161,4 +161,62 @@ describe("revealRingElementAfterLayout", () => {
 
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
+
+  it("returns a no-op canceller when there is no element to watch", () => {
+    const cancel = revealRingElementAfterLayout(null);
+
+    expect(() => cancel()).not.toThrow();
+  });
+
+  it("can be cancelled twice, and the second call leaves the first cancellation in effect", () => {
+    const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+    focusRingElement(element);
+    scrollIntoView.mockClear();
+    element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+    const cancel = revealRingElementAfterLayout(element);
+    cancel();
+    cancel();
+    vi.advanceTimersByTime(2000);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("still re-checks on timers and mutations when ResizeObserver is unavailable", async () => {
+    vi.stubGlobal("ResizeObserver", undefined);
+    try {
+      const { element, scrollIntoView } = pageShellWithCard({ top: 200, height: 40 });
+      focusRingElement(element);
+      scrollIntoView.mockClear();
+      element.getBoundingClientRect = () => ({ top: 463, bottom: 511, height: 48 }) as DOMRect;
+
+      revealRingElementAfterLayout(element);
+      vi.advanceTimersByTime(500);
+
+      expect(scrollIntoView).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("watches the document body when the page itself is the scroll container", () => {
+    const element = document.createElement("button");
+    element.scrollIntoView = vi.fn();
+    document.body.append(element);
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = observe;
+        disconnect = vi.fn();
+      },
+    );
+    try {
+      revealRingElementAfterLayout(element)();
+
+      expect(observe).toHaveBeenCalledWith(document.body);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
