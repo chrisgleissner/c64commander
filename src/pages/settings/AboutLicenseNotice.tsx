@@ -9,6 +9,7 @@
 import { variant } from "@/generated/variant";
 
 export const SOURCE_CODE_URL = "https://github.com/chrisgleissner/c64commander";
+export const SOURCE_CODE_ADDRESS = SOURCE_CODE_URL.replace(/^https?:\/\//, "");
 export const GPL_V3_URL = "https://www.gnu.org/licenses/gpl-3.0.html";
 
 export const AboutLicenseNotice = () => (
@@ -32,7 +33,7 @@ export const AboutLicenseNotice = () => (
       data-testid="settings-about-source-code"
     >
       Get the source code
-    </a>
-    .
+    </a>{" "}
+    ({SOURCE_CODE_ADDRESS}).
   </p>
 );

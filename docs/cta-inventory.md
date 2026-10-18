@@ -779,7 +779,8 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   License and Source links — link — 44 px targets; Back closes it) ; the small GPL notice
   `settings-about-license-notice` names the app by variant and holds two inline links: GNU GPL v3
   or later — `settings-about-license-text`, and Get the source code —
-  `settings-about-source-code` — R✅ I✅
+  `settings-about-source-code`, followed by the repository address as plain text
+  (`github.com/chrisgleissner/c64commander`, not a focus stop) — R✅ I✅
 
 ### 4.6 Docs (`/docs`)
 
