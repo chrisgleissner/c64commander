@@ -295,7 +295,7 @@ export class AvMirrorSession {
   private readonly audioLossRestarter = new StreamLossRestarter({
     stream: "audio",
     isWanted: () => this.audioWanted,
-    isLost: () => this.snapshot.audio.state === "error",
+    isLost: () => this.snapshot.audio.state === "error" && !this.snapshot.audio.senderMismatch,
     deviceAnswers: () => this.deviceAnswersRest(),
     restart: () =>
       this.serialize(async () => {
@@ -309,7 +309,7 @@ export class AvMirrorSession {
   private readonly videoLossRestarter = new StreamLossRestarter({
     stream: "video",
     isWanted: () => this.videoWanted,
-    isLost: () => this.snapshot.video.state === "error",
+    isLost: () => this.snapshot.video.state === "error" && !this.snapshot.video.senderMismatch,
     deviceAnswers: () => this.deviceAnswersRest(),
     restart: () =>
       this.serialize(async () => {

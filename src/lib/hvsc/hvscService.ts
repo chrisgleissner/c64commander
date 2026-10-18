@@ -281,16 +281,15 @@ export const ensureHvscMetadataHydration = async () => {
     if (!isCurrentGeneration()) {
       return;
     }
+    const hasPendingSongs = Object.values(loadedSnapshot.songs).some(
+      (song) => song.metadataStatus !== "hydrated" && song.metadataStatus !== "error",
+    );
+    if (!hasPendingSongs) {
+      return;
+    }
     // Hydration rewrites songs in place. The media index shares its maps with the remembered snapshot that other
     // loaders copy from, so the run works on its own maps and publishes them through setBrowseSnapshot.
     const snapshot = copyHvscBrowseIndexSnapshot(loadedSnapshot);
-
-    const pendingSongs = Object.values(snapshot.songs).filter(
-      (song) => song.metadataStatus !== "hydrated" && song.metadataStatus !== "error",
-    );
-    if (!pendingSongs.length) {
-      return;
-    }
 
     const emitProgress = createProgressEmitter("hvsc-metadata-hydration");
     // The in-memory index follows every chunk so browse and search stay live; only the disk write,

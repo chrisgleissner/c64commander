@@ -110,7 +110,7 @@ try {
   await recorderDone;
 } finally {
   if (!NO_MIC) {
-    await setVolume(device, original.level ?? 3).catch((error) =>
+    await setVolume(device, Math.min(original.level ?? 3, MAX_VOLUME)).catch((error) =>
       console.error(`could not restore the volume: ${error.message}`),
     );
   }

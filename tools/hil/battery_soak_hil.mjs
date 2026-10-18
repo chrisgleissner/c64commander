@@ -77,6 +77,10 @@ while (Date.now() < endAt) {
 }
 
 const read = samples.filter((s) => !s.error);
+if (read.length === 0)
+  throw new Error(
+    `no battery sample could be read in ${samples.length} attempts; the link to the phone was down for the whole run`,
+  );
 const offCharger = (sample) => sample.status === "Discharging" || sample.chargerDisabled;
 const discharging = read.filter(offCharger).length;
 const first = read.find(offCharger);

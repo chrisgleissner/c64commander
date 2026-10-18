@@ -416,7 +416,7 @@ export class AudioMirrorController {
       expected: mismatch.expected,
       rejectedPackets: mismatch.rejectedPackets,
     });
-    this.update({ error: describeSenderMismatch(mismatch, "audio"), senderMismatch: mismatch });
+    this.update({ error: describeSenderMismatch(mismatch, "audio"), senderMismatch: mismatch, reconnecting: false });
   }
 
   /** Nothing has arrived since the start: report a refused sender now rather than after the full timeout. */

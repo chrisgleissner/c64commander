@@ -714,6 +714,21 @@ describe("AvMirrorSession", () => {
       expect(audio.start).toHaveBeenCalledTimes(2);
     });
 
+    it("does not restart audio that was diagnosed as arriving from a refused sender", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio)).toBe(true);
+      audio.deps.onChange({
+        state: "error",
+        error: "refused",
+        senderMismatch: { source: "192.0.2.148", expected: "192.0.2.9", rejectedPackets: 10 },
+      } as never);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+    });
+
     it("keeps counting restart attempts when a playback event asks again for audio that is already wanted", async () => {
       const { session, audio } = makeSession();
       await session.setAudioWanted(true);

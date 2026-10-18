@@ -541,7 +541,7 @@ export class VideoMirrorController {
       expected: mismatch.expected,
       rejectedPackets: mismatch.rejectedPackets,
     });
-    this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch });
+    this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch, reconnecting: false });
   }
 
   /** Nothing has arrived since the start: report a refused sender now rather than after the full timeout. */

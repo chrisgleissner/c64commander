@@ -305,7 +305,6 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
-      packetCounters.reset(name)
       senderFilter.retarget(name, call.getString("source"))
       val joinedInterface = if (group != null) siteLocalInterface() else null
       val socket: DatagramSocket =
@@ -360,7 +359,6 @@ class StreamUdpPlugin : Plugin() {
     closeSocket(name)
     streamSenders.remove(name)
     senderFilter.clearDiagnostics(name)
-    packetCounters.reset(name)
     call.resolve(JSObject())
   }
 
@@ -992,6 +990,8 @@ class StreamUdpPlugin : Plugin() {
   }
 
   private fun closeSocket(name: String) {
+    membershipRefresher.stop(name)
+    packetCounters.reset(name)
     sockets.remove(name)?.let {
       try {
         it.close()
