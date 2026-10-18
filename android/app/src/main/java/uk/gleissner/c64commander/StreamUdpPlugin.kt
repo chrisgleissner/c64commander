@@ -87,12 +87,13 @@ class StreamUdpPlugin : Plugin() {
    */
   private val streamSenders = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
 
+  private val packetCounters = StreamPacketCounters { clockNanos() }
+  private val membershipRefresher = MulticastMembershipRefresher()
   /**
    * Accepts each stream's packets only from the selected machine. Measured on the wire with two
    * Ultimates streaming into 239.0.1.64, an unfiltered assembler completed one machine's frames with
    * the other's lines, which a viewer sees as violent flicker between two screens.
    */
-  private val packetCounters = StreamPacketCounters { clockNanos() }
   private val senderFilter = StreamSenderFilter(runInBackground = { executor.execute(it) }, logEvery = FOREIGN_LOG_EVERY)
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
@@ -264,7 +265,7 @@ class StreamUdpPlugin : Plugin() {
       call.reject("name is required")
       return
     }
-    val result = streamDiagnostics(name, senderFilter, packetCounters, streamSenders[name])
+    val result = streamDiagnostics(name, senderFilter, packetCounters, membershipRefresher, streamSenders[name])
     call.resolve(result)
   }
 
@@ -331,6 +332,7 @@ class StreamUdpPlugin : Plugin() {
         Log.d(logTag, "receiveBufferSize hint ignored for $name", error)
       }
       sockets[name] = socket
+      membershipRefresher.start(name, socket, group, port, siteLocalInterface())
       if (assemble) {
         executor.execute { assembleLoop(name, socket) }
       } else {

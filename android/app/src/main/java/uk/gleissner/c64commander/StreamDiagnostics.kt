@@ -16,6 +16,7 @@ internal fun streamDiagnostics(
   name: String,
   senderFilter: StreamSenderFilter,
   packetCounters: StreamPacketCounters,
+  membershipRefresher: MulticastMembershipRefresher,
   senders: Collection<String>?,
 ): JSObject {
   val result = JSObject()
@@ -24,6 +25,7 @@ internal fun streamDiagnostics(
   result.put("expectedSource", senderFilter.expectedSource(name)?.hostAddress)
   result.put("receivedPackets", packetCounters.receivedPackets(name))
   packetCounters.millisSinceLastPacket(name)?.let { result.put("msSinceLastPacket", it) }
+  result.put("membershipRefreshes", membershipRefresher.refreshCount(name))
   val sendersArray = JSArray()
   senders?.forEach { sendersArray.put(it) }
   result.put("senders", sendersArray)
