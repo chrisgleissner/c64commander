@@ -62,3 +62,16 @@ charging phone, and the app does use about 42 % of a core with a foreground-serv
 until an unplugged run (wireless debugging, or the physical cable removed) records percentage and temperature at 30
 minutes and 2 hours, local engine against the Ultimate. If that run shows more than a few percent per hour, the CPU
 load of the local render path is the first thing to reduce.
+
+## How to complete the unplugged measurement
+
+An unplugged run needs a person to remove the cable, so it has not been done. `tools/hil/battery_soak_hil.mjs` records
+battery capacity, charge counter, status, battery temperature, the app's CPU time and memory every 30 seconds, and
+reports a drain figure only when at least 90 % of the samples read "Discharging".
+
+1. Enable wireless debugging on the phone (Developer options) and pair it with the host, so that droidctl lists the phone
+   under an `ip:port` serial. Keep the USB cable attached.
+2. Charge to at least 80 %, start the app, select the engine ("Here" for the local engine, "C64" for the Ultimate),
+   start SID Radio (Chill / Ambient) and turn the screen off.
+3. Start `node tools/hil/battery_soak_hil.mjs --serial <ip:port> --minutes 30 --label local-engine`, then unplug the cable.
+4. Repeat with the other engine, and with `--minutes 120` once the 30 minute figures are known.
