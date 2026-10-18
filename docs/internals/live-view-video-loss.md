@@ -158,3 +158,11 @@ jitter estimate growing without new packets. Before this change the audio mirror
 Listen is wanted, the page is visible and the device answers REST; the audio card reads "Audio lost, reconnecting…"
 meanwhile.
 
+## Cost of the membership refresh on Listen (2026-10-18)
+
+The refresh leaves and joins the group, so the stream is interrupted briefly once a minute. A 240 s Listen run on the
+Pixel 4 (`tools/hil/app_audio_stats.mjs`, samples every second) shows concealed audio rising by 12 to 16 ms at samples 36,
+96, 156 and 216, which are the refreshes 60 s apart, and nothing else after the initial 40 ms: no underruns, buffer between
+116 and 135 ms. That is about 14 ms of concealed audio per minute, which the concealment fades and a listener does not hear.
+Keeping the membership alive is worth that cost, since without it the stream stops for good every 270 s.
+
