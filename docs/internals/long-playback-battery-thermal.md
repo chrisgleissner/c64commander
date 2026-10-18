@@ -81,7 +81,7 @@ reports a drain figure only when at least 90 % of the samples read "Discharging"
 The Pixel 4 here is a userdebug build, so `adb root` followed by `echo 1 > /sys/class/power_supply/charger/charge_disable`
 stops charging while the USB cable stays attached. The battery status keeps reading "Charging" (it follows the USB port),
 so `tools/hil/battery_soak_hil.mjs` now also counts a sample as off the charger when `charge_disable` reads 1. The
-fuel gauge reports `charge_counter` in steps of about 12 mAh, so a 30 minute run resolves the drain to one step. Charging was
+fuel gauge reports `charge_counter` in steps of 6 to 12 mAh, so a 30 minute run resolves the drain to one step. Charging was
 switched on again after the runs (`echo 0`).
 
 Both runs: default edition build, screen off from the start, SID Radio Chill / Ambient, media volume 3 of 25, c64u as the

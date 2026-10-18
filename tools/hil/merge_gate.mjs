@@ -56,7 +56,7 @@
  * USAGE
  *
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
- *                                [--quiet-check] [--volume 3] [--tone-volume 8] [--json artifacts/hil-gate.json]
+ *                                [--quiet-check] [--volume 5] [--tone-volume 8] [--json artifacts/hil-gate.json]
  *                                [--keep-dir artifacts/gate-runs] [--target auto|handset|pixel]
  *
  * `--target auto` (the default) drives the keypad handset when droidctl lists it as ready, and the
@@ -122,7 +122,7 @@ const ONLY = arg("only", "")
  * raised the volume to improve a measurement and had to be stopped. If a grader cannot read a
  * signal at this level, the answer is a better grader or a closer microphone.
  */
-const GATE_VOLUME = Number(arg("volume", "3"));
+const GATE_VOLUME = Number(arg("volume", "5"));
 const MAX_VOLUME = 10;
 
 /** The Ultimate answers 401 to every call when it has a password and the header is absent. */
