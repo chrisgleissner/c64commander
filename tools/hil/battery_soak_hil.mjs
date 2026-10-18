@@ -20,6 +20,11 @@
  *
  * The run only means something while the phone is discharging: every sample records `status`, and the
  * summary refuses to report a drain figure unless at least 90 % of them read "Discharging".
+ *
+ * A phone whose firmware lets root stop charging (a userdebug Pixel: `adb root`, then
+ * `echo 1 > /sys/class/power_supply/charger/charge_disable`) can stay on the USB cable and still run on its
+ * battery. The status then keeps reading "Charging", so a sample also counts as off the charger when
+ * `charge_disable` reads 1. Write 0 to that file when the run is over.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -39,7 +44,7 @@ const LABEL = arg("label", "run");
 const OUT = arg("json", `artifacts/battery-${LABEL}.json`);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const READ = `B=/sys/class/power_supply/battery; echo "capacity=$(cat $B/capacity) charge_uah=$(cat $B/charge_counter) status=$(cat $B/status) temp_dc=$(cat $B/temp)";
+const READ = `B=/sys/class/power_supply/battery; echo "capacity=$(cat $B/capacity) charge_uah=$(cat $B/charge_counter) status=$(cat $B/status) temp_dc=$(cat $B/temp) charge_disable=$(cat /sys/class/power_supply/charger/charge_disable 2>/dev/null)";
 PID=$(pidof ${PACKAGE} | cut -d' ' -f1); if [ -n "$PID" ]; then echo "pid=$PID stat=$(cut -d')' -f2 /proc/$PID/stat | cut -d' ' -f13,14) rss_kb=$(grep VmRSS /proc/$PID/status | tr -s ' ' | cut -d' ' -f2)"; else echo "pid="; fi`;
 
 const parse = (text) => {
@@ -50,6 +55,7 @@ const parse = (text) => {
     capacity: Number(fields.capacity),
     chargeUah: Number(fields.charge_uah),
     status: fields.status,
+    chargerDisabled: fields.charge_disable === "1",
     batteryC: Number(fields.temp_dc) / 10,
     pid: fields.pid ? Number(fields.pid) : null,
     cpuSeconds: ticks.length === 2 ? (ticks[0] + ticks[1]) / 100 : null,
@@ -71,9 +77,10 @@ while (Date.now() < endAt) {
 }
 
 const read = samples.filter((s) => !s.error);
-const discharging = read.filter((s) => s.status === "Discharging").length;
-const first = read.find((s) => s.status === "Discharging");
-const last = [...read].reverse().find((s) => s.status === "Discharging");
+const offCharger = (sample) => sample.status === "Discharging" || sample.chargerDisabled;
+const discharging = read.filter(offCharger).length;
+const first = read.find(offCharger);
+const last = [...read].reverse().find(offCharger);
 const hours = first && last ? (last.t - first.t) / 3_600_000 : 0;
 const summary = {
   label: LABEL,

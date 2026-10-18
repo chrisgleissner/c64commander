@@ -49,7 +49,12 @@ export interface AudioMirrorSnapshot {
    * {@link foreignSenderNotice} covers). Carries the address the one-tap recovery adopts.
    */
   senderMismatch: SenderMismatch | null;
+  /** The stream went silent and the session is restarting it; the error text says so. */
+  reconnecting?: boolean;
 }
+
+export const AUDIO_STOPPED_ARRIVING_MESSAGE = "The audio stream stopped arriving.";
+export const AUDIO_RECONNECTING_MESSAGE = "Audio lost, reconnecting…";
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
 export interface AudioMirrorSignals {
@@ -96,6 +101,8 @@ export interface AudioMirrorDeps {
   /** Whether a sender is proven to be another machine; the selected device on another address is not. */
   isForeignSender?: (host: string) => Promise<boolean>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
+  /** The stream went silent after being live for `liveForMs`. True when a restart is scheduled. */
+  onStreamLost?: (liveForMs: number) => boolean;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
   /**
@@ -121,6 +128,7 @@ export class AudioMirrorController {
   private nativeLastSeq: number | null = null;
   /** Last socket-level packet count seen from the native sink, for the arrival watchdog's poll. */
   private lastSeenArrivalPackets = -1;
+  private liveSinceMs = 0;
   /** Notices that the multicast audio stopped arriving; a bound socket reports nothing when it does. */
   private readonly arrivalWatchdog = new StreamArrivalWatchdog({
     now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
@@ -210,6 +218,7 @@ export class AudioMirrorController {
       chunks: 0,
       foreignSenderNotice: null,
       senderMismatch: null,
+      reconnecting: false,
     });
     await this.releaseFailedSessionTransport();
 
@@ -254,7 +263,8 @@ export class AudioMirrorController {
     receiver.onStateChange((connection) => {
       if (this.receiver !== receiver) return;
       if (connection === "open") {
-        this.update({ state: "live" });
+        this.liveSinceMs = performance.now();
+        this.update({ state: "live", reconnecting: false });
         this.lastSeenArrivalPackets = -1;
         this.arrivalWatchdog.start();
       } else if (connection === "error") {
@@ -370,10 +380,21 @@ export class AudioMirrorController {
     addLog("warn", "Audio Mirror: no audio arrived for long enough to call the stream lost", {
       silentMs: Math.round(silentMs),
     });
-    this.update({ state: "error", error: "The audio stream stopped arriving." });
+    const reconnecting = this.deps.onStreamLost?.(Math.round(performance.now() - this.liveSinceMs)) === true;
+    this.update({
+      state: "error",
+      error: reconnecting ? AUDIO_RECONNECTING_MESSAGE : AUDIO_STOPPED_ARRIVING_MESSAGE,
+      reconnecting,
+    });
     // Reported first, diagnosed second: the plugin read crosses the bridge, and a call that never
     // answers must not be able to leave the silence unreported.
     void this.diagnoseSilence();
+  }
+
+  /** No restart will follow a lost stream: replace "reconnecting" with the plain fact. */
+  abandonReconnect(): void {
+    if (this.snapshot.state !== "error" || !this.snapshot.reconnecting) return;
+    this.update({ reconnecting: false, error: AUDIO_STOPPED_ARRIVING_MESSAGE });
   }
 
   /**

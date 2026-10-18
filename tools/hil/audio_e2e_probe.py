@@ -395,6 +395,25 @@ def identify_tones(levels: np.ndarray) -> np.ndarray:
     return np.where(clear, np.argmax(scores, axis=0), -1)
 
 
+ROOM_TRANSIENT_OVER_PLATEAU = 5.6  # amplitude ratio, about 15 dB; the ladder's own notes differ by under 8 dB
+
+
+def mask_room_transients(sounding: np.ndarray, levels: np.ndarray) -> np.ndarray:
+    """`sounding` with every window set to -1 whose loudest ladder band is far above the ladder's own plateau.
+
+    The phone plays the ladder at a fixed volume, so no ladder note can be louder than the others by a large
+    factor. A window that is, is something in the room: a knock or a voice. Gate run 2026-10-18 read a 62 ms
+    transient 24 dB over the plateau, 43 cents flat of the 870 Hz note, as that note and then as a replay of 1210 Hz.
+    Masked windows inside a note are bridged by `bridge_interruptions`.
+    """
+    import numpy as np  # analysis only: build-sid and the stimulus tools must run without numpy
+    peak = levels.max(axis=(0, 1))
+    if not (sounding >= 0).any():
+        return sounding
+    plateau = float(np.median(peak[sounding >= 0]))
+    return np.where(peak > plateau * ROOM_TRANSIENT_OVER_PLATEAU, -1, sounding)
+
+
 def bridge_interruptions(sounding: np.ndarray, note_windows: int, max_windows: int = BRIDGE_WINDOWS) -> np.ndarray:
     """`sounding` with a short interruption inside one note set to that note.
 
@@ -450,7 +469,9 @@ def detect_bursts(samples: list[float], rate: int) -> list[tuple[int, int, int]]
             for hz in TONES_HZ
         ]
     )
-    sounding = bridge_interruptions(identify_tones(levels), note_windows=math.ceil(ON_MS / coarse_ms) + 1)
+    sounding = bridge_interruptions(
+        mask_room_transients(identify_tones(levels), levels), note_windows=math.ceil(ON_MS / coarse_ms) + 1
+    )
 
     bursts: list[tuple[int, int, int]] = []
     i = 0

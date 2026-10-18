@@ -30,7 +30,7 @@ interface Captured {
     renderAudio?: (samples: Int16Array) => void;
     renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
     schedulePresent?: (present: () => void) => void;
-    onStreamLost?: (info: { liveForMs: number }) => boolean;
+    onStreamLost?: (info: { liveForMs: number } | number) => boolean;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -57,6 +57,7 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
       audioRejectedPackets: 0,
     }));
     adoptSender = vi.fn(async () => {});
+    abandonReconnect = vi.fn();
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -620,6 +621,59 @@ describe("AvMirrorSession", () => {
           error: "streams:stop refused",
         });
       });
+    });
+  });
+
+  describe("restarting a lost audio stream", () => {
+    const lose = (audio: Captured, liveForMs = 5000) => {
+      audio.deps.onChange({ state: "error", error: "lost" });
+      return audio.deps.onStreamLost!(liveForMs);
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.spyOn(getC64API(), "getInfo").mockResolvedValue({} as never);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("restarts the audio once after the backoff while Listen is wanted and the device answers", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledTimes(1);
+
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(audio.start).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not restart after Listen was turned off", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      await session.stopAudio();
+
+      expect(lose(audio)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops restarting after the bounded number of attempts when the stream keeps dying", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(lose(audio, 1000)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(3);
     });
   });
 

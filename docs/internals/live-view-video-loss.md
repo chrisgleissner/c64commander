@@ -30,7 +30,7 @@ at the sender (restart, or a second sender taking over the group). `rejectedPack
 
 ## Restart policy
 
-`VideoLossRestarter` (`src/lib/streams/videoLossRecovery.ts`), owned by `AvMirrorSession`:
+`StreamLossRestarter` (`src/lib/streams/streamLossRecovery.ts`), owned by `AvMirrorSession`:
 
 - Applies only while Watch is wanted: set by `startVideo()`, cleared by `stopVideo()` and `stopAll()`, which also cancel
   a pending restart.
@@ -113,7 +113,7 @@ the 30 minute run above had four losses declared by the watchdog. The router is 
 phone sends was not captured. This points at multicast delivery on the Wi-Fi leg, not at the app's watchdog, but the
 cause is not established. A second Ultimate sending into the group was not retested.
 
-Reading `videoLossRecovery.ts` and `streamArrivalWatchdog.ts`: the watchdog counts a completed frame (native path) or a
+Reading `streamLossRecovery.ts` and `streamArrivalWatchdog.ts`: the watchdog counts a completed frame (native path) or a
 datagram (JS path) as an arrival. On the native path, packets that arrive but do not assemble into frames leave the
 watchdog without an arrival, so "lost" can be declared while packets still arrive. The recovery restarts at most twice,
 2 s and 6 s after the loss, and only a stream that then stays live for 30 s earns new attempts.
@@ -147,4 +147,14 @@ A/B on the keypad phone, Watch for 22 minutes, no host on the group, the same ha
 | After: refresh every 60 s              | 22 min   | 0 (264 samples all live, no counter reset) | 4,472,478 with 22 refreshes |
 
 Six counter resets in 25 minutes is about one per 270 s. The run after the change had none.
+
+## Audio recovery (2026-10-18)
+
+The same bounded restart now serves Listen. A repeat of the `av-clarity` stage on the Pixel found one run in 20 where the
+audio stopped arriving at the phone 4 s after the start and did not come back for the remaining 16 s: the host's
+capture of the Ultimate's stream was complete, and the app's audio statistics showed the buffer fixed at 78 ms and the
+jitter estimate growing without new packets. Before this change the audio mirror reported the loss and stayed lost.
+`StreamLossRestarter` (renamed from the video-only restarter) restarts the audio after 2 s and again after 6 s while
+Listen is wanted, the page is visible and the device answers REST; the audio card reads "Audio lost, reconnecting…"
+meanwhile.
 
