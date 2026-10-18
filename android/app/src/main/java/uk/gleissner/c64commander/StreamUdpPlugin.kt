@@ -92,6 +92,7 @@ class StreamUdpPlugin : Plugin() {
    * Ultimates streaming into 239.0.1.64, an unfiltered assembler completed one machine's frames with
    * the other's lines, which a viewer sees as violent flicker between two screens.
    */
+  private val packetCounters = StreamPacketCounters { clockNanos() }
   private val senderFilter = StreamSenderFilter(runInBackground = { executor.execute(it) }, logEvery = FOREIGN_LOG_EVERY)
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
@@ -267,6 +268,8 @@ class StreamUdpPlugin : Plugin() {
     result.put("rejectedPackets", senderFilter.rejectedPackets(name))
     result.put("lastRejectedSource", senderFilter.lastRejectedSource(name)?.hostAddress)
     result.put("expectedSource", senderFilter.expectedSource(name)?.hostAddress)
+    result.put("receivedPackets", packetCounters.receivedPackets(name))
+    packetCounters.millisSinceLastPacket(name)?.let { result.put("msSinceLastPacket", it) }
     val senders = JSArray()
     streamSenders[name]?.forEach { senders.put(it) }
     result.put("senders", senders)
@@ -310,6 +313,7 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
+      packetCounters.reset(name)
       senderFilter.retarget(name, call.getString("source"))
       val socket: DatagramSocket =
         if (group != null) {
@@ -363,6 +367,7 @@ class StreamUdpPlugin : Plugin() {
     closeSocket(name)
     streamSenders.remove(name)
     senderFilter.clearDiagnostics(name)
+    packetCounters.reset(name)
     call.resolve(JSObject())
   }
 
@@ -723,6 +728,7 @@ class StreamUdpPlugin : Plugin() {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
+        packetCounters.note(name)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
         val arrivalNanos = clockNanos()
         val source = packet.address
@@ -852,6 +858,7 @@ class StreamUdpPlugin : Plugin() {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
+        packetCounters.note(name)
         val arrivalNanos = clockNanos()
         // Drop a foreign sender's packet before it reaches the assembler. Two Ultimates on one
         // multicast group carry two independent frame-number spaces, so an unfiltered assembler

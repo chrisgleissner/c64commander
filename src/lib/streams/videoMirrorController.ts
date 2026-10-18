@@ -531,6 +531,8 @@ export class VideoMirrorController {
       senders: diagnostics?.senders ?? null,
       rejectedPackets: diagnostics?.rejectedPackets ?? null,
       expectedSource: diagnostics?.expectedSource ?? null,
+      receivedPackets: diagnostics?.receivedPackets ?? null,
+      msSinceLastPacket: diagnostics?.msSinceLastPacket ?? null,
     });
     const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
     if (!mismatch) return;

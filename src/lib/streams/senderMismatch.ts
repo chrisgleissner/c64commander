@@ -29,6 +29,10 @@ export interface SenderFilterDiagnostics {
   expectedSource?: string;
   /** Distinct source addresses seen on the stream's group; more than one is a second sender. */
   senders?: string[];
+  /** Datagrams the socket received since it was bound, before filtering and assembly. */
+  receivedPackets?: number;
+  /** Milliseconds since the socket last received a datagram; absent until one has arrived. */
+  msSinceLastPacket?: number;
 }
 
 /** A stream arriving from an address the filter is not accepting. */

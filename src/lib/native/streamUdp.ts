@@ -133,6 +133,10 @@ export interface StreamUdpStreamDiagnostics {
   expectedSource?: string;
   /** Distinct source IPs seen on this stream's group. */
   senders?: string[];
+  /** Datagrams the socket received since it was bound, from any sender and before any filtering or assembly. */
+  receivedPackets?: number;
+  /** Milliseconds since the socket last received a datagram; absent until one has arrived. */
+  msSinceLastPacket?: number;
 }
 
 /**
