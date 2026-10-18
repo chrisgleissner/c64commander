@@ -139,10 +139,19 @@ describe("ArchiveSelectionView", () => {
     expect(screen.getByText(/Override host active/i)).toBeInTheDocument();
   });
 
-  it("always shows the license sentence, as small text, without opening About this archive", () => {
+  it("shows the license sentence as small text above the results, where the user picks what to add", () => {
+    renderView({}, { phase: "results", params: {}, results: [makeResult()] });
+    const notice = screen.getByTestId("archive-legal-notice");
+    expect(notice).toHaveTextContent(LEGAL_NOTICE);
+    expect(notice).toHaveClass("text-xs");
+    expect(notice.compareDocumentPosition(screen.getByTestId("archive-result-row"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("keeps the license sentence off the search form until there are results to add", () => {
     renderView();
-    expect(screen.getByTestId("archive-legal-notice")).toHaveTextContent(LEGAL_NOTICE);
-    expect(screen.getByTestId("archive-legal-notice")).toHaveClass("text-xs");
+    expect(screen.queryByTestId("archive-legal-notice")).toBeNull();
   });
 
   it("shows placeholder text when form is empty and no query preview", () => {

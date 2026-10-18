@@ -87,6 +87,8 @@ class StreamUdpPlugin : Plugin() {
    */
   private val streamSenders = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
 
+  private val packetCounters = StreamPacketCounters { clockNanos() }
+  private val membershipRefresher = MulticastMembershipRefresher()
   /**
    * Accepts each stream's packets only from the selected machine. Measured on the wire with two
    * Ultimates streaming into 239.0.1.64, an unfiltered assembler completed one machine's frames with
@@ -263,14 +265,7 @@ class StreamUdpPlugin : Plugin() {
       call.reject("name is required")
       return
     }
-    val result = JSObject()
-    result.put("rejectedPackets", senderFilter.rejectedPackets(name))
-    result.put("lastRejectedSource", senderFilter.lastRejectedSource(name)?.hostAddress)
-    result.put("expectedSource", senderFilter.expectedSource(name)?.hostAddress)
-    val senders = JSArray()
-    streamSenders[name]?.forEach { senders.put(it) }
-    result.put("senders", senders)
-    call.resolve(result)
+    call.resolve(streamDiagnostics(name, senderFilter, packetCounters, membershipRefresher, streamSenders[name]))
   }
 
   /** Who a stream sender is, asked over ident so that no device password goes to an unknown address. */
@@ -311,14 +306,14 @@ class StreamUdpPlugin : Plugin() {
     try {
       closeSocket(name)
       senderFilter.retarget(name, call.getString("source"))
+      val joinedInterface = if (group != null) siteLocalInterface() else null
       val socket: DatagramSocket =
         if (group != null) {
           acquireMulticastLock()
           MulticastSocket(null).apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
-            val netIf = siteLocalInterface()
-            joinGroup(InetSocketAddress(InetAddress.getByName(group), port), netIf)
+            joinGroup(InetSocketAddress(InetAddress.getByName(group), port), joinedInterface)
           }
         } else {
           DatagramSocket(null).apply {
@@ -335,6 +330,7 @@ class StreamUdpPlugin : Plugin() {
         Log.d(logTag, "receiveBufferSize hint ignored for $name", error)
       }
       sockets[name] = socket
+      membershipRefresher.start(name, socket, group, port, joinedInterface)
       if (assemble) {
         executor.execute { assembleLoop(name, socket) }
       } else {
@@ -725,6 +721,7 @@ class StreamUdpPlugin : Plugin() {
         socket.receive(packet)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
         val arrivalNanos = clockNanos()
+        packetCounters.note(name, arrivalNanos)
         val source = packet.address
         if (source !== lastSender) {
           lastSender = source
@@ -853,6 +850,7 @@ class StreamUdpPlugin : Plugin() {
         packet.setLength(buffer.size)
         socket.receive(packet)
         val arrivalNanos = clockNanos()
+        packetCounters.note(name, arrivalNanos)
         // Drop a foreign sender's packet before it reaches the assembler. Two Ultimates on one
         // multicast group carry two independent frame-number spaces, so an unfiltered assembler
         // completes one machine's partial frame with the other machine's lines — which is the
@@ -992,6 +990,8 @@ class StreamUdpPlugin : Plugin() {
   }
 
   private fun closeSocket(name: String) {
+    membershipRefresher.stop(name)
+    packetCounters.reset(name)
     sockets.remove(name)?.let {
       try {
         it.close()

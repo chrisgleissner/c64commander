@@ -117,6 +117,57 @@ describe("AudioMirrorController", () => {
     }
   });
 
+  it("leaves a live stream alone when asked to abandon a reconnect that is not under way", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.abandonReconnect();
+
+    expect(controller.getSnapshot().state).toBe("live");
+    expect(controller.getSnapshot().error).toBeNull();
+  });
+
+  it("tells its owner how long the audio had been live when it went silent, and shows the reconnecting state", async () => {
+    vi.useFakeTimers();
+    try {
+      const receiver = new FakeReceiver();
+      const onStreamLost = vi.fn(() => true);
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createPlayer: () => fakePlayer(true),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        onStreamLost,
+        networkBufferMs: 0,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await tickSeconds(10);
+
+      expect(onStreamLost).toHaveBeenCalledTimes(1);
+      const liveForMs = (onStreamLost.mock.calls[0] as unknown as [number])[0];
+      expect(liveForMs).toBeGreaterThanOrEqual(8000);
+      expect(controller.getSnapshot().reconnecting).toBe(true);
+      expect(controller.getSnapshot().error).toBe("Audio lost, reconnecting…");
+
+      controller.abandonReconnect();
+      expect(controller.getSnapshot().reconnecting).toBe(false);
+      expect(controller.getSnapshot().error).toBe("The audio stream stopped arriving.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("calls the stream lost when audio stops arriving, instead of reading live forever", async () => {
     // Cutting the phone's Wi-Fi after the mirror is live leaves the bound multicast socket open with
     // no error and no close, so the receiver reports nothing and the control keeps reading "Listening".

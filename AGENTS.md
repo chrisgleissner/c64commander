@@ -36,7 +36,7 @@ hearing-safety constraint, so it outranks any measurement that would be easier w
 
 If you change it at all, restore it to 10 or below immediately and say so in your report.
 `tools/hil/merge_gate.mjs` enforces the ceiling (`MAX_VOLUME = 10`) and runs most audible stages at
-3 of 25 (`--volume`) and the two tone stages at 8 (`--tone-volume`). Measuring at that level works — see
+5 of 25 (`--volume`) and the two tone stages at 8 (`--tone-volume`). Measuring at that level works — see
 [Audio discipline](#audio-discipline) for the band-limiting that makes it work.
 
 ### Never wedge the device

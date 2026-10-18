@@ -666,7 +666,7 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
 let snapshotEpoch = 0;
 
-const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
+export const copyHvscBrowseIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
   ...snapshot,
   songs: { ...snapshot.songs },
   folders: { ...snapshot.folders },
@@ -674,14 +674,25 @@ const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapsho
 
 const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
   snapshotEpoch += 1;
-  lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
+  lastStoredSnapshot = snapshot ? copyHvscBrowseIndexSnapshot(snapshot) : null;
 };
 
 /** Drops the remembered snapshot, so the next load reads storage again. */
 export const forgetHvscBrowseIndexSnapshot = () => rememberSnapshot(null);
 
+/**
+ * The remembered snapshot itself, with no copy of its maps, for a caller that only reads it. Copying the song and
+ * folder maps of a full HVSC library took about 260 ms on the keypad phone, and the media index loads this on the
+ * first visit to Play or Disks. A caller that changes songs or folders must use {@link loadHvscBrowseIndexSnapshot}.
+ */
+export const loadHvscBrowseIndexSnapshotReadOnly = async (): Promise<HvscBrowseIndexSnapshot | null> => {
+  if (lastStoredSnapshot) return lastStoredSnapshot;
+  const loaded = await loadHvscBrowseIndexSnapshot();
+  return lastStoredSnapshot ?? loaded;
+};
+
 export const loadHvscBrowseIndexSnapshot = async () => {
-  if (lastStoredSnapshot) return copySnapshot(lastStoredSnapshot);
+  if (lastStoredSnapshot) return copyHvscBrowseIndexSnapshot(lastStoredSnapshot);
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {

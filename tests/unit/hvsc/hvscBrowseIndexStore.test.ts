@@ -1162,6 +1162,19 @@ describe("hvscBrowseIndexStore remembered snapshot", () => {
     getItem.mockRestore();
   });
 
+  it("hands a read-only caller the remembered maps without copying them", async () => {
+    await seedMediaIndex();
+    const { loadHvscBrowseIndexSnapshotReadOnly } = await import("@/lib/hvsc/hvscBrowseIndexStore");
+    const first = await loadHvscBrowseIndexSnapshotReadOnly();
+    const second = await loadHvscBrowseIndexSnapshotReadOnly();
+    const copy = await loadHvscBrowseIndexSnapshot();
+
+    expect(second?.songs).toBe(first?.songs);
+    expect(second?.folders).toBe(first?.folders);
+    expect(copy?.songs).not.toBe(first?.songs);
+    expect(copy?.songs["/GAMES/A.sid"]).toBe(first?.songs["/GAMES/A.sid"]);
+  });
+
   it("reads storage again after a save", async () => {
     await seedMediaIndex();
     const first = await loadHvscBrowseIndexSnapshot();

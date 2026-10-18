@@ -65,6 +65,17 @@ def test_a_knock_inside_a_note_does_not_read_as_the_note_played_twice(tmp_path, 
     assert graded["sequenceErrors"] == 0, graded["out"]
 
 
+def test_a_loud_tonal_transient_between_two_notes_is_not_read_as_a_note(tmp_path, capsys):
+    # 62 ms of 849 Hz about 24 dB above the ladder, 43 cents flat of the 870 Hz note, over the end of the 1080 Hz note
+    # and the start of the 1210 Hz note: it was read as a short 870 Hz note and then as a replay of 1210 Hz.
+    signal = phone_ladder(cycle(0, 26)) * 0.1
+    at, width = slot_start(13) + int(RATE * 0.12), int(RATE * 0.062)
+    t = np.arange(width) / RATE
+    signal[at : at + width] += 0.5 * np.sin(2 * np.pi * 849.0 * t)
+    graded = grade(write(tmp_path / "tonal-transient.wav", signal), capsys)
+    assert graded["sequenceErrors"] == 0, graded["out"]
+
+
 def test_the_same_note_heard_again_after_a_silent_slot_gap_is_still_a_replay(tmp_path, capsys):
     slots = cycle(0, 13) + [float(TONES_HZ[4])] + cycle(5, 12)
     graded = grade(write(tmp_path / "replay.wav", phone_ladder(slots)), capsys)

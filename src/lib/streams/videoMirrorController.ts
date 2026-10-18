@@ -531,6 +531,8 @@ export class VideoMirrorController {
       senders: diagnostics?.senders ?? null,
       rejectedPackets: diagnostics?.rejectedPackets ?? null,
       expectedSource: diagnostics?.expectedSource ?? null,
+      receivedPackets: diagnostics?.receivedPackets ?? null,
+      msSinceLastPacket: diagnostics?.msSinceLastPacket ?? null,
     });
     const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
     if (!mismatch) return;
@@ -539,7 +541,7 @@ export class VideoMirrorController {
       expected: mismatch.expected,
       rejectedPackets: mismatch.rejectedPackets,
     });
-    this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch });
+    this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch, reconnecting: false });
   }
 
   /** Nothing has arrived since the start: report a refused sender now rather than after the full timeout. */

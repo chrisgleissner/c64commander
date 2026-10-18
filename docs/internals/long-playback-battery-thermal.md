@@ -75,3 +75,29 @@ reports a drain figure only when at least 90 % of the samples read "Discharging"
    start SID Radio (Chill / Ambient) and turn the screen off.
 3. Start `node tools/hil/battery_soak_hil.mjs --serial <ip:port> --minutes 30 --label local-engine`, then unplug the cable.
 4. Repeat with the other engine, and with `--minutes 120` once the 30 minute figures are known.
+
+## Runs 2 and 3: unplugged measurement without touching the cable (2026-10-18)
+
+The Pixel 4 here is a userdebug build, so `adb root` followed by `echo 1 > /sys/class/power_supply/charger/charge_disable`
+stops charging while the USB cable stays attached. The battery status keeps reading "Charging" (it follows the USB port),
+so `tools/hil/battery_soak_hil.mjs` now also counts a sample as off the charger when `charge_disable` reads 1. The
+fuel gauge reports `charge_counter` in steps of 6 to 12 mAh, so a 30 minute run resolves the drain to one step. Charging was
+switched on again after the runs (`echo 0`).
+
+Both runs: default edition build, screen off from the start, SID Radio Chill / Ambient, media volume 3 of 25, c64u as the
+Ultimate, 30 minutes, 60 samples, all 60 off the charger. A first attempt was discarded because a person used the phone
+during it.
+
+| Engine         | Drain over 30 min | Rate        | App CPU time in 30 min | Battery temperature    |
+| -------------- | ----------------- | ----------- | ---------------------- | ---------------------- |
+| Here (local)   | 1 step (6 mAh)    | 2.0 %/h     | 704 s (39 % of a core) | 30.2 C to 29.3 C       |
+| C64 (Ultimate) | 0 steps           | below 0.5 %/h | 240 s (13 % of a core) | 29.2 C to 27.4 C       |
+
+The local engine renders the tune on the phone and costs about three times the CPU of the C64 engine, which only
+receives control traffic. At 2 % per hour a full battery lasts about 50 hours of screen-off local playback, and the
+battery did not warm up in either run. The question in #505 was whether more than a few percent per hour needs a
+power-saving option: it does not, so no option is added.
+
+Not measured: the keypad handset (its battery gauge is not exposed over droidctl), and runs longer than 30 minutes.
+CPU time per 5 minute interval was flat in the earlier run, so a longer run is not expected to differ.
+

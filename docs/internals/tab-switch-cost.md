@@ -50,3 +50,12 @@ is the structural change tracked in #502.
 Acceptance for #503 was no task over 200 ms in 20 consecutive switches. A warm app meets it (0 of 24 and 0 of 36). The
 first visit to Disks after a launch does not (up to 473 ms), because of the HVSC index load and the snapshot copies,
 and Config produced three of the four switches over 200 ms in run 1. The Config floor is about 170 ms with a layout of the Config page as the largest part.
+
+## Run 4: first launch after the media index stopped copying its maps
+
+The media index now loads the remembered browse snapshot through `loadHvscBrowseIndexSnapshotReadOnly`, which returns the
+remembered maps without copying them; the copy of the song and folder maps (about 260 ms in run 1) was the largest single
+cost of the first visit to Play or Disks. The keypad phone, app freshly started after installing the build, 24 switches:
+2 switches had a task over 200 ms (the first Disks visit, 267 ms, and one Config visit, 242 ms), the worst task was 267 ms,
+and the heap after collection was 97 MiB. Run 1 had 4 of 20 and a worst task of 473 ms. The Config visit is the layout
+floor described above; reducing it further needs fewer rows rendered at once (#502).

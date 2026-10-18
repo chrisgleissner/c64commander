@@ -30,7 +30,7 @@ interface Captured {
     renderAudio?: (samples: Int16Array) => void;
     renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
     schedulePresent?: (present: () => void) => void;
-    onStreamLost?: (info: { liveForMs: number }) => boolean;
+    onStreamLost?: (info: { liveForMs: number } | number) => boolean;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -57,6 +57,7 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
       audioRejectedPackets: 0,
     }));
     adoptSender = vi.fn(async () => {});
+    abandonReconnect = vi.fn();
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -620,6 +621,126 @@ describe("AvMirrorSession", () => {
           error: "streams:stop refused",
         });
       });
+    });
+  });
+
+  describe("restarting a lost audio stream", () => {
+    const lose = (audio: Captured, liveForMs = 5000) => {
+      audio.deps.onChange({ state: "error", error: "lost" });
+      return audio.deps.onStreamLost!(liveForMs);
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.spyOn(getC64API(), "getInfo").mockResolvedValue({} as never);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("restarts the audio once after the backoff while Listen is wanted and the device answers", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(audio.start).toHaveBeenCalledTimes(1);
+
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(audio.start).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not restart after Listen was turned off", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      await session.stopAudio();
+
+      expect(lose(audio)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops restarting after the bounded number of attempts when the stream keeps dying", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(lose(audio, 1000)).toBe(false);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(3);
+    });
+    it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
+      vi.spyOn(getC64API(), "getInfo").mockRejectedValue(new Error("timeout"));
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+      expect((audio as unknown as { abandonReconnect: ReturnType<typeof vi.fn> }).abandonReconnect).toHaveBeenCalled();
+    });
+
+    it("cancels a pending restart when Listen is switched off by setAudioWanted or by stopAll", async () => {
+      const first = makeSession();
+      await first.session.startAudio();
+      expect(lose(first.audio)).toBe(true);
+      await first.session.setAudioWanted(false);
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(first.audio.start).toHaveBeenCalledTimes(1);
+
+      const second = makeSession();
+      await second.session.setAudioWanted(true);
+      expect(lose(second.audio)).toBe(true);
+      await second.session.stopAll();
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(second.audio.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("restarts the audio even while the page is hidden, because background audio keeps playing", async () => {
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(audio.start).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not restart audio that was diagnosed as arriving from a refused sender", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio)).toBe(true);
+      audio.deps.onChange({
+        state: "error",
+        error: "refused",
+        senderMismatch: { source: "192.0.2.148", expected: "192.0.2.9", rejectedPackets: 10 },
+      } as never);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps counting restart attempts when a playback event asks again for audio that is already wanted", async () => {
+      const { session, audio } = makeSession();
+      await session.setAudioWanted(true);
+
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      await session.setAudioWanted(true);
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6000);
+      await session.setAudioWanted(true);
+
+      expect(lose(audio, 1000)).toBe(false);
     });
   });
 

@@ -12,6 +12,7 @@ import { AudioMirrorController } from "@/lib/streams/audioMirrorController";
 import type { StreamConnectionState, StreamReceiver } from "@/lib/streams/streamReceiver";
 import type { SenderFilterDiagnostics } from "@/lib/streams/senderMismatch";
 import type { AudioMirrorPlayer } from "@/lib/streams/audioPlayer";
+import { clearLogs, getLogs } from "@/lib/logging";
 
 /**
  * A dual-homed Ultimate: the app talks REST to one of its addresses and the firmware streams from
@@ -190,6 +191,39 @@ describe("a Live View stream that is arriving from an address the filter refuses
       expect(controller.getSnapshot().state).toBe("live");
     } finally {
       vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the video loss log when packets still arrive", () => {
+  it("records the socket packet count and the time since the last packet, so a stop can be told from frames failing to assemble", async () => {
+    vi.useFakeTimers();
+    try {
+      clearLogs();
+      const clock = { value: 0 };
+      const receiver = new FilteringReceiver();
+      receiver.diagnostics = {
+        rejectedPackets: 0,
+        expectedSource: "192.0.2.9",
+        receivedPackets: 48_120,
+        msSinceLastPacket: 4,
+      };
+      const controller = new VideoMirrorController({
+        createReceiver: () => receiver,
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        expectedSenderHost: () => "192.0.2.9",
+        now: () => clock.value,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await goSilent(clock);
+
+      const entry = getLogs().find((log) => log.message.includes("sender filter state after the stream went silent"));
+      expect(entry?.details).toMatchObject({ receivedPackets: 48_120, msSinceLastPacket: 4 });
+    } finally {
       vi.useRealTimers();
     }
   });

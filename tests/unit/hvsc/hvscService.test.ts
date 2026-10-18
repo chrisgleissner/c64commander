@@ -840,6 +840,27 @@ describe("hvscService", () => {
       });
     });
 
+    it("hydrates its own copy of the snapshot, so the maps the media index shares are not edited in place", async () => {
+      const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {};
+      for (let index = 0; index < 3; index += 1) {
+        const virtualPath = `/DEMOS/Song_${index}.sid`;
+        songs[virtualPath] = { virtualPath, fileName: `Song_${index}.sid`, metadataStatus: "seeded" };
+      }
+      const shared = {
+        schemaVersion: 2,
+        updatedAt: new Date().toISOString(),
+        songs,
+        folders: { "/": { path: "/", folders: [], songs: [] } },
+      };
+      mediaIndexMocks.loadBrowseSnapshot.mockResolvedValueOnce(shared);
+
+      await ensureHvscMetadataHydration();
+
+      expect(Object.values(shared.songs).map((song) => song.metadataStatus)).toEqual(["seeded", "seeded", "seeded"]);
+      const adopted = mediaIndexMocks.setBrowseSnapshot.mock.calls.at(-1)?.[0] as typeof shared;
+      expect(adopted.songs).not.toBe(shared.songs);
+    });
+
     it("restarts the hydration an ingestion stopped when the ingestion is canceled and the library stays ready", async () => {
       __resetHvscHydrationGenerationForTests();
       const songs: Record<string, { virtualPath: string; fileName: string; metadataStatus: string }> = {

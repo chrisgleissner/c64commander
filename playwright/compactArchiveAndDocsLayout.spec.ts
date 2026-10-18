@@ -82,7 +82,7 @@ test.describe("compact Docs contents and archive search", () => {
     expect(tour.height, "the tour card is one row on this screen").toBeLessThan(80);
   });
 
-  test("archive search shows a plain summary, keeps Search on screen and always shows the license sentence", async ({
+  test("archive search shows a plain summary, keeps Search on screen and shows the license sentence with the results", async ({
     page,
   }) => {
     await page.goto("/play", { waitUntil: "domcontentloaded" });
@@ -105,7 +105,6 @@ test.describe("compact Docs contents and archive search", () => {
     await picker.getByLabel("Name").fill("joyride");
     await expect(picker.getByTestId("archive-filter-summary")).toHaveText("Name joyride");
     await expect(dialog).not.toContainText("(name:");
-    await expect(picker.getByTestId("archive-legal-notice")).toBeVisible();
 
     await dialog.getByTestId("add-items-scroll").evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
     const scrolled = await searchBox();
@@ -114,11 +113,15 @@ test.describe("compact Docs contents and archive search", () => {
     );
     expect(scrolled.y).toBeGreaterThan(0);
 
-    await expect(picker.getByTestId("archive-legal-notice")).toBeVisible();
-
     expect(await ringFocus(page, search), "the keypad ring can reach Search").toBe(true);
     await page.keyboard.press("Enter");
     await expect(picker.getByTestId("archive-result-row")).toHaveCount(1);
+    const notice = await boxOf(page, "archive-legal-notice");
+    const row0 = await boxOf(page, "archive-result-row");
+    expect(notice.y, "the license sentence sits above the results").toBeLessThan(row0.y);
+    expect(notice.y, "the license sentence is brought into view with the results").toBeGreaterThanOrEqual(
+      (await boxOf(page, "add-items-scroll")).y,
+    );
     const row = await boxOf(page, "archive-result-row");
     const body = await boxOf(page, "add-items-scroll");
     expect(row.y, "the first result is brought into view").toBeGreaterThanOrEqual(body.y);

@@ -20,7 +20,7 @@ import {
   listFolderFromBrowseIndex,
   listSongsRecursiveFromBrowseIndex,
   streamSongsRecursiveFromBrowseIndex,
-  loadHvscBrowseIndexSnapshot,
+  loadHvscBrowseIndexSnapshotReadOnly,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
   type HvscBrowseIndexedSong,
@@ -134,7 +134,7 @@ export class HvscMediaIndexAdapter implements MediaIndex {
 
   async loadBrowseSnapshot(): Promise<HvscBrowseIndexSnapshot | null> {
     if (this.browseSnapshot) return this.browseSnapshot;
-    this.browseSnapshotLoad ??= loadHvscBrowseIndexSnapshot()
+    this.browseSnapshotLoad ??= loadHvscBrowseIndexSnapshotReadOnly()
       .then((persisted) => {
         // Only adopt it if nothing cleared or replaced the snapshot while this was in flight.
         if (persisted && !this.browseSnapshot) this.browseSnapshot = persisted;

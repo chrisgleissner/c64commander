@@ -678,6 +678,9 @@ class StreamUdpPluginTest {
     assertTrue("expected the refused packets to be counted, got $stats", counted)
     assertEquals("127.0.0.1", stats.getString("lastRejectedSource"))
     assertEquals("127.0.0.2", stats.getString("expectedSource"))
+    // The socket counter sits before the filter, so refused packets still show that the network delivers.
+    assertEquals(3, stats.getInteger("receivedPackets"))
+    assertTrue("a packet had just arrived", stats.getInteger("msSinceLastPacket")!! < 5_000)
     // Nothing was forwarded: the packets were dropped before any accounting, which is why the app
     // sees silence.
     assertEquals(0, received.size)

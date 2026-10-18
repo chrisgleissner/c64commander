@@ -213,9 +213,6 @@ export const ArchiveSelectionView = ({
             {resolvedConfig.host !== currentDefaults.host ? <p>Override host active.</p> : null}
           </div>
         ) : null}
-        <p className="px-2 text-xs text-muted-foreground" data-testid="archive-legal-notice">
-          {LEGAL_NOTICE}
-        </p>
       </div>
 
       {isDeveloperModeEnabled && queryPreview ? (
@@ -263,6 +260,11 @@ export const ArchiveSelectionView = ({
       ) : null}
 
       <div ref={resultsRef} className="space-y-2" data-testid="archive-selection-results">
+        {resultRows.length > 0 ? (
+          <p className="text-xs text-muted-foreground" data-testid="archive-legal-notice">
+            {LEGAL_NOTICE}
+          </p>
+        ) : null}
         {state.phase !== "searching" && resultRows.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {state.phase === "idle" ? "Search results appear here." : "No results found."}

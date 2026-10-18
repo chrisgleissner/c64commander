@@ -8,26 +8,26 @@
 
 import { addLog } from "@/lib/logging";
 
-/** Delays before each automatic restart of a lost video stream; its length is the bound on attempts. */
-export const VIDEO_RECOVERY_BACKOFF_MS: readonly number[] = [2000, 6000];
+/** Delays before each automatic restart of a lost live stream; its length is the bound on attempts. */
+export const STREAM_RECOVERY_BACKOFF_MS: readonly number[] = [2000, 6000];
 
 /** How long a restarted stream must stay live before its attempts are counted afresh. */
-export const VIDEO_RECOVERY_STABLE_MS = 30000;
+export const STREAM_RECOVERY_STABLE_MS = 30000;
 
 /**
- * Decides whether a lost video stream is restarted automatically, and after how long.
+ * Decides whether a lost video or audio stream is restarted automatically, and after how long.
  *
  * A stream that keeps dying after each restart is not helped by more restarts, so the attempts are
- * bounded and only a stream that then stays live for {@link VIDEO_RECOVERY_STABLE_MS} earns a new set.
+ * bounded and only a stream that then stays live for {@link STREAM_RECOVERY_STABLE_MS} earns a new set.
  */
-export class VideoLossRecovery {
+export class StreamLossRecovery {
   private attempts = 0;
 
   /** The delay before the next restart, or null when the attempts for this loss episode are used up. */
   noteLost(liveForMs: number): number | null {
-    if (liveForMs >= VIDEO_RECOVERY_STABLE_MS) this.attempts = 0;
-    if (this.attempts >= VIDEO_RECOVERY_BACKOFF_MS.length) return null;
-    return VIDEO_RECOVERY_BACKOFF_MS[this.attempts++];
+    if (liveForMs >= STREAM_RECOVERY_STABLE_MS) this.attempts = 0;
+    if (this.attempts >= STREAM_RECOVERY_BACKOFF_MS.length) return null;
+    return STREAM_RECOVERY_BACKOFF_MS[this.attempts++];
   }
 
   /** A user-initiated start or stop begins a fresh episode. */
@@ -36,10 +36,12 @@ export class VideoLossRecovery {
   }
 }
 
-export interface VideoLossRestarterHooks {
+export interface StreamLossRestarterHooks {
+  /** Which mirror this restarter serves; it names the stream in the log. */
+  stream: "video" | "audio";
   /** Watch is still wanted: nobody stopped it since it was started. */
   isWanted: () => boolean;
-  /** The video mirror is still in its lost (error) state. */
+  /** The mirror is still in its lost (error) state. */
   isLost: () => boolean;
   /** The Ultimate answers REST, so a restart has something to start. */
   deviceAnswers: () => Promise<boolean>;
@@ -50,17 +52,17 @@ export interface VideoLossRestarterHooks {
 }
 
 /**
- * Restarts a lost video stream after the {@link VideoLossRecovery} backoff.
+ * Restarts a lost video or audio stream after the {@link StreamLossRecovery} backoff.
  *
  * Every wait here ends: the delay is a timer, a hidden page is waited out only until it is shown,
  * and {@link cancel} (called on any stop) clears both.
  */
-export class VideoLossRestarter {
-  private readonly recovery = new VideoLossRecovery();
+export class StreamLossRestarter {
+  private readonly recovery = new StreamLossRecovery();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private onVisible: (() => void) | null = null;
 
-  constructor(private readonly hooks: VideoLossRestarterHooks) {}
+  constructor(private readonly hooks: StreamLossRestarterHooks) {}
 
   /** `liveForMs` is how long the stream had been live before it went silent. Returns true when a restart is scheduled. */
   onLost(liveForMs: number): boolean {
@@ -100,17 +102,21 @@ export class VideoLossRestarter {
     }
     try {
       if (!(await this.hooks.deviceAnswers())) {
-        addLog("warn", "Live View: not restarting the lost video because the device does not answer REST", {
-          service: "streams",
-        });
+        addLog(
+          "warn",
+          `Live View: not restarting the lost ${this.hooks.stream} because the device does not answer REST`,
+          {
+            service: "streams",
+          },
+        );
         this.hooks.giveUp();
         return;
       }
       if (!this.hooks.isWanted() || !this.hooks.isLost()) return;
-      addLog("info", "Live View: restarting the lost video stream", { service: "streams" });
+      addLog("info", `Live View: restarting the lost ${this.hooks.stream} stream`, { service: "streams" });
       await this.hooks.restart();
     } catch (error) {
-      addLog("warn", "Live View: restarting the lost video stream failed", {
+      addLog("warn", `Live View: restarting the lost ${this.hooks.stream} stream failed`, {
         service: "streams",
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,

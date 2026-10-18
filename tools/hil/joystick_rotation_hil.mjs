@@ -213,17 +213,48 @@ const readMemory = (address, length) =>
   httpGetBytes(`http://${HOST}/v1/machine:readmem?address=${address.toString(16)}&length=${length}`);
 
 const readTelemetry = async () => {
-  const bytes = await readMemory(TELEMETRY_BASE, TELEMETRY_BYTES);
+  const bytes = await withRetries(() => readMemory(TELEMETRY_BASE, TELEMETRY_BYTES));
   return Object.fromEntries(Object.entries(T).map(([name, offset]) => [name, bytes[offset]]));
+};
+
+/**
+ * Telemetry once two reads 300 ms apart agree.
+ *
+ * A key press travels phone -> Wi-Fi -> REST -> CIA before the probe counts it, and a fixed wait after the press
+ * sometimes read the machine before the event arrived. The late event then showed up in the next key's reading
+ * as a direction nobody pressed. The wait is bounded: a machine that never settles is reported with its last reading.
+ */
+const readSettledTelemetry = async () => {
+  let previous = await readTelemetry();
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await sleep(300);
+    const current = await readTelemetry();
+    if (JSON.stringify(current) === JSON.stringify(previous)) return current;
+    previous = current;
+  }
+  return previous;
+};
+
+/** A REST read that is tried again on a transient failure; the third failure is the answer. */
+const withRetries = async (read) => {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+      await sleep(400);
+    }
+  }
+  throw lastError;
 };
 
 /** The screen cell the circle should be in, and the colour beside it. */
 const readCell = async (col, row) => {
   const offset = row * 40 + col;
-  const [screen, colour] = await Promise.all([
-    readMemory(SCREEN_BASE + offset, 1),
-    readMemory(COLOUR_BASE + offset, 1),
-  ]);
+  const [screen, colour] = await withRetries(() =>
+    Promise.all([readMemory(SCREEN_BASE + offset, 1), readMemory(COLOUR_BASE + offset, 1)]),
+  );
   return { screenCode: screen[0], colour: colour[0] & 0x0f };
 };
 
@@ -399,9 +430,9 @@ const rows = [];
 
 const checkKey = async (layout, rotation, key) => {
   const expectedSlot = rotateSlot(key.slot, rotation);
-  const before = await readTelemetry();
+  const before = await readSettledTelemetry();
   await pressKey(key.keycode);
-  const after = await readTelemetry();
+  const after = await readSettledTelemetry();
 
   const observed = [];
   for (const direction of ["up", "down", "left", "right"]) {

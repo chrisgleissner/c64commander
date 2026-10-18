@@ -54,6 +54,11 @@ if (VOLUME > MAX_VOLUME) throw new Error(`refusing volume ${VOLUME}; the ceiling
 const app = createHilCdp({ serial: SERIAL, packageName: PACKAGE, port: PORT });
 const device = await app.device();
 const original = await readVolume(device);
+if (NO_MIC && (original.level ?? 0) > MAX_VOLUME) {
+  throw new Error(
+    `the phone's media volume is ${original.level}, above the ceiling of ${MAX_VOLUME} of 25; lower it first`,
+  );
+}
 const click = (testId) =>
   app.evaluate(
     `(()=>{const e=document.querySelector('[data-testid="${testId}"]');if(!e)return "missing";e.click();return "ok"})()`,
@@ -105,7 +110,7 @@ try {
   await recorderDone;
 } finally {
   if (!NO_MIC) {
-    await setVolume(device, original.level ?? 3).catch((error) =>
+    await setVolume(device, Math.min(original.level ?? 3, MAX_VOLUME)).catch((error) =>
       console.error(`could not restore the volume: ${error.message}`),
     );
   }

@@ -6,7 +6,7 @@ least once while CI was green, and because checking them by hand — in a differ
 different stimulus, against a memory of the last run — is not a gate.
 
 ```bash
-# Full run, in someone's room: volume 3 for most stages, 8 for the two tone stages, plays only while measuring.
+# Full run, in someone's room: volume 5 for most stages, 8 for the two tone stages, plays only while measuring.
 node tools/hil/merge_gate.mjs --host c64u --iface <this host's LAN ip> --json artifacts/hil-gate.json
 
 # A password-protected Ultimate. One flag covers the gate and every harness it starts.
@@ -192,7 +192,7 @@ fell, and the gate reported dropouts that had not happened.
 
 This runs next to somebody. The rules are enforced by the runner, not left to judgement:
 
-- The phone is set to **volume 3 of 25** for the run (`--volume`), and to **8** for the two ten-second
+- The phone is set to **volume 5 of 25** for the run (`--volume`), and to **8** for the two ten-second
   tone stages `sid-remote` and `sid-local` (`--tone-volume`), and restored afterwards. The runner **refuses**
   to run above **10**, which is a hard ceiling from `AGENTS.md` and not a tuning parameter.
 - Every grader is band-limited to **300–6000 Hz**. The room's noise is almost all below 300 Hz,
@@ -323,3 +323,12 @@ tune through the app instead.
 One thing that was not a defect at all: a report of no sound from the phone. `STREAM_MUSIC` was
 muted on the device and the C64 was running the joystick probe, which is silent except for a blip
 on fire.
+
+## av-clarity repeatability (2026-10-18)
+
+At volume 3, 60 repeated runs of `av-clarity` on one build gave 15 to 17 passes in 20. Every failure had a complete capture
+on the wire; the microphone showed notes at the floor of its range (-50 dB) lost to room noise, a loud tonal transient in the room read as a
+note, or, once, the audio stopping at the phone. At volume 5, 20 of 20 consecutive runs passed (0 to 1 defective notes of 82).
+The gate default is therefore 5 of 25, still under the ceiling of 10. The grader also ignores a window whose loudest band is
+more than 15 dB above the ladder's own plateau (`mask_room_transients`), and the app restarts a lost audio stream.
+
