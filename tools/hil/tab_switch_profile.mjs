@@ -10,7 +10,7 @@
 /**
  * Time keypad tab switches on a phone and capture a CPU profile of them.
  *
- *   node tools/hil/tab_switch_profile.mjs --serial defaultuser@192.168.2.15 --package uk.gleissner.c64uremote \
+ *   node tools/hil/tab_switch_profile.mjs --serial <adb serial> --package uk.gleissner.c64uremote \
  *        --switches 20 --out artifacts/tab-switch/run
  *
  * Presses keys 1-6 in turn, waits for the route to change and the page to settle, and records the
@@ -75,9 +75,17 @@ try {
     const settleMs = await settled(route);
     await sleep(700);
     const { profile: switchProfile } = await cdp.send("Profiler.stop");
-    fs.writeFileSync(path.join(profileDir, `${String(i).padStart(2, "0")}${route.replace("/", "-") || "-home"}.cpuprofile`), JSON.stringify(switchProfile));
+    fs.writeFileSync(
+      path.join(profileDir, `${String(i).padStart(2, "0")}${route.replace("/", "-") || "-home"}.cpuprofile`),
+      JSON.stringify(switchProfile),
+    );
     const long = await cdp.evaluate(`JSON.stringify(window.__tabLong.slice(${before}))`);
-    samples.push({ i, route, settleMs: Math.round(settleMs), longTasks: JSON.parse(long).map((t) => Math.round(t.ms)) });
+    samples.push({
+      i,
+      route,
+      settleMs: Math.round(settleMs),
+      longTasks: JSON.parse(long).map((t) => Math.round(t.ms)),
+    });
     console.log(JSON.stringify(samples.at(-1)));
   }
 

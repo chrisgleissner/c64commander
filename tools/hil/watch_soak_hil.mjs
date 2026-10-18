@@ -18,7 +18,7 @@
  * access point and the phone shows up as the app reporting a loss while the host rate stays flat.
  *
  *   node tools/hil/watch_soak_hil.mjs --serial <adb serial> --package uk.gleissner.c64uremote \
- *     --iface 192.168.1.185 --minutes 30 --json artifacts/watch-soak.json
+ *     --iface <this host's LAN address> --minutes 30 --json artifacts/watch-soak.json
  *
  * It presses Watch when the button reads "Watch" on the page it finds, and leaves Watch on afterwards.
  *
@@ -40,11 +40,12 @@ const arg = (name, fallback) => {
 };
 const SERIAL = arg("serial", undefined);
 const PACKAGE = arg("package", "uk.gleissner.c64uremote");
-const IFACE = arg("iface", "192.168.1.185");
+const IFACE = arg("iface", "");
 const MINUTES = Number(arg("minutes", "30"));
 const PORT = Number(arg("cdp-port", "9371"));
 const OUT = arg("json", "artifacts/watch-soak.json");
 const WIRE = !argv.includes("--no-wire");
+if (WIRE && !IFACE) throw new Error("--iface <this host's LAN address> is required unless --no-wire");
 const GROUP = "239.0.1.64";
 const GROUP_PORT = 11000;
 const SAMPLE_MS = 5000;
