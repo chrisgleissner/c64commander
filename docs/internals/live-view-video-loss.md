@@ -117,3 +117,34 @@ Reading `videoLossRecovery.ts` and `streamArrivalWatchdog.ts`: the watchdog coun
 datagram (JS path) as an arrival. On the native path, packets that arrive but do not assemble into frames leave the
 watchdog without an arrival, so "lost" can be declared while packets still arrive. The recovery restarts at most twice,
 2 s and 6 s after the loss, and only a stream that then stays live for 30 s earns new attempts.
+
+## Cause and fix (2026-10-18): the router's multicast membership expired every 270 s
+
+Issue #516. With the new socket packet counter (`receivedPackets`, `msSinceLastPacket` in `readStreamDiagnostics`), the
+keypad phone ran Watch for 25 minutes with no host on the video group. The counter rose by about 3400 packets/s and
+stopped completely at the losses: `msSinceLastPacket` read 9028 ms and 10735 ms in the two samples that caught a loss
+(13:15:56 and 13:35:49 on the host clock), so the packets really stopped arriving at the phone's socket. They were not
+arriving and failing to assemble. The counter was also reset by the app's own restart (after the 2 s backoff) at 13:20:31,
+13:25:02, 13:26:48 and 13:31:18, where no 5 s sample landed inside the short outage.
+
+The losses are periodic. In this run the stream resumed at 13:16:01 and stopped again about 270 s apart; in the run of
+2026-10-18 recorded above, the watchdog fired at 07:37:47, 07:42:18 and 07:46:48 UTC, 271 s and 270 s apart. A period of 270 s
+matches the IGMP group membership interval of a router with a 130 s query interval (2 x 130 s + 10 s response time).
+The router is the IGMP querier. The conclusion is that the phone's answers to the router's membership queries do not keep
+its membership alive on this Wi-Fi path, while the join report sent when the socket joins the group does: the stream always
+came back as soon as the app bound the socket again. A host on the Ethernet side that joined the group changed the
+behavior, which fits a membership table that is keyed per group and port on the router or access point.
+
+`MulticastMembershipRefresher` leaves and joins the group again once a minute on every multicast stream socket, which
+sends a new join report well inside the membership interval. A refresh that fails to rejoin logs a warning with the
+stack. `readStreamDiagnostics` reports the number of completed refreshes as `membershipRefreshes`.
+
+A/B on the keypad phone, Watch for 22 minutes, no host on the group, the same harness (`tools/hil/watch_soak_hil.mjs`):
+
+| Build                                  | Duration | Streams lost | Packets received |
+| -------------------------------------- | -------- | ------------ | ---------------- |
+| Before: no refresh                     | 25 min   | 2 sampled, 4 restarts in all (counter reset 6 times) | resets at each loss |
+| After: refresh every 60 s              | 22 min   | 0 (264 samples all live, no counter reset) | 4,472,478 with 22 refreshes |
+
+The 25 minute run before the change lost the stream about every 270 s, which matches 5 losses in 25 minutes.
+

@@ -32,3 +32,25 @@ refilled ring of 12 s at 955 s and 1005 s. The Java heap was 110 MB of 256 MB af
 cause was not found: the log ring had already dropped the entries of that period. A second 22 minute run had a noisier
 room (levels rose by 15 dB at its end), so its recording cannot be graded. The drive was Next, not a natural tune end, and
 the tunes were 20 minutes long, which no real tune is, so this is a measurement of a stress pattern. Issue #534 tracks it.
+
+## Pixel 4, two repeat runs of the 20 minute tone soak (issue #534)
+
+Both runs used the same drive as the run above (Next every 25 s on Tone-Low and Tone-High, 20 minutes each, local engine,
+screen on, app in the foreground, volume 8 of 25), with `logcat -v threadtime`, `dumpsys meminfo` every 45 s and the app
+log (`c64u_app_logs`) dumped every 45 s, so that the log ring cannot lose the period.
+
+| Run                         | Duration | Changes | Underruns | Lowest buffered audio | Java heap, highest of the samples |
+| --------------------------- | -------- | ------- | --------- | --------------------- | --------------------------------- |
+| 1, without microphone       | 28 min   | 67      | 0         | 11983 ms              | 152 MB                            |
+| 2, with microphone          | 32 min   | 77      | 0         | 11985 ms              | recorded in the run's meminfo log |
+
+The recording of run 2 (1925 s, 77 changes) has no gap of 20 ms or more, at a change or away from one
+(`tools/hil/tone_gaps.py`). The silences of 6 to 44 s from the first run did not occur again in either run, so the cause of
+that run remains unknown. The logcat of the repeat runs shows the retained PCM budget dropping one 46 MB buffer per
+change ("Retained PCM over budget"), which is the designed behavior and did not coincide with an underrun.
+
+What is established: in 60 minutes of the same stress pattern on the same phone, with the same build family, the ring
+never fell below 11.9 s. The first run's silences coincided with an empty ring (45 underruns, 2 ms buffered), so the audio
+path stopped receiving PCM from the renderer for 6 to 44 s; the log needed to say why was lost. The session now has a
+way to capture it (the harness commands above), and a recurrence should be reported with those three logs.
+
