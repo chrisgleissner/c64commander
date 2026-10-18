@@ -54,6 +54,9 @@ if (VOLUME > MAX_VOLUME) throw new Error(`refusing volume ${VOLUME}; the ceiling
 const app = createHilCdp({ serial: SERIAL, packageName: PACKAGE, port: PORT });
 const device = await app.device();
 const original = await readVolume(device);
+if (NO_MIC && (original.level ?? 0) > MAX_VOLUME) {
+  throw new Error(`the phone's media volume is ${original.level}, above the ceiling of ${MAX_VOLUME} of 25; lower it first`);
+}
 const click = (testId) =>
   app.evaluate(
     `(()=>{const e=document.querySelector('[data-testid="${testId}"]');if(!e)return "missing";e.click();return "ok"})()`,
