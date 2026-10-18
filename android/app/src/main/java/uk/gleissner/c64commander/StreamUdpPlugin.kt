@@ -264,15 +264,7 @@ class StreamUdpPlugin : Plugin() {
       call.reject("name is required")
       return
     }
-    val result = JSObject()
-    result.put("rejectedPackets", senderFilter.rejectedPackets(name))
-    result.put("lastRejectedSource", senderFilter.lastRejectedSource(name)?.hostAddress)
-    result.put("expectedSource", senderFilter.expectedSource(name)?.hostAddress)
-    result.put("receivedPackets", packetCounters.receivedPackets(name))
-    packetCounters.millisSinceLastPacket(name)?.let { result.put("msSinceLastPacket", it) }
-    val senders = JSArray()
-    streamSenders[name]?.forEach { senders.put(it) }
-    result.put("senders", senders)
+    val result = streamDiagnostics(name, senderFilter, packetCounters, streamSenders[name])
     call.resolve(result)
   }
 
