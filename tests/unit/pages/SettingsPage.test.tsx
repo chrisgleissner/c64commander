@@ -3528,6 +3528,27 @@ describe("SettingsPage remote function key assignments", () => {
   });
 });
 
+describe("SettingsPage documentation link", () => {
+  afterEach(() => {
+    variantIdOverride.current = null;
+  });
+
+  it("links the REST API documentation in C64 Commander", () => {
+    variantIdOverride.current = "c64commander";
+    renderSettingsPage();
+
+    expect(screen.getByTestId("settings-about-rest-api-docs")).toHaveAttribute("href", expect.stringContaining("http"));
+  });
+
+  it("shows no documentation link on C64U Remote, whose phone cannot open it", () => {
+    variantIdOverride.current = "c64u-remote";
+    renderSettingsPage();
+
+    expect(screen.queryByTestId("settings-about-rest-api-docs")).toBeNull();
+    expect(screen.queryByTestId("settings-about-c64u-user-guide")).toBeNull();
+  });
+});
+
 describe("SettingsPage screen orientation lock", () => {
   it("does not re-apply the orientation lock on mount (startup already applies it)", () => {
     renderSettingsPage();

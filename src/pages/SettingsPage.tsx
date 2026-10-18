@@ -3403,16 +3403,18 @@ export default function SettingsPage() {
               ) : null}
             </div>
 
-            <a
-              href={settingsDocumentationLink.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
-              data-testid={settingsDocumentationLink.testId}
-            >
-              <ExternalLink className="h-4 w-4" />
-              {settingsDocumentationLink.label}
-            </a>
+            {settingsDocumentationLink ? (
+              <a
+                href={settingsDocumentationLink.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
+                data-testid={settingsDocumentationLink.testId}
+              >
+                <ExternalLink className="h-4 w-4" />
+                {settingsDocumentationLink.label}
+              </a>
+            ) : null}
 
             <button
               type="button"

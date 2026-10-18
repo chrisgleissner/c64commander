@@ -205,6 +205,19 @@ describe("prefetching the next tune's bytes from the Ultimate", () => {
     );
   });
 
+  it("logs once when the stored bytes are handed over, and not when there are none", async () => {
+    prefetcher.schedule(item("next"), 10_000);
+    await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);
+    vi.mocked(addLog).mockClear();
+
+    prefetcher.take("next");
+    prefetcher.take("next");
+
+    const used = vi.mocked(addLog).mock.calls.filter(([, message]) => /stored bytes used/.test(message));
+    expect(used).toHaveLength(1);
+    expect(used[0][2]).toMatchObject({ id: "next" });
+  });
+
   it("hands the bytes over once, and forgets entries that no longer belong to the next tune", async () => {
     prefetcher.schedule(item("next"), 10_000);
     await vi.advanceTimersByTimeAsync(PREFETCH_SETTLE_MS);

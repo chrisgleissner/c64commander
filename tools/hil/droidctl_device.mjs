@@ -84,9 +84,15 @@ const invoke = async (runtime, name, args) => {
   return envelope.data;
 };
 
+/** Every target droidctl lists, and the transports that failed to list theirs, without binding to one. */
+export const listDroidTargetReport = async ({ artifactRoot } = {}) => {
+  const data = await invoke(await createRuntime(artifactRoot), "droid_target.list_targets", {});
+  return { targets: data.targets, transportErrors: data.transportErrors ?? [] };
+};
+
 /** Every target droidctl lists, without binding to one. */
 export const listDroidTargets = async ({ artifactRoot } = {}) =>
-  (await invoke(await createRuntime(artifactRoot), "droid_target.list_targets", {})).targets;
+  (await listDroidTargetReport({ artifactRoot })).targets;
 
 export const createDroidDevice = async ({ serial, artifactRoot, choose } = {}) => {
   const runtime = await createRuntime(artifactRoot);
@@ -128,6 +134,6 @@ export const createDroidDevice = async ({ serial, artifactRoot, choose } = {}) =
       call("droid_input.swipe", { targetId, x1, y1, x2, y2, ...(durationMs ? { durationMs } : {}) }),
     forwardWebview: (pkg, localPort) => call("droid_device.forward_webview", { targetId, package: pkg, localPort }),
     /** Closes the ssh tunnels droidctl opened. Optional: a tunnel never keeps the process alive. */
-    close: () => runtime.dispose(),
+    close: () => runtime.dispose?.(),
   };
 };

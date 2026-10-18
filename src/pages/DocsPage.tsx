@@ -77,10 +77,8 @@ export default function DocsPage() {
             </motion.div>
           ))}
 
-          {/* External Links. Omitted on c64u-remote: that edition's only external link is
-            the C64U User Guide, already reachable from Settings -> About, so a whole
-            standalone card for one duplicate link is not worth the space. */}
-          {variantId !== "c64u-remote" && (
+          {/* External links. The keypad edition has none: its phone cannot open them. */}
+          {externalResourceLinks.length > 0 && (
             <CollapsibleSection
               scope="docs"
               id="external-resources"

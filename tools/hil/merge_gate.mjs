@@ -80,7 +80,7 @@ import { promisify } from "node:util";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { createDroidDevice, listDroidTargets } from "./droidctl_device.mjs";
+import { createDroidDevice, listDroidTargetReport } from "./droidctl_device.mjs";
 import {
   DROIDCTL_FREE_STAGES,
   assertPageApp,
@@ -1076,7 +1076,8 @@ const runPlan = async () => {
     for (const name of selected) await runStage(name);
     return;
   }
-  plan = resolveGatePlan(await listDroidTargets(), { mode: TARGET_MODE, modeExplicit: MODE_EXPLICIT, serial: SERIAL });
+  const { targets, transportErrors } = await listDroidTargetReport();
+  plan = resolveGatePlan(targets, { mode: TARGET_MODE, modeExplicit: MODE_EXPLICIT, serial: SERIAL, transportErrors });
   const { aborted } = await runPhases({
     plan,
     selected,

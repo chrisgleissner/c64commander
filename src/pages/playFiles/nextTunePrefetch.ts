@@ -74,6 +74,12 @@ export class NextTunePrefetcher {
   take(id: string): Blob | null {
     const blob = this.stored.get(id) ?? null;
     this.stored.delete(id);
+    if (blob)
+      addLog("info", "Next tune prefetch: stored bytes used to start the tune", {
+        service: "local-sid",
+        id,
+        bytes: blob.size,
+      });
     return blob;
   }
 

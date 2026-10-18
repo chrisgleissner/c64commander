@@ -10,7 +10,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { variant } from "@/generated/variant";
-import { AboutLicenseNotice, GPL_V3_URL, SOURCE_CODE_URL } from "@/pages/settings/AboutLicenseNotice";
+import {
+  AboutLicenseNotice,
+  GPL_V3_URL,
+  SOURCE_CODE_ADDRESS,
+  SOURCE_CODE_URL,
+} from "@/pages/settings/AboutLicenseNotice";
 
 describe("AboutLicenseNotice", () => {
   it("names the license and warranty terms and links the source code and license text", () => {
@@ -20,5 +25,11 @@ describe("AboutLicenseNotice", () => {
     expect(notice).toHaveTextContent(/no warranty/);
     expect(screen.getByTestId("settings-about-source-code")).toHaveAttribute("href", SOURCE_CODE_URL);
     expect(screen.getByTestId("settings-about-license-text")).toHaveAttribute("href", GPL_V3_URL);
+  });
+
+  it("prints the repository address without a scheme, for a phone whose browser cannot open the link", () => {
+    render(<AboutLicenseNotice />);
+    expect(SOURCE_CODE_ADDRESS).toBe("github.com/chrisgleissner/c64commander");
+    expect(screen.getByTestId("settings-about-license-notice")).toHaveTextContent(`(${SOURCE_CODE_ADDRESS}).`);
   });
 });

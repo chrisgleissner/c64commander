@@ -88,3 +88,32 @@ What this does not cover:
 - The Wi-Fi path itself was not measured at the access point. The host sees the Ethernet side only; a loss that happens
   between the access point and the phone (multicast delivery on Wi-Fi) is invisible to this counter. `lastFps` and
   the sender-filter entry that the app now logs on a loss are the evidence to read when it happens again.
+
+## Measurements (2026-10-18): Watch on the keypad phone
+
+Issue #516 stays open. The harness is `tools/hil/watch_soak_hil.mjs`. The keypad phone (compact profile, Wi-Fi, app in
+the foreground, c64u on Ethernet) ran Watch for 30 minutes with no host membership of the video group (`--no-wire`).
+
+| Quantity                                      | Value                                                             |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| App samples, every 5 s (360)                  | 356 "Watching", 4 "Watch" (lost)                                  |
+| Losses declared by the app                    | 4, at 07:24:10, 07:37:47, 07:42:18 and 07:46:48 UTC               |
+| Sender filter at the end                      | `rejectedPackets` 0, `senders` listing only the c64u              |
+
+Each loss was logged as "no video arrived for long enough to call the stream lost". The 8 s watchdog fired four times in
+30 minutes while Watch was wanted. Whether packets were still arriving at those moments is not known, because the host
+was not listening and `readStreamDiagnostics` reports no packet count. This is the evidence the issue was missing: on
+this phone the app declared a loss four times, at intervals of 4 to 14 minutes. Whether the stream really stopped
+in those moments, or frames stopped assembling while packets arrived, is not shown.
+
+A host that joined the video group changed the result on the same phone. With the host's membership in place, the stream
+was lost within about 8 s in three of three runs, and restarts by the app did not help (the loss recurred after each
+restart until the attempts were used up). Without the host's membership, six of six start attempts held for at least 24 s, and
+the 30 minute run above had four losses declared by the watchdog. The router is the IGMP querier and speaks IGMP version 2. The host sent version 2 reports. What the
+phone sends was not captured. This points at multicast delivery on the Wi-Fi leg, not at the app's watchdog, but the
+cause is not established. A second Ultimate sending into the group was not retested.
+
+Reading `videoLossRecovery.ts` and `streamArrivalWatchdog.ts`: the watchdog counts a completed frame (native path) or a
+datagram (JS path) as an arrival. On the native path, packets that arrive but do not assemble into frames leave the
+watchdog without an arrival, so "lost" can be declared while packets still arrive. The recovery restarts at most twice,
+2 s and 6 s after the loss, and only a stream that then stays live for 30 s earns new attempts.

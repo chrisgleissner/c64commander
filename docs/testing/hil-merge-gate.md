@@ -53,6 +53,10 @@ droidctl's own adb tunnel to the handset (a `127.0.0.1:<port>` serial) is never 
 Pixel. A serial (`--serial` or `ANDROID_SERIAL`) picks one phone and wins over `auto`. An explicit
 `--target` that the serial contradicts is refused.
 
+The gate loads droidctl from `droidctl/dist`. When that build is older than the ssh configuration in
+`~/.config/droidctl/ssh.json`, the ssh transport reports a configuration error and lists no handset.
+The default plan is then refused with that error; run `npm run droid:build` and start again.
+
 | Stage                                                 | Where it runs, and why                                                                                                   |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `preflight`                                           | On each phone used, before that phone's stages                                                                           |
