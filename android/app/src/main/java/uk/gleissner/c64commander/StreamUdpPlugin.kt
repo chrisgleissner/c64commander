@@ -307,14 +307,14 @@ class StreamUdpPlugin : Plugin() {
       closeSocket(name)
       packetCounters.reset(name)
       senderFilter.retarget(name, call.getString("source"))
+      val joinedInterface = if (group != null) siteLocalInterface() else null
       val socket: DatagramSocket =
         if (group != null) {
           acquireMulticastLock()
           MulticastSocket(null).apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
-            val netIf = siteLocalInterface()
-            joinGroup(InetSocketAddress(InetAddress.getByName(group), port), netIf)
+            joinGroup(InetSocketAddress(InetAddress.getByName(group), port), joinedInterface)
           }
         } else {
           DatagramSocket(null).apply {
@@ -331,7 +331,7 @@ class StreamUdpPlugin : Plugin() {
         Log.d(logTag, "receiveBufferSize hint ignored for $name", error)
       }
       sockets[name] = socket
-      membershipRefresher.start(name, socket, group, port, siteLocalInterface())
+      membershipRefresher.start(name, socket, group, port, joinedInterface)
       if (assemble) {
         executor.execute { assembleLoop(name, socket) }
       } else {
@@ -721,9 +721,9 @@ class StreamUdpPlugin : Plugin() {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
-        packetCounters.note(name)
         // Stamp wire-arrival time immediately, before any encoding/bridge latency (see emitDatagram).
         val arrivalNanos = clockNanos()
+        packetCounters.note(name, arrivalNanos)
         val source = packet.address
         if (source !== lastSender) {
           lastSender = source
@@ -851,8 +851,8 @@ class StreamUdpPlugin : Plugin() {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
-        packetCounters.note(name)
         val arrivalNanos = clockNanos()
+        packetCounters.note(name, arrivalNanos)
         // Drop a foreign sender's packet before it reaches the assembler. Two Ultimates on one
         // multicast group carry two independent frame-number spaces, so an unfiltered assembler
         // completes one machine's partial frame with the other machine's lines — which is the

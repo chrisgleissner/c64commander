@@ -26,9 +26,10 @@ class StreamPacketCounters(private val clockNanos: () -> Long) {
 
   private val counters = ConcurrentHashMap<String, Counter>()
 
-  fun note(name: String) {
+  /** `atNanos` is the arrival time the receive loop has already read, so the hot path reads the clock once. */
+  fun note(name: String, atNanos: Long) {
     val counter = counters.getOrPut(name) { Counter() }
-    counter.lastNanos = clockNanos()
+    counter.lastNanos = atNanos
     counter.received.incrementAndGet()
   }
 

@@ -25,9 +25,9 @@ class StreamPacketCountersTest {
   @Test
   fun countsEveryPacketPerStreamAndReportsTheTimeSinceTheLastOne() {
     nowNanos = 1_000_000_000L
-    counters.note("video")
-    counters.note("video")
-    counters.note("audio")
+    counters.note("video", nowNanos)
+    counters.note("video", nowNanos)
+    counters.note("audio", nowNanos)
     nowNanos = 1_250_000_000L
 
     assertEquals(2L, counters.receivedPackets("video"))
@@ -37,8 +37,8 @@ class StreamPacketCountersTest {
 
   @Test
   fun resettingAStreamForgetsItsPacketsButNotTheOtherStream() {
-    counters.note("video")
-    counters.note("audio")
+    counters.note("video", 0L)
+    counters.note("audio", 0L)
     counters.reset("video")
 
     assertEquals(0L, counters.receivedPackets("video"))

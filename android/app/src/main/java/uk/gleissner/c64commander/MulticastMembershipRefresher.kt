@@ -15,7 +15,7 @@ import java.net.InetSocketAddress
 import java.net.MulticastSocket
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -30,9 +30,13 @@ import java.util.concurrent.atomic.AtomicLong
  * report does. Leaving and joining again well inside the timeout keeps the membership from expiring.
  */
 class MulticastMembershipRefresher(private val intervalMs: Long = DEFAULT_INTERVAL_MS) {
+  /** The thread ends after 30 s without a scheduled task, so a plugin that is gone leaves nothing running. */
   private val scheduler =
-    Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "multicast-membership").apply { isDaemon = true } }
-  private val tasks = ConcurrentHashMap<String, ScheduledFuture<*>>()
+    ScheduledThreadPoolExecutor(1) { task -> Thread(task, "multicast-membership").apply { isDaemon = true } }.apply {
+      setKeepAliveTime(30, TimeUnit.SECONDS)
+      allowCoreThreadTimeOut(true)
+    }
+  private val tasks = ConcurrentHashMap<String, Pair<MulticastSocket, ScheduledFuture<*>>>()
   private val refreshes = ConcurrentHashMap<String, AtomicLong>()
 
   /** Refreshes the membership of a socket that joined a multicast group; any other socket is left alone. */
@@ -42,24 +46,30 @@ class MulticastMembershipRefresher(private val intervalMs: Long = DEFAULT_INTERV
     val groupAddress = InetSocketAddress(InetAddress.getByName(group), port)
     refreshes[name] = AtomicLong()
     tasks[name] =
-      scheduler.scheduleWithFixedDelay(
-        { refresh(name, socket, groupAddress, networkInterface) },
-        intervalMs,
-        intervalMs,
-        TimeUnit.MILLISECONDS,
-      )
+      socket to
+        scheduler.scheduleWithFixedDelay(
+          { refresh(name, socket, groupAddress, networkInterface) },
+          intervalMs,
+          intervalMs,
+          TimeUnit.MILLISECONDS,
+        )
   }
 
   fun stop(name: String) {
-    tasks.remove(name)?.cancel(false)
+    tasks.remove(name)?.second?.cancel(false)
     refreshes.remove(name)
+  }
+
+  /** A closed socket ends its own task, unless the name has been bound again to a newer socket since. */
+  private fun stopIfOwnedBy(name: String, socket: MulticastSocket) {
+    if (tasks[name]?.first === socket) stop(name)
   }
 
   fun refreshCount(name: String): Long = refreshes[name]?.get() ?: 0L
 
   internal fun refresh(name: String, socket: MulticastSocket, group: InetSocketAddress, networkInterface: NetworkInterface?) {
     if (socket.isClosed) {
-      stop(name)
+      stopIfOwnedBy(name, socket)
       return
     }
     try {
@@ -71,6 +81,7 @@ class MulticastMembershipRefresher(private val intervalMs: Long = DEFAULT_INTERV
       socket.joinGroup(group, networkInterface)
       refreshes[name]?.incrementAndGet()
     } catch (error: Exception) {
+      if (socket.isClosed) return
       Log.w(TAG, "stream $name: joining $group again failed; the stream will stop until it is restarted", error)
     }
   }

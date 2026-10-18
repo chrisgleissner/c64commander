@@ -666,7 +666,7 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
 let snapshotEpoch = 0;
 
-const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
+export const copyHvscBrowseIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapshot => ({
   ...snapshot,
   songs: { ...snapshot.songs },
   folders: { ...snapshot.folders },
@@ -674,7 +674,7 @@ const copySnapshot = (snapshot: HvscBrowseIndexSnapshot): HvscBrowseIndexSnapsho
 
 const rememberSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
   snapshotEpoch += 1;
-  lastStoredSnapshot = snapshot ? copySnapshot(snapshot) : null;
+  lastStoredSnapshot = snapshot ? copyHvscBrowseIndexSnapshot(snapshot) : null;
 };
 
 /** Drops the remembered snapshot, so the next load reads storage again. */
@@ -692,7 +692,7 @@ export const loadHvscBrowseIndexSnapshotReadOnly = async (): Promise<HvscBrowseI
 };
 
 export const loadHvscBrowseIndexSnapshot = async () => {
-  if (lastStoredSnapshot) return copySnapshot(lastStoredSnapshot);
+  if (lastStoredSnapshot) return copyHvscBrowseIndexSnapshot(lastStoredSnapshot);
   return runWithHvscPerfScope(
     "browse:load-snapshot",
     async () => {

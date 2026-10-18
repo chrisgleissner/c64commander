@@ -23,6 +23,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import {
   getHvscSongFromBrowseIndex,
+  copyHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
   type HvscBrowseIndexSnapshot,
@@ -273,13 +274,16 @@ export const ensureHvscMetadataHydration = async () => {
     const isCurrentGeneration = () => getHvscHydrationGeneration() === runGeneration;
 
     await ensureHvscSonglengthsReadyOnColdStart();
-    const snapshot = await hvscIndex.loadBrowseSnapshot();
-    if (!snapshot) {
+    const loadedSnapshot = await hvscIndex.loadBrowseSnapshot();
+    if (!loadedSnapshot) {
       return;
     }
     if (!isCurrentGeneration()) {
       return;
     }
+    // Hydration rewrites songs in place. The media index shares its maps with the remembered snapshot that other
+    // loaders copy from, so the run works on its own maps and publishes them through setBrowseSnapshot.
+    const snapshot = copyHvscBrowseIndexSnapshot(loadedSnapshot);
 
     const pendingSongs = Object.values(snapshot.songs).filter(
       (song) => song.metadataStatus !== "hydrated" && song.metadataStatus !== "error",

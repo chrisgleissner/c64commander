@@ -703,19 +703,29 @@ describe("AvMirrorSession", () => {
       expect(second.audio.start).toHaveBeenCalledTimes(1);
     });
 
-    it("waits for the page to be visible before restarting the audio", async () => {
-      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    it("restarts the audio even while the page is hidden, because background audio keeps playing", async () => {
+      vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
       const { session, audio } = makeSession();
       await session.startAudio();
+
       expect(lose(audio)).toBe(true);
       await vi.advanceTimersByTimeAsync(2000);
-      expect(audio.start).toHaveBeenCalledTimes(1);
-
-      visibility.mockReturnValue("visible");
-      document.dispatchEvent(new Event("visibilitychange"));
-      await vi.advanceTimersByTimeAsync(0);
 
       expect(audio.start).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps counting restart attempts when a playback event asks again for audio that is already wanted", async () => {
+      const { session, audio } = makeSession();
+      await session.setAudioWanted(true);
+
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      await session.setAudioWanted(true);
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(6000);
+      await session.setAudioWanted(true);
+
+      expect(lose(audio, 1000)).toBe(false);
     });
   });
 

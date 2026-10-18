@@ -91,6 +91,21 @@ class MulticastMembershipRefresherTest {
   }
 
   @Test
+  fun aClosedSocketDoesNotStopTheTaskOfTheSocketBoundToTheSameNameSince() {
+    val refresher = MulticastMembershipRefresher()
+    val first = RecordingSocket()
+    val second = RecordingSocket()
+    refresher.start("video", first, "239.0.1.64", 11000, null)
+    refresher.start("video", second, "239.0.1.64", 11000, null)
+    first.close()
+
+    refresher.refresh("video", first, group, null)
+    refresher.refresh("video", second, group, null)
+
+    assertEquals(1L, refresher.refreshCount("video"))
+  }
+
+  @Test
   fun aPlainUnicastSocketIsLeftAlone() {
     val refresher = MulticastMembershipRefresher(intervalMs = 10)
     val socket = DatagramSocket(null)

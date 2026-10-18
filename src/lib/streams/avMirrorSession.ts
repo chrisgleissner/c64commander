@@ -303,7 +303,8 @@ export class AvMirrorSession {
         await this.startAudioNow();
       }),
     giveUp: () => this.audio.abandonReconnect(),
-    isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
+    // Mirrored audio keeps playing with the page hidden (see avMirrorBackgroundPolicy), so its restart must not wait for it.
+    isPageHidden: () => false,
   });
   private readonly videoLossRestarter = new StreamLossRestarter({
     stream: "video",
@@ -738,7 +739,6 @@ export class AvMirrorSession {
     if (typeof this.video.setKeepFraction === "function") this.video.setKeepFraction(fraction);
   }
 
-  /** Clear stale telemetry + governor pressure when a fresh session begins (§7.10), and apply the saved mode. */
   private async deviceAnswersRest(): Promise<boolean> {
     try {
       await getC64API().getInfo({ timeoutMs: STREAM_RESTART_PROBE_TIMEOUT_MS });
@@ -752,6 +752,7 @@ export class AvMirrorSession {
     }
   }
 
+  /** Clear stale telemetry + governor pressure when a fresh session begins (§7.10), and apply the saved mode. */
   private beginSessionIfIdle(): void {
     if (this.audioLive || this.videoLive) return;
     this.telemetry.reset();
@@ -789,8 +790,10 @@ export class AvMirrorSession {
    * was still queued, so the stop then ran and the feed it was asked for never came.
    */
   setAudioWanted(want: boolean): Promise<void> {
-    this.audioWanted = want;
-    this.audioLossRestarter.cancel();
+    if (this.audioWanted !== want) {
+      this.audioWanted = want;
+      this.audioLossRestarter.cancel();
+    }
     return this.serialize(async () => {
       const failed = this.snapshot.audio.state === "error";
       if (want ? this.audioLive : !this.audioLive && !failed) return;
