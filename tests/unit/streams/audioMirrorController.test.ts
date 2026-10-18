@@ -117,6 +117,25 @@ describe("AudioMirrorController", () => {
     }
   });
 
+  it("leaves a live stream alone when asked to abandon a reconnect that is not under way", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.abandonReconnect();
+
+    expect(controller.getSnapshot().state).toBe("live");
+    expect(controller.getSnapshot().error).toBeNull();
+  });
+
   it("tells its owner how long the audio had been live when it went silent, and shows the reconnecting state", async () => {
     vi.useFakeTimers();
     try {

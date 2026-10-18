@@ -675,6 +675,48 @@ describe("AvMirrorSession", () => {
 
       expect(audio.start).toHaveBeenCalledTimes(3);
     });
+    it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
+      vi.spyOn(getC64API(), "getInfo").mockRejectedValue(new Error("timeout"));
+      const { session, audio } = makeSession();
+      await session.startAudio();
+
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(audio.start).toHaveBeenCalledTimes(1);
+      expect((audio as unknown as { abandonReconnect: ReturnType<typeof vi.fn> }).abandonReconnect).toHaveBeenCalled();
+    });
+
+    it("cancels a pending restart when Listen is switched off by setAudioWanted or by stopAll", async () => {
+      const first = makeSession();
+      await first.session.startAudio();
+      expect(lose(first.audio)).toBe(true);
+      await first.session.setAudioWanted(false);
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(first.audio.start).toHaveBeenCalledTimes(1);
+
+      const second = makeSession();
+      await second.session.setAudioWanted(true);
+      expect(lose(second.audio)).toBe(true);
+      await second.session.stopAll();
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(second.audio.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("waits for the page to be visible before restarting the audio", async () => {
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      expect(lose(audio)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(audio.start).toHaveBeenCalledTimes(1);
+
+      visibility.mockReturnValue("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(audio.start).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("restarting a lost video stream", () => {
