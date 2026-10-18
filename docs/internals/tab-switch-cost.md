@@ -20,9 +20,9 @@ the app connected to the c64u, on the Home page at the start of each run.
 | 2, same process                      | 24       | 0                                | 181 ms     | 97 MiB before, 99 MiB after |
 | 3, same process                      | 36       | 0                                | 172 ms     | 98 MiB before, 99 MiB after |
 
-The three runs lasted from the first cycle of a freshly started app to a warm app. All four tasks over 200 ms in run 1
-fell in the first visit to Play and Disks (473, 239 and 202 ms) and on Config (279 and 258 ms in the following cycles).
-In the warm runs only Config produced tasks above 150 ms.
+The three runs lasted from the first cycle of a freshly started app to a warm app. The four switches over 200 ms in run 1
+were the first visit to Disks (tasks of 202, 239 and 473 ms) and three visits to Config (207, 279 and 258 ms). In the
+warm runs only Config and one Play switch (152 ms) produced tasks above 150 ms.
 
 ## Where the time goes
 
