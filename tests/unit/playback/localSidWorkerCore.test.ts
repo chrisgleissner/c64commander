@@ -29,11 +29,31 @@ describe("localSidWorkerCore", () => {
   });
 
   describe("detectRomRequired", () => {
-    it("flags RSID as ROM-dependent (routed to Play on C64)", () => {
-      expect(detectRomRequired(withMagic("RSID"))).toBe(true);
+    it("flags the RSID BASIC declaration as a positive ROM requirement", () => {
+      const bytes = withMagic("RSID", 0x7c - 4);
+      bytes[5] = 2;
+      bytes[0x77] = 2;
+      expect(detectRomRequired(bytes)).toBe(true);
     });
-    it("treats PSID as ROM-independent (plays on device)", () => {
+    it("does not infer a requirement from PSID or a clear RSID BASIC flag", () => {
       expect(detectRomRequired(withMagic("PSID"))).toBe(false);
+      const bytes = withMagic("RSID", 0x7c - 4);
+      bytes[5] = 2;
+      expect(detectRomRequired(bytes)).toBe(false);
+      bytes.set(new TextEncoder().encode("PSID"));
+      bytes[0x77] = 2; // PlaySID-specific in PSID, not a BASIC declaration.
+      expect(detectRomRequired(bytes)).toBe(false);
+    });
+    it("leaves truncated and unsupported-version RSID data to the engine", () => {
+      expect(detectRomRequired(withMagic("RSID"))).toBe(false);
+      const bytes = withMagic("RSID", 0x7c - 4);
+      bytes[0x77] = 2;
+      expect(detectRomRequired(bytes)).toBe(false);
+      bytes[5] = 5;
+      expect(detectRomRequired(bytes)).toBe(false);
+      bytes[5] = 2;
+      bytes[4] = 1;
+      expect(detectRomRequired(bytes)).toBe(false);
     });
     it("does not flag unknown data (engine rejects it)", () => {
       expect(detectRomRequired(withMagic("junk"))).toBe(false);

@@ -7,6 +7,7 @@
  */
 
 import type { EngineSidModel } from "../localSidWorkerProtocol";
+import { detectRomRequired } from "../localSidWorkerCore";
 import type {
   SidRendererCore,
   SidRendererOpenRequest,
@@ -45,6 +46,9 @@ export type SidAudioEngineLoader = () => Promise<SidAudioEngineCtor>;
 const PRERENDER_SLICE_SECONDS = 5;
 const PRERENDER_YIELD_MS = 120;
 
+const missingDeclaredBasic = (request: SidRendererOpenRequest): boolean =>
+  detectRomRequired(new Uint8Array(request.sidBytes)) && request.roms?.basic.byteLength !== 8192;
+
 const wasmEngineName = (engine: SidRendererOpenRequest["engine"]): "residfp" | "sidlite" =>
   engine === "sidlite" ? "sidlite" : "residfp";
 
@@ -66,8 +70,8 @@ const applySidModel = async (target: SidAudioEngineLike, sidModel: EngineSidMode
  * reSIDfp and SIDLite, through `libsidplayfp-wasm`. Runs inside the Web Worker.
  *
  * Without C64 ROM images the engine is still given nulls: `setSystemROMs` accepts them and
- * synthesizes a minimal KERNAL, and a PSID renders identically either way. Refusing here once made
- * "Listen on this device" produce silence for anyone whose ROM capture had not succeeded.
+ * synthesizes a minimal KERNAL. A declared BASIC program needs a supplied BASIC
+ * image; an otherwise accepted tune is not guaranteed to be ROM independent.
  */
 export class WasmSidRendererCore implements SidRendererCore {
   private Ctor: SidAudioEngineCtor | null = null;
@@ -89,6 +93,7 @@ export class WasmSidRendererCore implements SidRendererCore {
   }
 
   private async prepare(target: SidAudioEngineLike, request: SidRendererOpenRequest): Promise<void> {
+    if (missingDeclaredBasic(request)) throw new Error("This RSID BASIC program needs a supplied 8192-byte BASIC ROM");
     // ROMs before the tune: the engine reloads the current tune when ROMs change, and the tune is
     // meant to be opened against the real ROMs once.
     await target.setSystemROMs(
@@ -107,6 +112,9 @@ export class WasmSidRendererCore implements SidRendererCore {
 
   async open(request: SidRendererOpenRequest): Promise<SidRendererOpened> {
     this.disposeEngine();
+    if (missingDeclaredBasic(request)) {
+      return { romRequired: true, sampleRate: request.sampleRate, channels: 2, tuneInfo: null };
+    }
     const startedAt = performance.now();
     const Ctor = await this.ensureModule();
     const moduleReadyAt = performance.now();

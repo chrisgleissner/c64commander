@@ -43,7 +43,9 @@ export interface SidRendererOpenRequest {
   engine: SidRendererId;
 }
 
-export type SidRendererOpened = Omit<LocalSidOpenedMessage, "type" | "id" | "romRequired">;
+export type SidRendererOpened = Omit<LocalSidOpenedMessage, "type" | "id" | "romRequired"> & {
+  romRequired?: boolean;
+};
 
 export interface SidRendererChunk {
   /** Interleaved stereo S16; a JS buffer or a native reference. */
