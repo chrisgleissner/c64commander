@@ -1623,6 +1623,28 @@ export function usePlaybackController({
     cancelPendingUserSkip,
   ]);
 
+  // A Play page mounted over a paused tune restores it without a guard, so a resume has none to re-date.
+  const rearmAutoAdvanceOnResume = useCallback(
+    (now: number, currentDurationMs: number | undefined, elapsedMs: number) => {
+      if (typeof currentDurationMs !== "number") return;
+      if (!autoAdvanceGuardRef.current && playlistEndedRef.current) return;
+      const dueAtMs = now + autoAdvanceDelayMs(currentDurationMs, elapsedMs, currentPlaybackIsLocalRef.current);
+      const guard = autoAdvanceGuardRef.current ?? {
+        trackInstanceId: trackInstanceIdRef.current,
+        dueAtMs,
+        autoFired: false,
+        userCancelled: false,
+      };
+      guard.dueAtMs = dueAtMs;
+      guard.autoFired = false;
+      guard.deferredToEnd = false;
+      guard.userCancelled = false;
+      autoAdvanceGuardRef.current = guard;
+      setAutoAdvanceDueAtMs(dueAtMs);
+    },
+    [autoAdvanceGuardRef, playlistEndedRef, trackInstanceIdRef, setAutoAdvanceDueAtMs],
+  );
+
   // HARD19-009: mirror pause and resume applied from elsewhere (Home), or auto-advance would launch
   // the next track on a machine the user paused. Play's own writes are skipped through
   // playInitiatedMachineTransitionRef, and a value-equality bail prevents a re-render loop.
@@ -1644,15 +1666,7 @@ export function usePlaybackController({
         trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, currentElapsedMs);
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
-        const currentDurationMs = durationMsRef.current;
-        if (autoAdvanceGuardRef.current && typeof currentDurationMs === "number") {
-          autoAdvanceGuardRef.current.dueAtMs =
-            now + autoAdvanceDelayMs(currentDurationMs, currentElapsedMs, currentPlaybackIsLocalRef.current);
-          autoAdvanceGuardRef.current.autoFired = false;
-          autoAdvanceGuardRef.current.deferredToEnd = false;
-          autoAdvanceGuardRef.current.userCancelled = false;
-          setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
-        }
+        rearmAutoAdvanceOnResume(now, durationMsRef.current, currentElapsedMs);
       }
     });
   }, [
@@ -1660,10 +1674,10 @@ export function usePlaybackController({
     setPlayedMs,
     setIsPaused,
     setAutoAdvanceDueAtMs,
-    autoAdvanceGuardRef,
     trackStartedAtRef,
     durationMsRef,
     playbackTime,
+    rearmAutoAdvanceOnResume,
   ]);
 
   // Defined below; read by Resume after a restart, which starts the tune again where it was.
@@ -1713,14 +1727,7 @@ export function usePlaybackController({
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
-          if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-            autoAdvanceGuardRef.current.dueAtMs =
-              now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
-            autoAdvanceGuardRef.current.autoFired = false;
-            autoAdvanceGuardRef.current.deferredToEnd = false;
-            autoAdvanceGuardRef.current.userCancelled = false;
-            setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
-          }
+          rearmAutoAdvanceOnResume(now, durationMs, elapsedMs);
         } else {
           cancelPendingUserSkip();
           await local.pause();
@@ -1774,14 +1781,7 @@ export function usePlaybackController({
               trackStartedAtRef.current = resumedTrackStartedAtMs(playlistEndedRef.current, now, elapsedMs);
               playedClockRef.current.resume(now);
               setPlayedMs(playedClockRef.current.current(now));
-              if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-                autoAdvanceGuardRef.current.dueAtMs =
-                  now + autoAdvanceDelayMs(durationMs, elapsedMs, currentPlaybackIsLocalRef.current);
-                autoAdvanceGuardRef.current.autoFired = false;
-                autoAdvanceGuardRef.current.deferredToEnd = false;
-                autoAdvanceGuardRef.current.userCancelled = false;
-                setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
-              }
+              rearmAutoAdvanceOnResume(now, durationMs, elapsedMs);
               return;
             }
 
@@ -1843,7 +1843,7 @@ export function usePlaybackController({
       setPlayedMs,
       setIsPaused,
       trackStartedAtRef,
-      autoAdvanceGuardRef,
+      rearmAutoAdvanceOnResume,
       cancelPendingUserSkip,
       playItem,
       reportPlaybackStartFailure,

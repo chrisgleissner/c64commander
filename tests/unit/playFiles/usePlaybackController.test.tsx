@@ -4280,6 +4280,61 @@ describe("usePlaybackController", () => {
         expect(setIsPaused).toHaveBeenCalledWith(false);
       });
 
+      // A Play page mounted over a paused tune restores it without an auto-advance guard. Resume then
+      // started the tune again but armed nothing, so it played on past its songlength and never moved on.
+      it("arms auto-advance again when Resume finds no guard on a paused on-device tune", async () => {
+        enableLocal();
+        const controller = fakeController();
+        const autoAdvanceGuardRef = { current: null as any };
+        const setAutoAdvanceDueAtMs = vi.fn();
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+          isPaused: true,
+          durationMs: 54_000,
+          autoAdvanceGuardRef,
+          setAutoAdvanceDueAtMs,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        autoAdvanceGuardRef.current = null;
+        setAutoAdvanceDueAtMs.mockClear();
+
+        await act(async () => {
+          await result.current.handlePauseResume();
+        });
+
+        expect(controller.resume).toHaveBeenCalledTimes(1);
+        expect(autoAdvanceGuardRef.current).toMatchObject({ autoFired: false, userCancelled: false });
+        expect(setAutoAdvanceDueAtMs).toHaveBeenLastCalledWith(expect.any(Number));
+      });
+
+      it("arms auto-advance again when Resume finds no guard on a paused device tune", async () => {
+        const machineResume = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+        const autoAdvanceGuardRef = { current: null as any };
+        const setAutoAdvanceDueAtMs = vi.fn();
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          isPlaying: true,
+          isPaused: true,
+          durationMs: 54_000,
+          autoAdvanceGuardRef,
+          setAutoAdvanceDueAtMs,
+        });
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        autoAdvanceGuardRef.current = null;
+        setAutoAdvanceDueAtMs.mockClear();
+
+        await act(async () => {
+          await result.current.handlePauseResume();
+        });
+
+        expect(machineResume).toHaveBeenCalled();
+        expect(autoAdvanceGuardRef.current).toMatchObject({ autoFired: false, userCancelled: false });
+        expect(setAutoAdvanceDueAtMs).toHaveBeenLastCalledWith(expect.any(Number));
+      });
+
       it("still pauses the C64 for a device track", async () => {
         // Local engine off → unchanged behaviour.
         const controller = fakeController();

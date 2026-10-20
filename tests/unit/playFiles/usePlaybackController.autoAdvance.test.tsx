@@ -265,6 +265,35 @@ describe("usePlaybackController auto advance", () => {
     resetMachineExecution();
   });
 
+  // A Play page mounted over a paused session holds no guard, so a resume issued from Home had nothing to re-date.
+  it("arms auto-advance when Home resumes a paused session that holds no guard", async () => {
+    const { setMachineExecutionPaused, setMachineExecutionRunning, resetMachineExecution } =
+      await import("@/lib/deviceInteraction/machineExecutionStore");
+    resetMachineExecution();
+    const playlist = [createPlaylistItem("one", 1_000), createPlaylistItem("two", 1_000)];
+    const { result } = renderPlaybackHarness(playlist);
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    act(() => {
+      setMachineExecutionPaused();
+    });
+    act(() => {
+      result.current.cancelAutoAdvance();
+    });
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+
+    act(() => {
+      setMachineExecutionRunning();
+    });
+
+    expect(result.current.isPaused).toBe(false);
+    expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
+    expect(result.current.autoAdvanceDueAtMs).toEqual(expect.any(Number));
+
+    resetMachineExecution();
+  });
+
   // HARD23-004: playItem is the shared launch primitive for Play, Next,
   // Previous, and auto-advance. A user Next/Previous skip reaches the device
   // ONLY through playItem (startPlaylist/resume assert the shared
@@ -501,6 +530,8 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.isPaused).toBe(false);
     expect(result.current.trackStartedAtRef.current).toBeNull();
     expect(result.current.elapsedMs).toBe(1_000);
+    expect(result.current.autoAdvanceGuardRef.current).toBeNull();
+    expect(result.current.autoAdvanceDueAtMs).toBeNull();
   });
 
   it("wraps back to the first playlist item when repeat is enabled", async () => {
