@@ -103,8 +103,8 @@ describe.skipIf(!synced)("synced libsidplayfp-wasm engine", () => {
     ]);
     const range = JSON.parse(manifest).dependencies["libsidplayfp-wasm"];
 
-    expect(range).toMatch(/^\^\d+\.\d+\.\d+$/);
-    expect(JSON.parse(installed).version).toBe(range.slice(1));
+    expect(range).toBe("1.1.1");
+    expect(JSON.parse(installed).version).toBe(range);
   });
 
   /** The URL `localSid.worker.ts` loads must actually be servable. */
