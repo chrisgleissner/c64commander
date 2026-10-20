@@ -12,13 +12,15 @@ import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from 
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 import { __resetPhoneAudioOwnership } from "@/lib/audio/phoneAudioOwnership";
-import { savePlaybackCrossfadeMs } from "@/lib/config/appSettings";
+import { savePlaybackCrossfadeMs, saveSidEmulationEngine } from "@/lib/config/appSettings";
+
+const romState = vi.hoisted(() => ({ available: true }));
 
 vi.mock("@/lib/roms/romStore", () => ({
-  loadStoredRoms: () => ({ kernal: new Uint8Array(8192), basic: new Uint8Array(8192) }),
+  loadStoredRoms: () => (romState.available ? { kernal: new Uint8Array(8192), basic: new Uint8Array(8192) } : {}),
   // The engine now picks its emulation from whether the images are actually in hand, so the stub has
   // to answer that too — a mock that reports no ROMs would silently downgrade every test to SIDLite.
-  hasCompleteRomSet: () => true,
+  hasCompleteRomSet: () => romState.available,
 }));
 
 /**
@@ -180,6 +182,55 @@ describe("seeking inside a pre-rendered tune", () => {
   beforeEach(() => {
     __resetPhoneAudioOwnership();
     localStorage.clear();
+    romState.available = true;
+  });
+
+  it("does not start a cached BASIC intro after ROMs are revoked, even with a reused cache key", async () => {
+    saveSidEmulationEngine("sidlite");
+    const engine = makeEngine();
+    await openAndWarm(engine);
+    romState.available = false;
+    const basic = new Uint8Array(0x7c);
+    basic.set([0x52, 0x53, 0x49, 0x44, 0, 2]);
+    basic[0x77] = 2;
+    const before = written.length;
+    const play = engine.play(basic.buffer, 0, {}, "tune#0");
+    await Promise.resolve();
+    await Promise.resolve();
+    const opened = worker.ofType("open").at(-1)!;
+    worker.emit({
+      type: "opened",
+      id: opened.id,
+      romRequired: true,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+    });
+    expect((await play).romRequired).toBe(true);
+    expect(written.length).toBe(before);
+    expect(engine.isActive()).toBe(false);
+    engine.dispose();
+  });
+
+  it("stops an optimistic cached intro when the renderer refuses the tune", async () => {
+    const engine = makeEngine();
+    await openAndWarm(engine);
+    const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(written.length).toBeGreaterThan(0);
+    const opened = worker.ofType("open").at(-1)!;
+    worker.emit({
+      type: "opened",
+      id: opened.id,
+      romRequired: true,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+    });
+    expect((await play).romRequired).toBe(true);
+    expect(engine.isActive()).toBe(false);
+    engine.dispose();
   });
 
   // A tune playing on the C64 is rendered here in case the network goes and it has to carry on on this phone.

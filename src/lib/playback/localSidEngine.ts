@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { detectRomRequired } from "./localSidWorkerCore";
 import { LocalSidChunkScheduler } from "./localSidChunkScheduler";
 import type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
@@ -863,6 +864,11 @@ export class LocalSidEngine {
       transfer.push(kernal, basic);
     }
 
+    const canStartCachedIntro =
+      this.renderer === "sidplayez" ||
+      romPayload?.basic.byteLength === 8192 ||
+      !detectRomRequired(new Uint8Array(sidBytes));
+
     return new Promise<LocalSidPlayResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.openPending = null;
@@ -898,7 +904,7 @@ export class LocalSidEngine {
       // render that arrives ahead of the open asks it to render a tune it has not got. Called
       // earlier it also ran before `activeId` was assigned, so every chunk came back stale and the
       // open ran to its 15 s timeout. Measured as an 18 s open on a Pixel 4, heard as a hard cut.
-      this.startFromPrerenderedIntro();
+      if (canStartCachedIntro) this.startFromPrerenderedIntro();
     });
   }
 
@@ -1141,7 +1147,8 @@ export class LocalSidEngine {
     }
 
     if (message.romRequired) {
-      // Cannot play ROM-dependent tunes without ship-forbidden C64 ROMs.
+      // A backend refusal must also tear down an intro started optimistically from cache.
+      this.stopPlayback();
       pending?.resolve({
         romRequired: true,
         started: false,
