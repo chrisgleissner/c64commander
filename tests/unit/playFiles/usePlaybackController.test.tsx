@@ -3273,7 +3273,12 @@ describe("usePlaybackController", () => {
 
   describe("Track B — local playback engine routing", () => {
     const psid = () => new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "PSID"
-    const rsid = () => new Uint8Array([0x52, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "RSID"
+    const rsid = () => {
+      const bytes = new Uint8Array(0x7c);
+      bytes.set([0x52, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]);
+      bytes[0x77] = 2; // RSID BASIC declaration; RSID alone does not declare ROM dependence.
+      return bytes.buffer;
+    };
 
     // `songNr` is one-based, as it is everywhere it is stored, shown or looked up. Tune 1 is the
     // default because that is what a file with a single tune, and a file whose header names no
@@ -3975,13 +3980,32 @@ describe("usePlaybackController", () => {
       expect(setIsPlaying).toHaveBeenCalledWith(false);
     });
 
+    it("tries a clear-BASIC-flag RSID locally when ROMs are unavailable", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const clearRsid = () => {
+        const bytes = new Uint8Array(rsid());
+        bytes[0x77] = 0;
+        return bytes.buffer;
+      };
+      const playlist = [sidItem(clearRsid)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
     it("falls a ROM-dependent RSID back to the C64 when its ROMs are unavailable", async () => {
       enableLocal();
       const controller = fakeController();
       const playlist = [sidItem(rsid)];
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
 
       expect(controller.play).not.toHaveBeenCalled();
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
@@ -4016,7 +4040,9 @@ describe("usePlaybackController", () => {
         localSidPlaybackController: controller,
       });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
 
       await act(async () => {
@@ -4041,12 +4067,16 @@ describe("usePlaybackController", () => {
       const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
       expect(isRemotePlaybackActive()).toBe(true);
       expect(machineReset).not.toHaveBeenCalled();
 
-      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
 
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(machineReset).toHaveBeenCalledTimes(1);
@@ -4069,7 +4099,9 @@ describe("usePlaybackController", () => {
         isPaused: true,
       });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
 
       expect(machineResume).toHaveBeenCalledTimes(1);
       expect(machineReset).toHaveBeenCalledTimes(1);
@@ -4089,10 +4121,14 @@ describe("usePlaybackController", () => {
         localSidPlaybackController: controller,
         restoreVolumeOverrides,
       });
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
       restoreVolumeOverrides.mockClear();
 
-      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
 
       expect(restoreVolumeOverrides).toHaveBeenCalledWith("stop");
       expect(machineReset.mock.invocationCallOrder[0]).toBeLessThan(restoreVolumeOverrides.mock.invocationCallOrder[0]);
@@ -4111,7 +4147,9 @@ describe("usePlaybackController", () => {
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
 
       try {
-        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+        await act(async () => {
+          await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+        });
 
         expect(controller.play).toHaveBeenCalledTimes(1);
         expect(machineReset).not.toHaveBeenCalled();
@@ -4129,8 +4167,12 @@ describe("usePlaybackController", () => {
       const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
-      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
 
       expect(machineReset).toHaveBeenCalledTimes(1);
       expect(controller.play).toHaveBeenCalledTimes(1);
@@ -4145,7 +4187,9 @@ describe("usePlaybackController", () => {
       ];
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
 
-      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
 
       expect(controller.play).not.toHaveBeenCalled();
       expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
