@@ -26,15 +26,19 @@ export function sidMagic(bytes: Uint8Array): SidMagic {
 }
 
 /**
- * True when the tune needs C64 KERNAL/BASIC/CHARGEN ROMs we cannot ship
- * (spec §12.2). v1 stance: **RSID always needs the KERNAL** (its init/play run
- * as real interrupt-driven C64 code), so it is routed to "Play on C64". The
- * large **ROM-independent PSID** subset plays on-device; the rare PSID that
- * calls a ROM routine is a refinement we can add on-device if a specific tune
- * misbehaves. `UNKNOWN` is left to the engine to reject.
+ * Positive declaration of BASIC execution in an RSID v2+ header. There is no
+ * general KERNAL requirement flag. A clear flag (including PSID) is unknown,
+ * not a guarantee that execution never calls a system ROM routine.
  */
 export function detectRomRequired(bytes: Uint8Array): boolean {
-  return sidMagic(bytes) === "RSID";
+  return (
+    sidMagic(bytes) === "RSID" &&
+    bytes.length >= 0x7c &&
+    bytes[4] === 0 &&
+    bytes[5] >= 2 &&
+    bytes[5] <= 4 &&
+    (bytes[0x77] & 2) !== 0
+  );
 }
 
 /** True when running inside a real Web Worker global scope (not the main thread). */
