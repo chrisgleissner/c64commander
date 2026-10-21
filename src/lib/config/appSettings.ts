@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { SID_RADIO_QUEUE_LIMIT_KEY } from "./radioQueueSettings";
+export * from "./radioQueueSettings";
+
 import { variant } from "@/generated/variant";
 import type { DisplayProfile } from "@/lib/displayProfiles";
 
@@ -22,6 +25,8 @@ const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const MIRROR_C64_VIDEO_KEY = "c64u_mirror_c64_video";
 const DEFAULT_SONG_DURATION_MS_KEY = "c64u_default_song_duration_ms";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
+const REPEAT_ONE_ENABLED_KEY = "c64u_repeat_one_enabled";
+
 const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
 const FRIENDLY_SID_NAMES_KEY = "c64u_friendly_sid_names";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
@@ -920,6 +925,8 @@ export const APP_SETTINGS_KEYS = {
   HIDE_STATUS_BAR_KEY,
   HIDE_NAVIGATION_BAR_KEY,
   SID_RADIO_ENABLED_KEY,
+  SID_RADIO_QUEUE_LIMIT_KEY,
+  REPEAT_ONE_ENABLED_KEY,
   SID_RANKING_ENABLED_KEY,
   PLAYBACK_ENGINE_KEY,
   LOCAL_ENGINE_ENABLED_KEY,
@@ -984,3 +991,7 @@ export const savePaletteTarget = (target: PaletteTarget) => writeString(PALETTE_
 export const loadPersistConfigToFlash = () => readBoolean(PERSIST_CONFIG_TO_FLASH_KEY, false);
 
 export const savePersistConfigToFlash = (enabled: boolean) => writeBoolean(PERSIST_CONFIG_TO_FLASH_KEY, enabled);
+
+/** Repeat only on automatic completion; manual Next and Previous always remain available. */
+export const loadRepeatOneEnabled = () => readBoolean(REPEAT_ONE_ENABLED_KEY, false);
+export const saveRepeatOneEnabled = (enabled: boolean) => writeBoolean(REPEAT_ONE_ENABLED_KEY, enabled);

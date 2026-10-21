@@ -3297,6 +3297,14 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await installListPreviewLimit(page, 3);
+      await page.addInitScript(() => {
+        const original = JSON.parse(localStorage.getItem("c64u_playlist:v1:default")!);
+        const items = Array.from({ length: 80 }, (_, index) => {
+          const item = original.items[index % original.items.length];
+          return { ...item, path: `/Usb0/Collection-${index}/${item.name}`, name: `${item.name} (${index + 1})` };
+        });
+        localStorage.setItem("c64u_playlist:v1:default", JSON.stringify({ ...original, items }));
+      });
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/", { waitUntil: "domcontentloaded" });
         await applyDisplayProfileViewport(page, profileId);
@@ -3309,6 +3317,19 @@ test.describe("App screenshots", () => {
         const viewAllDialog = await openViewAllIfPresent(page);
         if (viewAllDialog) {
           await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "02-view-all.png"));
+          const scroller = viewAllDialog.locator('[data-virtuoso-scroller="true"]');
+          await scroller.evaluate((element) => {
+            element.scrollTop = 400;
+          });
+          await expect
+            .poll(async () =>
+              viewAllDialog.getByRole("heading", { name: "Playlist", exact: true }).evaluate((element) => {
+                const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+                return element.getBoundingClientRect().bottom < viewport.getBoundingClientRect().top;
+              }),
+            )
+            .toBe(true);
+          await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "03-view-all-scrolled.png"));
           await page.keyboard.press("Escape");
         }
       }

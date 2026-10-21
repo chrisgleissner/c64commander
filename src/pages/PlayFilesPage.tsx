@@ -271,6 +271,7 @@ export default function PlayFilesPage() {
   // Written by the station playlist handover below. A ref, because `useSidRadio` is created after the playback
   // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
   const stationActiveRef = useRef(false);
+  const stationFinishingRef = useRef(false);
   const {
     playlist,
     setPlaylist,
@@ -280,6 +281,8 @@ export default function PlayFilesPage() {
     setShuffleEnabled,
     shuffleSeed,
     setShuffleSeed,
+    repeatOneEnabled,
+    setRepeatOneEnabled,
     repeatEnabled,
     setRepeatEnabled,
     playlistTypeFilters,
@@ -614,6 +617,8 @@ export default function PlayFilesPage() {
     repeatEnabled,
     shuffleEnabled,
     stationActiveRef,
+    stationFinishingRef,
+    repeatOneEnabled,
     shuffleSeed,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -2314,7 +2319,16 @@ export default function PlayFilesPage() {
   useEffect(() => setPlaylistRestored(playlistHydrated), [playlistHydrated]);
   const stationHandover = useStationPlaylistHandover({
     queue: { playlist, setPlaylist, currentIndex, setCurrentIndex, selectedPlaylistIds, setSelectedPlaylistIds },
-    playback: { isPlaying, isPaused, playlistEnded, startPlaylist, stopPlayback, stationActiveRef },
+    playback: {
+      isPlaying,
+      isPaused,
+      playlistEnded,
+      isPlaylistLoading,
+      startPlaylist,
+      stopPlayback,
+      stationActiveRef,
+      stationFinishingRef,
+    },
     persistence: { ready: playlistHydrated && sessionRestoreSettled, readSavedPlaylist: readRepositoryPlaylist },
     station: sidRadio,
   });
@@ -2604,7 +2618,12 @@ export default function PlayFilesPage() {
                   </div>
                 }
                 shuffleEnabled={shuffleEnabled}
-                onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
+                onShuffleChange={(value) => {
+                  if (value && sidRadio.active) stationHandover.requestShuffleQueue(() => setShuffleEnabled(true));
+                  else setShuffleEnabled(Boolean(value));
+                }}
+                repeatOneEnabled={repeatOneEnabled}
+                onRepeatOneChange={setRepeatOneEnabled}
                 repeatEnabled={repeatEnabled}
                 onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
                 onReshuffle={handleReshuffle}

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 
@@ -23,6 +23,32 @@ const renderDialog = (stationTuneCount: number, playlistTuneCount: number | null
   );
 
 describe("StationQueueEditedDialog", () => {
+  it("explains replacement before shuffling radio tunes and lets Cancel keep the station running", () => {
+    const keep = vi.fn(),
+      dismiss = vi.fn(),
+      restore = vi.fn();
+    render(
+      <StationQueueEditedDialog
+        open
+        shuffleRequested
+        stationTuneCount={200}
+        playlistTuneCount={40}
+        onKeepStationTunes={keep}
+        onDismiss={dismiss}
+        onReturnToPlaylist={restore}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Shuffle these radio tunes?" })).toBeVisible();
+    expect(screen.getByTestId("station-queue-edited-dialog")).toHaveTextContent(
+      "replaces your saved playlist of 40 tunes",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(dismiss).toHaveBeenCalledOnce();
+    expect(restore).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Shuffle radio tunes" }));
+    expect(keep).toHaveBeenCalledOnce();
+  });
+
   it("names what is kept and what comes back, with their sizes", () => {
     renderDialog(12, 40);
     const dialog = screen.getByTestId("station-queue-edited-dialog");

@@ -30,7 +30,20 @@ const createPlaylistItem = (id: string): PlaylistItem => ({
 });
 
 describe("usePlaylistManager", () => {
+  it("remembers repeat-one across Play page remounts and lets the listener turn it off", () => {
+    const first = renderHook(() => usePlaylistManager());
+    expect(first.result.current.repeatOneEnabled).toBe(false);
+    act(() => first.result.current.setRepeatOneEnabled(true));
+    first.unmount();
+    const next = renderHook(() => usePlaylistManager());
+    expect(next.result.current.repeatOneEnabled).toBe(true);
+    act(() => next.result.current.setRepeatOneEnabled(false));
+    expect(next.result.current.repeatOneEnabled).toBe(false);
+    expect(localStorage.getItem("c64u_repeat_one_enabled")).toBe("0");
+  });
+
   beforeEach(() => {
+    localStorage.clear();
     vi.useFakeTimers();
   });
 

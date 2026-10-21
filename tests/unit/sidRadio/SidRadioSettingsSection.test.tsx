@@ -39,6 +39,7 @@ import {
   loadLocalSidModelFromDevice,
   loadSidEmulationEngine,
   loadSidRadioEnabled,
+  loadSidRadioQueueLimit,
   saveLearnedDeviceSidModel,
   saveLocalEngineEnabled,
   saveLocalSidModelFromDevice,
@@ -161,6 +162,22 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     for (const ms of [0, 600, 1500, 3000]) {
       expect(getByTestId(`settings-crossfade-${ms}`)).not.toBeDisabled();
     }
+  });
+
+  it("edits the radio queue limit and restores a valid default after clearing it", () => {
+    render(<SidRadioSettingsSection />);
+    const input = screen.getByRole("spinbutton", { name: "Radio playlist limit" });
+    expect(input).toHaveValue(200);
+    fireEvent.change(input, { target: { value: "40" } });
+    fireEvent.blur(input);
+    expect(loadSidRadioQueueLimit()).toBe(40);
+    fireEvent.change(input, { target: { value: "5000" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(1000);
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(200);
+    expect(loadSidRadioQueueLimit()).toBe(200);
   });
 
   it("offers the shortest-tune setting without developer mode", () => {

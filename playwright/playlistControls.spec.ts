@@ -126,6 +126,73 @@ test.describe("Playlist controls and advanced features", () => {
     },
   );
 
+  test("playlist title and filter scroll away with the rows and return for editing @layout", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem(
+        "c64u_playlist:v1:default",
+        JSON.stringify({
+          currentIndex: -1,
+          items: Array.from({ length: 80 }, (_, i) => ({
+            source: "ultimate",
+            path: "/Usb0/Track-" + i + ".sid",
+            name: "Track-" + i + ".sid",
+            durationMs: 60000,
+          })),
+        }),
+      );
+    });
+    await page.goto("/play");
+    const playlist = page.getByTestId("play-section-playlist");
+    await playlist.getByRole("button", { name: "View all" }).click();
+    const sheet = page.getByRole("dialog");
+    const title = sheet.getByRole("heading", { name: "Playlist", exact: true });
+    const toggle = sheet.getByTestId("view-all-filter-toggle");
+    await toggle.click();
+    const filter = sheet.getByTestId("view-all-filter-input");
+    await expect(filter).toBeVisible();
+    const scroller = sheet.locator('[data-virtuoso-scroller="true"]');
+    await scroller.evaluate((element) => {
+      element.scrollTop = 500;
+    });
+    await expect
+      .poll(async () =>
+        title.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().bottom < viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await expect
+      .poll(async () =>
+        filter.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().bottom < viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await snap(page, testInfo, "playlist-scrolled-without-fixed-header");
+    await filter.focus();
+    await expect(filter).toBeFocused();
+    await expect
+      .poll(async () =>
+        filter.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().top >= viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await filter.fill("no matching tune");
+    await expect(sheet.getByText(/No items match the filter/)).toBeVisible();
+    await filter.clear();
+    await expect(sheet.getByTestId("playlist-item").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+  });
+
   test("shuffle mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -210,7 +277,9 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(page.getByTestId("playlist-list")).not.toContainText(/demo\s?SID/i);
   });
 
-  test("repeat mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("repeat cycles through off, playlist and current tune @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
@@ -221,10 +290,15 @@ test.describe("Playlist controls and advanced features", () => {
     await page.getByTestId("playback-repeat").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    const repeatCheckbox = page.getByTestId("playback-repeat");
+    const repeatButton = page.getByTestId("playback-repeat");
 
-    await repeatCheckbox.click();
-    await expect(repeatCheckbox).toBeChecked();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: off");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: playlist");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: tune");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: off");
     await snap(page, testInfo, "repeat-enabled");
   });
 

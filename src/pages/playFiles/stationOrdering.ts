@@ -20,9 +20,8 @@
  *  - Repeat sends the cursor back into tracks the station has already served, which is heard as the
  *    station repeating itself.
  *
- * The controls are hidden while a station runs, but hiding a control is a statement about the screen
- * and not about the traversal — the stored values were still being read. This is where the traversal
- * itself is told to ignore them, so the two cannot drift apart.
+ * Shuffle offers conversion to a regular playlist while a station runs. Repeat-one is handled
+ * separately by playback. Queue traversal ignores stored shuffle and repeat-all preferences here.
  *
  * Nothing is written: the listener's own Shuffle and Repeat values are left untouched and apply
  * again the moment the station stops.

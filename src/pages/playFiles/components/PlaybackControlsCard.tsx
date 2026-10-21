@@ -14,7 +14,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Loader2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -141,6 +141,8 @@ export type PlaybackControlsCardProps = {
   volumeControls: ReactNode;
   shuffleEnabled: boolean;
   onShuffleChange: (value: boolean) => void;
+  repeatOneEnabled: boolean;
+  onRepeatOneChange: (value: boolean) => void;
   repeatEnabled: boolean;
   onRepeatChange: (value: boolean) => void;
   onReshuffle: () => void;
@@ -158,7 +160,7 @@ export type PlaybackControlsCardProps = {
    * station never moves the title or the transport underneath it.
    */
   stationIndicator?: ReactNode;
-  /** True while a SID Radio station drives the queue — hides Shuffle/Repeat/Reshuffle (§5.3, principle 9). */
+  /** True while a SID Radio station drives the queue — offers to keep and shuffle its queue; hides Reshuffle; Repeat cycles between off and tune (§5.3, principle 9). */
   stationActive?: boolean;
 };
 
@@ -167,6 +169,7 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   play: 110,
   pause: 120,
   next: 130,
+  repeat: 170,
   reshuffle: 180,
 } as const;
 
@@ -361,6 +364,8 @@ export const PlaybackControlsCard = ({
   volumeControls,
   shuffleEnabled,
   onShuffleChange,
+  repeatOneEnabled = false,
+  onRepeatOneChange,
   repeatEnabled,
   onRepeatChange,
   onReshuffle,
@@ -457,6 +462,11 @@ export const PlaybackControlsCard = ({
     order: PLAY_TRANSPORT_FOCUS_ORDER.next,
     group: "play-transport",
     disabled: !canTransport || !hasNext,
+  });
+  const repeatFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-repeat",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.repeat,
+    group: "play-transport",
   });
   const reshuffleFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-reshuffle",
@@ -796,49 +806,40 @@ export const PlaybackControlsCard = ({
             />
           </div>
           {volumeControls}
-          {/* The whole order row goes while a station drives the queue — removed, not greyed.
-
-            A station is a mode, not a passing unavailability. The rule is to disable what will come
-            back on its own and to remove what has no meaning in the current mode, and nothing the
-            listener can do brings Shuffle, Repeat or Reshuffle back while a station runs: the
-            station owns the order by definition, so they return only by stopping it. Greying is
-            usually defended as teaching that a control exists, but that argument is paid for here by
-            the source line at the top of the card, which names the station and carries Stop — and it
-            was never actually being made, because the only explanation these controls carried was a
-            `title` tooltip and there is no hover on the phone this ships to.
-
-            The row holds nothing else. Recurse used to sit here and would have been left alone in an
-            otherwise empty row; it is now in the Add items sheet, next to the folders it applies to.
-            A radio station is something you listen to, so what is left on this card during one is
-            the transport and the ranking pair, and the vertical space is given back rather than
-            spent on controls that do nothing.
-
-            Nothing above this moves: the row is the last thing in the card, so dropping it only
-            shortens the card from the bottom. */}
-          {stationActive ? null : (
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex min-h-11 items-center gap-2 text-xs">
-                <Checkbox
-                  checked={shuffleEnabled}
-                  onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-                  aria-label="Shuffle"
-                  data-testid="playback-shuffle"
-                />
-                <span className="flex items-center gap-1">
-                  <Shuffle className="h-3.5 w-3.5" /> Shuffle
-                </span>
-              </label>
-              <label className="flex min-h-11 items-center gap-2 text-xs">
-                <Checkbox
-                  checked={repeatEnabled}
-                  onCheckedChange={(value) => onRepeatChange(Boolean(value))}
-                  aria-label="Repeat"
-                  data-testid="playback-repeat"
-                />
-                <span className="flex items-center gap-1">
-                  <Repeat className="h-3.5 w-3.5" /> Repeat
-                </span>
-              </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex min-h-11 items-center gap-2 text-xs">
+              <Checkbox
+                checked={!stationActive && shuffleEnabled}
+                onCheckedChange={(value) => onShuffleChange(Boolean(value))}
+                aria-label="Shuffle"
+                data-testid="playback-shuffle"
+              />
+              <span className="flex items-center gap-1">
+                <Shuffle className="h-3.5 w-3.5" /> Shuffle
+              </span>
+            </label>
+            <Button
+              ref={repeatFocusRef}
+              variant="outline"
+              size="sm"
+              data-testid="playback-repeat"
+              aria-label={`Repeat: ${repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off"}`}
+              onClick={() => {
+                if (repeatOneEnabled) {
+                  onRepeatOneChange(false);
+                  onRepeatChange(false);
+                } else if (stationActive || repeatEnabled) {
+                  onRepeatChange(false);
+                  onRepeatOneChange(true);
+                } else {
+                  onRepeatChange(true);
+                }
+              }}
+            >
+              {repeatOneEnabled ? <Repeat1 /> : <Repeat />}
+              Repeat: {repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off"}
+            </Button>
+            {stationActive ? null : (
               <Button
                 ref={reshuffleFocusRef}
                 variant="outline"
@@ -848,18 +849,13 @@ export const PlaybackControlsCard = ({
                 id="playlist-reshuffle"
                 data-testid="playlist-reshuffle"
                 data-active={reshuffleActive ? "true" : "false"}
-                // Non-destructive shuffle (HARD9-007) never reorders the visible
-                // playlist, so the live seed of the next/prev order layer is
-                // surfaced here as a diagnostic: a changed value proves Reshuffle
-                // re-seeded the traversal without disturbing the curated list.
                 data-shuffle-seed={shuffleSeed ?? ""}
                 className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
               >
-                <Shuffle className="h-4 w-4 mr-1" />
-                Reshuffle
+                <Shuffle className="h-4 w-4 mr-1" /> Reshuffle
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         {/* Below the transport: credits, facts and STIL change height between tunes, and the buttons must not. */}
         {hasCurrentItem ? (

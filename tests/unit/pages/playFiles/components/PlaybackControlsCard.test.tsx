@@ -84,6 +84,8 @@ const buildProps = ({
   volumeControls: <div data-testid="volume-controls-placeholder" />,
   shuffleEnabled: false,
   onShuffleChange: vi.fn(),
+  repeatOneEnabled: false,
+  onRepeatOneChange: vi.fn(),
   repeatEnabled: false,
   onRepeatChange: vi.fn(),
   onReshuffle: vi.fn(),
@@ -332,34 +334,25 @@ describe("PlaybackControlsCard", () => {
     }
   });
 
-  /**
-   * A station is a mode, not a passing unavailability: nothing the user can do re-enables Shuffle,
-   * Repeat or Reshuffle while one runs, because the station owns the play order by definition. So
-   * they are removed rather than greyed, and the row they sat in goes with them — a row left holding
-   * one control, or a row of greyed controls, would spend vertical space on nothing.
-   */
-  it("drops the whole order row while a station runs, leaving the transport and the ranking pair", () => {
-    const { container } = render(
-      <PlaybackControlsCard {...buildProps({ stationActive: true, reshuffleDisabled: false })} />,
-    );
-
-    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
-    expect(screen.queryByTestId("playback-repeat")).toBeNull();
+  it("offers shuffle and repeat-one during a station while hiding reshuffle", () => {
+    const props = buildProps({ stationActive: true, reshuffleDisabled: false });
+    render(<PlaybackControlsCard {...props} />);
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "unchecked");
     expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
-    // Recurse is no longer a playback control at all; it lives in the Add items sheet.
-    expect(screen.queryByTestId("playback-recurse")).toBeNull();
-    // What a listener still needs is untouched.
-    expect(screen.getByTestId("playback-transport-row")).toBeInTheDocument();
-    // And the space is actually given back, rather than an empty row being left behind. Counted
-    // against the same render with no station, so the assertion cannot pass by naming a class that
-    // is never present.
-    const rowsDuringStation = container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length;
-    cleanup();
-    const idle = render(<PlaybackControlsCard {...buildProps({ reshuffleDisabled: false })} />);
-    expect(idle.container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length).toBeGreaterThan(
-      rowsDuringStation,
-    );
-    expect(rowsDuringStation).toBe(0);
+    expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: off");
+    fireEvent.click(screen.getByTestId("playback-repeat"));
+    expect(props.onRepeatOneChange).toHaveBeenCalledWith(true);
+  });
+
+  it("cycles repeat from playlist to tune to off with a single control", () => {
+    const props = buildProps({ repeatEnabled: true });
+    const { rerender } = render(<PlaybackControlsCard {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Repeat: playlist" }));
+    expect(props.onRepeatChange).toHaveBeenCalledWith(false);
+    expect(props.onRepeatOneChange).toHaveBeenCalledWith(true);
+    rerender(<PlaybackControlsCard {...props} repeatEnabled={false} repeatOneEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Repeat: tune" }));
+    expect(props.onRepeatOneChange).toHaveBeenLastCalledWith(false);
   });
 
   it("puts the order controls back, with the values the user had, once the station stops", () => {
@@ -368,12 +361,12 @@ describe("PlaybackControlsCard", () => {
     const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
     const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
 
-    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "unchecked");
 
     rerender(<PlaybackControlsCard {...props} stationActive={false} />);
 
     expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "checked");
-    expect(screen.getByTestId("playback-repeat")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: playlist");
     expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
   });
 

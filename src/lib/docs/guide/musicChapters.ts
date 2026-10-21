@@ -124,19 +124,25 @@ export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
       ],
     },
     {
+      kind: "tip",
+      text: isKeypadEdition(variantId)
+        ? "Android's system picker for local files, folders and .cfg imports uses the opposite soft keys from this app: the right soft key is Back, and the left opens its menu. Press the right soft key to cancel without selecting anything. If a menu, search or folder is open, press it again until C64U Remote returns. C= opens the phone's Home screen and does not cancel the picker."
+        : "In Android's system file or folder picker, use Android Back to cancel without choosing anything. Back may first close a menu or leave a folder; press it again to return to the app.",
+    },
+    {
       kind: "steps",
       heading: "Choose the order",
       items: [
         "Items play in the order you added them. Rows cannot be moved, so add folders in the order you want to hear them.",
         "Tick **Shuffle** to play in a random order; **Reshuffle** picks a new one. The list itself keeps its order.",
-        "Tick **Repeat** to start again after the last item.",
+        "Press **Repeat** to cycle through **off**, **playlist** (start again after the last item), and **tune** (play the current tune indefinitely). Next and Previous still change tunes.",
       ],
     },
     {
       kind: "steps",
       heading: "Trim it",
       items: [
-        "Open **View all** when the list is long.",
+        "Open **View all** when the list is long. Its title and filter scroll away with the rows; scroll back to the top to filter again, or use Back to close the sheet.",
         "Tick the rows you do not want, or **Select all**.",
         "Choose **Remove selected items**. **Clear playlist** empties it after asking.",
       ],
@@ -179,7 +185,11 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
     },
     {
       kind: "tip",
-      text: "Set a **Sleep timer** under the transport controls if you listen at bedtime. A station never stops on its own.",
+      text: "Radio keeps at most 200 automatically queued tunes, including the current tune and those queued next. Older played tunes leave the list. Change **Settings → SID Radio → Radio playlist limit** (20–1000). Tunes you added yourself stay. **Repeat: tune** holds the current tune; turn it off to continue the station. **Shuffle** offers to stop radio and use its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; Cancel keeps radio running. **Reshuffle** returns after radio stops.",
+    },
+    {
+      kind: "text",
+      text: "Set a **Sleep timer** under the transport controls if you listen at bedtime.",
     },
   ],
 });

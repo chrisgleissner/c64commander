@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { loadRepeatOneEnabled, saveRepeatOneEnabled } from "@/lib/config/appSettings";
 import { CATEGORY_OPTIONS, generateShuffleSeed } from "../playFilesUtils";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -20,6 +21,11 @@ export function usePlaylistManager() {
   // resolveNextPlaylistIndex/resolvePreviousPlaylistIndex in
   // playFilesUtils.ts). See HARD9-007.
   const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
+  const [repeatOneEnabled, setRepeatOneState] = useState(loadRepeatOneEnabled);
+  const setRepeatOneEnabled = (value: boolean) => {
+    saveRepeatOneEnabled(value);
+    setRepeatOneState(value);
+  };
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
@@ -78,6 +84,8 @@ export function usePlaylistManager() {
     setShuffleEnabled,
     shuffleSeed,
     setShuffleSeed,
+    repeatOneEnabled,
+    setRepeatOneEnabled,
     repeatEnabled,
     setRepeatEnabled,
     playlistTypeFilters,

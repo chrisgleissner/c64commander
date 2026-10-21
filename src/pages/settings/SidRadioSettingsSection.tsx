@@ -14,6 +14,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
+  DEFAULT_SID_RADIO_QUEUE_LIMIT,
+  MIN_SID_RADIO_QUEUE_LIMIT,
+  MAX_SID_RADIO_QUEUE_LIMIT,
+  loadSidRadioQueueLimit,
+  saveSidRadioQueueLimit,
   saveSidRadioEnabled,
   saveSidRankingEnabled,
   saveLocalEngineEnabled,
@@ -120,6 +125,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   // also have been learned from the machine while this screen was open.
   const effectiveSidModel = useLocalSidModel();
   const learnedSidModel = useLearnedDeviceSidModel();
+  const [queueLimit, setQueueLimit] = useState(() => String(loadSidRadioQueueLimit()));
   const [minSeconds, setMinSeconds] = useState<number>(loadSidRadioMinSeconds);
   const [crossfadeMs, setCrossfadeMs] = useState<number>(() => loadPlaybackCrossfadeMs());
   // Crossfading needs two tunes sounding at once. The C64 has one SID and
@@ -165,6 +171,28 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             onChange={saveSidRankingEnabled}
           />
         ) : null}
+
+        <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0">
+          <Label htmlFor="radio-queue-limit">Radio playlist limit</Label>
+          <p className="text-xs text-muted-foreground">
+            Keeps the newest radio tunes, including those queued next. Default {DEFAULT_SID_RADIO_QUEUE_LIMIT}. Older
+            played tunes leave the playlist; your own additions stay.
+          </p>
+          <Input
+            id="radio-queue-limit"
+            aria-label="Radio playlist limit"
+            type="number"
+            min={MIN_SID_RADIO_QUEUE_LIMIT}
+            max={MAX_SID_RADIO_QUEUE_LIMIT}
+            value={queueLimit}
+            inputMode="numeric"
+            onChange={(event) => setQueueLimit(event.target.value)}
+            onBlur={() => {
+              saveSidRadioQueueLimit(queueLimit.trim() ? Number(queueLimit) : DEFAULT_SID_RADIO_QUEUE_LIMIT);
+              setQueueLimit(String(loadSidRadioQueueLimit()));
+            }}
+          />
+        </div>
 
         <div
           className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0"

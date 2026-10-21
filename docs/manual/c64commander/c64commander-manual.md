@@ -188,6 +188,8 @@ Choose **Add items** (it reads **Add more items** once the list has something in
 
 The picker stays inside the source you chose, so **Up** never wanders off somewhere else. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means just that folder or everything beneath it. That can be the difference between adding twelve files and twelve thousand.
 
+**Leaving Android's system picker.** Use Android **Back** to cancel a local file, folder or `.cfg` selection without choosing anything. Back may first close a menu or leave a folder; press it again to return to the app.
+
 > **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue. On a small screen the button sits at the top of the sheet and reads **Add** with the count.
 
 ![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
@@ -196,7 +198,9 @@ Play handles SID and MOD music, PRG programs, CRT cartridges, and disk images. O
 
 ![Playlist view all](../../img/app/play/profiles/medium/02-view-all.png)
 
-A playlist can hold a single song, or a whole evening's worth.
+![Playlist while scrolling, with title and filter out of view](../../img/app/play/profiles/medium/03-view-all-scrolled.png)
+
+A playlist can hold a single song, or a whole evening's worth. In **View all**, the title and filter scroll out of view with the rows. Scroll to the top to filter again, or press **Back** to close the sheet.
 
 A short list fits on the Play page. When it grows, open **View all**. There you have room to scan, filter, select and remove, with the playback controls still in sight. **Settings → Play and disk → List preview limit** sets how many rows Play shows before you need View all; it starts at 50.
 
@@ -215,6 +219,8 @@ Every item remembers where it came from. Local files stay local, C64U files poin
 Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and disk → Friendly SID names**.
 
 The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
+
+Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; **Reshuffle** chooses a new order.
 
 **Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
@@ -620,7 +626,9 @@ Your choices stay on your phone or tablet. They belong to the music itself, not 
 
 **It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.
 
-While a station runs, it chooses what comes next, so Shuffle, Repeat and Reshuffle step aside. They come back, settings intact, the moment you stop it.
+Radio keeps at most **200 automatically queued tunes**, including the current tune and lookahead. Older played tunes leave the playlist. Change **Settings → SID Radio → Radio playlist limit** from **20** to **1000**; older history is trimmed as playback advances. Your own additions, the playing tune and upcoming tunes are kept. The limit does not remove files from HVSC or affect your saved playlist.
+
+While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Reshuffle** returns after the station stops. **Repeat** cycles between **off** and **tune**: tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if repeat-one was on.
 
 The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
 
@@ -662,7 +670,7 @@ The second is what the individual tunes inside a file are called. A list of nine
 
 #### Stopping later
 
-A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
+Set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
 
 ### Live View
 
