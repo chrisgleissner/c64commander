@@ -128,7 +128,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toMatch(
       /const traversalOrdering = resolveTraversalOrdering\(\s*\{ repeatEnabled, shuffleEnabled \},\s*stationHandover\.stationOrdersQueue,?\s*\);/,
     );
-    expect(playFilesPageSource).toContain("stationActiveRef },");
+    expect(playFilesPageSource).toMatch(/playback:\s*\{[^}]*\bstationActiveRef,/);
     for (const helper of ["canAdvancePrevious", "canAdvanceNext"]) {
       const call = playFilesPageSource.slice(playFilesPageSource.indexOf(`${helper}(`));
       expect(call.slice(0, 200)).toContain("traversalOrdering.repeatEnabled");

@@ -497,9 +497,15 @@ export const SelectableActionList = ({
     estimatedItemHeight,
     viewAllOpen ? letterIndexSource : undefined,
   );
-  // The rail's 2.75rem strip spans the sheet's and card's right padding; rows give up only the rest,
-  // and its letters are centred over the card padding plus that lane.
-  const letterRailLaneClass = letterRail.eligible ? (isCompact ? "pr-5" : "pr-3") : undefined;
+  // Scrolling headers use the whole sheet width, so reserve the rail's full 2.75rem touch strip.
+  // Pinned headers retain the card padding that already supplies part of that strip.
+  const letterRailLaneClass = letterRail.eligible
+    ? scrollViewAllHeader
+      ? "pr-11"
+      : isCompact
+        ? "pr-5"
+        : "pr-3"
+    : undefined;
   const letterColumnClass = isCompact ? "pr-3.5" : "pr-9";
   // Level with the list itself, inside the card's rounded corners: body padding, border, card padding.
   const letterRailBoundsClass = isCompact
