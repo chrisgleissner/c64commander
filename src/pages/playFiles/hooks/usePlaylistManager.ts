@@ -15,12 +15,16 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 export function usePlaylistManager() {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
-  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [shuffleEnabled, setShuffleState] = useState(false);
+  const shuffleEnabledRef = useRef(false);
   // The curated playlist array is never reordered for shuffle - it is a
   // non-destructive playback-order layer keyed by this seed (see
   // resolveNextPlaylistIndex/resolvePreviousPlaylistIndex in
   // playFilesUtils.ts). See HARD9-007.
   const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
+  const [shuffleAnchorId, setShuffleAnchorId] = useState<string | null>(null);
+  const shuffleContextRef = useRef({ playlist, currentIndex });
+  shuffleContextRef.current = { playlist, currentIndex };
   const [repeatOneEnabled, setRepeatOneState] = useState(loadRepeatOneEnabled);
   const setRepeatOneEnabled = (value: boolean) => {
     saveRepeatOneEnabled(value);
@@ -30,9 +34,16 @@ export function usePlaylistManager() {
   const [playlistTypeFilters, setPlaylistTypeFilters] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
-  const [reshuffleActive, setReshuffleActive] = useState(false);
-
-  const reshuffleTimerRef = useRef<number | null>(null);
+  // Changing traversal order never changes the playing item or its playback clock.
+  const setShuffleEnabled = useCallback((enabled: boolean) => {
+    if (enabled && !shuffleEnabledRef.current) {
+      setShuffleSeed(generateShuffleSeed());
+      const context = shuffleContextRef.current;
+      setShuffleAnchorId(context.playlist[Math.max(0, context.currentIndex)]?.id ?? null);
+    }
+    shuffleEnabledRef.current = enabled;
+    setShuffleState(enabled);
+  }, []);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -43,37 +54,14 @@ export function usePlaylistManager() {
     });
   }, [playlist]);
 
-  // Lazily generate a shuffle order the first time shuffle is turned on.
+  // Legacy sessions may have no seed/anchor; Shuffle can also be enabled before adding songs.
   useEffect(() => {
-    if (shuffleEnabled && shuffleSeed === null) {
-      setShuffleSeed(generateShuffleSeed());
+    if (!shuffleEnabled) return;
+    if (shuffleSeed === null) setShuffleSeed(generateShuffleSeed());
+    if (shuffleAnchorId === null && playlist.length) {
+      setShuffleAnchorId(playlist[Math.max(0, currentIndex)]?.id ?? playlist[0].id);
     }
-  }, [shuffleEnabled, shuffleSeed]);
-
-  const handleReshuffle = useCallback(() => {
-    if (!shuffleEnabled || !playlist.length) return;
-    setReshuffleActive(true);
-    if (reshuffleTimerRef.current) {
-      window.clearTimeout(reshuffleTimerRef.current);
-    }
-    reshuffleTimerRef.current = window.setTimeout(() => {
-      setReshuffleActive(false);
-      reshuffleTimerRef.current = null;
-    }, 200);
-    // "Reshuffle" is a new seed for the non-destructive order layer, not a
-    // physical reorder of the curated playlist.
-    setShuffleSeed(generateShuffleSeed());
-  }, [playlist.length, shuffleEnabled]);
-
-  useEffect(
-    () => () => {
-      if (reshuffleTimerRef.current) {
-        window.clearTimeout(reshuffleTimerRef.current);
-        reshuffleTimerRef.current = null;
-      }
-    },
-    [],
-  );
+  }, [shuffleEnabled, shuffleSeed, shuffleAnchorId, playlist, currentIndex]);
 
   return {
     playlist,
@@ -84,6 +72,8 @@ export function usePlaylistManager() {
     setShuffleEnabled,
     shuffleSeed,
     setShuffleSeed,
+    shuffleAnchorId,
+    setShuffleAnchorId,
     repeatOneEnabled,
     setRepeatOneEnabled,
     repeatEnabled,
@@ -94,8 +84,5 @@ export function usePlaylistManager() {
     setSelectedPlaylistIds,
     isPlaylistLoading,
     setIsPlaylistLoading,
-    reshuffleActive,
-    setReshuffleActive,
-    handleReshuffle,
   };
 }

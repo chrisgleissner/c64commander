@@ -1,3 +1,4 @@
+import { assertPlaybackModeLayout } from "./playbackModeLayout";
 /*
  * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
  * Copyright (C) 2026 Christian Gleissner
@@ -3255,6 +3256,8 @@ test.describe("App screenshots", () => {
       // One rendition per manual profile; each manual embeds only its own.
       for (const profileId of MANUAL_PROFILE_SEQUENCE) {
         await applyDisplayProfileViewport(page, profileId);
+        await scrollTestIdToTopOfScroller(page, "playback-current-track");
+        await assertPlaybackModeLayout(page);
         await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "01-controls.png"));
       }
       await expect(badge).toHaveAttribute("data-health-state", "Healthy");

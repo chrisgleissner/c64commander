@@ -216,11 +216,11 @@ Every item remembers where it came from. Local files stay local, C64U files poin
 
 Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and disk → Friendly SID names**.
 
-The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
+The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
 
-Three icons share one row: **Shuffle** (crossed arrows), **Repeat** (loop arrows), and **Reshuffle** (circular arrows). A dot beneath Shuffle or Repeat means it is on; a **1** in the Repeat loop means only this tune.
+The volume row holds speaker/mute, the slider, the dB value, **Shuffle** (crossed arrows) and **Repeat** (loop arrows). The mode buttons align with × and heart beside the metadata above the transport. Highlighted buttons with a dot are on; a **1** inside Repeat means only this tune.
 
-Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; **Reshuffle** chooses a new order.
+Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.
 
 **Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
@@ -628,7 +628,7 @@ Your choices stay on your phone. They belong to the music itself, not to a file 
 
 Radio keeps at most **200 automatically queued tunes**, including the current tune and lookahead. Older played tunes leave the playlist. Change **Settings → SID Radio → Radio playlist limit** from **20** to **1000**; older history is trimmed as playback advances. Your own additions, the playing tune and upcoming tunes are kept. The limit does not remove files from HVSC or affect your saved playlist.
 
-While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Reshuffle** returns after the station stops. **Repeat** cycles between **off** and **tune**: tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if repeat-one was on.
+While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Repeat** cycles **off → playlist → tune → off**: playlist wraps the retained queue if it runs out, and tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if Repeat was on.
 
 The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
 
@@ -1172,7 +1172,7 @@ The best place to look is listed first, in bold.
 | Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on under **Home printer shortcut actions** in Settings → Experimental Features. |
 | Full configuration tree | **Config** | Use search, open a category, edit rows. |
 | Add playlist items | **Play → Add items** | Sources: Local, C64U, HVSC, CommoServe. |
-| Playback controls | **Play** | Play, stop, pause, previous and next, shuffle, repeat, reshuffle, volume. |
+| Playback controls | **Play** | Play, stop, pause, previous and next, shuffle, repeat, volume. |
 | Sleep timer, default duration, songlengths file | **Play** | Beneath the transport controls. |
 | Per-item playback config | **Play → item menu** | Apply a device configuration before one playlist item runs. |
 | HVSC preparation | **Play → Add items**, card at the foot of Play | On by default. Turn it off under **HVSC downloads** in Settings → Stable Features. Settings → HVSC holds the mirror and the update check. |

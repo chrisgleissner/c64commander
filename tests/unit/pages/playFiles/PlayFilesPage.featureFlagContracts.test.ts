@@ -126,7 +126,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
     // traversal reads that from the handover. Reading `sidRadio.active` here showed Next as enabled on
     // that last tune when Repeat was on, while tapping it did nothing.
     expect(playFilesPageSource).toMatch(
-      /const traversalOrdering = resolveTraversalOrdering\(\s*\{ repeatEnabled, shuffleEnabled \},\s*stationHandover\.stationOrdersQueue,?\s*\);/,
+      /const traversalOrdering = resolveTraversalOrdering\(\s*\{ repeatEnabled, shuffleEnabled \},\s*stationHandover\.stationOrdersQueue,\s*stationFinishingRef\.current,?\s*\);/,
     );
     expect(playFilesPageSource).toMatch(/playback:\s*\{[^}]*\bstationActiveRef,/);
     for (const helper of ["canAdvancePrevious", "canAdvanceNext"]) {

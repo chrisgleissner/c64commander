@@ -42,8 +42,9 @@ re-measure the physical scan codes.
   keep their normal meaning.
 - View-all title/filter live inside the virtual scroller; filtering keeps the
   input mounted, including empty results.
-- The Shuffle, Repeat and Reshuffle icon buttons share one row at 320 × 426 CSS
-  pixels, with 44 × 44 targets, named button roles and exposed toggle states.
+- The Shuffle and Repeat icon buttons share the volume row at 320 × 426 CSS
+  pixels, with 44 × 44 targets, 20px icons, named button roles and exposed toggle states.
+  Their columns match the neutral × and heart beside the facts. Credits stay below the title and before the transport.
+- Each new shuffle cycle starts at the current tune and visits every other item once, including without Repeat; its anchor survives session restoration.
 
-The cap, repeat-restart race, scrolling-header and compact icon-row regressions were each observed
-failing with their respective fix removed.
+The cap, repeat-restart race and scrolling-header regressions were observed failing with their respective fix removed. The Shuffle off/on regression failed against the previous seed-reuse behavior.

@@ -956,7 +956,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-populated");
   });
 
-  test("reshuffle re-seeds the playback order and keeps the current track index and curated list", async ({
+  test("shuffle off/on re-seeds the playback order and keeps the current track index and curated list", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const playlistItems: Array<{
@@ -1021,9 +1021,10 @@ test.describe("Playback file browser (part 2)", () => {
     // currently-playing track is unaffected. Prove the reshuffle happened via
     // the seed diagnostic, then assert the visible order and the current
     // track's position are both preserved.
-    const reshuffleButton = page.getByTestId("playlist-reshuffle");
+    const reshuffleButton = page.getByTestId("playback-shuffle");
     const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
 
+    await reshuffleButton.click();
     await reshuffleButton.click();
     await snap(page, testInfo, "reshuffle-clicked");
 
@@ -1509,21 +1510,17 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-bounds");
   });
 
-  test("reshuffle button does not stick", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("shuffle off/on keeps the new order selected", async ({ page }, testInfo) => {
     await page.goto("/play");
-    await openAddItemsDialog(page);
-    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
-    await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
-    await expect(page.getByRole("dialog")).toBeHidden();
-
-    await page.getByTestId("playback-shuffle").click();
-    const reshuffle = page.getByTestId("playlist-reshuffle");
-    await expect(reshuffle).toBeEnabled();
-    await reshuffle.click();
-    await expect(reshuffle).toHaveAttribute("data-active", "true");
-    await expect.poll(async () => reshuffle.getAttribute("data-active")).toBe("false");
-    await snap(page, testInfo, "reshuffle-momentary");
+    const shuffle = page.getByTestId("playback-shuffle");
+    await shuffle.click();
+    const seed = await shuffle.getAttribute("data-shuffle-seed");
+    await shuffle.click();
+    await expect(shuffle).toHaveAttribute("aria-pressed", "false");
+    await shuffle.click();
+    await expect(shuffle).toHaveAttribute("aria-pressed", "true");
+    await expect(shuffle).not.toHaveAttribute("data-shuffle-seed", seed!);
+    await snap(page, testInfo, "shuffle-new-order-selected");
   });
 
   test("FTP failure shows the browse error inside the browser", async ({

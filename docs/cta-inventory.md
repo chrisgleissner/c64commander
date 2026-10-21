@@ -411,10 +411,9 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
 - Volume — slider — `volume-slider` — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
   the former `volume-caption` label is gone, the readout is fixed-width so the row cannot reflow
 - Shuffle — icon toggle button — `playback-shuffle` — R✅ I✅ — during radio, opens a confirmation to stop the station and keep its queued tunes as a shuffled playlist; confirming replaces the saved pre-radio playlist. Cancel leaves radio running.
-- Repeat — icon mode button — ring ID `play-transport-repeat`, group `play-transport`, order 170 — `playback-repeat` — cycles **off → playlist → tune → off**; during a station,
-  **off → tune → off**. Its accessible name includes the mode. Manual skips remain available.
-- Reshuffle — icon button (circular arrows) — `playlist-reshuffle` — R✅ I✅ `[disabled: shuffle off or fewer than two items]`;
-  not rendered during a station.
+- Repeat — icon mode button — ring ID `play-transport-repeat`, group `play-transport`, order 170 — `playback-repeat` — cycles **off → playlist → tune → off**, including during a station. Its accessible name includes the mode. Manual skips remain available.
+  Shuffle and Repeat follow the volume readout on one horizontal row, sharing grid columns with × and heart.
+  All four use matching outline buttons, 20px icons and targets of at least 44px. Turn Shuffle off/on for a fresh upcoming order without restarting the tune.
 - Duration — slider — `duration-slider` — R✅ I✅
 - Duration override — text — `duration-input` (`mm:ss`) — R✅ I✅ ; Change — button — R✅ I✅
 - Add (aria-label "Add items to playlist") — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
@@ -503,7 +502,7 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
-- Rank the current tune: thumbs-down / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
+- Rank the current tune: × / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
   same size and chrome as the transport

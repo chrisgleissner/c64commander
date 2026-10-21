@@ -88,10 +88,6 @@ const buildProps = ({
   onRepeatOneChange: vi.fn(),
   repeatEnabled: false,
   onRepeatChange: vi.fn(),
-  onReshuffle: vi.fn(),
-  reshuffleActive: false,
-  reshuffleDisabled: true,
-  shuffleSeed: null,
   ...overrides,
 });
 
@@ -276,7 +272,11 @@ describe("PlaybackControlsCard", () => {
     // Below the title, which keeps the full width to itself.
     expect(titleRow.compareDocumentPosition(rankingRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // shrink-0 so the actions keep their targets whatever the facts line does.
-    expect(rankingRow.className).toContain("shrink-0");
+    expect(rankingRow).toHaveClass("col-span-2");
+    const credits = screen.getByTestId("playback-current-credits");
+    const transport = screen.getByTestId("playback-transport-row");
+    expect(titleRow.compareDocumentPosition(credits) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rankingRow.compareDocumentPosition(transport) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps a long title on one line and does not lose any of it", () => {
@@ -334,8 +334,8 @@ describe("PlaybackControlsCard", () => {
     }
   });
 
-  it("offers shuffle and repeat-one during a station while hiding reshuffle", () => {
-    const props = buildProps({ stationActive: true, reshuffleDisabled: false });
+  it("offers the same shuffle and repeat cycle during a station", () => {
+    const props = buildProps({ stationActive: true });
     render(<PlaybackControlsCard {...props} />);
     expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
@@ -343,11 +343,11 @@ describe("PlaybackControlsCard", () => {
     expect(props.onShuffleChange).toHaveBeenCalledWith(true);
     expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: off");
     fireEvent.click(screen.getByTestId("playback-repeat"));
-    expect(props.onRepeatOneChange).toHaveBeenCalledWith(true);
+    expect(props.onRepeatChange).toHaveBeenCalledWith(true);
   });
 
   it("uses named icon buttons with pressed states and a toggle action for shuffle", () => {
-    const props = buildProps({ reshuffleDisabled: false });
+    const props = buildProps();
     const { rerender } = render(<PlaybackControlsCard {...props} />);
     const shuffle = screen.getByRole("button", { name: "Shuffle", exact: true });
     fireEvent.click(shuffle);
@@ -355,7 +355,7 @@ describe("PlaybackControlsCard", () => {
     rerender(<PlaybackControlsCard {...props} shuffleEnabled repeatOneEnabled />);
     expect(shuffle).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Repeat: tune" })).toHaveAttribute("aria-pressed", "true");
-    for (const name of ["Shuffle", "Repeat: tune", "Reshuffle"]) {
+    for (const name of ["Shuffle", "Repeat: tune"]) {
       const button = screen.getByRole("button", { name, exact: true });
       expect(button.textContent).toBe("");
       expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
@@ -376,8 +376,7 @@ describe("PlaybackControlsCard", () => {
   });
 
   it("puts the order controls back, with the values the user had, once the station stops", () => {
-    // Station traversal preserves the saved shuffle and repeat-all preferences.
-    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
+    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true });
     const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
 
     expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
@@ -386,7 +385,6 @@ describe("PlaybackControlsCard", () => {
 
     expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: playlist");
-    expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
   });
 
   it("centres the transport around a single filled Play, so the card has one focal point", () => {
@@ -427,7 +425,6 @@ describe("PlaybackControlsCard", () => {
       hasPrev: true,
       hasNext: true,
       canPause: true,
-      reshuffleDisabled: false,
     });
 
     // HARD27-039: a keypad user arrives here by key, so the discovery engine is
@@ -447,7 +444,6 @@ describe("PlaybackControlsCard", () => {
     expect(focusContext.current?.engine.sourceForId("play-transport-next")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-shuffle")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-repeat")).toBe("dom+explicit");
-    expect(focusContext.current?.engine.sourceForId("play-transport-reshuffle")).toBe("dom+explicit");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
@@ -461,13 +457,13 @@ describe("PlaybackControlsCard", () => {
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(screen.getByTestId("playlist-next")).toHaveFocus();
 
-    for (let step = 0; step < 8 && document.activeElement !== screen.getByTestId("playlist-reshuffle"); step += 1) {
+    for (let step = 0; step < 8 && document.activeElement !== screen.getByTestId("playback-repeat"); step += 1) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
     }
-    expect(screen.getByTestId("playlist-reshuffle")).toHaveFocus();
+    expect(screen.getByTestId("playback-repeat")).toHaveFocus();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    expect(props.onReshuffle).toHaveBeenCalledTimes(1);
+    expect(props.onRepeatChange).toHaveBeenCalledTimes(1);
   });
 
   it("skips disabled transport CTAs in the keypad focus ring", () => {
@@ -475,7 +471,6 @@ describe("PlaybackControlsCard", () => {
       hasPrev: false,
       canPause: false,
       hasNext: true,
-      reshuffleDisabled: true,
     });
 
     render(
@@ -494,7 +489,6 @@ describe("PlaybackControlsCard", () => {
     expect(props.onNext).toHaveBeenCalledTimes(1);
     expect(props.onPrevious).not.toHaveBeenCalled();
     expect(props.onPauseResume).not.toHaveBeenCalled();
-    expect(props.onReshuffle).not.toHaveBeenCalled();
   });
 
   it("shows what the tune says about itself under the title, smaller than it", () => {

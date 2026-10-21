@@ -14,7 +14,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Loader2, Pause, Play, RefreshCw, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
@@ -137,17 +137,15 @@ export type PlaybackControlsCardProps = {
    * will not.
    */
   renderedPercent?: number;
+  outputSelector?: ReactNode;
   volumeControls: ReactNode;
+  shuffleSeed?: number | null;
   shuffleEnabled: boolean;
   onShuffleChange: (value: boolean) => void;
   repeatOneEnabled: boolean;
   onRepeatOneChange: (value: boolean) => void;
   repeatEnabled: boolean;
   onRepeatChange: (value: boolean) => void;
-  onReshuffle: () => void;
-  reshuffleActive: boolean;
-  reshuffleDisabled: boolean;
-  shuffleSeed: number | null;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
   /**
@@ -159,7 +157,7 @@ export type PlaybackControlsCardProps = {
    * station never moves the title or the transport underneath it.
    */
   stationIndicator?: ReactNode;
-  /** True while a SID Radio station drives the queue — offers to keep and shuffle its queue; hides Reshuffle; Repeat cycles between off and tune (§5.3, principle 9). */
+  /** True while a SID Radio station drives the queue — Shuffle offers to keep its queue as a regular playlist. */
   stationActive?: boolean;
 };
 
@@ -170,7 +168,6 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   next: 130,
   shuffle: 160,
   repeat: 170,
-  reshuffle: 180,
 } as const;
 
 /** How long Previous/Next must be held before it scrubs instead of skipping. */
@@ -361,24 +358,22 @@ export const PlaybackControlsCard = ({
   timeline,
   renderedPercent,
   pendingSeek,
+  outputSelector,
   volumeControls,
+  shuffleSeed,
   shuffleEnabled,
   onShuffleChange,
   repeatOneEnabled = false,
   onRepeatOneChange,
   repeatEnabled,
   onRepeatChange,
-  onReshuffle,
-  reshuffleActive,
-  reshuffleDisabled,
-  shuffleSeed,
   rankingControls,
   stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
-  // The composer link grows upward by up to 44px, so the details need room above it that no control occupies.
+  // Credits clip the composer link's 44px target so it cannot cover the title.
   const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
   const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
@@ -395,7 +390,7 @@ export const PlaybackControlsCard = ({
       part.kind === "author" && onComposerSelected ? (
         <button
           type="button"
-          className="hit-area-44-above z-[1] underline decoration-dotted underline-offset-2 hover:text-foreground"
+          className="hit-area-44-clipped z-[1] underline decoration-dotted underline-offset-2 hover:text-foreground"
           onClick={() => onComposerSelected(part.text)}
           data-testid="playback-current-composer"
           title={`Find more by ${part.text}`}
@@ -417,7 +412,7 @@ export const PlaybackControlsCard = ({
       );
     return (
       <span key={`${part.kind}-${index}`}>
-        <span className="whitespace-nowrap">
+        <span className={part.row === "credits" ? "[overflow-wrap:anywhere]" : "whitespace-nowrap"}>
           {body}
           {hasNext ? NOW_PLAYING_METADATA_SEPARATOR.trimEnd() : null}
         </span>
@@ -431,7 +426,7 @@ export const PlaybackControlsCard = ({
     originalArtist: stil?.originalArtist ?? null,
   });
   const shuffleOn = !stationActive && shuffleEnabled;
-  const repeatMode = repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off";
+  const repeatMode = repeatOneEnabled ? "tune" : repeatEnabled ? "playlist" : "off";
   const repeatOn = repeatMode !== "off";
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
@@ -476,18 +471,15 @@ export const PlaybackControlsCard = ({
     order: PLAY_TRANSPORT_FOCUS_ORDER.repeat,
     group: "play-transport",
   });
-  const reshuffleFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-reshuffle",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.reshuffle,
-    group: "play-transport",
-    disabled: reshuffleDisabled || stationActive,
-  });
 
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
       {stationIndicator}
-      <div className="w-full" data-testid="playback-current-track">
-        <div className="mb-3 text-xs text-muted-foreground">
+      <div
+        className="grid w-full grid-cols-[minmax(0,1fr)_max-content_max-content] items-center gap-x-2"
+        data-testid="playback-current-track"
+      >
+        <div className="col-span-3 mb-0.5 text-xs text-muted-foreground">
           {hasCurrentItem ? (
             <>
               {/* The title now has the full width of the card to itself.
@@ -516,7 +508,72 @@ export const PlaybackControlsCard = ({
             "Select a playlist item to start"
           )}
         </div>
-        <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
+        {/* Credits and facts belong immediately below the title, before the transport. */}
+        {hasCurrentItem ? (
+          <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
+            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
+                their own.
+
+                Credits first - the author and the HVSC `released` value, which is one field
+                holding both year and publisher and is printed whole. Then the facts: chip, video
+                standard, which tune of how many, and how long. On a 320px screen that is the
+                difference between three rows and two, and the row the actions used to occupy was
+                otherwise empty.
+
+                Each segment carries its own trailing separator inside a nowrap span, so a wrap
+                happens after the separator rather than before it. Putting the separator in front
+                of the following segment reads the same on one line but leaves a stranded "·" at
+                the start of the next one as soon as the line is too narrow. */}
+            {creditsParts.length ? (
+              <p
+                className={cn(
+                  "col-span-3 min-w-0 break-words text-sm leading-snug text-muted-foreground",
+                  hasComposerLink && "min-h-11 overflow-clip [overflow-clip-margin:4px]",
+                )}
+                data-testid="playback-current-credits"
+              >
+                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
+              </p>
+            ) : null}
+            {factsParts.length || rankingControls ? (
+              <div className="contents">
+                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
+                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
+                <p
+                  className={cn(
+                    "min-w-0 self-stretch overflow-clip break-words text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]",
+                    hasTunesLink && "min-h-11",
+                  )}
+                  data-testid="playback-current-facts"
+                >
+                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
+                </p>
+                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
+                {rankingControls ? (
+                  <div className="col-span-2 self-start" data-testid="playback-ranking-row">
+                    {rankingControls}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {/* What STIL says about this tune, folded away by default.
+
+                STIL is the archive's editorial record rather than the file's own header: what this
+                particular tune is called, who wrote the music being arranged, and a note about it. A
+                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
+                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
+                names Rob Hubbard, who arranged it.
+
+                All of it is worth reading and none of it is needed to identify the tune or to work
+                the transport, so it is the part of the card that gives way on a small screen. See
+                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
+                archive, which STIL does not cover. */}
+            <div className="col-span-3 min-w-0">
+              <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
+            </div>
+          </div>
+        ) : null}
+        <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
           {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
             44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
             were, and the row stopped 33 px short of the right edge — visibly ragged against the
@@ -813,23 +870,26 @@ export const PlaybackControlsCard = ({
               data-testid="playback-counters"
             />
           </div>
-          {volumeControls}
-          <div
-            className="flex flex-nowrap items-center justify-center gap-2"
-            role="group"
-            aria-label="Playback order"
-            data-testid="playback-order-controls"
-          >
+        </div>
+        {outputSelector ? <div className="col-span-3 mt-3">{outputSelector}</div> : null}
+        {/* One grid owns both button pairs, so wrapping metadata cannot move their columns. */}
+        <div className="contents" data-testid="playback-volume-metadata-grid">
+          <div className="mt-3 min-w-0">{volumeControls}</div>
+          <div className="contents" role="group" aria-label="Playback order" data-testid="playback-order-controls">
             <Button
               ref={shuffleFocusRef}
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className={cn("relative shrink-0", shuffleOn && "bg-accent text-accent-foreground")}
+              className={cn(
+                "relative mt-3 shrink-0 size-[44px] min-h-[44px] min-w-[44px] [&_svg]:size-[20px]",
+                shuffleOn && "bg-accent text-accent-foreground",
+              )}
               onClick={() => onShuffleChange(stationActive || !shuffleEnabled)}
               aria-label="Shuffle"
               aria-pressed={shuffleOn}
               title={`Shuffle: ${shuffleOn ? "on" : "off"}`}
               data-testid="playback-shuffle"
+              data-shuffle-seed={shuffleSeed ?? ""}
             >
               <Shuffle aria-hidden="true" className="h-4 w-4" />
               {shuffleOn ? (
@@ -838,9 +898,12 @@ export const PlaybackControlsCard = ({
             </Button>
             <Button
               ref={repeatFocusRef}
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className={cn("relative shrink-0", repeatOn && "bg-accent text-accent-foreground")}
+              className={cn(
+                "relative mt-3 shrink-0 size-[44px] min-h-[44px] min-w-[44px] [&_svg]:size-[20px]",
+                repeatOn && "bg-accent text-accent-foreground",
+              )}
               data-testid="playback-repeat"
               aria-label={`Repeat: ${repeatMode}`}
               aria-pressed={repeatOn}
@@ -849,7 +912,7 @@ export const PlaybackControlsCard = ({
                 if (repeatOneEnabled) {
                   onRepeatOneChange(false);
                   onRepeatChange(false);
-                } else if (stationActive || repeatEnabled) {
+                } else if (repeatEnabled) {
                   onRepeatChange(false);
                   onRepeatOneChange(true);
                 } else {
@@ -866,83 +929,8 @@ export const PlaybackControlsCard = ({
                 <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-current" />
               ) : null}
             </Button>
-            {stationActive ? null : (
-              <Button
-                ref={reshuffleFocusRef}
-                variant="ghost"
-                size="icon"
-                aria-label="Reshuffle"
-                title="Reshuffle"
-                onClick={onReshuffle}
-                disabled={reshuffleDisabled}
-                id="playlist-reshuffle"
-                data-testid="playlist-reshuffle"
-                data-active={reshuffleActive ? "true" : "false"}
-                data-shuffle-seed={shuffleSeed ?? ""}
-                className={cn("shrink-0", reshuffleActive && "bg-accent text-accent-foreground")}
-              >
-                <RefreshCw aria-hidden="true" className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </div>
-        {/* Below the transport: credits, facts and STIL change height between tunes, and the buttons must not. */}
-        {hasCurrentItem ? (
-          <div
-            className={cn("text-xs text-muted-foreground", hasComposerLink ? "mt-7" : "mt-3")}
-            data-testid="playback-current-details"
-          >
-            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
-                their own.
-
-                Credits first - the author and the HVSC `released` value, which is one field
-                holding both year and publisher and is printed whole. Then the facts: chip, video
-                standard, which tune of how many, and how long. On a 320px screen that is the
-                difference between three rows and two, and the row the actions used to occupy was
-                otherwise empty.
-
-                Each segment carries its own trailing separator inside a nowrap span, so a wrap
-                happens after the separator rather than before it. Putting the separator in front
-                of the following segment reads the same on one line but leaves a stranded "·" at
-                the start of the next one as soon as the line is too narrow. */}
-            {creditsParts.length ? (
-              <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
-              </p>
-            ) : null}
-            {factsParts.length || rankingControls ? (
-              <div className={cn("mt-0.5 flex items-start justify-between gap-2", hasTunesLink && "min-h-11")}>
-                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
-                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
-                <p
-                  className="min-w-0 flex-1 self-stretch overflow-clip text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]"
-                  data-testid="playback-current-facts"
-                >
-                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
-                </p>
-                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
-                {rankingControls ? (
-                  <div className="flex shrink-0 items-center" data-testid="playback-ranking-row">
-                    {rankingControls}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {/* What STIL says about this tune, folded away by default.
-
-                STIL is the archive's editorial record rather than the file's own header: what this
-                particular tune is called, who wrote the music being arranged, and a note about it. A
-                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
-                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
-                names Rob Hubbard, who arranged it.
-
-                All of it is worth reading and none of it is needed to identify the tune or to work
-                the transport, so it is the part of the card that gives way on a small screen. See
-                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
-                archive, which STIL does not cover. */}
-            <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
-          </div>
-        ) : null}
       </div>
     </div>
   );

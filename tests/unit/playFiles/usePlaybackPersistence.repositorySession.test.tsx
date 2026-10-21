@@ -83,6 +83,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
   const [activePlaylistQuery, setActivePlaylistQuery] = useState("");
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [shuffleSeed, setShuffleSeed] = useState<number | null>(null);
+  const [shuffleAnchorId, setShuffleAnchorId] = useState<string | null>(null);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
@@ -108,7 +109,9 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     shuffleEnabled,
     setShuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
     setShuffleSeed,
+    setShuffleAnchorId,
     repeatEnabled,
     setRepeatEnabled,
     resolvedDeviceId: "device-1",
@@ -140,8 +143,10 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     elapsedMs,
     shuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
     repeatEnabled,
     setCurrentIndex,
+    setShuffleAnchorId,
     setActivePlaylistQuery,
   };
 };
@@ -189,6 +194,23 @@ describe("usePlaybackPersistence repository session persistence", () => {
         currentPlaylistItemId: "hvsc:hvsc-library:/MUSICIANS/Test/two.sid",
         activeQuery: "",
       }),
+    );
+  });
+
+  it("persists the shuffle cycle anchor without losing it on a later session write", async () => {
+    const key = buildPlaylistStorageKey("device-1");
+    const { result } = renderHook(() => useHarness(key));
+    await waitFor(() => expect(repository.replacePlaylistItems).toHaveBeenCalled());
+    await act(async () => {
+      result.current.setCurrentIndex(1);
+      result.current.setShuffleAnchorId("hvsc:hvsc-library:/MUSICIANS/Test/two.sid");
+    });
+    await waitFor(() =>
+      expect(repository.saveSession).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          shuffleAnchorId: "hvsc:hvsc-library:/MUSICIANS/Test/two.sid",
+        }),
+      ),
     );
   });
 
@@ -322,7 +344,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
     });
   });
 
-  it("restores shuffle repeat and seed from repository session state before playback restore", async () => {
+  it("restores shuffle anchor repeat and seed so the upcoming queue survives remounting", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     repository.getSession.mockResolvedValueOnce({
       playlistId: playlistStorageKey,
@@ -334,6 +356,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
       shuffleEnabled: true,
       repeatEnabled: true,
       randomSeed: 123456,
+      shuffleAnchorId: "hvsc:hvsc-library:/MUSICIANS/Test/one.sid",
       randomCursor: null,
       activeQuery: "",
       updatedAt: "2026-04-03T20:00:00.000Z",
@@ -345,6 +368,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
       expect(result.current.shuffleEnabled).toBe(true);
       expect(result.current.repeatEnabled).toBe(true);
       expect(result.current.shuffleSeed).toBe(123456);
+      expect(result.current.shuffleAnchorId).toBe("hvsc:hvsc-library:/MUSICIANS/Test/one.sid");
     });
   });
 

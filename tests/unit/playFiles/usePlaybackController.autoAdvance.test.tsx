@@ -286,9 +286,13 @@ describe("usePlaybackController auto advance", () => {
     expect(result.current.currentIndex).toBe(1);
   });
 
-  it("lets a stopped station finish its last tune despite repeat-one", async () => {
+  it.each(["playlist", "tune"])("lets a stopped station finish its last tune despite repeat %s", async (mode) => {
     const playlist = [createPlaylistItem("last", 1000)];
-    const { result } = renderPlaybackHarness(playlist, { repeatOneEnabled: true, stationFinishing: true });
+    const { result } = renderPlaybackHarness(playlist, {
+      repeatOneEnabled: mode === "tune",
+      repeatEnabled: mode === "playlist",
+      stationFinishing: true,
+    });
     await act(async () => {
       await result.current.playItem(playlist[0], { playlistIndex: 0 });
     });

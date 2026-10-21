@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { assertPlaybackModeLayout } from "./playbackModeLayout";
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import type { Page, TestInfo } from "@playwright/test";
@@ -197,13 +198,26 @@ test.describe("Playlist controls and advanced features", () => {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: 320, height: 426 });
-    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_sid_radio_enabled", "1");
+      localStorage.setItem("c64u_sid_ranking_enabled", "1");
+    });
     await page.goto("/play");
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+    // A disk has no SID credits or output selector, but keeps the same volume/mode layout.
+    await page.getByTestId("playlist-play").click();
     const shuffle = page.getByTestId("playback-shuffle");
     await shuffle.scrollIntoViewIfNeeded();
+    await assertPlaybackModeLayout(page);
+    const slider = page.getByTestId("volume-slider").getByRole("slider");
+    const before = await slider.getAttribute("aria-valuenow");
+    await slider.focus();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowRight");
+    await expect(slider).not.toHaveAttribute("aria-valuenow", before!);
     await shuffle.click();
-    const controls = [shuffle, page.getByTestId("playback-repeat"), page.getByTestId("playlist-reshuffle")];
+    const controls = [page.getByTestId("volume-mute"), shuffle, page.getByTestId("playback-repeat")];
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
     for (let index = 0; index < controls.length; index += 1) {
       const box = boxes[index]!;
@@ -216,8 +230,8 @@ test.describe("Playlist controls and advanced features", () => {
       expect((await controls[index].textContent())?.trim()).toBe("");
     }
     await expect(shuffle).toHaveAccessibleName("Shuffle");
-    await expect(controls[1]).toHaveAccessibleName("Repeat: off");
-    await expect(controls[2]).toHaveAccessibleName("Reshuffle");
+    await expect(controls[2]).toHaveAccessibleName("Repeat: off");
+    await expect(page.getByRole("button", { name: "Reshuffle", exact: true })).toHaveCount(0);
     await snap(page, testInfo, "compact-playlist-order-icons");
   });
 
@@ -248,7 +262,7 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "shuffle-disabled");
   });
 
-  test("reshuffle re-seeds the playback order without disturbing the curated list @layout", async ({
+  test("shuffle off/on re-seeds the playback order without disturbing the curated list @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
@@ -272,10 +286,11 @@ test.describe("Playlist controls and advanced features", () => {
     // a NEW seed - it never reorders the curated visible list. Assert both: the
     // seed changes (Reshuffle is functional) and the visible order is
     // preserved (the curated order is no longer destroyed irreversibly).
-    const reshuffleButton = page.getByTestId("playlist-reshuffle");
+    const reshuffleButton = page.getByTestId("playback-shuffle");
     await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe("");
     const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
 
+    await reshuffleButton.click();
     await reshuffleButton.click();
     await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe(seedBefore);
     expect((await getPlaylistOrder(page)).join("|")).toBe(initialOrder.join("|"));

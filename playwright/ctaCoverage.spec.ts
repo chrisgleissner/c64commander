@@ -112,17 +112,18 @@ test.describe("Shuffle Mode Tests", () => {
     await attachStepScreenshot(page, testInfo, "shuffle-toggled");
   });
 
-  test("reshuffle button appears when shuffle is enabled", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("repeat stays independent of shuffle and has no separate reshuffle control", async ({ page }, testInfo) => {
     await page.goto("/play");
-    await attachStepScreenshot(page, testInfo, "play-page");
-
     const shuffle = page.getByTestId("playback-shuffle");
-    await shuffle.scrollIntoViewIfNeeded();
-    if ((await shuffle.getAttribute("aria-pressed")) !== "true") await shuffle.click();
-    await expect(shuffle).toHaveAttribute("aria-pressed", "true");
-    const reshuffle = page.getByRole("button", { name: "Reshuffle", exact: true });
-    await expect(reshuffle).toBeVisible();
-    await attachStepScreenshot(page, testInfo, "reshuffle-button-found");
+    const repeat = page.getByTestId("playback-repeat");
+    await shuffle.click();
+    for (const mode of ["playlist", "tune", "off"]) {
+      await repeat.click();
+      await expect(repeat).toHaveAccessibleName(`Repeat: ${mode}`);
+      await expect(shuffle).toHaveAttribute("aria-pressed", "true");
+    }
+    await expect(page.getByRole("button", { name: "Reshuffle", exact: true })).toHaveCount(0);
+    await attachStepScreenshot(page, testInfo, "independent-playback-modes");
   });
 });
 

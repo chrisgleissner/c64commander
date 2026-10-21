@@ -280,7 +280,9 @@ export default function PlayFilesPage() {
     shuffleEnabled,
     setShuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
     setShuffleSeed,
+    setShuffleAnchorId,
     repeatOneEnabled,
     setRepeatOneEnabled,
     repeatEnabled,
@@ -291,8 +293,6 @@ export default function PlayFilesPage() {
     setSelectedPlaylistIds,
     isPlaylistLoading,
     setIsPlaylistLoading,
-    reshuffleActive,
-    handleReshuffle,
   } = usePlaylistManager();
   const hasPlaylistRef = useRef(false);
   const playlistSnapshotRef = useRef(playlist);
@@ -620,6 +620,7 @@ export default function PlayFilesPage() {
     stationFinishingRef,
     repeatOneEnabled,
     shuffleSeed,
+    shuffleAnchorId,
     localEntriesBySourceId,
     localSourceTreeUris,
     buildHvscLocalPlayFile,
@@ -2294,9 +2295,11 @@ export default function PlayFilesPage() {
     setCurrentSubsongCount,
     setShuffleEnabled,
     setShuffleSeed,
+    setShuffleAnchorId,
     setRepeatEnabled,
     shuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
     repeatEnabled,
     activePlaylistQuery: playlistFilterText,
     setActivePlaylistQuery: restorePlaylistFilterText,
@@ -2337,6 +2340,7 @@ export default function PlayFilesPage() {
   const traversalOrdering = resolveTraversalOrdering(
     { repeatEnabled, shuffleEnabled },
     stationHandover.stationOrdersQueue,
+    stationFinishingRef.current,
   );
   const hasPrev = canAdvancePrevious(
     playlist,
@@ -2344,6 +2348,7 @@ export default function PlayFilesPage() {
     traversalOrdering.repeatEnabled,
     traversalOrdering.shuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
   );
   const hasNext = canAdvanceNext(
     playlist,
@@ -2351,6 +2356,7 @@ export default function PlayFilesPage() {
     traversalOrdering.repeatEnabled,
     traversalOrdering.shuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
   );
 
   useRestoreVolumeWhenPlaybackEnds({
@@ -2436,6 +2442,7 @@ export default function PlayFilesPage() {
     currentIndex: shownNowPlaying.index,
     shuffleEnabled: traversalOrdering.shuffleEnabled,
     shuffleSeed,
+    shuffleAnchorId,
   });
   const timeline = usePlaybackTimeline(shownNowPlaying.time, {
     durationMs: shownNowPlaying.durationMs,
@@ -2600,23 +2607,17 @@ export default function PlayFilesPage() {
                 seekDurationMs={currentDurationMs}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                volumeControls={
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
-                      <PlaybackEngineToggle />
-                    ) : null}
-                    {/* basis-48 with flex-wrap: the volume row keeps the chip's line while there is
-                        room for both, and drops to its own line at the largest Text size rather
-                        than pushing the dB readout past the 320 px edge. */}
-                    <div className="min-w-0 flex-1 basis-48">
-                      <VolumeControls
-                        {...volumeBinding}
-                        previewIntervalMs={volumeSliderPreviewIntervalMs}
-                        useNativeRangeInput={isAndroid}
-                      />
-                    </div>
-                  </div>
+                outputSelector={
+                  playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null
                 }
+                volumeControls={
+                  <VolumeControls
+                    {...volumeBinding}
+                    previewIntervalMs={volumeSliderPreviewIntervalMs}
+                    useNativeRangeInput={isAndroid}
+                  />
+                }
+                shuffleSeed={shuffleSeed}
                 shuffleEnabled={shuffleEnabled}
                 onShuffleChange={(value) => {
                   if (value && sidRadio.active) stationHandover.requestShuffleQueue(() => setShuffleEnabled(true));
@@ -2626,10 +2627,6 @@ export default function PlayFilesPage() {
                 onRepeatOneChange={setRepeatOneEnabled}
                 repeatEnabled={repeatEnabled}
                 onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
-                onReshuffle={handleReshuffle}
-                reshuffleActive={reshuffleActive}
-                reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
-                shuffleSeed={shuffleSeed}
               />
               {/*
                * One row for everything on this page that opens a sheet: start or change a station,

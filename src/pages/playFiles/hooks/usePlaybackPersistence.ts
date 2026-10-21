@@ -55,9 +55,11 @@ interface UsePlaybackPersistenceProps {
   setCurrentSubsongCount: (value: number | null) => void;
   shuffleEnabled?: boolean;
   shuffleSeed?: number | null;
+  shuffleAnchorId?: string | null;
   repeatEnabled?: boolean;
   setShuffleEnabled?: (value: boolean) => void;
   setShuffleSeed?: (value: number | null) => void;
+  setShuffleAnchorId?: (value: string | null) => void;
   setRepeatEnabled?: (value: boolean) => void;
   activePlaylistQuery?: string | null;
   setActivePlaylistQuery?: (value: string) => void;
@@ -128,9 +130,11 @@ export function usePlaybackPersistence({
   setCurrentSubsongCount,
   shuffleEnabled = false,
   shuffleSeed = null,
+  shuffleAnchorId = null,
   repeatEnabled = false,
   setShuffleEnabled,
   setShuffleSeed,
+  setShuffleAnchorId,
   setRepeatEnabled,
   activePlaylistQuery = null,
   setActivePlaylistQuery,
@@ -253,7 +257,12 @@ export function usePlaybackPersistence({
   };
 
   const applyRestoredTraversalState = useCallback(
-    (session: Pick<PlaylistSessionRecord, "shuffleEnabled" | "repeatEnabled" | "randomSeed"> | null) => {
+    (
+      session: Pick<
+        PlaylistSessionRecord,
+        "shuffleEnabled" | "repeatEnabled" | "randomSeed" | "shuffleAnchorId"
+      > | null,
+    ) => {
       if (!session) return;
       if (
         typeof session.shuffleEnabled === "boolean" &&
@@ -265,13 +274,24 @@ export function usePlaybackPersistence({
       if (typeof session.repeatEnabled === "boolean" && setRepeatEnabled && repeatEnabled !== session.repeatEnabled) {
         setRepeatEnabled(session.repeatEnabled);
       }
+      const restoredAnchor = typeof session.shuffleAnchorId === "string" ? session.shuffleAnchorId : null;
+      if (shuffleAnchorId !== restoredAnchor) setShuffleAnchorId?.(restoredAnchor);
       const restoredSeed =
         typeof session.randomSeed === "number" && Number.isFinite(session.randomSeed) ? session.randomSeed : null;
       if (setShuffleSeed && shuffleSeed !== restoredSeed) {
         setShuffleSeed(restoredSeed);
       }
     },
-    [repeatEnabled, setRepeatEnabled, setShuffleEnabled, setShuffleSeed, shuffleEnabled, shuffleSeed],
+    [
+      repeatEnabled,
+      setRepeatEnabled,
+      setShuffleEnabled,
+      setShuffleSeed,
+      setShuffleAnchorId,
+      shuffleEnabled,
+      shuffleSeed,
+      shuffleAnchorId,
+    ],
   );
 
   const hydrateFromRepository = async (playlistId = playlistStorageKey) => {
@@ -518,6 +538,7 @@ export function usePlaybackPersistence({
       shuffleEnabled: pending.shuffleEnabled ?? shuffleEnabled,
       repeatEnabled: pending.repeatEnabled ?? repeatEnabled,
       randomSeed: pending.randomSeed ?? shuffleSeed,
+      shuffleAnchorId: pending.shuffleAnchorId ?? shuffleAnchorId,
     });
     setCurrentIndex(matchedIndex);
     // A session that was playing kept playing while the page was away: the stored clock is from the moment it was written.
@@ -641,6 +662,7 @@ export function usePlaybackPersistence({
         shuffleEnabled,
         repeatEnabled,
         randomSeed: shuffleSeed,
+        shuffleAnchorId,
         randomCursor: null,
         activeQuery: activePlaylistQuery,
         updatedAt: new Date().toISOString(),
@@ -664,6 +686,7 @@ export function usePlaybackPersistence({
       restoreVersion,
       shuffleEnabled,
       shuffleSeed,
+      shuffleAnchorId,
     ],
   );
   usePlaybackTimeEffect(playbackTime, persistRepositorySession);
@@ -695,6 +718,7 @@ export function usePlaybackPersistence({
         shuffleEnabled,
         repeatEnabled,
         randomSeed: shuffleSeed,
+        shuffleAnchorId,
         playingOnPhone: isLocalPlaybackActive(),
         resumeStartsAgain: isPaused && peekRestartedPhoneTune() === currentPlaylistItemId,
         playbackDeviceId: getSavedDevicesSnapshot().selectedDeviceId,
@@ -716,6 +740,7 @@ export function usePlaybackPersistence({
       restoreVersion,
       shuffleEnabled,
       shuffleSeed,
+      shuffleAnchorId,
     ],
   );
   usePlaybackTimeEffect(playbackTime, persistSession);

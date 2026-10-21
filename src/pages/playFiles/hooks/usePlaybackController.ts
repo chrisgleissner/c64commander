@@ -110,11 +110,7 @@ import {
 } from "@/lib/config/applyConfigFileReference";
 import { cancelActiveConfigApply, isConfigApplyCancelledError } from "@/lib/config/configApplyCancellation";
 import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
-import {
-  resolveNextPlaylistIndex,
-  resolvePreviousPlaylistIndex,
-  type AudioMixerItem,
-} from "@/pages/playFiles/playFilesUtils";
+import { createPlaylistTraversal, type AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
@@ -195,6 +191,7 @@ interface UsePlaybackControllerProps {
    */
   stationActiveRef?: { readonly current: boolean };
   shuffleSeed: number | null;
+  shuffleAnchorId?: string | null;
 
   // Dependencies
   localEntriesBySourceId: Map<
@@ -306,6 +303,7 @@ export function usePlaybackController({
   shuffleEnabled,
   stationActiveRef,
   shuffleSeed,
+  shuffleAnchorId,
   localEntriesBySourceId,
   localSourceTreeUris,
   buildHvscLocalPlayFile,
@@ -1844,13 +1842,20 @@ export function usePlaybackController({
     ],
   );
 
-  /**
-   * The ordering the traversal should use right now — the listener's switches, unless a station is
-   * running and owns the order itself. See `resolveTraversalOrdering`.
-   */
-  const traversalOrdering = useCallback(
-    () => resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, stationActiveRef?.current === true),
-    [repeatEnabled, shuffleEnabled, stationActiveRef],
+  // Resolve the live station and repeat state when a transition actually runs.
+  const playlistTraversal = useCallback(
+    (items: PlaylistItem[]) =>
+      createPlaylistTraversal(
+        items,
+        resolveTraversalOrdering(
+          { repeatEnabled, shuffleEnabled },
+          stationActiveRef?.current === true,
+          stationFinishingRef?.current === true,
+        ),
+        shuffleSeed,
+        shuffleAnchorId,
+      ),
+    [repeatEnabled, shuffleEnabled, stationActiveRef, stationFinishingRef, shuffleSeed, shuffleAnchorId],
   );
 
   const flushPendingUserSkip = useCallback(async () => {
@@ -1884,24 +1889,12 @@ export function usePlaybackController({
         let resolvedTargetIndex = targetIndex;
         let resolvedStopAtEnd = pending.stopAtEnd;
         if (anotherTransitionAdvanced || targetIndex === -1) {
-          const ordering = traversalOrdering();
+          const traversal = playlistTraversal(activePlaylist);
           if (pending.operation === "PLAYBACK_NEXT") {
-            resolvedTargetIndex = resolveNextPlaylistIndex(
-              activePlaylist,
-              activeIndex,
-              ordering.repeatEnabled,
-              ordering.shuffleEnabled,
-              shuffleSeed,
-            );
+            resolvedTargetIndex = traversal.next(activeIndex);
             resolvedStopAtEnd = resolvedTargetIndex === null;
           } else {
-            resolvedTargetIndex = resolvePreviousPlaylistIndex(
-              activePlaylist,
-              activeIndex,
-              ordering.repeatEnabled,
-              ordering.shuffleEnabled,
-              shuffleSeed,
-            );
+            resolvedTargetIndex = traversal.previous(activeIndex);
             resolvedStopAtEnd = false;
           }
         }
@@ -1947,8 +1940,7 @@ export function usePlaybackController({
     playItem,
     playedClockRef,
     reportPlaybackStartFailure,
-    traversalOrdering,
-    shuffleSeed,
+    playlistTraversal,
     setAutoAdvanceDueAtMs,
     setIsPaused,
     setIsPlaying,
@@ -2017,9 +2009,8 @@ export function usePlaybackController({
   /** The next track in playing order and, with the device out of reach, the first from there that can play without it. */
   const resolveReachableNextIndex = useCallback(
     (activePlaylist: PlaylistItem[], fromIndex: number, automatic = false) => {
-      const ordering = traversalOrdering();
-      const following = (index: number) =>
-        resolveNextPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+      const traversal = playlistTraversal(activePlaylist);
+      const following = traversal.next;
       const nextIndex =
         automatic && repeatOneEnabled && !stationFinishingRef?.current ? fromIndex : following(fromIndex);
       const reachableIndex =
@@ -2028,7 +2019,7 @@ export function usePlaybackController({
           : firstPlayableWithoutDevice(activePlaylist, nextIndex, following);
       return { nextIndex, reachableIndex };
     },
-    [traversalOrdering, shuffleSeed, repeatOneEnabled, stationFinishingRef],
+    [playlistTraversal, repeatOneEnabled, stationFinishingRef],
   );
 
   scheduleNextTunePrefetchRef.current = (fromIndex, remainingMs) => {
@@ -2178,9 +2169,8 @@ export function usePlaybackController({
     const activePlaylist = playlistRef.current;
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
-    const ordering = traversalOrdering();
-    const preceding = (index: number) =>
-      resolvePreviousPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+    const traversal = playlistTraversal(activePlaylist);
+    const preceding = traversal.previous;
     const previousIndex = preceding(activeIndex);
     const prevIndex =
       previousIndex !== null && isDeviceOutOfReach()
@@ -2195,8 +2185,7 @@ export function usePlaybackController({
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
   }, [
     cancelAutoAdvance,
-    traversalOrdering,
-    shuffleSeed,
+    playlistTraversal,
     playedClockRef,
     setPlayedMs,
     scheduleUserSkip,

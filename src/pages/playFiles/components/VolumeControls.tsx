@@ -68,10 +68,11 @@ export const VolumeControls = ({
   });
 
   return (
-    <div className="flex items-center gap-3" data-testid="volume-row">
+    <div className="flex min-w-0 items-center gap-1" data-testid="volume-row">
       <Button
         variant="outline"
         size="icon"
+        className="size-[44px] min-h-[44px] min-w-[44px] shrink-0 [&_svg]:size-[20px]"
         onClick={onToggleMute}
         disabled={!canControlVolume}
         data-c64-persistent-active={volumeMuted ? "true" : undefined}
@@ -108,7 +109,7 @@ export const VolumeControls = ({
           it. A transport row that moved while it was being touched has already cost this project a
           run of automated taps that landed on the wrong control. */}
       <span
-        className="w-[52px] shrink-0 text-right text-xs tabular-nums text-muted-foreground"
+        className="w-[5ch] shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground"
         data-testid="volume-label"
       >
         {volumeLabel}
