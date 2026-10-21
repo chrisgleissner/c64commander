@@ -344,6 +344,7 @@ const ScrollingViewAllHeader = ({ context }: { context?: ViewAllListContext }) =
 const EmptyViewAllList = ({ context }: { context?: ViewAllListContext }) => (
   <p className="px-3 py-3 text-xs text-muted-foreground">{context?.emptyLabel}</p>
 );
+const PINNED_LIST_COMPONENTS = {};
 const SCROLLING_LIST_COMPONENTS = { Header: ScrollingViewAllHeader, EmptyPlaceholder: EmptyViewAllList };
 
 export const SelectableActionList = ({
@@ -591,38 +592,36 @@ export const SelectableActionList = ({
   }, [scrollViewAllHeader, viewAllScroller, letterRail.eligible]);
 
   const viewAllHeader = (
-    <div ref={viewAllHeaderRef}>
-      <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
-        <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
-        <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-        {collapsibleFilter ? (
-          <CollapsibleListFilter
+    <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
+      <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
+      <AppSheetDescription>Review all items in this list.</AppSheetDescription>
+      {collapsibleFilter ? (
+        <CollapsibleListFilter
+          value={expandedFilterText}
+          onChange={setExpandedFilterText}
+          placeholder={filterPlaceholder}
+          testId="view-all-filter-input"
+          toggleTestId="view-all-filter-toggle"
+          header={viewAllFilterHeader ?? filterHeader}
+          headerSummary={filterHeaderSummary}
+          region={viewAllFilterRegion}
+        />
+      ) : (
+        <>
+          <ListFilterField
             value={expandedFilterText}
             onChange={setExpandedFilterText}
             placeholder={filterPlaceholder}
             testId="view-all-filter-input"
-            toggleTestId="view-all-filter-toggle"
-            header={viewAllFilterHeader ?? filterHeader}
-            headerSummary={filterHeaderSummary}
-            region={viewAllFilterRegion}
           />
-        ) : (
-          <>
-            <ListFilterField
-              value={expandedFilterText}
-              onChange={setExpandedFilterText}
-              placeholder={filterPlaceholder}
-              testId="view-all-filter-input"
-            />
-            {(viewAllFilterHeader ?? filterHeader) ? (
-              <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                {viewAllFilterHeader ?? filterHeader}
-              </div>
-            ) : null}
-          </>
-        )}
-      </AppSheetHeader>
-    </div>
+          {(viewAllFilterHeader ?? filterHeader) ? (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+              {viewAllFilterHeader ?? filterHeader}
+            </div>
+          ) : null}
+        </>
+      )}
+    </AppSheetHeader>
   );
 
   const renderList = (list: ActionListItem[]) => (
@@ -774,8 +773,11 @@ export const SelectableActionList = ({
                   ) : (
                     <Virtuoso<ActionListItem, ViewAllListContext>
                       ref={virtuosoRef}
-                      components={scrollViewAllHeader ? SCROLLING_LIST_COMPONENTS : undefined}
-                      context={{ header: viewAllHeader, emptyLabel: viewAllEmptyLabel }}
+                      components={scrollViewAllHeader ? SCROLLING_LIST_COMPONENTS : PINNED_LIST_COMPONENTS}
+                      context={{
+                        header: <div ref={viewAllHeaderRef}>{viewAllHeader}</div>,
+                        emptyLabel: viewAllEmptyLabel,
+                      }}
                       style={{ height: "100%" }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}

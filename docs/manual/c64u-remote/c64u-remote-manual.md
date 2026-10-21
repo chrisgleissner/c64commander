@@ -222,7 +222,7 @@ Press **Repeat** to cycle through **off**, **playlist** (start again after the l
 
 **Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
-Each row's **⋮** button opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.
+Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.
 
 Playback carries on when you leave the app or lock your phone, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one. On Android 13 and later, the app asks once for permission to show this notification, shortly after it first connects and before you play anything. If you decline, playback works the same without it.
 
