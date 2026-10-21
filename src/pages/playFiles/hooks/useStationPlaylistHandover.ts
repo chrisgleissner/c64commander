@@ -170,6 +170,8 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     const { queue } = latestRef.current;
     queue.setPlaylist(retained.items);
     queue.setCurrentIndex(retained.currentIndex);
+    const retainedSelection = new Set([...queue.selectedPlaylistIds].filter((id) => !retained.removedIds.has(id)));
+    if (retainedSelection.size !== queue.selectedPlaylistIds.size) queue.setSelectedPlaylistIds(retainedSelection);
   }, [playlist, currentIndex, stationActive, ready, params.playback.isPlaylistLoading, commit]);
 
   const requestStop = useCallback(() => {

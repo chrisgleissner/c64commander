@@ -88,7 +88,16 @@ const useHarness = (props: HarnessProps) => {
     },
     station: { active: props.stationActive, resumeSettled: props.resumeSettled ?? true, stop: stationStop },
   });
-  return { playlist, currentIndex, selectedPlaylistIds, stationActiveRef, handover, setPlaylist, setCurrentIndex };
+  return {
+    playlist,
+    currentIndex,
+    selectedPlaylistIds,
+    stationActiveRef,
+    handover,
+    setPlaylist,
+    setCurrentIndex,
+    setSelectedPlaylistIds,
+  };
 };
 
 const renderHarness = (props: HarnessProps) =>
@@ -180,6 +189,20 @@ describe("useStationPlaylistHandover", () => {
     expect(stationStop).toHaveBeenCalledOnce();
     harness.rerender({ stationActive: false, isPlaying: false });
     expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
+
+  it("removes selected IDs only when their radio rows are evicted", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(
+      harness,
+      Array.from({ length: 200 }, (_, index) => item(`radio:${index}`)),
+    );
+    act(() => {
+      harness.result.current.setCurrentIndex(199);
+      harness.result.current.setSelectedPlaylistIds(new Set(["radio:0", "radio:199"]));
+    });
+    act(() => harness.result.current.handover.appendStationItems([item("radio:200")]));
+    expect([...harness.result.current.selectedPlaylistIds]).toEqual(["radio:199"]);
   });
 
   it("keeps user additions and remembers a removed radio tune after history eviction", async () => {
