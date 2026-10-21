@@ -22,7 +22,7 @@
     "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -31,6 +31,6 @@
     "ajv": "^8.17.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.12"
   }
 }
