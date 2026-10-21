@@ -102,71 +102,27 @@ test.describe("Shuffle Mode Tests", () => {
     }
   });
 
-  test("shuffle checkbox toggles shuffle mode", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("shuffle icon toggles shuffle mode", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    await attachStepScreenshot(page, testInfo, "play-page");
-
-    // Find shuffle checkbox by finding text "Shuffle" near checkbox role
-    // Radix UI checkboxes use role="checkbox"
-    const shuffleDiv = page.locator('div:has-text("Shuffle")');
-    const shuffleCheckbox = shuffleDiv.locator('button[role="checkbox"]').first();
-
-    await expect(shuffleCheckbox).toBeVisible();
-    await attachStepScreenshot(page, testInfo, "shuffle-checkbox-found");
-
-    // Check initial state
-    const initialState = (await shuffleCheckbox.getAttribute("data-state")) === "checked";
-    await attachStepScreenshot(page, testInfo, `shuffle-initial-${initialState ? "on" : "off"}`);
-
-    // Toggle shuffle
-    await shuffleCheckbox.click();
-    await expect(shuffleCheckbox).toHaveAttribute("data-state", initialState ? "unchecked" : "checked");
+    const shuffle = page.getByRole("button", { name: "Shuffle", exact: true });
+    await shuffle.scrollIntoViewIfNeeded();
+    const initialState = (await shuffle.getAttribute("aria-pressed")) === "true";
+    await shuffle.click();
+    await expect(shuffle).toHaveAttribute("aria-pressed", String(!initialState));
     await attachStepScreenshot(page, testInfo, "shuffle-toggled");
-
-    // Verify state changed
-    const newState = (await shuffleCheckbox.getAttribute("data-state")) === "checked";
-    expect(newState).toBe(!initialState);
-    await attachStepScreenshot(page, testInfo, `shuffle-now-${newState ? "on" : "off"}`);
   });
 
   test("reshuffle button appears when shuffle is enabled", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await attachStepScreenshot(page, testInfo, "play-page");
 
-    // Enable shuffle if not already
-    const shuffleCheckbox = page
-      .locator('input[type="checkbox"]')
-      .filter({ hasText: /shuffle/i })
-      .or(
-        page
-          .locator('label:has-text("Shuffle"), label:has-text("shuffle")')
-          .locator("..")
-          .locator('input[type="checkbox"]'),
-      )
-      .first();
-
-    const checkboxExists = (await shuffleCheckbox.count()) > 0;
-    if (checkboxExists) {
-      const isChecked = await shuffleCheckbox.isChecked();
-      if (!isChecked) {
-        await shuffleCheckbox.click();
-        await expect(shuffleCheckbox).toBeChecked();
-      }
-      await attachStepScreenshot(page, testInfo, "shuffle-enabled");
-
-      // Look for reshuffle button
-      const reshuffleButton = page.getByRole("button", {
-        name: /reshuffle|shuffle again|re-shuffle/i,
-      });
-      const hasReshuffle = await reshuffleButton.isVisible({ timeout: 2000 }).catch(() => false);
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        hasReshuffle ? "reshuffle-button-found" : "reshuffle-button-not-found",
-      );
-    } else {
-      await attachStepScreenshot(page, testInfo, "shuffle-control-not-found");
-    }
+    const shuffle = page.getByTestId("playback-shuffle");
+    await shuffle.scrollIntoViewIfNeeded();
+    if ((await shuffle.getAttribute("aria-pressed")) !== "true") await shuffle.click();
+    await expect(shuffle).toHaveAttribute("aria-pressed", "true");
+    const reshuffle = page.getByRole("button", { name: "Reshuffle", exact: true });
+    await expect(reshuffle).toBeVisible();
+    await attachStepScreenshot(page, testInfo, "reshuffle-button-found");
   });
 });
 

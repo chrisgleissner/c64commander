@@ -14,9 +14,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, RefreshCw, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -169,6 +168,7 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   play: 110,
   pause: 120,
   next: 130,
+  shuffle: 160,
   repeat: 170,
   reshuffle: 180,
 } as const;
@@ -430,6 +430,9 @@ export const PlaybackControlsCard = ({
     title: stil?.title ?? null,
     originalArtist: stil?.originalArtist ?? null,
   });
+  const shuffleOn = !stationActive && shuffleEnabled;
+  const repeatMode = repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off";
+  const repeatOn = repeatMode !== "off";
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
   const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
@@ -462,6 +465,11 @@ export const PlaybackControlsCard = ({
     order: PLAY_TRANSPORT_FOCUS_ORDER.next,
     group: "play-transport",
     disabled: !canTransport || !hasNext,
+  });
+  const shuffleFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-shuffle",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.shuffle,
+    group: "play-transport",
   });
   const repeatFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-repeat",
@@ -806,24 +814,37 @@ export const PlaybackControlsCard = ({
             />
           </div>
           {volumeControls}
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex min-h-11 items-center gap-2 text-xs">
-              <Checkbox
-                checked={!stationActive && shuffleEnabled}
-                onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-                aria-label="Shuffle"
-                data-testid="playback-shuffle"
-              />
-              <span className="flex items-center gap-1">
-                <Shuffle className="h-3.5 w-3.5" /> Shuffle
-              </span>
-            </label>
+          <div
+            className="flex flex-nowrap items-center justify-center gap-2"
+            role="group"
+            aria-label="Playback order"
+            data-testid="playback-order-controls"
+          >
+            <Button
+              ref={shuffleFocusRef}
+              variant="ghost"
+              size="icon"
+              className={cn("relative shrink-0", shuffleOn && "bg-accent text-accent-foreground")}
+              onClick={() => onShuffleChange(stationActive || !shuffleEnabled)}
+              aria-label="Shuffle"
+              aria-pressed={shuffleOn}
+              title={`Shuffle: ${shuffleOn ? "on" : "off"}`}
+              data-testid="playback-shuffle"
+            >
+              <Shuffle aria-hidden="true" className="h-4 w-4" />
+              {shuffleOn ? (
+                <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-current" />
+              ) : null}
+            </Button>
             <Button
               ref={repeatFocusRef}
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="icon"
+              className={cn("relative shrink-0", repeatOn && "bg-accent text-accent-foreground")}
               data-testid="playback-repeat"
-              aria-label={`Repeat: ${repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off"}`}
+              aria-label={`Repeat: ${repeatMode}`}
+              aria-pressed={repeatOn}
+              title={`Repeat: ${repeatMode}`}
               onClick={() => {
                 if (repeatOneEnabled) {
                   onRepeatOneChange(false);
@@ -836,23 +857,31 @@ export const PlaybackControlsCard = ({
                 }
               }}
             >
-              {repeatOneEnabled ? <Repeat1 /> : <Repeat />}
-              Repeat: {repeatOneEnabled ? "tune" : !stationActive && repeatEnabled ? "playlist" : "off"}
+              {repeatOneEnabled ? (
+                <Repeat1 aria-hidden="true" className="h-4 w-4" />
+              ) : (
+                <Repeat aria-hidden="true" className="h-4 w-4" />
+              )}
+              {repeatOn ? (
+                <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-current" />
+              ) : null}
             </Button>
             {stationActive ? null : (
               <Button
                 ref={reshuffleFocusRef}
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="icon"
+                aria-label="Reshuffle"
+                title="Reshuffle"
                 onClick={onReshuffle}
                 disabled={reshuffleDisabled}
                 id="playlist-reshuffle"
                 data-testid="playlist-reshuffle"
                 data-active={reshuffleActive ? "true" : "false"}
                 data-shuffle-seed={shuffleSeed ?? ""}
-                className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
+                className={cn("shrink-0", reshuffleActive && "bg-accent text-accent-foreground")}
               >
-                <Shuffle className="h-4 w-4 mr-1" /> Reshuffle
+                <RefreshCw aria-hidden="true" className="h-4 w-4" />
               </Button>
             )}
           </div>

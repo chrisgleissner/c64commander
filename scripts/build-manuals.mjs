@@ -1095,6 +1095,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
     "",
+    "Three icons share one row: **Shuffle** (crossed arrows), **Repeat** (loop arrows), and **Reshuffle** (circular arrows). A dot beneath Shuffle or Repeat means it is on; a **1** in the Repeat loop means only this tune.",
+    "",
     "Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; **Reshuffle** chooses a new order.",
     "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",

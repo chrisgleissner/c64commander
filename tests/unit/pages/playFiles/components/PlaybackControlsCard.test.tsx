@@ -337,11 +337,31 @@ describe("PlaybackControlsCard", () => {
   it("offers shuffle and repeat-one during a station while hiding reshuffle", () => {
     const props = buildProps({ stationActive: true, reshuffleDisabled: false });
     render(<PlaybackControlsCard {...props} />);
-    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "unchecked");
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
+    fireEvent.click(screen.getByTestId("playback-shuffle"));
+    expect(props.onShuffleChange).toHaveBeenCalledWith(true);
     expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: off");
     fireEvent.click(screen.getByTestId("playback-repeat"));
     expect(props.onRepeatOneChange).toHaveBeenCalledWith(true);
+  });
+
+  it("uses named icon buttons with pressed states and a toggle action for shuffle", () => {
+    const props = buildProps({ reshuffleDisabled: false });
+    const { rerender } = render(<PlaybackControlsCard {...props} />);
+    const shuffle = screen.getByRole("button", { name: "Shuffle", exact: true });
+    fireEvent.click(shuffle);
+    expect(props.onShuffleChange).toHaveBeenLastCalledWith(true);
+    rerender(<PlaybackControlsCard {...props} shuffleEnabled repeatOneEnabled />);
+    expect(shuffle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Repeat: tune" })).toHaveAttribute("aria-pressed", "true");
+    for (const name of ["Shuffle", "Repeat: tune", "Reshuffle"]) {
+      const button = screen.getByRole("button", { name, exact: true });
+      expect(button.textContent).toBe("");
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+    fireEvent.click(shuffle);
+    expect(props.onShuffleChange).toHaveBeenLastCalledWith(false);
   });
 
   it("cycles repeat from playlist to tune to off with a single control", () => {
@@ -356,16 +376,15 @@ describe("PlaybackControlsCard", () => {
   });
 
   it("puts the order controls back, with the values the user had, once the station stops", () => {
-    // Nothing is mutated while they are hidden: the card only stops drawing them, so stopping a
-    // station returns the playlist exactly as it was left.
+    // Station traversal preserves the saved shuffle and repeat-all preferences.
     const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
     const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
 
-    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "unchecked");
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
 
     rerender(<PlaybackControlsCard {...props} stationActive={false} />);
 
-    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: playlist");
     expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
   });
@@ -426,6 +445,8 @@ describe("PlaybackControlsCard", () => {
     expect(focusContext.current?.engine.sourceForId("play-transport-play")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-pause")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-next")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-shuffle")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-repeat")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-reshuffle")).toBe("dom+explicit");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });

@@ -134,8 +134,8 @@ export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
       heading: "Choose the order",
       items: [
         "Items play in the order you added them. Rows cannot be moved, so add folders in the order you want to hear them.",
-        "Tick **Shuffle** to play in a random order; **Reshuffle** picks a new one. The list itself keeps its order.",
-        "Press **Repeat** to cycle through **off**, **playlist** (start again after the last item), and **tune** (play the current tune indefinitely). Next and Previous still change tunes.",
+        "Press **Shuffle** (crossed arrows) for a random order; **Reshuffle** (circular arrows) picks a new one. The list itself keeps its order.",
+        "Press **Repeat** (loop arrows) to cycle through **off**, **playlist** (start again after the last item), and **tune** (repeat this tune). A **1** in the loop means one tune; a dot below Shuffle or Repeat means on.",
       ],
     },
     {
@@ -189,7 +189,7 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
     },
     {
       kind: "text",
-      text: "**Repeat: tune** holds the current tune indefinitely. Turn it off to continue the station. Next and Previous still change tunes.",
+      text: "The **Repeat** loop with **1** holds the current tune indefinitely. Turn it off to continue the station. Next and Previous still change tunes.",
     },
     {
       kind: "text",

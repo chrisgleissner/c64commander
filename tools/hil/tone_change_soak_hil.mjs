@@ -74,7 +74,12 @@ try {
   if (!NO_MIC) await setVolume(device, VOLUME);
   await app.evaluate(`(async()=>{document.querySelector('[data-testid="tab-play"]')?.click();await new Promise(r=>setTimeout(r,2000));
     const t=document.querySelector('[data-testid="playback-engine-toggle"]'); if(t?.dataset.engine!=="local"){t.click();await new Promise(r=>setTimeout(r,900));document.querySelector('[data-testid="playback-engine-local"]')?.click();await new Promise(r=>setTimeout(r,1200));}
-    const rep=document.querySelector('[data-testid="playback-repeat"]'); if(rep&&rep.getAttribute("data-state")!=="checked"){rep.click();await new Promise(r=>setTimeout(r,500));}
+    const rep=document.querySelector('[data-testid="playback-repeat"]');
+    if(!rep)throw new Error("Repeat control is missing from the tone playlist");
+    for(let attempt=0;attempt<3&&rep.getAttribute("aria-label")!=="Repeat: playlist";attempt++){
+      rep.click();await new Promise(r=>setTimeout(r,500));
+    }
+    if(rep.getAttribute("aria-label")!=="Repeat: playlist")throw new Error("Tone soak requires playlist repeat; stop radio first");
     const row=document.querySelector('[data-testid="playlist-item"] button[aria-label^="Play "]'); row?.click(); return 1})()`);
   await sleep(8000);
 

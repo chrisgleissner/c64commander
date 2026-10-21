@@ -193,7 +193,35 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(sheet).toBeHidden();
   });
 
-  test("shuffle mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist order icons share one accessible 44-pixel row on the Callback viewport @layout", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
+    await page.goto("/play");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+    const shuffle = page.getByTestId("playback-shuffle");
+    await shuffle.scrollIntoViewIfNeeded();
+    await shuffle.click();
+    const controls = [shuffle, page.getByTestId("playback-repeat"), page.getByTestId("playlist-reshuffle")];
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
+    for (let index = 0; index < controls.length; index += 1) {
+      const box = boxes[index]!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThan(1);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      await expect(controls[index]).toHaveRole("button");
+      expect((await controls[index].textContent())?.trim()).toBe("");
+    }
+    await expect(shuffle).toHaveAccessibleName("Shuffle");
+    await expect(controls[1]).toHaveAccessibleName("Repeat: off");
+    await expect(controls[2]).toHaveAccessibleName("Reshuffle");
+    await snap(page, testInfo, "compact-playlist-order-icons");
+  });
+
+  test("shuffle icon toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
@@ -206,18 +234,17 @@ test.describe("Playlist controls and advanced features", () => {
     await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    // Now find the shuffle checkbox - it's the second checkbox in the options area
-    const shuffleCheckbox = page.getByTestId("playback-shuffle");
-    await expect(shuffleCheckbox).toBeVisible();
-    await expect(shuffleCheckbox).not.toBeChecked();
+    const shuffleButton = page.getByTestId("playback-shuffle");
+    await expect(shuffleButton).toBeVisible();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "false");
     await snap(page, testInfo, "shuffle-off");
 
-    await shuffleCheckbox.click();
-    await expect(shuffleCheckbox).toBeChecked();
+    await shuffleButton.click();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "true");
     await snap(page, testInfo, "shuffle-enabled");
 
-    await shuffleCheckbox.click();
-    await expect(shuffleCheckbox).not.toBeChecked();
+    await shuffleButton.click();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "false");
     await snap(page, testInfo, "shuffle-disabled");
   });
 
@@ -233,8 +260,8 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
     await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
-    const shuffleCheckbox = page.getByTestId("playback-shuffle");
-    await shuffleCheckbox.click();
+    const shuffleButton = page.getByTestId("playback-shuffle");
+    await shuffleButton.click();
     await snap(page, testInfo, "shuffle-enabled");
 
     const initialOrder = await getPlaylistOrder(page);
