@@ -268,7 +268,7 @@
     "vite": "^6.4.5",
     "vite-node": "^3.2.4",
     "vite-plugin-istanbul": "^7.2.1",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "@xmldom/xmldom": "0.8.15",
