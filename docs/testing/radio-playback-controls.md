@@ -14,6 +14,7 @@ not stand in for these results.
 | Repeat-one, a real short SID                                          | Two complete tune endings restarted the same tune; manual Next launched the immediate successor                                               |
 | Shuffle during radio                                                  | Cancel retained the running station; confirmation stopped radio and enabled playlist shuffle                                                  |
 | Playlist View all                                                     | Native swipe moved title and filter above the viewport; alphabet rail remained beside rows; D-pad focus stayed visible; Back closed the sheet |
+| Radio playlist limit                                                  | Native keypad editing saved 200 → 300 → 200                                                                                                   |
 | Android picker cancellation                                           | CFG, SID, CFG selections cancelled and returned to the app after injected Android Back events, including an open menu                         |
 
 The tail-selection exercise used a 200-row preview. Selecting the tail and
@@ -41,6 +42,8 @@ re-measure the physical scan codes.
   keep their normal meaning.
 - View-all title/filter live inside the virtual scroller; filtering keeps the
   input mounted, including empty results.
+- The Shuffle, Repeat and Reshuffle icon buttons share one row at 320 × 426 CSS
+  pixels, with 44 × 44 targets, named button roles and exposed toggle states.
 
-The cap, repeat-restart race and scrolling-header regressions were each observed
+The cap, repeat-restart race, scrolling-header and compact icon-row regressions were each observed
 failing with their respective fix removed.
