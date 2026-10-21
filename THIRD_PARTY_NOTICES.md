@@ -773,7 +773,7 @@ Summary: 811 dependencies across NPM (793), Gradle (14), CocoaPods (4), SwiftPM 
 | NPM | util-deprecate | 1.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz](https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz) |
 | NPM | uuid | 11.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz](https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz) |
 | NPM | victory-vendor | 36.9.2 | MIT AND ISC | [https://registry.npmjs.org/victory-vendor/-/victory-vendor-36.9.2.tgz](https://registry.npmjs.org/victory-vendor/-/victory-vendor-36.9.2.tgz) |
-| NPM | vite | 6.4.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vite/-/vite-6.4.4.tgz](https://registry.npmjs.org/vite/-/vite-6.4.4.tgz) |
+| NPM | vite | 6.4.5 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vite/-/vite-6.4.5.tgz](https://registry.npmjs.org/vite/-/vite-6.4.5.tgz) |
 | NPM | vite-node | 3.2.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vite-node/-/vite-node-3.2.4.tgz](https://registry.npmjs.org/vite-node/-/vite-node-3.2.4.tgz) |
 | NPM | vite-plugin-istanbul | 7.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vite-plugin-istanbul/-/vite-plugin-istanbul-7.2.1.tgz](https://registry.npmjs.org/vite-plugin-istanbul/-/vite-plugin-istanbul-7.2.1.tgz) |
 | NPM | vitest | 4.1.11 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vitest/-/vitest-4.1.11.tgz](https://registry.npmjs.org/vitest/-/vitest-4.1.11.tgz) |
