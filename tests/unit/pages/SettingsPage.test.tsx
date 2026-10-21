@@ -542,6 +542,11 @@ vi.mock("@/lib/config/settingsTransfer", () => ({
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
+  DEFAULT_SID_RADIO_QUEUE_LIMIT: 200,
+  MIN_SID_RADIO_QUEUE_LIMIT: 20,
+  MAX_SID_RADIO_QUEUE_LIMIT: 1000,
+  loadSidRadioQueueLimit: vi.fn(() => 200),
+  saveSidRadioQueueLimit: vi.fn(),
   // SID Radio's minimum-tune-length control reads and writes these; a partial mock that omits them
   // throws at render, and the whole page fails rather than the control.
   DEFAULT_SID_RADIO_MIN_SECONDS: 15,
