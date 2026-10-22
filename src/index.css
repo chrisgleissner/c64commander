@@ -1301,8 +1301,13 @@ button:focus-visible,
     .tab-item {
       min-width: 44px;
       gap: 2px;
-      padding-left: 2px;
-      padding-right: 2px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .tab-bar {
+      padding-left: 0;
+      padding-right: 0;
     }
 
     /* Qualified with `:root[data-display-profile]` so it outranks the per-profile type scale, which

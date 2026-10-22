@@ -446,6 +446,29 @@ test.describe("Small screen layout integrity", () => {
   });
 
   /**
+   * A phone's own font size setting at 1.3 widens the labels the same way the text scale variable does.
+   * With the app's text size left at Default, all six tabs must still fit a 320px screen without
+   * the bar having to scroll (Docs was drawn almost entirely off the right edge).
+   */
+  test("all six tabs fit at 320px with the device font scale at 1.3 @layout", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+    });
+    await page.setViewportSize(compactViewport);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.evaluate(() => document.documentElement.style.setProperty("--text-scale", "1.3"));
+
+    const nav = page.locator("nav.tab-bar");
+    const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth, "the tab bar must not need to scroll").toBeLessThanOrEqual(clientWidth);
+  });
+
+  /**
    * Dialogs, sheets and interstitials, which the page sweeps above cannot reach.
    *
    * Radix marks everything behind an open dialog `aria-hidden`, and the audit skips
