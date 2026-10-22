@@ -2874,7 +2874,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="startup-discovery-window" className="flex min-h-11 items-center font-medium">
-                  Startup Discovery Window (seconds)
+                  Startup discovery window (seconds)
                 </Label>
                 <Input
                   id="startup-discovery-window"
@@ -2894,7 +2894,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="background-rediscovery-interval" className="flex min-h-11 items-center font-medium">
-                  Background Rediscovery Interval (seconds)
+                  Background rediscovery interval (seconds)
                 </Label>
                 <Input
                   id="background-rediscovery-interval"
@@ -2914,7 +2914,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="probe-timeout" className="flex min-h-11 items-center font-medium">
-                  Discovery Probe Timeout (seconds)
+                  Discovery probe timeout (seconds)
                 </Label>
                 <Input
                   id="probe-timeout"

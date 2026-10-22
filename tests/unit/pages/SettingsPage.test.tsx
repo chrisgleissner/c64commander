@@ -2009,15 +2009,15 @@ describe("SettingsPage", () => {
     expect(deviceSafetySection).toBeTruthy();
 
     if (connectionSection) {
-      expect(within(connectionSection).queryByText("Startup Discovery Window (seconds)")).toBeNull();
-      expect(within(connectionSection).queryByText("Background Rediscovery Interval (seconds)")).toBeNull();
-      expect(within(connectionSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
+      expect(within(connectionSection).queryByText("Startup discovery window (seconds)")).toBeNull();
+      expect(within(connectionSection).queryByText("Background rediscovery interval (seconds)")).toBeNull();
+      expect(within(connectionSection).queryByText("Discovery probe timeout (seconds)")).toBeNull();
     }
 
     if (deviceSafetySection) {
-      expect(within(deviceSafetySection).getByText("Startup Discovery Window (seconds)")).toBeInTheDocument();
-      expect(within(deviceSafetySection).getByText("Background Rediscovery Interval (seconds)")).toBeInTheDocument();
-      expect(within(deviceSafetySection).getByText("Discovery Probe Timeout (seconds)")).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Startup discovery window (seconds)")).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Background rediscovery interval (seconds)")).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Discovery probe timeout (seconds)")).toBeInTheDocument();
     }
 
     expect(screen.getAllByLabelText(/startup discovery window/i)).toHaveLength(1);
