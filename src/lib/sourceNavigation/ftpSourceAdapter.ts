@@ -243,7 +243,7 @@ const listFilesRecursive = async (
     if (result.timedOut) {
       failures.push({
         path: normalizedPath,
-        message: "Listing incomplete: device FTP timed out",
+        message: "Listing incomplete: the device stopped answering",
       });
     }
     return attachPartialFailures(entries, failures);

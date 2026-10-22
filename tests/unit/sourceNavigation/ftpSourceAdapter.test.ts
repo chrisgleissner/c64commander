@@ -372,7 +372,9 @@ describe("ftpSourceAdapter", () => {
     const source = createUltimateSourceLocation();
     const results = await source.listFilesRecursive("/");
 
-    expect(results.partialFailures).toEqual([{ path: "/", message: "Listing incomplete: device FTP timed out" }]);
+    expect(results.partialFailures).toEqual([
+      { path: "/", message: "Listing incomplete: the device stopped answering" },
+    ]);
   });
 
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {

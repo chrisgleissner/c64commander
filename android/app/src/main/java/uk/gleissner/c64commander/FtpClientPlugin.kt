@@ -334,7 +334,9 @@ class FtpClientPlugin : Plugin() {
                           // FTP is already wedging on PASV cycles; continuing would pile
                           // on more data channels against known-flaky firmware. Bail the
                           // whole walk (surfacing this one failure) instead of churning.
-                          if (error is java.net.SocketTimeoutException) {
+                          // A lost connection is the same: every later folder would fail the same way and
+                          // write its own warnings.
+                          if (error is java.net.SocketTimeoutException || error is java.net.SocketException) {
                             timedOut = true
                             break
                           }
