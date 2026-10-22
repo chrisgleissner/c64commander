@@ -4,6 +4,7 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 import { addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
 import { collectSonglengthsSearchPaths } from "@/lib/sid/songlengthsDiscovery";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
@@ -650,6 +651,30 @@ describe("addFileSelections batching", () => {
         path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
       }),
     ]);
+  });
+
+  it("says how many folders could not be scanned when a recursive ultimate listing is partial", async () => {
+    const deps = { ...createDeps(), recurseFolders: true };
+    const listing = Object.assign(
+      [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/Games/10_Orbyte.sid" }],
+      { partialFailures: [{ path: "/USB2/Games/Arcade", message: "FTP listing failed" }] },
+    );
+    const source = createUltimateSource(
+      async () => [],
+      async () => listing,
+    );
+    const handler = createAddFileSelectionsHandler(deps as any);
+    vi.mocked(toast).mockClear();
+
+    const result = await handler(source, [{ type: "dir", name: "Games", path: "/USB2/Games" }]);
+
+    expect(result).toBe(true);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Items added",
+        description: "1 file(s) added to playlist. 1 folder(s) could not be scanned.",
+      }),
+    );
   });
 
   it("lists only folders that exist while looking for a songlengths file", async () => {

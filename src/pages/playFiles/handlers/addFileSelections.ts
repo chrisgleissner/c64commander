@@ -27,7 +27,7 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
-import type { SelectedItem, SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
+import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure } from "@/lib/sourceNavigation/types";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsProgressOverlay";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
@@ -555,6 +555,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }
 
       const selectedFiles: SourceEntry[] = [];
+      const skippedFolders: SourceRecursiveFailure[] = [];
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
@@ -771,6 +772,15 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             } else {
               const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
               throwIfAborted();
+              if (nested.partialFailures?.length) {
+                skippedFolders.push(...nested.partialFailures);
+                addLog("warn", "Playlist add completed with skipped folders", {
+                  sourceId: source.id,
+                  sourceType: source.type,
+                  selectionPath: selection.path,
+                  skippedFolders: nested.partialFailures,
+                });
+              }
               if (source.type === "hvsc") {
                 while (nested.length > 0) {
                   throwIfAborted();
@@ -1101,7 +1111,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       dispatchFeedback(() => {
         toast({
           title: "Items added",
-          description: `${appendedPlaylistItems} file(s) added to playlist.`,
+          description: skippedFolders.length
+            ? `${appendedPlaylistItems} file(s) added to playlist. ${skippedFolders.length} folder(s) could not be scanned.`
+            : `${appendedPlaylistItems} file(s) added to playlist.`,
         });
       });
       void recordSmokeBenchmarkSnapshot({
