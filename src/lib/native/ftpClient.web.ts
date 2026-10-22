@@ -122,6 +122,7 @@ export class FtpClientWeb implements FtpClientPlugin {
     entries: FtpEntry[];
     partialFailures?: { path: string; message: string }[];
     timedOut?: boolean;
+    refused?: boolean;
   }> {
     throw new Error("FTP bridge recursive listing is unavailable on web.");
   }

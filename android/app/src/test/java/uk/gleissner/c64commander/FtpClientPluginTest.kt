@@ -655,8 +655,21 @@ class FtpClientPluginTest {
                     mapOf("one" to refused(), "two" to refused()),
             )
 
-    assertEquals(true, resolved?.getBoolean("timedOut"))
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    assertEquals(true, resolved?.getBoolean("refused"))
     verify(ftpClient, never()).listFiles("/three")
+  }
+
+  @Test
+  fun listDirectoryRecursiveDoesNotTakeAFolderNamedTimeoutForATimeout() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(
+                    listOf("Timeout", "two"),
+                    mapOf("Timeout" to FtpListRefusedException("/Timeout", 550, "no such folder")),
+            )
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    verify(ftpClient).listFiles("/two")
   }
 
   @Test

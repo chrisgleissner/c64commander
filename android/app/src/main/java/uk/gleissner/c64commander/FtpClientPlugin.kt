@@ -314,14 +314,15 @@ class FtpClientPlugin : Plugin() {
                 var examinedEntries = 0
                 var capped = false
                 var timedOut = false
-                var consecutiveRefusals = 0
+                var refused = false
+                val walkFailures = WalkFailureTracker(timeoutMessagePattern)
 
-                while (queue.isNotEmpty() && !capped && !timedOut) {
+                while (queue.isNotEmpty() && !capped && !timedOut && !refused) {
                   val (currentPath, depth) = queue.removeFirst()
                   if (!visited.add(currentPath)) continue
                   val files =
                           try {
-                            resolveListing(client, currentPath).also { consecutiveRefusals = 0 }
+                            resolveListing(client, currentPath).also { walkFailures.listed() }
                           } catch (error: Exception) {
                           failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
                           AppLogger.warn(
@@ -331,17 +332,18 @@ class FtpClientPlugin : Plugin() {
                                   "FtpClientPlugin",
                                   error,
                           )
-                          // A data-channel timeout means the firmware's single-threaded
-                          // FTP is already wedging on PASV cycles; continuing would pile
-                          // on more data channels against known-flaky firmware. Bail the
-                          // whole walk (surfacing this one failure) instead of churning.
-                          // A lost connection is the same: every later folder would fail the same way and
-                          // write its own warnings. A firmware that refuses data connections is given a
-                          // second folder, then the walk ends too.
-                          consecutiveRefusals = if (isFtpConnectionRefused(error)) consecutiveRefusals + 1 else 0
-                          if (isFtpConnectionLost(error, timeoutMessagePattern) || consecutiveRefusals >= maxConsecutiveRefusals) {
-                            timedOut = true
-                            break
+                          // A lost connection or a firmware that keeps refusing data channels (the
+                          // single-threaded FTP wedging on PASV cycles) ends the walk instead of churning.
+                          when (walkFailures.failed(error)) {
+                            WalkStop.LOST -> {
+                              timedOut = true
+                              break
+                            }
+                            WalkStop.REFUSED -> {
+                              refused = true
+                              break
+                            }
+                            WalkStop.NONE -> Unit
                           }
                           continue
                         }
@@ -386,6 +388,7 @@ class FtpClientPlugin : Plugin() {
                 // by either spelling and the "walk aborted early" signal was
                 // silently dropped. See HARD9-078.
                 result.put("timedOut", timedOut)
+                result.put("refused", refused)
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
@@ -992,6 +995,3 @@ class FtpClientPlugin : Plugin() {
 
 /** 450, 451 and 550 mean the server could not open the folder, not that it lacks LIST. */
 private val refusedListReplyCodes = setOf(450, 451, 550)
-
-class FtpListRefusedException(path: String, code: Int, reply: String) :
-        java.io.IOException("FTP LIST $path refused ($code): $reply")

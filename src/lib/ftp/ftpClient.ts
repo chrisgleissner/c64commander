@@ -39,6 +39,8 @@ export type FtpRecursiveListResult = FtpListResult & {
   // channel timed out mid-walk - entries/partialFailures reflect only what
   // was gathered before the bail, not the full tree. See HARD9-078.
   timedOut: boolean;
+  // True when the walk ended because the device kept refusing connections, as opposed to dropping them.
+  refused: boolean;
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
@@ -203,6 +205,7 @@ const executeFtpRecursiveList = async (
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
       timedOut: response.timedOut ?? false,
+      refused: response.refused ?? false,
     };
     recordFtpOperation(action, {
       operation: "list",
@@ -226,6 +229,7 @@ const executeFtpRecursiveList = async (
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
       timedOut: response.timedOut ?? false,
+      refused: response.refused ?? false,
     };
   } catch (error) {
     const err = error as Error;
