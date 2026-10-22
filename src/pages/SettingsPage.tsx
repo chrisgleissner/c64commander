@@ -75,13 +75,7 @@ import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import {
-  dismissConnectionSaveToasts,
-  reportConnectionSaveFailed,
-  reportConnectionSaveRefused,
-  reportInvalidConnectionDraft,
-} from "@/pages/settings/connectionSaveRefusal";
-import { useIsMounted } from "@/hooks/useIsMounted";
+import { useConnectionSaveReporter } from "@/pages/settings/connectionSaveRefusal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -414,7 +408,9 @@ export default function SettingsPage() {
     savedDevices.devices[0] ??
     null;
   const [isSaving, setIsSaving] = useState(false);
-  const isMounted = useIsMounted();
+  const saveReport = useConnectionSaveReporter();
+  const selectedDeviceIdRef = useRef(savedDevices.selectedDeviceId);
+  selectedDeviceIdRef.current = savedDevices.selectedDeviceId;
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
   // CTAs so the touch-off device can save/connect, refresh, and scan with no taps. Inert
@@ -811,42 +807,42 @@ export default function SettingsPage() {
     setConnectionFieldError(portError);
     const validationError = nextDeviceNameError ?? hostError ?? portError;
     if (validationError) {
-      reportInvalidConnectionDraft(validationError);
+      saveReport.invalid(validationError);
       return;
     }
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
-    // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
-    // is false the user hasn't touched it, so reuse the stored password unchanged instead
-    // of the empty value that's actually sitting in the (never-shown) input.
-    const isChangingPassword = passwordEditing;
-    const typedPassword = passwordInputRef.current.trim();
-    const effectivePassword = isChangingPassword
-      ? typedPassword
-      : selectedSavedDevice.hasPassword
-        ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
-        : "";
-    const hasPassword = effectivePassword.length > 0;
-    // HARD27-037: a rename or an FTP/Telnet port correction cannot make the device
-    // unreachable, so it must not be gated on a probe that fails while the machine
-    // is switched off.
-    const savedDraft = buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host);
-    // `passwordEditing` is true whenever the field is editable, which it is for every
-    // device that has no stored password. Only a password that is actually being set
-    // or cleared needs the device to answer.
-    const isChangingStoredPassword = isChangingPassword && (hasPassword || selectedSavedDevice.hasPassword);
-    const isLocalOnlyEdit = isLocalOnlySavedDeviceEdit(
-      { host: selectedSavedDevice.host, httpPort: selectedSavedDevice.httpPort },
-      { host: nextHost, httpPort: Number(deviceDraft.httpPort) },
-      isChangingStoredPassword,
-      deviceDraft.name !== savedDraft.name ||
-        deviceDraft.type !== savedDraft.type ||
-        deviceDraft.ftpPort !== savedDraft.ftpPort ||
-        deviceDraft.telnetPort !== savedDraft.telnetPort,
-    );
     setPasswordError(null);
     setIsSaving(true);
     try {
+      // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
+      // is false the user hasn't touched it, so reuse the stored password unchanged instead
+      // of the empty value that's actually sitting in the (never-shown) input.
+      const isChangingPassword = passwordEditing;
+      const typedPassword = passwordInputRef.current.trim();
+      const effectivePassword = isChangingPassword
+        ? typedPassword
+        : selectedSavedDevice.hasPassword
+          ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
+          : "";
+      const hasPassword = effectivePassword.length > 0;
+      // HARD27-037: a rename or an FTP/Telnet port correction cannot make the device
+      // unreachable, so it must not be gated on a probe that fails while the machine
+      // is switched off.
+      const savedDraft = buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host);
+      // `passwordEditing` is true whenever the field is editable, which it is for every
+      // device that has no stored password. Only a password that is actually being set
+      // or cleared needs the device to answer.
+      const isChangingStoredPassword = isChangingPassword && (hasPassword || selectedSavedDevice.hasPassword);
+      const isLocalOnlyEdit = isLocalOnlySavedDeviceEdit(
+        { host: selectedSavedDevice.host, httpPort: selectedSavedDevice.httpPort },
+        { host: nextHost, httpPort: Number(deviceDraft.httpPort) },
+        isChangingStoredPassword,
+        deviceDraft.name !== savedDraft.name ||
+          deviceDraft.type !== savedDraft.type ||
+          deviceDraft.ftpPort !== savedDraft.ftpPort ||
+          deviceDraft.telnetPort !== savedDraft.telnetPort,
+      );
       // Pre-commit reachability gate: never persist an unreachable device. When an
       // entered hostname can't be reached but the device is found on the LAN, calmly
       // steer the user to its IP address instead of failing silently.
@@ -857,12 +853,11 @@ export default function SettingsPage() {
             deviceHost: nextDeviceHost,
             password: hasPassword ? effectivePassword : null,
           });
-      if (!isMounted.current) return;
       if (reachability?.status === "unreachable") {
         if (reachability.suggestedAddress) {
           setReachabilitySuggestion({ address: reachability.suggestedAddress });
           setHostnameError(null);
-          reportConnectionSaveRefused(
+          saveReport.refused(
             `We couldn’t reach “${nextHost}”, but found a device at ${reachability.suggestedAddress}. Use that address in the host field.`,
             selectedSavedDevice.host,
           );
@@ -870,7 +865,7 @@ export default function SettingsPage() {
           setReachabilitySuggestion(null);
           const unreachableMessage = `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`;
           setHostnameError(unreachableMessage);
-          reportConnectionSaveRefused(unreachableMessage, selectedSavedDevice.host);
+          saveReport.refused(unreachableMessage, selectedSavedDevice.host);
         }
         return;
       }
@@ -878,7 +873,7 @@ export default function SettingsPage() {
         // The just-typed password was itself rejected by the device. A wrong password
         // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
         setPasswordError("Wrong password for this device.");
-        reportConnectionSaveRefused("Wrong password for this device.", selectedSavedDevice.host);
+        saveReport.refused("Wrong password for this device.", selectedSavedDevice.host);
         return;
       }
       setReachabilitySuggestion(null);
@@ -891,6 +886,7 @@ export default function SettingsPage() {
           await clearPasswordForDevice(selectedSavedDevice.id);
         }
       }
+      const isStillSelected = selectedDeviceIdRef.current === selectedSavedDevice.id;
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
         nameSource: deviceDraft.nameSource,
@@ -900,12 +896,13 @@ export default function SettingsPage() {
         telnetPort: Number(deviceDraft.telnetPort),
         hasPassword,
       });
-      updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
+      if (isStillSelected) updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
       // A local-only edit still re-applies to a live connection, but a device that is
       // not connected is not made to answer: that wait and its failure are exactly what
       // HARD27-037 removed.
-      if (!isLocalOnlyEdit || status.isConnected) {
+      if (isStillSelected && (!isLocalOnlyEdit || status.isConnected)) {
         const verification = await switchSavedDevice(selectedSavedDevice.id);
+        if (isSupersededSavedDeviceSwitch(verification)) return;
         if (isOfflineSwitchResult(verification) && !isLocalOnlyEdit) {
           throw new Error(
             describeSwitchFailure(
@@ -919,10 +916,10 @@ export default function SettingsPage() {
       setPasswordInput("");
       passwordInputRef.current = "";
       setPasswordEditing(!hasPassword);
-      dismissConnectionSaveToasts();
+      saveReport.dismiss();
       toast({ title: "Connection settings saved" });
     } catch (error) {
-      reportConnectionSaveFailed((error as Error).message, error, nextHost);
+      saveReport.failed((error as Error).message, error, nextHost);
     } finally {
       setIsSaving(false);
     }

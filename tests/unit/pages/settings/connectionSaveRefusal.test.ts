@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __clearDedupStateForTests } from "@/lib/uiErrors";
+import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog } from "@/lib/logging";
 import {
@@ -37,6 +38,7 @@ describe("connectionSaveRefusal", () => {
     vi.clearAllMocks();
     __clearDedupStateForTests();
     dismissals.length = 0;
+    updateDeviceConnectionState("UNKNOWN");
     vi.mocked(toast).mockImplementation((() => {
       const dismiss = vi.fn();
       dismissals.push(dismiss);
@@ -85,6 +87,26 @@ describe("connectionSaveRefusal", () => {
     expect(dismissals[0]).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenLastCalledWith(
       expect.objectContaining({ title: "Unable to save connection", description: "switch failed" }),
+    );
+  });
+
+  it("shows why the save failed even while the device is shown offline", () => {
+    updateDeviceConnectionState("OFFLINE_NO_DEMO");
+
+    reportConnectionSaveFailed("Host unreachable", new Error("Host unreachable"), "c64u");
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Unable to save connection", variant: "destructive" }),
+    );
+  });
+
+  it("shows why a save was refused even while the device is shown offline", () => {
+    updateDeviceConnectionState("OFFLINE_NO_DEMO");
+
+    reportConnectionSaveRefused("Host unreachable (DNS)", "c64u");
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Connection not saved", description: "Host unreachable (DNS)" }),
     );
   });
 

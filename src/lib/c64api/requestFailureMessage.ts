@@ -9,10 +9,12 @@
 // Includes Android's "Unable to resolve host", which CapacitorHttp reports for
 // an unresolvable device hostname and which the other patterns do not match.
 export const isDnsFailure = (message: string) =>
-  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
+  /unknown host|enotfound|ename_not_found|\(dns\)|\bdns (?:lookup|resolution|error|failure|failed)|unable to resolve host/i.test(
+    message,
+  );
 
 export const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|\(dns\)|\bdns (?:lookup|resolution|error|failure|failed)|unable to resolve host/i.test(
     message,
   );
 

@@ -27,6 +27,16 @@ describe("failureTaxonomy", () => {
     expect(classifyError(new Error("getaddrinfo ENOTFOUND c64u")).failureClass).toBe("network-unreachable");
   });
 
+  it("does not read the letters dns inside a host name as an unreachable network", () => {
+    expect(classifyError(new Error("Failed to fetch http://c64.ddns.net/v1/info")).failureClass).toBe(
+      "network-transient",
+    );
+  });
+
+  it("classifies a name resolution failure as network-unreachable", () => {
+    expect(classifyError(new Error("DNS lookup failed for c64u")).failureClass).toBe("network-unreachable");
+  });
+
   it("classifies permission errors", () => {
     expect(classifyError(new Error("Permission denied: content://demo")).failureClass).toBe("permission-denied");
   });

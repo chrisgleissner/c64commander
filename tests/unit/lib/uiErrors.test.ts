@@ -545,6 +545,20 @@ describe("uiErrors", () => {
       expect(destructiveToasts()).toHaveLength(0);
     });
 
+    it("shows the reason of a failure the user caused, even while the device is shown offline", () => {
+      updateDeviceConnectionState("OFFLINE_NO_DEMO");
+
+      reportUserError({
+        operation: "CONNECTION_SAVE",
+        title: "Unable to save connection",
+        description: "Host unreachable",
+        userInitiated: true,
+      });
+
+      expect(destructiveToasts()).toHaveLength(1);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: "Host unreachable" }));
+    });
+
     it("treats a report titled Offline the same way when the connection is shown offline", () => {
       updateDeviceConnectionState("OFFLINE_NO_DEMO");
 

@@ -900,6 +900,7 @@ describe("SettingsPage", () => {
       title: "Connection not saved",
       description: typeof description === "string" ? description : expect.stringMatching(description),
       deviceHost: "c64u",
+      userInitiated: true,
     });
 
   it("reports the unreachable host as a refusal, because the inline error can sit above the visible screen", async () => {
@@ -998,13 +999,18 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeEnabled());
   }, 15000);
 
-  it("raises no refusal when the page is gone before the device answers", async () => {
-    let answer!: (value: { status: "unreachable"; suggestedAddress: null; suggestedHostname: null }) => void;
+  const pendingProbe = () => {
+    let answer!: (value: Record<string, unknown>) => void;
     mockEvaluateNewDeviceReachability.mockReturnValue(
       new Promise((resolve) => {
         answer = resolve;
       }),
     );
+    return (value: Record<string, unknown>) => answer(value);
+  };
+
+  it("raises no refusal when the page is gone before the device answers", async () => {
+    const answer = pendingProbe();
     const view = renderSettingsPage();
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
@@ -1015,6 +1021,85 @@ describe("SettingsPage", () => {
     });
 
     expect(reportUserError).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Connection save refusal not shown: the page was closed",
+      expect.anything(),
+    );
+  }, 15000);
+
+  it("still saves and connects when the page is gone before a reachable device answers", async () => {
+    const answer = pendingProbe();
+    const view = renderSettingsPage();
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    view.unmount();
+    await act(async () => {
+      answer({ status: "reachable" });
+    });
+
+    await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1"));
+    expect(mockUpdateConfig).toHaveBeenCalled();
+  }, 15000);
+
+  it("does not switch back to the edited device when another device was selected while the device was asked", async () => {
+    addSecondSavedDevice();
+    const answer = pendingProbe();
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
+    changeField("settings-device-telnet", "65");
+    await act(async () => {
+      answer({ status: "reachable" });
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("neither reports success nor failure when the switch was superseded by another one", async () => {
+    const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
+    mockSwitchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    renderSettingsPage();
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+    expect(reportUserError).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("disables the device rows from the moment Save & Connect is pressed, including while the stored password is read", async () => {
+    addSecondSavedDevice();
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: savedDevicesRef.current.devices.map((device) => ({ ...device, hasPassword: true })),
+    };
+    let release!: (value: string) => void;
+    vi.mocked(getPasswordForDevice).mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeDisabled());
+    expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
+    await act(async () => {
+      release("secret");
+    });
   }, 15000);
 
   it("replaces an earlier refusal when the next save fails after the device answered", async () => {

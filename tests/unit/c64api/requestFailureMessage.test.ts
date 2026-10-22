@@ -29,6 +29,12 @@ describe("resolveTransportFailureMessage", () => {
     );
   });
 
+  it("does not call a failure DNS because the device host name contains the letters dns", () => {
+    expect(resolveTransportFailureMessage("Failed to fetch c64.ddns.net", { timedOut: false, timeoutMs: 15_000 })).toBe(
+      "Host unreachable",
+    );
+  });
+
   it("produces a timeout message that still counts as a transient connectivity failure", () => {
     const message = resolveTransportFailureMessage("signal is aborted", { timedOut: true, timeoutMs: 15_000 });
     expect(isTransientConnectivityFailure(message)).toBe(true);
