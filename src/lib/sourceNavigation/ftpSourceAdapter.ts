@@ -236,9 +236,9 @@ const listFilesRecursive = async (
       onProgress?.(entries.length);
     }
     const failures = result.partialFailures ?? [];
-    // The native walk bails on the first FTP data-channel timeout instead of
-    // cascading into more PASV connections against known-flaky firmware -
-    // that early exit must be visible, not silently presented as a complete
+    // The native walk bails on the first lost connection (a data-channel timeout, a closed or
+    // broken socket) instead of cascading into more PASV connections against known-flaky
+    // firmware - that early exit must be visible, not silently presented as a complete
     // listing. Reuses the existing partialFailures surface. See HARD9-078.
     if (result.timedOut) {
       failures.push({

@@ -65,6 +65,7 @@ class FtpClientPlugin : Plugin() {
   private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
   private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
+
   internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -336,7 +337,7 @@ class FtpClientPlugin : Plugin() {
                           // whole walk (surfacing this one failure) instead of churning.
                           // A lost connection is the same: every later folder would fail the same way and
                           // write its own warnings.
-                          if (error is java.net.SocketTimeoutException || error is java.net.SocketException) {
+                          if (isFtpConnectionLost(error)) {
                             timedOut = true
                             break
                           }
@@ -841,8 +842,6 @@ class FtpClientPlugin : Plugin() {
     )
   }
 
-  private class NameListingFailedException(cause: Exception) : Exception(cause.message, cause)
-
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       resolveListingWithFallbacks(client, path)
@@ -878,7 +877,7 @@ class FtpClientPlugin : Plugin() {
       // Fail fast on a timeout so the firmware gets breathing room; only cascade for
       // genuine LIST-unsupported / capability errors (which surface as other errors).
       if (error is FtpListRefusedException ||
-              error is SocketTimeoutException ||
+              isFtpConnectionLost(error) ||
               timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
         throw error
       }

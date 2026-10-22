@@ -593,6 +593,69 @@ class FtpClientPluginTest {
     verify(ftpClient, never()).listFiles("/three")
   }
 
+  private fun recursiveListingWhereFolderOneFailsWith(error: Exception): Pair<JSObject?, FTPClient> {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    val folders =
+            listOf("one", "two").map { folderName ->
+              FTPFile().apply {
+                name = folderName
+                type = FTPFile.DIRECTORY_TYPE
+              }
+            }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles(any(String::class.java))).thenAnswer { invocation ->
+      when (invocation.getArgument<String>(0)) {
+        "/" -> folders.toTypedArray()
+        "/one" -> throw error
+        else -> emptyArray<FTPFile>()
+      }
+    }
+    `when`(ftpClient.mlistDir(any(String::class.java))).thenReturn(emptyArray())
+    `when`(ftpClient.listNames(any(String::class.java))).thenReturn(null)
+    `when`(ftpClient.isConnected).thenReturn(true)
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+    plugin.listDirectoryRecursive(call)
+    return Pair(resolved, ftpClient)
+  }
+
+  @Test
+  fun listDirectoryRecursiveKeepsWalkingAfterARefusedConnection() {
+    val (resolved, ftpClient) =
+            recursiveListingWhereFolderOneFailsWith(java.net.ConnectException("Connection refused"))
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    verify(ftpClient).listFiles("/two")
+  }
+
+  @Test
+  fun listDirectoryRecursiveStopsWhenTheControlConnectionIsClosed() {
+    val (resolved, ftpClient) =
+            recursiveListingWhereFolderOneFailsWith(
+                    org.apache.commons.net.ftp.FTPConnectionClosedException("Connection closed")
+            )
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    verify(ftpClient, never()).listFiles("/two")
+    verify(ftpClient, never()).mlistDir("/one")
+  }
+
   @Test
   fun listDirectorySkipsDotEntries() {
     val plugin = FtpClientPlugin()
