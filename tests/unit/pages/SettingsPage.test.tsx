@@ -891,6 +891,41 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
+  it("raises a toast when the save is blocked, because the inline error can sit above the visible screen", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.0.2.248" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith({
+        title: "Connection not saved",
+        description: expect.stringMatching(/couldn’t reach “192\.0\.2\.248”/i),
+        variant: "destructive",
+      });
+    });
+  }, 15000);
+
+  it("raises a toast naming the invalid port when Save & Connect is refused", async () => {
+    renderSettingsPage();
+    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "70000" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith({
+        title: "Connection not saved",
+        description: "FTP port must be 1 to 65535.",
+        variant: "destructive",
+      });
+    });
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
   // Typing 192.0.2.248 was answered with "or enter its IP address", which the user had just done.
   it("does not suggest entering an IP address when the unreachable host already is one", async () => {
     mockEvaluateNewDeviceReachability.mockResolvedValue({

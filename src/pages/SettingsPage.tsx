@@ -788,6 +788,9 @@ export default function SettingsPage() {
     }
   };
 
+  const rejectConnectionSave = (description: string) =>
+    toast({ title: "Connection not saved", description, variant: "destructive" });
+
   const handleSaveConnection = trace(async function handleSaveConnection() {
     if (!selectedSavedDevice) return;
     const hostError = validateDeviceHost(deviceDraft.host);
@@ -801,7 +804,11 @@ export default function SettingsPage() {
     setDeviceNameError(nextDeviceNameError);
     const portError = validateSavedDevicePorts(deviceDraft);
     setConnectionFieldError(portError);
-    if (hostError || portError || nextDeviceNameError) return;
+    const validationError = nextDeviceNameError ?? hostError ?? portError;
+    if (validationError) {
+      rejectConnectionSave(validationError);
+      return;
+    }
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
     // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
@@ -849,11 +856,12 @@ export default function SettingsPage() {
         if (reachability.suggestedAddress) {
           setReachabilitySuggestion({ address: reachability.suggestedAddress });
           setHostnameError(null);
+          rejectConnectionSave(`We couldn’t reach “${nextHost}”. Use the suggested address under the host field.`);
         } else {
           setReachabilitySuggestion(null);
-          setHostnameError(
-            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`,
-          );
+          const unreachableMessage = `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`;
+          setHostnameError(unreachableMessage);
+          rejectConnectionSave(unreachableMessage);
         }
         return;
       }
