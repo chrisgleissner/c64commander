@@ -572,6 +572,25 @@ Status · Evidence.
 
 ### 5.7 Settings
 
+
+#### SPM-PLAY-08 CommoServe stays and opens narrowed to SID files
+
+- Requirement: CommoServe MUST stay available in Add items in SID Player. Its search MUST open with the type
+  preset `sid` selected, and a result whose files include no SID file MUST NOT be offered for adding.
+- Rationale: CommoServe does host SID music. Check made on 2026-10-22 with read-only requests to its public search
+  service: the presets include the type `sid` and the category `music`, a search for `type:sid` returned SID
+  entries, and an entry listing contained a `.sid` file next to a disk image. It also hosts disk images,
+  cartridges, tapes, apps, games, demos and graphics, which SID Player cannot run.
+- Files: `src/pages/playFiles/hooks/useArchiveClientSettings.ts`, the archive search view, the existing
+  `filterEntry` of `SPM-PLAY-02` for entries.
+- Choke point: the archive search's default preset values and the shared `filterEntry`.
+- Acceptance: In SID Player the CommoServe search shows SID results only. In the Full App the search is
+  unchanged. The CommoServe source is hidden when the feature flag `commoserve_enabled` is off, in both modes.
+- Tests: `tests/unit/pages/playFiles/sidPlayerCommoServe.test.tsx` — "SID Player opens CommoServe narrowed to the
+  sid type", "SID Player does not offer a result without a SID file", "the Full App keeps all types".
+- Verification: unit, Playwright with the existing archive mock.
+- Status: Not started. Evidence: —
+
 #### SPM-SET-01 Section visibility
 
 - Requirement: Settings sections MUST follow the surface map through `CollapsibleSection`:
@@ -1649,6 +1668,7 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-PLAY-05 | Supply ROM images from files (umbrella) | Not started | see SPM-ROM-01..04, 08..15 | — |
 | SPM-PLAY-06 | Engine notices fit SID Player | Not started | playbackEngineRouting.test.ts | — |
 | SPM-PLAY-07 | SID Radio works in SID Player | Not started | sidPlayerMode.spec.ts | — |
+| SPM-PLAY-08 | CommoServe stays and opens narrowed to SID files | Not started | sidPlayerCommoServe.test.tsx | — |
 | SPM-SET-01 | Section visibility | Not started | SettingsPage.sidPlayer.test.tsx | — |
 | SPM-SET-02 | Play and disk rows | Not started | PlayAndDiskSettingsSection.test.tsx | — |
 | SPM-SET-03 | Feature flags that need a device | Not started | featureFlags.sidPlayer.test.ts | — |
