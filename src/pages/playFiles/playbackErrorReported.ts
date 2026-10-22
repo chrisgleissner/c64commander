@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-type HandledUiError = Error & { c64uHandled?: boolean };
+type PlaybackReportedError = Error & { c64uHandled?: boolean };
 
-export const markHandledUiError = (error: unknown) => {
+export const markPlaybackErrorReported = (error: unknown) => {
   if (error instanceof Error) {
-    (error as HandledUiError).c64uHandled = true;
+    (error as PlaybackReportedError).c64uHandled = true;
   }
 };
 
-export const isHandledUiError = (error: unknown): error is HandledUiError =>
-  error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
+export const isPlaybackErrorReported = (error: unknown): error is PlaybackReportedError =>
+  error instanceof Error && Boolean((error as PlaybackReportedError).c64uHandled);

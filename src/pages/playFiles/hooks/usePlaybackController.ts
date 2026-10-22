@@ -39,7 +39,7 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
-import { isHandledUiError, markHandledUiError } from "@/pages/playFiles/handledUiError";
+import { isPlaybackErrorReported, markPlaybackErrorReported } from "@/pages/playFiles/playbackErrorReported";
 import {
   isLaunchOvertaken,
   isSongCategory,
@@ -732,7 +732,7 @@ export function usePlaybackController({
                 archivePath: item.archiveRef?.entryPath ?? item.path,
               },
             });
-            markHandledUiError(error);
+            markPlaybackErrorReported(error);
             throw error;
           }
         }
@@ -755,7 +755,7 @@ export function usePlaybackController({
                 path: item.path,
               },
             });
-            markHandledUiError(error);
+            markPlaybackErrorReported(error);
             throw error;
           }
         }
@@ -939,7 +939,7 @@ export function usePlaybackController({
                 item: item.label,
               },
             });
-            markHandledUiError(error);
+            markPlaybackErrorReported(error);
             throw error;
           }
           await ensureUnmuted({ refreshItems: true });
@@ -959,7 +959,7 @@ export function usePlaybackController({
                   item: item.label,
                 },
               });
-              markHandledUiError(error);
+              markPlaybackErrorReported(error);
               throw error;
             }
           }
@@ -1039,7 +1039,7 @@ export function usePlaybackController({
                       });
                       return;
                     }
-                    markHandledUiError(error);
+                    markPlaybackErrorReported(error);
                     throw error;
                   }
                   reportUserError({
@@ -1054,7 +1054,7 @@ export function usePlaybackController({
                       overrideCount: configOverrides?.length ?? 0,
                     },
                   });
-                  markHandledUiError(error);
+                  markPlaybackErrorReported(error);
                   throw error;
                 }
               }
@@ -1330,7 +1330,7 @@ export function usePlaybackController({
   // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
   const reportPlaybackStartFailure = useCallback(
     (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
-      if (isHandledUiError(report.error)) return;
+      if (isPlaybackErrorReported(report.error)) return;
       if (isAbortLikeError(report.error)) {
         reportUserError({
           operation: report.operation,
@@ -2108,7 +2108,7 @@ export function usePlaybackController({
             // Away from the device, with nothing left that plays without it: stop here, without an error.
             addLog("info", "Playback stopped: the tracks that follow need the C64", { currentIndex: activeIndex });
             const unreachable = new Error(DEVICE_NOT_CONNECTED_MESSAGE);
-            markHandledUiError(unreachable);
+            markPlaybackErrorReported(unreachable);
             throw unreachable;
           }
           await playItem(nextItem, {
@@ -2119,7 +2119,7 @@ export function usePlaybackController({
           });
           setIsPaused(false);
         } catch (error) {
-          if (!isHandledUiError(error)) {
+          if (!isPlaybackErrorReported(error)) {
             reportUserError({
               operation: "PLAYBACK_NEXT",
               title: "Playback next failed",
