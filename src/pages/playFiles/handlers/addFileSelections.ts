@@ -39,7 +39,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
-import { isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
@@ -559,6 +559,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
+      let configLookupsSkipped = 0;
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
@@ -690,25 +691,26 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 : undefined)
             : undefined;
         const configSourceType = source.type === "local" || source.type === "ultimate" ? source.type : null;
-        const playbackConfig =
-          configSourceType && !(configSourceType === "ultimate" && isDeviceOutOfReach())
-            ? resolvePlaybackConfig({
-                candidates: await discoverConfigCandidates({
-                  sourceType: configSourceType,
-                  sourceId: source.type === "local" ? source.id : null,
-                  sourceRootPath: source.rootPath,
-                  targetFile: file,
-                  listEntries: source.listEntries,
-                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                  localEntriesBySourceId,
-                }),
-              })
-            : {
-                configRef: null as ConfigFileReference | null,
-                configOrigin: "none" as const,
-                configCandidates: [],
-                configOverrides: null,
-              };
+        const networkDown = configSourceType === "ultimate" && isNetworkKnownOffline();
+        if (networkDown) configLookupsSkipped += 1;
+        const playbackConfig = configSourceType
+          ? resolvePlaybackConfig({
+              candidates: await discoverConfigCandidates({
+                sourceType: configSourceType,
+                sourceId: source.type === "local" ? source.id : null,
+                sourceRootPath: source.rootPath,
+                targetFile: file,
+                listEntries: networkDown ? async () => [] : source.listEntries,
+                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                localEntriesBySourceId,
+              }),
+            })
+          : {
+              configRef: null as ConfigFileReference | null,
+              configOrigin: "none" as const,
+              configCandidates: [],
+              configOverrides: null,
+            };
         throwIfAborted();
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
@@ -1115,12 +1117,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
+      if (configLookupsSkipped > 0) {
+        addLog("warn", "Settings files were not looked up beside the added tunes: the network was down", {
+          sourceId: source.id,
+          tunes: configLookupsSkipped,
+        });
+      }
+      const notices = [
+        skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "",
+        configLookupsSkipped ? "Settings files were not looked up while the network was down." : "",
+      ].filter(Boolean);
       dispatchFeedback(() => {
         toast({
           title: "Items added",
-          description: skippedFolders.length
-            ? `${appendedPlaylistItems} file(s) added to playlist. ${INCOMPLETE_SCAN_NOTICE}`
-            : `${appendedPlaylistItems} file(s) added to playlist.`,
+          description: [`${appendedPlaylistItems} file(s) added to playlist.`, ...notices].join(" "),
         });
       });
       void recordSmokeBenchmarkSnapshot({

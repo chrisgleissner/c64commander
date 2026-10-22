@@ -90,9 +90,9 @@ vi.mock("@/lib/sid/songlengthsDiscovery", async (importOriginal) => ({
   isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name) || /songlengths\.md5$/i.test(name)),
 }));
 
-const { deviceOutOfReach } = vi.hoisted(() => ({ deviceOutOfReach: vi.fn(() => false) }));
+const { networkKnownOffline } = vi.hoisted(() => ({ networkKnownOffline: vi.fn(() => false) }));
 
-vi.mock("@/pages/playFiles/playableWithoutDevice", () => ({ isDeviceOutOfReach: deviceOutOfReach }));
+vi.mock("@/lib/connection/networkStatusWatch", () => ({ isNetworkKnownOffline: networkKnownOffline }));
 
 vi.mock("@/lib/config/configDiscovery", () => ({
   discoverConfigCandidates: vi.fn(async () => []),
@@ -717,30 +717,40 @@ describe("addFileSelections batching", () => {
     );
   });
 
-  it("does not look for settings files beside each tune while the device is out of reach", async () => {
+  it("does not list folders over the network for settings files while the network is down, and says so", async () => {
     const deps = { ...createDeps(), recurseFolders: true };
-    const listing = Object.assign(
-      [
-        { type: "file" as const, name: "a.sid", path: "/USB2/Games/a.sid" },
-        { type: "file" as const, name: "b.sid", path: "/USB2/Games/Arcade/b.sid" },
-      ],
-      {},
-    );
-    const source = createUltimateSource(
-      async () => [],
-      async () => listing,
-    );
+    const listing = [
+      { type: "file" as const, name: "a.sid", path: "/USB2/Games/a.sid" },
+      { type: "file" as const, name: "b.sid", path: "/USB2/Games/Arcade/b.sid" },
+    ];
+    const listEntries = vi.fn(async () => []);
+    const source = createUltimateSource(listEntries, async () => listing);
     vi.mocked(discoverConfigCandidates).mockClear();
-    deviceOutOfReach.mockReturnValue(true);
+    vi.mocked(toast).mockClear();
+    vi.mocked(addLog).mockClear();
+    networkKnownOffline.mockReturnValue(true);
     try {
       const result = await createAddFileSelectionsHandler(deps as any)(source, [
         { type: "dir", name: "Games", path: "/USB2/Games" },
       ]);
 
       expect(result).toBe(true);
-      expect(discoverConfigCandidates).not.toHaveBeenCalled();
+      expect(discoverConfigCandidates).toHaveBeenCalledTimes(2);
+      const { listEntries: lookup } = vi.mocked(discoverConfigCandidates).mock.calls[0]![0];
+      expect(lookup).not.toBe(listEntries);
+      await expect(lookup("/USB2/Games")).resolves.toEqual([]);
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "2 file(s) added to playlist. Settings files were not looked up while the network was down.",
+        }),
+      );
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Settings files were not looked up beside the added tunes: the network was down",
+        expect.objectContaining({ tunes: 2 }),
+      );
     } finally {
-      deviceOutOfReach.mockReturnValue(false);
+      networkKnownOffline.mockReturnValue(false);
     }
   });
 
