@@ -4108,6 +4108,37 @@ describe("usePlaybackController", () => {
       expect(isRemotePlaybackActive()).toBe(false);
     });
 
+    it("tells the user and stops the transport when the tune cannot restart on the engine just chosen", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const setIsPlaying = vi.fn();
+      const setIsPaused = vi.fn();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+        setIsPlaying,
+        setIsPaused,
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect(controller.isActive()).toBe(true);
+      vi.mocked(executePlayPlan).mockRejectedValueOnce(new Error("The C64 could not be reached"));
+
+      await act(async () => {
+        savePlaybackEngine("c64");
+      });
+
+      await waitFor(() =>
+        expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+          expect.objectContaining({ operation: "PLAYBACK_START", title: "Playback failed" }),
+        ),
+      );
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
+      expect(setIsPaused).toHaveBeenCalledWith(false);
+    });
+
     // A paused tune leaves the C64 frozen; the reset that stops it has to reach a running machine.
     it("resumes a paused C64 before resetting it for a tune that plays on this device", async () => {
       enableLocal();

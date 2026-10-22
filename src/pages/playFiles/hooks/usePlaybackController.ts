@@ -1374,11 +1374,23 @@ export function usePlaybackController({
       }
     },
     onRestartFailed: (error, item) => {
-      if (isHandledUiError(error)) return;
-      addErrorLog("Restarting the tune on the new playback engine failed", {
-        error: (error as Error).message,
-        item: item.label,
-      });
+      if (!isHandledUiError(error)) {
+        addErrorLog("Restarting the tune on the new playback engine failed", {
+          error: (error as Error).message,
+          item: item.label,
+        });
+        reportPlaybackStartFailure({
+          operation: "PLAYBACK_START",
+          title: "Playback failed",
+          error,
+          context: { item: item.label },
+        });
+      }
+      setIsPlaying(false);
+      setIsPaused(false);
+      trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
     },
   });
 
