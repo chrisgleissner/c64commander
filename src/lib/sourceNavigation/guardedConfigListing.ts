@@ -25,16 +25,20 @@ export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up w
  * Looking for a settings file is optional, so once the phone knows it is offline, or one listing from the device
  * has failed to connect, the remaining folders are answered from the source's cache (or as empty) instead of
  * each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the device again, so a
- * device that was only briefly refusing is used again. Lookups run one at a time, so the first failure is seen
- * before the next folder is asked. What was skipped is counted so the add can say so.
+ * device that was only briefly refusing is used again. Until one lookup has succeeded the lookups run one at a
+ * time, so a first failure is seen before the next folder is asked; after that they run together, as many as the
+ * FTP client allows. What was skipped is counted so the add can say so.
  */
-export const createConfigListing = (source: ListingSource) => {
+export const createConfigListing = (source: ListingSource, signal?: AbortSignal) => {
   let deviceUnreachable = false;
+  let deviceAnswered = false;
   let skipped = 0;
   let sinceLastProbe = 0;
+  let noticeLogged = false;
   let chain: Promise<unknown> = Promise.resolve();
 
   const lookUp = async (path: string): Promise<SourceEntry[]> => {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const fromDevice = source.type === "ultimate" && !isSimulatedDeviceTarget();
     const probing = deviceUnreachable && (sinceLastProbe += 1) >= CONFIG_LOOKUP_PROBE_EVERY;
     if (fromDevice && ((deviceUnreachable && !probing) || isNetworkKnownOffline())) {
@@ -45,17 +49,23 @@ export const createConfigListing = (source: ListingSource) => {
     try {
       const entries = await source.listEntries(path);
       deviceUnreachable = false;
+      deviceAnswered = true;
       return entries;
     } catch (error) {
       if (fromDevice && isConnectionFailure(error)) {
         deviceUnreachable = true;
+        deviceAnswered = false;
         skipped += 1;
+      } else if (fromDevice && (error as Error)?.name !== "AbortError") {
+        deviceUnreachable = false;
+        deviceAnswered = true;
       }
       throw error;
     }
   };
 
   const listEntries = (path: string): Promise<SourceEntry[]> => {
+    if (deviceAnswered) return lookUp(path);
     const run = chain.then(() => lookUp(path));
     chain = run.catch(() => undefined);
     return run;
@@ -67,10 +77,13 @@ export const createConfigListing = (source: ListingSource) => {
     /** Logs what was skipped and returns the notice for the add's message, or "" when nothing was. */
     skippedNotice: () => {
       if (skipped === 0) return "";
-      addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
-        sourceId: source.id,
-        folders: skipped,
-      });
+      if (!noticeLogged) {
+        noticeLogged = true;
+        addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
+          sourceId: source.id,
+          folders: skipped,
+        });
+      }
       return CONFIG_LOOKUP_SKIPPED_NOTICE;
     },
   };

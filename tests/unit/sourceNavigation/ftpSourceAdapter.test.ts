@@ -403,6 +403,22 @@ describe("ftpSourceAdapter", () => {
     );
   });
 
+  it("goes on with the TypeScript walk after a single folder timed out", async () => {
+    const dir = (name: string) => ({ type: "dir", name, path: `/${name}`, size: 0, modifiedAt: "now" });
+    listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+      if (path === "/") return { entries: [dir("stalled"), dir("good")] };
+      if (path === "/stalled") throw new Error("FTP list failed: Timeout (data socket)");
+      return { entries: [{ type: "file", name: "a.sid", path: "/good/a.sid", size: 1, modifiedAt: "now" }] };
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(results.map((entry) => entry.name)).toEqual(["a.sid"]);
+    expect(results.partialFailures?.map((failure) => failure.message)).not.toContain(
+      "Listing incomplete: the device stopped answering",
+    );
+  });
+
   it("says the device refused connections when the native walk ended after repeated refusals", async () => {
     isNativePlatformMock.mockReturnValue(true);
     listFtpDirectoryRecursiveMock.mockResolvedValue({

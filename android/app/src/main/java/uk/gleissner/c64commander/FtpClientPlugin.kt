@@ -163,14 +163,8 @@ class FtpClientPlugin : Plugin() {
           error: Exception,
           connectTimeoutMs: Int,
           transferTimeoutMs: Int
-  ): String {
-    val message = error.message ?: "FTP $operation failed"
-    return if (error is SocketTimeoutException || timeoutMessagePattern.containsMatchIn(message)) {
-      "FTP $operation timed out after connect ${connectTimeoutMs}ms / transfer ${transferTimeoutMs}ms"
-    } else {
-      message
-    }
-  }
+  ): String =
+          ftpFailureMessage(operation, error, connectTimeoutMs, transferTimeoutMs, timeoutMessagePattern)
 
   private fun ftpFileToEntry(path: String, file: FTPFile): JSObject? {
     val name = file.name ?: return null

@@ -142,7 +142,7 @@ const isUnreadableFolderEcho = async (
 const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
-  const normalizedPath = path && path !== "" ? path : "/";
+  const normalizedPath = (path && path !== "" ? path : "/").replace(/(.)\/$/, "$1");
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   if (!options?.skipCache) {
     const cached = getCachedEntries(cacheKey);
@@ -152,7 +152,7 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
   const request = { host, port: getStoredFtpPort(), password };
   const result = await listFtpDirectory({ ...request, path: normalizedPath });
   if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
-    throw new Error(`The C64 could not read ${normalizedPath}. Check that its storage is inserted and readable.`);
+    throw new Error(`The C64 could not read ${path || "/"}. Check that its storage is inserted and readable.`);
   }
   const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
@@ -174,6 +174,9 @@ const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursive
   });
   return entries;
 };
+
+/** One folder that times out can be a single stalled data channel; two in a row mean the device is gone. */
+const FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP = 2;
 
 const FTP_LIST_RECURSIVE_METHOD = "FtpClient.listDirectoryRecursive";
 
@@ -266,6 +269,7 @@ const listFilesRecursive = async (
   // messages exactly. See HARD9-081.
   let examinedEntries = 0;
   let capped = false;
+  let consecutiveLostFolders = 0;
 
   const processPath = async (current: { path: string; depth: number }) => {
     assertNotAborted();
@@ -288,7 +292,8 @@ const listFilesRecursive = async (
         path: current.path,
         message: err.message,
       });
-      if (isConnectionFailure(err)) {
+      consecutiveLostFolders = isConnectionFailure(err) ? consecutiveLostFolders + 1 : 0;
+      if (consecutiveLostFolders >= FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP) {
         // Every later folder would fail the same way, each after its own timeout.
         if (!capped) {
           partialFailures.push({ path: current.path, message: "Listing incomplete: the device stopped answering" });
@@ -306,6 +311,7 @@ const listFilesRecursive = async (
       return;
     }
     assertNotAborted();
+    consecutiveLostFolders = 0;
     let filesFound = 0;
     for (const entry of entries) {
       if (capped) break;

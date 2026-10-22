@@ -23,6 +23,25 @@ internal fun isFtpConnectionLost(error: Exception, timeoutMessagePattern: Regex)
                 (error !is FtpListRefusedException && timeoutMessagePattern.containsMatchIn(error.message ?: "")) ||
                 (error is SocketException && !isFtpConnectionRefused(error))
 
+/** The message reported for a failed operation: timeouts are named as such, a refused folder keeps its reply. */
+internal fun ftpFailureMessage(
+        operation: String,
+        error: Exception,
+        connectTimeoutMs: Int,
+        transferTimeoutMs: Int,
+        timeoutMessagePattern: Regex
+): String {
+  val message = error.message ?: "FTP $operation failed"
+  val timedOut =
+          error is SocketTimeoutException ||
+                  (error !is FtpListRefusedException && timeoutMessagePattern.containsMatchIn(message))
+  return if (timedOut) {
+    "FTP $operation timed out after connect ${connectTimeoutMs}ms / transfer ${transferTimeoutMs}ms"
+  } else {
+    message
+  }
+}
+
 /** How many folders in a row may be refused before the walk gives up. */
 internal const val maxConsecutiveRefusals = 2
 

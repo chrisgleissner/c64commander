@@ -1573,7 +1573,7 @@ export const HomeDiskManager = () => {
         );
 
         const runtimeFiles: Record<string, File> = {};
-        const configListing = createConfigListing(source);
+        const configListing = createConfigListing(source, abortSignal);
         const configSource = { ...source, listEntries: configListing.listEntries };
         const disks = await Promise.all(
           diskCandidates.map(async (entry, index) => {

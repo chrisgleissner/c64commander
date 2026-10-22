@@ -559,7 +559,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
-      const configListing = createConfigListing(source);
+      const configListing = createConfigListing(source, abortSignal);
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
