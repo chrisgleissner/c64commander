@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useIsMounted } from "@/hooks/useIsMounted";
+import { addLog } from "@/lib/logging";
 import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
 
 const REFUSED_OPERATION = "CONNECTION_SAVE_REFUSED";
@@ -59,6 +60,8 @@ export const reportConnectionSaveFailed = (description: string, error: unknown, 
   });
 };
 
+export type ConnectionSaveReporter = ReturnType<typeof useConnectionSaveReporter>;
+
 /** What a save tells the user. Once the page is gone a refusal is a notice, not an error that waits to be dismissed. */
 export const useConnectionSaveReporter = () => {
   const isMounted = useIsMounted();
@@ -69,7 +72,10 @@ export const useConnectionSaveReporter = () => {
       dismiss: dismissConnectionSaveToasts,
       refused: (description: string, deviceHost: string) => {
         if (isMounted.current) reportConnectionSaveRefused(description, deviceHost);
-        else reportInvalidConnectionDraft(description);
+        else {
+          addLog("info", "Connection save refusal shown as a notice: the page was closed", { description, deviceHost });
+          reportInvalidConnectionDraft(description);
+        }
       },
     }),
     [isMounted],

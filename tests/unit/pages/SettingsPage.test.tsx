@@ -22,6 +22,7 @@ import {
 } from "@/hooks/useFocusNavigation";
 import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
 import { dismissConnectionSaveToasts } from "@/pages/settings/connectionSaveRefusal";
+import { __resetConnectionSaveStateForTests } from "@/pages/settings/saveConnection";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
@@ -723,6 +724,7 @@ vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
 afterEach(() => {
   leaveKeyNavigationModality();
   dismissConnectionSaveToasts();
+  __resetConnectionSaveStateForTests();
   vi.clearAllMocks();
 });
 
@@ -1046,6 +1048,11 @@ describe("SettingsPage", () => {
         alwaysVisible: true,
       }),
     );
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Connection save refusal shown as a notice: the page was closed",
+      expect.objectContaining({ description: expect.stringMatching(/couldn’t reach/) }),
+    );
   }, 15000);
 
   it("still saves and connects when the page is gone before a reachable device answers", async () => {
@@ -1103,13 +1110,13 @@ describe("SettingsPage", () => {
 
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
     changeField("settings-device-telnet", "65");
-    expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument();
+    expect(document.getElementById("password")).toHaveAttribute("aria-label", "Network Password saved");
     await act(async () => {
       answer({ status: "reachable" });
     });
     await saveFinished();
 
-    expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument();
+    expect(document.getElementById("password")).toHaveAttribute("aria-label", "Network Password saved");
   }, 15000);
 
   it("does not show the refusal of the edited device in the editor of the newly selected device", async () => {
@@ -1163,7 +1170,7 @@ describe("SettingsPage", () => {
     addSecondSavedDevice();
     const answer = pendingProbe();
     renderSettingsPage();
-    fireEvent.change(screen.getByLabelText(/password|network password/i), { target: { value: "new-password" } });
+    fireEvent.change(document.getElementById("password") as HTMLInputElement, { target: { value: "new-password" } });
     changeField("settings-device-host", "192.0.2.50");
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
@@ -1817,7 +1824,7 @@ describe("SettingsPage", () => {
   it("persists the saved-device password flag before switching devices", async () => {
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/password|network password/i), { target: { value: "new-password" } });
+    fireEvent.change(document.getElementById("password") as HTMLInputElement, { target: { value: "new-password" } });
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => {
@@ -1962,6 +1969,39 @@ describe("SettingsPage", () => {
     expect(within(deleteDialog).getAllByText(/from your saved devices\? This can.t be undone\./)).toHaveLength(1);
     expect(deleteDialog).toHaveAccessibleDescription(/from your saved devices\? This can.t be undone\./);
   });
+
+  it("keeps Save & Connect disabled while the delete confirmation is still loading what refers to the device", async () => {
+    addSecondSavedDevice();
+    let loaded!: (value: { diskCount: number; playlistItemCount: number; totalCount: number }) => void;
+    mockGetSavedDeviceDependencySummary.mockReturnValue(
+      new Promise((resolve) => {
+        loaded = resolve;
+      }),
+    );
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i })).toBeDisabled());
+    await act(async () => {
+      loaded({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+    });
+  }, 15000);
+
+  it("does not let a delete be confirmed while a save waits for the device", async () => {
+    addSecondSavedDevice();
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+    pendingProbe();
+    renderSettingsPage();
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+    await screen.findByRole("alertdialog", { name: /delete device/i });
+    await waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i, hidden: true })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i, hidden: true }));
+
+    await waitFor(() => expect(screen.getByTestId("settings-delete-device-confirm")).toBeDisabled());
+  }, 15000);
 
   it("opens the delete device confirmation on Cancel", async () => {
     savedDevicesRef.current = {

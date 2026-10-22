@@ -73,7 +73,7 @@ export const isTest = (file) =>
  * Sorted longest first, which is also the order they are worth splitting in.
  */
 export const GRANDFATHERED = new Map([
-  ["src/pages/SettingsPage.tsx", 3473],
+  ["src/pages/SettingsPage.tsx", 3365],
   ["src/lib/c64api.ts", 3468],
   ["src/pages/PlayFilesPage.tsx", 3165],
   ["src/components/disks/HomeDiskManager.tsx", 2761],
