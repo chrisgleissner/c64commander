@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
@@ -17,6 +17,7 @@ import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { useGuardedNavigate, type GuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
+import { tabLabelsOverflow } from "@/lib/navigation/tabBarFit";
 import { requestPageReset } from "@/lib/navigation/pageReset";
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -117,13 +118,45 @@ export function TabBar() {
   const interstitialActive = useInterstitialActive();
   const navRef = useRef<HTMLElement>(null);
   const activeTabRef = useRef<HTMLButtonElement>(null);
+  const [iconsOnly, setIconsOnly] = useState(false);
+
+  /*
+   * Show icons alone, except on the active tab, when the six labels do not fit the bar (a large device
+   * font on a narrow screen). The labels are measured, not guessed, and observed so a change of text size,
+   * display profile or width is picked up. Every tab keeps its aria-label, its 44px target and its place
+   * in the focus order.
+   */
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const labels = Array.from(nav.querySelectorAll<HTMLElement>(".tab-item-label"));
+    const measure = () => {
+      const bar = getComputedStyle(nav);
+      const tab = nav.querySelector<HTMLElement>(".tab-item");
+      if (!tab) return;
+      const tabStyle = getComputedStyle(tab);
+      setIconsOnly(
+        tabLabelsOverflow({
+          labelWidths: labels.map((label) => label.offsetWidth),
+          minTabWidth: Number.parseFloat(tabStyle.minWidth) || 0,
+          tabPadding: Number.parseFloat(tabStyle.paddingLeft) + Number.parseFloat(tabStyle.paddingRight) || 0,
+          availableWidth: nav.clientWidth - Number.parseFloat(bar.paddingLeft) - Number.parseFloat(bar.paddingRight),
+        }),
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    labels.forEach((label) => observer.observe(label));
+    return () => observer.disconnect();
+  }, []);
 
   /*
    * Keep the selected tab on screen.
    *
-   * The bar scrolls (`overflow-x-auto` in index.css) because six labels do not fit 320 CSS px at
-   * the larger Text sizes — "Docs", the last one, is the one drawn past the edge. Scrolling alone
-   * is not enough: a page reached any other way (the Quick menu, a deep link, the keypad) left the
+   * The bar scrolls (`overflow-x-auto` in index.css) as the fallback when even icons-only tabs do not fit.
+   * Scrolling alone is not enough: a page reached any other way (the Quick menu, a deep link, the keypad) left the
    * bar wherever it happened to be, so the tab for the page you are on could be the one off screen.
    * `inline: "nearest"` moves it the minimum distance, so a tab already visible does not jog.
    */
@@ -160,7 +193,7 @@ export function TabBar() {
     >
       <nav
         ref={navRef}
-        className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
+        className={cn("tab-bar app-chrome-rail app-chrome-rail-bottom bg-background", iconsOnly && "tab-bar-icons")}
         data-testid="tab-bar"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"

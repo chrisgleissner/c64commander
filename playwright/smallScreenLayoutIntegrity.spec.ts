@@ -446,27 +446,44 @@ test.describe("Small screen layout integrity", () => {
   });
 
   /**
-   * A phone's own font size setting at 1.3 widens the labels the same way the text scale variable does.
-   * With the app's text size left at Default, all six tabs must still fit a 320px screen without
-   * the bar having to scroll (Docs was drawn almost entirely off the right edge).
+   * A phone's own font size setting widens the labels the same way the text scale variable does. At 320px
+   * the six labels no longer fit the bar from 1.3 on; the inactive tabs then show their icon alone. The bar
+   * must not need to scroll, every tab must keep a 44px target and its accessible name, and the active tab
+   * must keep its label.
    */
-  test("all six tabs fit at 320px with the device font scale at 1.3 @layout", async ({ page }) => {
-    await seedUiMocks(page, server.baseUrl);
-    await page.addInitScript(() => {
-      localStorage.setItem("c64u_display_profile_override", "compact");
-    });
-    await page.setViewportSize(compactViewport);
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await settle(page);
-    await page.evaluate(() => document.documentElement.style.setProperty("--text-scale", "1.3"));
+  for (const fontScale of [1, 1.3, 1.5]) {
+    test(`all six tabs fit at 320px with the device font scale at ${fontScale} @layout`, async ({ page }) => {
+      await seedUiMocks(page, server.baseUrl);
+      await page.addInitScript(() => {
+        localStorage.setItem("c64u_display_profile_override", "compact");
+      });
+      await page.setViewportSize(compactViewport);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await page.evaluate(
+        (scale) => document.documentElement.style.setProperty("--text-scale", String(scale)),
+        fontScale,
+      );
+      await page.waitForTimeout(300);
 
-    const nav = page.locator("nav.tab-bar");
-    const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
-      scrollWidth: el.scrollWidth,
-      clientWidth: el.clientWidth,
-    }));
-    expect(scrollWidth, "the tab bar must not need to scroll").toBeLessThanOrEqual(clientWidth);
-  });
+      const nav = page.locator("nav.tab-bar");
+      const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }));
+      expect(scrollWidth, "the tab bar must not need to scroll").toBeLessThanOrEqual(clientWidth);
+
+      for (const route of TAB_ROUTES) {
+        const tab = page.getByTestId(`tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`);
+        const box = await tab.boundingBox();
+        expect(box?.width ?? 0, `${route.label} tab width`).toBeGreaterThanOrEqual(43.5);
+        expect(box?.height ?? 0, `${route.label} tab height`).toBeGreaterThanOrEqual(43.5);
+        await expect(tab).toHaveAttribute("aria-label", route.label);
+      }
+      const activeLabel = page.locator("nav.tab-bar .tab-item.active .tab-item-label");
+      await expect(activeLabel).toBeVisible();
+    });
+  }
 
   /**
    * Dialogs, sheets and interstitials, which the page sweeps above cannot reach.
