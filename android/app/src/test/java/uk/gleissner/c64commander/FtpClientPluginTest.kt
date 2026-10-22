@@ -34,6 +34,7 @@ import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
@@ -1641,6 +1642,50 @@ class FtpClientPluginTest {
     assertEquals("demo.sid", result[1].name)
     assertTrue(result[1].isFile)
     verify(ftpClient).listNames("/")
+  }
+
+  private fun resolveListingFailure(ftpClient: FTPClient, path: String): Throwable? {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+    return try {
+      method.invoke(plugin, ftpClient, path)
+      null
+    } catch (error: java.lang.reflect.InvocationTargetException) {
+      error.targetException
+    }
+  }
+
+  @Test
+  fun resolveListingRethrowsTheListErrorWhenMlsdAndNlstFindNothing() {
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+    `when`(ftpClient.mlistDir("/folder")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/folder")).thenReturn(null)
+
+    val failure = resolveListingFailure(ftpClient, "/folder")
+
+    assertTrue(failure is java.io.IOException)
+    assertEquals("Network is unreachable", failure?.message)
+  }
+
+  @Test
+  fun resolveListingDoesNotRepeatMlsdWhenNlstFailsAfterAnEmptyMlsd() {
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/folder")).thenReturn(null)
+    `when`(ftpClient.mlistDir("/folder")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+
+    val failure = resolveListingFailure(ftpClient, "/folder")
+
+    assertTrue(failure is java.io.IOException)
+    verify(ftpClient, times(1)).mlistDir("/folder")
+    verify(ftpClient, times(1)).listNames("/folder")
   }
 
   @Test

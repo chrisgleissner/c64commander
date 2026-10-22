@@ -839,7 +839,17 @@ class FtpClientPlugin : Plugin() {
     )
   }
 
+  private class NameListingFailedException(cause: Exception) : Exception(cause.message, cause)
+
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
+    return try {
+      resolveListingWithFallbacks(client, path)
+    } catch (error: NameListingFailedException) {
+      throw (error.cause as? Exception ?: error)
+    }
+  }
+
+  private fun resolveListingWithFallbacks(client: FTPClient, path: String): Array<FTPFile> {
     return try {
       val listed = client.listFiles(path)
       // commons-net answers a refused LIST with an empty listing; the reply code is the only trace.
@@ -857,6 +867,7 @@ class FtpClientPlugin : Plugin() {
         }
       }
     } catch (error: Exception) {
+      if (error is NameListingFailedException) throw error
       // A timeout means the FTP data channel stopped responding — typically the
       // single-threaded c64u firmware FTP buckling under connection churn. Cascading
       // to MLSD then NLST opens two MORE PASV data connections that will also time
@@ -892,7 +903,8 @@ class FtpClientPlugin : Plugin() {
       if (mlisted != null && mlisted.isNotEmpty()) {
         mlisted
       } else {
-        resolveListingFromNames(client, path)
+        // LIST threw and neither fallback found anything: the folder is not known to be empty.
+        resolveListingFromNames(client, path).also { if (it.isEmpty()) throw error }
       }
     }
   }
@@ -909,7 +921,7 @@ class FtpClientPlugin : Plugin() {
                       "FtpClientPlugin",
                       error,
               )
-              throw error
+              throw NameListingFailedException(error)
             } ?: emptyArray()
     if (names.isEmpty()) {
       return emptyArray()
