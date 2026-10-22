@@ -90,6 +90,8 @@ interface UsePlaybackPersistenceProps {
 
   playedClockRef: React.MutableRefObject<PlaybackClock>;
   trackStartedAtRef: React.MutableRefObject<number | null>;
+  soundingTuneRef: React.MutableRefObject<PlaylistItem | null>;
+  setSoundingTune: (tune: PlaylistItem | null) => void;
   trackInstanceIdRef: React.MutableRefObject<number>;
   autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
   setTrackInstanceId: (value: number) => void;
@@ -146,6 +148,8 @@ export function usePlaybackPersistence({
   buildHvscLocalPlayFile,
   playedClockRef,
   trackStartedAtRef,
+  soundingTuneRef,
+  setSoundingTune,
   trackInstanceIdRef,
   autoAdvanceGuardRef,
   setTrackInstanceId,
@@ -557,7 +561,9 @@ export function usePlaybackPersistence({
     setPlayedMs(restoredPlayedMs);
     setDurationMs(pending.durationMs);
     setDurationMsItemId(playlist[matchedIndex].id);
-    setIsPlaying(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPlaying));
+    const restoredPlaying = !otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPlaying);
+    setIsPlaying(restoredPlaying);
+    setSoundingTune(restoredPlaying ? playlist[matchedIndex] : null);
     setIsPaused(!otherDeviceRestore && (staleActiveRestore || phoneStoppedRestore || pending.isPaused));
     const restoredItem = playlist[matchedIndex];
     if (restoredItem && isSongCategory(restoredItem.category)) {
@@ -601,6 +607,7 @@ export function usePlaybackPersistence({
     restoreVersion,
     setAutoAdvanceDueAtMs,
     setPlaylistEnded,
+    setSoundingTune,
     setTrackInstanceId,
   ]); // Depends on playlist being set
 
@@ -648,10 +655,13 @@ export function usePlaybackPersistence({
     }
   }, [playlist, playlistRepository, playlistStorageKey, repositorySnapshot.phase, restoreVersion]);
 
+  // While a skip has cleared the sounding tune the index already names the next tune with the old tune's clock;
+  // the last consistent session stays stored until the launch completes.
   // Persist Repository Session
   const persistRepositorySession = useCallback(
     ({ elapsedMs, playedMs }: PlaybackTime) => {
       if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
+      if ((isPlaying || isPaused) && !playlistEnded && soundingTuneRef.current === null) return;
       const session: PlaylistSessionRecord = {
         playlistId: playlistStorageKey,
         currentPlaylistItemId,
@@ -680,6 +690,7 @@ export function usePlaybackPersistence({
       currentPlaylistItemId,
       isPaused,
       isPlaying,
+      playlistEnded,
       playlistRepository,
       playlistStorageKey,
       repeatEnabled,
@@ -687,6 +698,7 @@ export function usePlaybackPersistence({
       shuffleEnabled,
       shuffleSeed,
       shuffleAnchorId,
+      soundingTuneRef,
     ],
   );
   usePlaybackTimeEffect(playbackTime, persistRepositorySession);
@@ -702,6 +714,7 @@ export function usePlaybackPersistence({
         clearStoredPlaybackSession();
         return;
       }
+      if ((isPlaying || isPaused) && !playlistEnded && soundingTuneRef.current === null) return;
       const currentItemLabel = currentIndex >= 0 ? (playlist[currentIndex]?.label ?? null) : null;
       const payload: StoredPlaybackSession = {
         playlistKey: playlistStorageKey,
@@ -741,6 +754,7 @@ export function usePlaybackPersistence({
       shuffleEnabled,
       shuffleSeed,
       shuffleAnchorId,
+      soundingTuneRef,
     ],
   );
   usePlaybackTimeEffect(playbackTime, persistSession);

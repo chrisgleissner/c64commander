@@ -254,6 +254,9 @@ interface UsePlaybackControllerProps {
     current: (now: number) => number;
   }>;
   trackStartedAtRef: MutableRefObject<number | null>;
+  soundingTuneRef: MutableRefObject<PlaylistItem | null>;
+  soundingTune: PlaylistItem | null;
+  setSoundingTune: (tune: PlaylistItem | null) => void;
   trackInstanceIdRef: MutableRefObject<number>;
   autoAdvanceGuardRef: MutableRefObject<AutoAdvanceGuard | null>;
   playStartInFlightRef: MutableRefObject<boolean>;
@@ -321,6 +324,9 @@ export function usePlaybackController({
   isManualMuteHeld,
   playedClockRef,
   trackStartedAtRef,
+  soundingTuneRef,
+  soundingTune,
+  setSoundingTune,
   trackInstanceIdRef,
   autoAdvanceGuardRef,
   playStartInFlightRef,
@@ -399,7 +405,6 @@ export function usePlaybackController({
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const userTransportQueueRef = useRef(Promise.resolve());
   const latestQueuedUserSkipRef = useRef(0);
-  const lastLaunchedItemIdRef = useRef<string | null>(null);
   const lastUserSkipTrackInstanceIdRef = useRef<number | null>(null);
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
@@ -697,6 +702,7 @@ export function usePlaybackController({
           return;
         }
         options?.onLaunchStarted?.();
+        setSoundingTune(null);
         nextTunePrefetch.cancel();
         if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
@@ -1209,7 +1215,7 @@ export function usePlaybackController({
           return;
         }
 
-        lastLaunchedItemIdRef.current = item.id;
+        setSoundingTune({ ...item, request: effectiveRequest, path: effectivePath });
         const now = Date.now();
         const nextTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = nextTrackInstanceId;
@@ -1511,6 +1517,7 @@ export function usePlaybackController({
       stopCountRef.current += 1;
       nextTunePrefetch.clear();
       cancelPendingUserSkip();
+      setSoundingTune(null);
       const currentItem = playlist[currentIndex];
       const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
@@ -1598,6 +1605,7 @@ export function usePlaybackController({
     return subscribeMachineTakeover((event) => {
       if (!isPlayingRef.current && !isPausedRef.current) return;
       cancelPendingUserSkip();
+      setSoundingTune(null);
       const now = Date.now();
       playedClockRef.current.stop(now, true);
       setPlayedMs(0);
@@ -1881,7 +1889,8 @@ export function usePlaybackController({
         }
         const activePlaylist = playlistRef.current;
         if (!activePlaylist.length || (!isPlayingRef.current && !isPausedRef.current)) return;
-        const launchedIndex = activePlaylist.findIndex((item) => item.id === lastLaunchedItemIdRef.current);
+        const launchedId = soundingTuneRef.current?.id ?? pending.originItemId;
+        const launchedIndex = activePlaylist.findIndex((item) => item.id === launchedId);
         const activeIndex = launchedIndex >= 0 ? launchedIndex : currentIndexRef.current;
         const { originIndex, targetIndex } = resolvePendingSkipIndices(activePlaylist, pending);
         const advancedByAnotherTransition =
@@ -1962,6 +1971,7 @@ export function usePlaybackController({
       title: PendingUserSkip["title"],
     ) =>
       new Promise<void>((resolve) => {
+        setSoundingTune(null);
         const pending = pendingUserSkipRef.current;
         if (pending?.timer !== null && pending?.timer !== undefined) {
           window.clearTimeout(pending.timer);
@@ -2402,7 +2412,8 @@ export function usePlaybackController({
 
   useRemotePlaybackHandover({
     playlistRef,
-    currentIndexRef,
+    soundingTuneRef,
+    soundingTune,
     isPlayingRef,
     isPausedRef,
     currentPlaybackIsLocalRef,
@@ -2410,7 +2421,6 @@ export function usePlaybackController({
     durationMsRef,
     isPlaying,
     isPaused,
-    currentIndex,
     localEngineActive,
     durationMs,
     getLocalSidPlayback,
@@ -2420,7 +2430,6 @@ export function usePlaybackController({
     playItem,
     seekBy: handleSeekBy,
     playGenerationRef,
-    lastLaunchedItemIdRef,
   });
 
   return {

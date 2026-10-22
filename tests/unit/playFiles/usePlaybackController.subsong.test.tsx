@@ -13,6 +13,7 @@ import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackContro
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -168,6 +169,7 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[]) =>
       ensureUnmuted: vi.fn().mockResolvedValue(undefined),
       playedClockRef,
       trackStartedAtRef,
+      ...useSoundingTune(),
       trackInstanceIdRef,
       autoAdvanceGuardRef,
       playStartInFlightRef,

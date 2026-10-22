@@ -15,6 +15,7 @@ import { buildPlaylistStorageKey, PLAYBACK_SESSION_KEY } from "@/pages/playFiles
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 // Flexible harness allowing custom buildPlaylistItem and initial state
 const usePlaybackHarness = ({
@@ -37,6 +38,7 @@ const usePlaybackHarness = ({
   initialIsPlaying = false,
   initialIsPaused = false,
   initialAutoAdvanceDueAtMs = null,
+  keepSoundingTune = false,
   buildPlaylistItemOverride,
 }: {
   playlistStorageKey: string;
@@ -58,6 +60,7 @@ const usePlaybackHarness = ({
   initialIsPlaying?: boolean;
   initialIsPaused?: boolean;
   initialAutoAdvanceDueAtMs?: number | null;
+  keepSoundingTune?: boolean;
   buildPlaylistItemOverride?: (
     entry: PlayableEntry,
     songNrOverride?: number,
@@ -74,6 +77,8 @@ const usePlaybackHarness = ({
   const [autoAdvanceDueAtMs] = useState<number | null>(initialAutoAdvanceDueAtMs);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
+  const sounding = useSoundingTune();
+  if (keepSoundingTune) sounding.soundingTuneRef.current = { id: "playing-tune" } as PlaylistItem;
   const trackInstanceIdRef = useRef(0);
   const autoAdvanceGuardRef = useRef<any>(null);
   const setAutoAdvanceDueAtMsRef = useRef(vi.fn());
@@ -132,6 +137,7 @@ const usePlaybackHarness = ({
     buildPlaylistItem: buildPlaylistItemOverride ?? defaultBuildPlaylistItem,
     playedClockRef: playedClockRef as any,
     trackStartedAtRef,
+    ...sounding,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),
@@ -490,6 +496,7 @@ describe("usePlaybackPersistence – edge cases", () => {
         initialIsPlaying: true,
         initialIsPaused: false,
         initialAutoAdvanceDueAtMs: autoAdvanceDueAtMs,
+        keepSoundingTune: true,
       }),
     );
 

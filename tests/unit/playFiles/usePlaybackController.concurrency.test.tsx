@@ -15,6 +15,7 @@ import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { SupersededMachineTransitionError } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { spiedPlaybackTime } from "../../helpers/playbackTime";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -139,6 +140,7 @@ const renderSkipController = (
         },
       },
       trackStartedAtRef: { current: null },
+      ...useSoundingTune(),
       trackInstanceIdRef: { current: 0 },
       autoAdvanceGuardRef: { current: null },
       playStartInFlightRef: { current: false },
@@ -218,6 +220,7 @@ describe("usePlaybackController play transition supersession", () => {
           },
         },
         trackStartedAtRef: { current: null },
+        ...useSoundingTune(),
         trackInstanceIdRef: { current: 0 },
         autoAdvanceGuardRef: { current: null },
         playStartInFlightRef: { current: false },
@@ -304,6 +307,7 @@ describe("usePlaybackController play transition supersession", () => {
           },
         },
         trackStartedAtRef: { current: null },
+        ...useSoundingTune(),
         trackInstanceIdRef: { current: 1 },
         autoAdvanceGuardRef: { current: null },
         playStartInFlightRef: { current: false },
@@ -584,6 +588,7 @@ describe("usePlaybackController play transition supersession", () => {
           },
         },
         trackStartedAtRef: { current: null },
+        ...useSoundingTune(),
         trackInstanceIdRef: { current: 0 },
         autoAdvanceGuardRef: { current: null },
         playStartInFlightRef: { current: false },
@@ -683,6 +688,7 @@ describe("usePlaybackController play transition supersession", () => {
           },
         },
         trackStartedAtRef: { current: null },
+        ...useSoundingTune(),
         trackInstanceIdRef: { current: 0 },
         autoAdvanceGuardRef: { current: null },
         playStartInFlightRef: { current: false },
@@ -759,6 +765,7 @@ describe("usePlaybackController play transition supersession", () => {
           },
         },
         trackStartedAtRef: { current: null },
+        ...useSoundingTune(),
         trackInstanceIdRef: { current: 0 },
         autoAdvanceGuardRef: { current: null },
         playStartInFlightRef: { current: false },

@@ -47,18 +47,17 @@ const readSidBytes = async (
 
 type RemotePlaybackHandoverOptions = {
   playlistRef: MutableRefObject<PlaylistItem[]>;
-  currentIndexRef: MutableRefObject<number>;
+  /** The tune sounding now as launched, or null while a change is in progress (see useSoundingTune). */
+  soundingTuneRef: MutableRefObject<PlaylistItem | null>;
+  soundingTune: PlaylistItem | null;
   isPlayingRef: MutableRefObject<boolean>;
   isPausedRef: MutableRefObject<boolean>;
   currentPlaybackIsLocalRef: MutableRefObject<boolean>;
   playGenerationRef: MutableRefObject<number>;
-  /** The tune whose start time trackStartedAtRef holds; the current index moves before a launch completes. */
-  lastLaunchedItemIdRef: MutableRefObject<string | null>;
   trackStartedAtRef: MutableRefObject<number | null>;
   durationMsRef: MutableRefObject<number | undefined>;
   isPlaying: boolean;
   isPaused: boolean;
-  currentIndex: number;
   localEngineActive: boolean;
   durationMs: number | undefined;
   getLocalSidPlayback: () => LocalSidPlaybackController;
@@ -75,15 +74,7 @@ type RemotePlaybackHandoverOptions = {
 export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
-  const { lastLaunchedItemIdRef, playlistRef } = options;
-  const { isPlaying, isPaused, currentIndex, localEngineActive, durationMs } = options;
-
-  // A session restored on this page has a start time but no launch of its own: its tune is the one playing.
-  useEffect(() => {
-    if (isPlaying && lastLaunchedItemIdRef.current === null && options.trackStartedAtRef.current !== null) {
-      lastLaunchedItemIdRef.current = playlistRef.current[currentIndex]?.id ?? null;
-    }
-  }, [isPlaying, currentIndex, lastLaunchedItemIdRef, options.trackStartedAtRef, playlistRef]);
+  const { isPlaying, isPaused, soundingTune, localEngineActive, durationMs } = options;
   // Read while rendering: a replayed track keeps its index and duration, and only its start time changes.
   const trackStartedAt = options.trackStartedAtRef.current;
   const remotePlaying = isRemotePlaybackActive();
@@ -91,9 +82,9 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
   useEffect(() => {
     const current = optionsRef.current;
     // Not on a page that has yet to restore its session: the tune may still be playing on the C64.
-    if (isPaused || localEngineActive || !remotePlaying) rememberRemoteTune(null);
+    if (isPaused || localEngineActive || !remotePlaying || !soundingTune) rememberRemoteTune(null);
     if (!isPlaying || isPaused || localEngineActive || !remotePlaying || !durationMs) return;
-    const item = current.playlistRef.current[currentIndex];
+    const item = soundingTune;
     const startedAt = trackStartedAt;
     if (item?.category !== "sid" || startedAt === null || !LocalSidPlaybackController.isSupported()) return;
     const tuneIndex = toEngineTuneIndex(item.request.songNr);
@@ -124,7 +115,8 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         // Loaded as well as rendered: a first load at the moment the device goes is 1.7 s of silence on a Pixel 4.
         engine.preload();
         engine.prerender(knownKey, bytes, tuneIndex, durationMs / 1000);
-        let index: number | null = currentIndex;
+        const soundingIndex = current.playlistRef.current.findIndex((row) => row.id === item.id);
+        let index: number | null = soundingIndex >= 0 ? soundingIndex : null;
         for (let ahead = 0; ahead < TRACKS_READ_AHEAD && index !== null && !cancelled; ahead += 1) {
           index = current.resolveNextIndex(index);
           const upcoming = index === null ? undefined : current.playlistRef.current[index];
@@ -143,22 +135,21 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
     return () => {
       cancelled = true;
     };
-  }, [isPlaying, isPaused, currentIndex, localEngineActive, durationMs, trackStartedAt, remotePlaying]);
+  }, [isPlaying, isPaused, soundingTune, localEngineActive, durationMs, trackStartedAt, remotePlaying]);
 
   useEffect(() => {
     const carryOn = async () => {
       const current = optionsRef.current;
-      const index = current.currentIndexRef.current;
-      const item = current.playlistRef.current[index];
+      const sounding = current.soundingTuneRef.current;
       const startedAt = current.trackStartedAtRef.current;
-      if (!item || startedAt === null || !current.isPlayingRef.current || current.isPausedRef.current) return;
-      const launchedId = current.lastLaunchedItemIdRef.current;
-      if (launchedId !== null && item.id !== launchedId) {
-        addLog("info", "Playback: the C64 is out of reach while another tune is starting; not carrying on", {
-          item: item.label,
-        });
+      if (!current.isPlayingRef.current || current.isPausedRef.current) return;
+      if (!sounding || startedAt === null) {
+        addLog("info", "Playback: the C64 is out of reach while another tune is starting; not carrying on");
         return;
       }
+      const index = current.playlistRef.current.findIndex((row) => row.id === sounding.id);
+      if (index < 0) return;
+      const item = { ...current.playlistRef.current[index], request: sounding.request };
       if (current.currentPlaybackIsLocalRef.current || !isRemotePlaybackActive() || wasTuneHandedOver(startedAt))
         return;
       const duration = current.durationMsRef.current;
@@ -199,7 +190,7 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
 
     // A tune taken over while this page was closed is playing on the phone already; the page makes it its own.
     const current = optionsRef.current;
-    const item = current.playlistRef.current[current.currentIndexRef.current];
+    const item = current.soundingTuneRef.current;
     if (current.isPlayingRef.current && item) {
       const adopted = takeTuneHandedOverWithoutPage();
       if (adopted === item.id && current.getLocalSidPlayback().isActive()) {

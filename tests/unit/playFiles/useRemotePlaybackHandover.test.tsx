@@ -102,17 +102,16 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
   const seekBy = vi.fn(async () => undefined);
   const options = {
     playlistRef: { current: playlist },
-    currentIndexRef: { current: 0 },
+    soundingTuneRef: { current: playlist[0] ?? null },
+    soundingTune: playlist[0] ?? null,
     isPlayingRef: { current: true },
     isPausedRef: { current: false },
     currentPlaybackIsLocalRef,
     playGenerationRef: { current: 7 },
-    lastLaunchedItemIdRef: { current: playlist[0]?.id ?? null },
     trackStartedAtRef: { current: startedAt },
     durationMsRef: { current: 180_000 as number | undefined },
     isPlaying: true,
     isPaused: false,
-    currentIndex: 0,
     localEngineActive: false,
     durationMs: 180_000,
     getLocalSidPlayback: () => engine as never,
@@ -217,17 +216,16 @@ describe("useRemotePlaybackHandover", () => {
       ({ startedAt }: { startedAt: number | null }) =>
         useRemotePlaybackHandover({
           playlistRef: { current: playlist },
-          currentIndexRef: { current: 0 },
           isPlayingRef: { current: true },
           isPausedRef: { current: false },
           currentPlaybackIsLocalRef: { current: false },
           playGenerationRef: { current: 0 },
-          lastLaunchedItemIdRef: { current: "one" },
+          soundingTuneRef: { current: playlist[0] ?? null },
+          soundingTune: playlist[0] ?? null,
           trackStartedAtRef: { current: hookOptions(startedAt) },
           durationMsRef: { current: 180_000 },
           isPlaying: true,
           isPaused: false,
-          currentIndex: 0,
           localEngineActive: false,
           durationMs: 180_000,
           getLocalSidPlayback: () => engine as never,
@@ -271,32 +269,62 @@ describe("useRemotePlaybackHandover", () => {
     expect(wasTuneHandedOver(startedAt)).toBe(true);
   });
 
-  it("does not carry on the tune a Next press moved to while the start time still belongs to the previous tune", async () => {
+  it("does not carry on while a skip has cleared the sounding tune although the playlist already names the next tune", async () => {
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
     const { playItem, seekBy, options } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
-    options.currentIndexRef.current = 1;
+    options.soundingTuneRef.current = null;
 
     setConnection("OFFLINE_NO_DEMO");
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("another tune is starting")),
+    );
     expect(playItem).not.toHaveBeenCalled();
     expect(seekBy).not.toHaveBeenCalled();
   });
 
-  it("takes the restored tune as the one launched, so a Next press right after a remount is not carried on", async () => {
+  it("carries on the sounding tune at its own index, not the row at the start of the playlist", async () => {
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { playItem, options } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
-    options.lastLaunchedItemIdRef.current = null;
-    const restored = renderHook(() => useRemotePlaybackHandover({ ...options }));
-    expect(options.lastLaunchedItemIdRef.current).toBe("one");
+    const playlist = [ultimateSid("one"), ultimateSid("two")];
+    const { playItem, options } = renderHandover(playlist, Date.now() - 42_000);
+    options.soundingTuneRef.current = playlist[1];
 
-    options.currentIndexRef.current = 1;
-    restored.rerender();
     setConnection("OFFLINE_NO_DEMO");
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(options.lastLaunchedItemIdRef.current).toBe("one");
-    expect(playItem).not.toHaveBeenCalled();
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    expect(playItem).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "two" }),
+      expect.objectContaining({ playlistIndex: 1 }),
+    );
+  });
+
+  it("carries on the subsong that was launched, not the one the playlist row still names", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const playlist = [ultimateSid("one")];
+    const { playItem, options } = renderHandover(playlist, Date.now() - 42_000);
+    options.soundingTuneRef.current = {
+      ...playlist[0],
+      request: { ...playlist[0].request, songNr: 3 },
+    } as PlaylistItem;
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    expect(playItem).toHaveBeenCalledWith(
+      expect.objectContaining({ request: expect.objectContaining({ songNr: 3 }) }),
+      expect.anything(),
+    );
+  });
+
+  it("forgets the remembered C64 tune as soon as the sounding tune is cleared", async () => {
+    const playlist = [ultimateSid("one")];
+    const { options } = renderHandover(playlist, Date.now());
+    await waitFor(() => expect(rememberRemoteTune).toHaveBeenCalledWith(expect.objectContaining({ itemId: "one" })));
+    vi.mocked(rememberRemoteTune).mockClear();
+
+    renderHook(() => useRemotePlaybackHandover({ ...options, soundingTune: null }));
+
+    expect(rememberRemoteTune).toHaveBeenCalledWith(null);
   });
 
   it("does not seek when the hand-over was dropped because a newer tune launched on the phone", async () => {
@@ -418,6 +446,15 @@ describe("useRemotePlaybackHandover", () => {
       ),
     );
     expect(playItem).not.toHaveBeenCalled();
+  });
+
+  it("makes a tune the phone took over while the page was closed its own only when it is the sounding tune", async () => {
+    handedOverWithoutPage.itemId = "two";
+    connection.state = "OFFLINE_NO_DEMO";
+
+    const { setCurrentPlaybackIsLocal } = renderHandover([ultimateSid("one")], Date.now() - 20_000, true);
+
+    expect(setCurrentPlaybackIsLocal).not.toHaveBeenCalled();
   });
 
   it("makes a tune the phone took over while the page was closed its own", async () => {

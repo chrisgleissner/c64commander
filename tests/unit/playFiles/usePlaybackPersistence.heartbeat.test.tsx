@@ -14,6 +14,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/playlistRepository", () => ({
   getPlaylistDataRepository: () => ({
@@ -44,6 +45,8 @@ const useHarness = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [playbackTime] = useState(createPlaybackTimeStore);
   const trackStartedAtRef = useRef<number | null>(null);
+  const sounding = useSoundingTune();
+  sounding.soundingTuneRef.current = item;
   usePlaybackPersistence({
     playlist: [item],
     setPlaylist: vi.fn(),
@@ -67,13 +70,14 @@ const useHarness = () => {
     buildPlaylistItem: () => null,
     playedClockRef: { current: { hydrate: vi.fn() } } as never,
     trackStartedAtRef,
+    ...sounding,
     trackInstanceIdRef: { current: 0 },
     autoAdvanceGuardRef: { current: null },
     setTrackInstanceId: vi.fn(),
     setAutoAdvanceDueAtMs: vi.fn(),
     setSessionRestoreSettled: vi.fn(),
   });
-  return { setIsPlaying, setIsPaused, playbackTime, trackStartedAtRef };
+  return { setIsPlaying, setIsPaused, playbackTime, trackStartedAtRef, soundingTuneRef: sounding.soundingTuneRef };
 };
 
 describe("usePlaybackPersistence stored position while the clock is not ticking", () => {
@@ -102,6 +106,23 @@ describe("usePlaybackPersistence stored position while the clock is not ticking"
 
     expect(readStoredPlaybackSession()?.elapsedMs).toBe(25_000);
     expect(readStoredPlaybackSession()?.playedMs).toBe(25_000);
+  });
+
+  it("writes no session while a skip has cleared the sounding tune, and keeps the last consistent one", async () => {
+    const { result } = renderHook(useHarness);
+    result.current.trackStartedAtRef.current = Date.now() - 20_000;
+    await act(async () => {
+      result.current.setIsPlaying(true);
+    });
+    const before = readStoredPlaybackSession();
+    expect(before?.currentItemId).toBe(item.id);
+    result.current.soundingTuneRef.current = null;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PLAYBACK_SESSION_HEARTBEAT_MS * 3);
+    });
+
+    expect(readStoredPlaybackSession()).toEqual(before);
   });
 
   it("keeps up with the tune on every beat, not just the first", async () => {

@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
@@ -27,6 +27,9 @@ import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlayback
 import { getC64API } from "@/lib/c64api";
 import { reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
+import * as remoteTuneHandover from "@/lib/playback/remoteTuneHandover";
+import { publishMachineTakeover } from "@/lib/deviceInteraction/machineTakeoverEvent";
+import { USER_TRANSPORT_COALESCE_MS } from "@/pages/playFiles/hooks/usePlaybackController";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
@@ -44,6 +47,7 @@ import {
   buildEnabledSidVolumeSnapshot,
 } from "@/lib/config/sidVolumeControl";
 import { spiedPlaybackTime } from "../../helpers/playbackTime";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
 const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
@@ -76,6 +80,7 @@ vi.mock("@/lib/archive/execution", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
+  getC64APIConfigSnapshot: vi.fn(() => ({ deviceHost: "c64u" })),
 }));
 
 vi.mock("@/lib/roms/romStore", async (importOriginal) => {
@@ -163,6 +168,9 @@ const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem
   unavailableReason: null,
   ...overrides,
 });
+
+const soundingSpy = { current: null as ReturnType<typeof useSoundingTune> | null };
+const soundingTuneNow = () => soundingSpy.current?.soundingTuneRef.current ?? null;
 
 const renderPlaybackController = (
   playlist: PlaylistItem[],
@@ -293,6 +301,7 @@ const renderPlaybackController = (
           },
         } as const),
       trackStartedAtRef: options?.trackStartedAtRef ?? { current: null },
+      ...(soundingSpy.current = useSoundingTune()),
       trackInstanceIdRef: options?.trackInstanceIdRef ?? { current: 0 },
       autoAdvanceGuardRef: options?.autoAdvanceGuardRef ?? { current: null },
       playStartInFlightRef: options?.playStartInFlightRef ?? { current: false },
@@ -5329,5 +5338,303 @@ describe("telling the router when the firmware would reload a program's settings
     await result.current.playItem(item, { playlistIndex: 0 });
 
     expect(vi.mocked(buildPlayPlan).mock.calls.at(-1)?.[1]).toBe(true);
+  });
+});
+
+describe("usePlaybackController sounding tune", () => {
+  beforeEach(() => {
+    vi.mocked(executePlayPlan).mockReset();
+    vi.mocked(executePlayPlan).mockResolvedValue(undefined as never);
+  });
+
+  const tunes = () => [createPlaylistItem({ id: "tune-a" }), createPlaylistItem({ id: "tune-b" })];
+
+  it("clears the sounding tune when a launch begins and records the launched tune when it completes", async () => {
+    const playlist = tunes();
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0 });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    let finish: () => void = () => undefined;
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    let launch: Promise<void> = Promise.resolve();
+    await act(async () => {
+      launch = result.current.playItem(playlist[1], { playlistIndex: 1 });
+      await Promise.resolve();
+    });
+    expect(soundingTuneNow()).toBeNull();
+
+    await act(async () => {
+      finish();
+      await launch;
+    });
+    expect(soundingTuneNow()?.id).toBe("tune-b");
+  });
+
+  it("records the tune as it was launched, with the path the archive download resolved", async () => {
+    mockArchiveClient.downloadBinary.mockResolvedValueOnce({
+      fileName: "joyride",
+      bytes: new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      contentType: "application/octet-stream",
+      url: "http://commoserve/files/joyride",
+    });
+    mockBuildArchivePlayPlan.mockReturnValueOnce({
+      category: "sid",
+      source: "local",
+      path: "joyride.sid",
+      file: { name: "joyride.sid", lastModified: 0, arrayBuffer: vi.fn(async () => new ArrayBuffer(4)) },
+    });
+    const item = createPlaylistItem({
+      id: "archive-extensionless",
+      category: "sid",
+      label: "Joyride",
+      path: "joyride",
+      request: { source: "commoserve", path: "joyride" },
+      sourceId: "archive-commoserve",
+      archiveRef: {
+        sourceId: "archive-commoserve",
+        resultId: "100",
+        category: 40,
+        entryId: 1,
+        entryPath: "joyride",
+      },
+    });
+    const { result } = renderPlaybackController([item], {
+      archiveConfigs: {
+        "archive-commoserve": {
+          id: "archive-commoserve",
+          name: "CommoServe",
+          baseUrl: "http://commoserve.files.commodore.net",
+          enabled: true,
+        },
+      },
+    });
+
+    await act(async () => {
+      await result.current.playItem(item, { playlistIndex: 0 });
+    });
+
+    expect(soundingTuneNow()?.id).toBe("archive-extensionless");
+    expect(soundingTuneNow()?.path).toBe("joyride.sid");
+  });
+
+  it("clears the sounding tune when a launch is overtaken by Stop", async () => {
+    const playlist = tunes();
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPlaying: true });
+    let finish: () => void = () => undefined;
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    let launch: Promise<void> = Promise.resolve();
+    await act(async () => {
+      launch = result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.handleStop();
+      finish();
+      await launch;
+    });
+
+    expect(soundingTuneNow()).toBeNull();
+  });
+
+  it("clears the sounding tune on Stop", async () => {
+    const playlist = tunes();
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPlaying: true });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    await act(async () => {
+      await result.current.handleStop();
+    });
+
+    expect(soundingTuneNow()).toBeNull();
+  });
+
+  it("clears the sounding tune when another machine launch takes the C64", async () => {
+    const playlist = tunes();
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPlaying: true });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+
+    await act(async () => {
+      await publishMachineTakeover({ reason: "external-launch", label: "demo" });
+    });
+
+    expect(soundingTuneNow()).toBeNull();
+  });
+
+  it("clears the sounding tune at the start of a Next press and records the target when its launch completes", async () => {
+    vi.useFakeTimers();
+    try {
+      const playlist = tunes();
+      const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPlaying: true });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect(soundingTuneNow()?.id).toBe("tune-a");
+
+      let next: Promise<void> = Promise.resolve();
+      act(() => {
+        next = result.current.handleNext();
+      });
+      expect(soundingTuneNow()).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS * 4);
+        await next;
+      });
+      expect(soundingTuneNow()?.id).toBe("tune-b");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the sounding tune at the start of a Previous press", async () => {
+    vi.useFakeTimers();
+    try {
+      const playlist = tunes();
+      const { result } = renderPlaybackController(playlist, { currentIndex: 1, isPlaying: true });
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
+      expect(soundingTuneNow()?.id).toBe("tune-b");
+
+      let previous: Promise<void> = Promise.resolve();
+      act(() => {
+        previous = result.current.handlePrevious();
+      });
+      expect(soundingTuneNow()).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS * 4);
+        await previous;
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("usePlaybackController hand-over to the phone (#555)", () => {
+  const carryOns: Array<() => void> = [];
+
+  beforeEach(() => {
+    carryOns.length = 0;
+    vi.spyOn(remoteTuneHandover, "registerPageHandover").mockImplementation((carryOn) => {
+      carryOns.push(carryOn);
+      return () => undefined;
+    });
+    localStorage.setItem("c64u_local_engine_enabled", "1");
+    localStorage.setItem("c64u_playback_engine", "c64");
+    vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])]));
+    vi.mocked(executePlayPlan).mockReset();
+    vi.mocked(executePlayPlan).mockResolvedValue(undefined as never);
+    markRemotePlaybackStarted();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    connectionStateOverride.current = null;
+    markRemotePlaybackStopped();
+  });
+
+  const ultimateSid = (id: string) =>
+    createPlaylistItem({
+      id,
+      category: "sid",
+      label: `${id}.sid`,
+      path: `/USB2/${id}.sid`,
+      durationMs: 180_000,
+      request: { source: "ultimate", path: `/USB2/${id}.sid`, songNr: 1 },
+    });
+
+  const phoneEngine = () => {
+    let active = false;
+    return {
+      play: vi.fn(async () => {
+        active = true;
+        return { romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null };
+      }),
+      stop: vi.fn(() => {
+        active = false;
+      }),
+      pause: vi.fn(async () => undefined),
+      resume: vi.fn(async () => undefined),
+      getStats: vi.fn(() => null),
+      dispose: vi.fn(),
+      warmLeadIn: vi.fn(),
+      prerender: vi.fn(),
+      preload: vi.fn(),
+      holdSilence: vi.fn(() => () => undefined),
+      positionSeconds: vi.fn(() => 0.2),
+      isActive: vi.fn(() => active),
+    };
+  };
+
+  const goOffline = async () => {
+    connectionStateOverride.current = "OFFLINE_NO_DEMO";
+    await act(async () => {
+      carryOns.at(-1)?.();
+      for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+    });
+  };
+
+  it("#555: going offline during Next does not carry the next tune on at the previous tune's position", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const engine = phoneEngine();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      trackStartedAtRef: { current: Date.now() - 42_000 },
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    vi.mocked(executePlayPlan).mockClear();
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      act(() => {
+        void result.current.handleNext();
+      });
+      expect(soundingTuneNow()).toBeNull();
+      await goOffline();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(engine.play).not.toHaveBeenCalled();
+    expect(executePlayPlan).not.toHaveBeenCalled();
+  });
+
+  it("#555: going offline after the tune playing on the C64 carries it on from where the C64 was", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const engine = phoneEngine();
+    const startedAt = Date.now() - 42_000;
+    const trackStartedAtRef = { current: startedAt };
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      trackStartedAtRef,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    trackStartedAtRef.current = startedAt;
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    await goOffline();
+
+    await waitFor(() => expect(engine.play).toHaveBeenCalledTimes(1));
+    expect(soundingTuneNow()?.id).toBe("tune-a");
   });
 });

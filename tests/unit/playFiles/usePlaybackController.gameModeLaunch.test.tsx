@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/archive/client", () => ({ createArchiveClient: vi.fn() }));
 vi.mock("@/lib/archive/execution", () => ({ buildArchivePlayPlan: vi.fn() }));
@@ -116,6 +117,7 @@ const renderHarness = (initialPlaylist: PlaylistItem[], onUserLaunchedItem: (ite
       ensureUnmuted: vi.fn().mockResolvedValue(undefined),
       playedClockRef,
       trackStartedAtRef,
+      ...useSoundingTune(),
       trackInstanceIdRef,
       autoAdvanceGuardRef,
       playStartInFlightRef,

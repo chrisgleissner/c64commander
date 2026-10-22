@@ -15,6 +15,7 @@ import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -155,6 +156,7 @@ const renderPlaybackHarness = (
       ensureUnmuted: vi.fn().mockResolvedValue(undefined),
       playedClockRef,
       trackStartedAtRef,
+      ...useSoundingTune(),
       trackInstanceIdRef,
       autoAdvanceGuardRef,
       playStartInFlightRef,
@@ -180,6 +182,7 @@ const renderPlaybackHarness = (
       autoAdvanceDueAtMs,
       autoAdvanceGuardRef,
       trackStartedAtRef,
+      ...useSoundingTune(),
       trackInstanceIdRef,
       cancelAutoAdvance,
     };
