@@ -726,6 +726,10 @@ describe("addFileSelections batching", () => {
     const listEntries = vi.fn(async () => []);
     const source = createUltimateSource(listEntries, async () => listing);
     vi.mocked(discoverConfigCandidates).mockClear();
+    vi.mocked(discoverConfigCandidates).mockImplementation(async (options) => {
+      await options.listEntries("/USB2/Games");
+      return [];
+    });
     vi.mocked(toast).mockClear();
     vi.mocked(addLog).mockClear();
     networkKnownOffline.mockReturnValue(true);
@@ -735,22 +739,22 @@ describe("addFileSelections batching", () => {
       ]);
 
       expect(result).toBe(true);
-      expect(discoverConfigCandidates).toHaveBeenCalledTimes(2);
-      const { listEntries: lookup } = vi.mocked(discoverConfigCandidates).mock.calls[0]![0];
-      expect(lookup).not.toBe(listEntries);
-      await expect(lookup("/USB2/Games")).resolves.toEqual([]);
+      expect(listEntries).not.toHaveBeenCalled();
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
-          description: "2 file(s) added to playlist. Settings files were not looked up while the network was down.",
+          description:
+            "2 file(s) added to playlist. Settings files were not looked up while the device could not be reached.",
         }),
       );
       expect(addLog).toHaveBeenCalledWith(
         "warn",
-        "Settings files were not looked up beside the added tunes: the network was down",
-        expect.objectContaining({ tunes: 2 }),
+        "Settings files were not looked up in some folders: the device could not be reached",
+        expect.objectContaining({ folders: 2 }),
       );
     } finally {
       networkKnownOffline.mockReturnValue(false);
+      vi.mocked(discoverConfigCandidates).mockReset();
+      vi.mocked(discoverConfigCandidates).mockResolvedValue([]);
     }
   });
 

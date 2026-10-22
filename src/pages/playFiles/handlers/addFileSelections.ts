@@ -39,7 +39,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
-import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
+import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
@@ -559,7 +559,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
-      let configLookupsSkipped = 0;
+      const configListing = createConfigListing(source);
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
@@ -691,8 +691,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 : undefined)
             : undefined;
         const configSourceType = source.type === "local" || source.type === "ultimate" ? source.type : null;
-        const networkDown = configSourceType === "ultimate" && isNetworkKnownOffline();
-        if (networkDown) configLookupsSkipped += 1;
         const playbackConfig = configSourceType
           ? resolvePlaybackConfig({
               candidates: await discoverConfigCandidates({
@@ -700,7 +698,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 sourceId: source.type === "local" ? source.id : null,
                 sourceRootPath: source.rootPath,
                 targetFile: file,
-                listEntries: networkDown ? async () => [] : source.listEntries,
+                listEntries: configListing.listEntries,
                 prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
                 localEntriesBySourceId,
               }),
@@ -1117,15 +1115,16 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
+      const configLookupsSkipped = configListing.skippedLookups();
       if (configLookupsSkipped > 0) {
-        addLog("warn", "Settings files were not looked up beside the added tunes: the network was down", {
+        addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
           sourceId: source.id,
-          tunes: configLookupsSkipped,
+          folders: configLookupsSkipped,
         });
       }
       const notices = [
         skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "",
-        configLookupsSkipped ? "Settings files were not looked up while the network was down." : "",
+        configLookupsSkipped ? "Settings files were not looked up while the device could not be reached." : "",
       ].filter(Boolean);
       dispatchFeedback(() => {
         toast({

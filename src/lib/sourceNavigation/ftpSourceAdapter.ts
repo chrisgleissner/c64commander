@@ -356,6 +356,11 @@ const listFilesRecursive = async (
   }
 };
 
+const peekCachedEntries = (path: string): SourceEntry[] | null => {
+  const host = normalizeFtpHost(getC64APIConfigSnapshot().deviceHost);
+  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), path && path !== "" ? path : "/"));
+};
+
 export const createUltimateSourceLocation = (options?: { name?: string }): SourceLocation => ({
   id: "ultimate",
   type: "ultimate",
@@ -365,6 +370,7 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   // One source for whichever Ultimate is connected: a folder on one device is usually absent on another.
   navigationScope: () => normalizeFtpHost(getC64APIConfigSnapshot().deviceHost),
   listEntries,
+  peekCachedEntries,
   listFilesRecursive,
   // A walk over FTP, so it runs only when asked for — never per keystroke.
   searchEntries: createDeepScanSearch(listFilesRecursive),

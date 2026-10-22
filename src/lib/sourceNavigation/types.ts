@@ -65,6 +65,8 @@ export type SourceLocation = {
   /** Keeps the last folder apart per device where one source stands for whichever device is connected. */
   navigationScope?: () => string;
   listEntries: (path: string) => Promise<SourceEntry[]>;
+  /** A folder's entries from the source's own cache, without asking the device; null when it has none. */
+  peekCachedEntries?: (path: string) => SourceEntry[] | null;
   listEntriesPage?: (options: {
     path: string;
     query?: string;

@@ -115,6 +115,7 @@ import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import {
@@ -1571,6 +1572,7 @@ export const HomeDiskManager = () => {
         );
 
         const runtimeFiles: Record<string, File> = {};
+        const configSource = { ...source, listEntries: createConfigListing(source).listEntries };
         const disks = await Promise.all(
           diskCandidates.map(async (entry, index) => {
             const normalized = normalizeDiskPath(entry.path);
@@ -1595,7 +1597,7 @@ export const HomeDiskManager = () => {
               }
             }
             throwIfAborted();
-            const playbackConfig = await discoverDiskPlaybackConfig(source, {
+            const playbackConfig = await discoverDiskPlaybackConfig(configSource, {
               path: normalized,
               name: entry.name,
             });
