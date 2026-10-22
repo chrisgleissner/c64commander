@@ -37,6 +37,13 @@ describe("failureTaxonomy", () => {
     expect(classifyError(new Error("DNS lookup failed for c64u")).failureClass).toBe("network-unreachable");
   });
 
+  it.each(["net::ERR_NAME_NOT_RESOLVED", "DNS_PROBE_FINISHED_NXDOMAIN", "dns: no such host", "EAI_AGAIN"])(
+    "classifies the name resolution failure %s as network-unreachable",
+    (message) => {
+      expect(classifyError(new Error(message)).failureClass).toBe("network-unreachable");
+    },
+  );
+
   it("classifies permission errors", () => {
     expect(classifyError(new Error("Permission denied: content://demo")).failureClass).toBe("permission-denied");
   });

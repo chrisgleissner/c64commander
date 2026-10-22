@@ -468,6 +468,18 @@ const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigation
   );
 };
 
+vi.mock("@/lib/savedDevices/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/savedDevices/store")>();
+  return {
+    ...actual,
+    getSavedDevicesSnapshot: () => ({
+      ...actual.getSavedDevicesSnapshot(),
+      selectedDeviceId: savedDevicesRef.current.selectedDeviceId,
+      devices: savedDevicesRef.current.devices,
+    }),
+  };
+});
+
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
   clearToastForSuccessfulOperation: vi.fn(),
@@ -1021,10 +1033,12 @@ describe("SettingsPage", () => {
     });
 
     expect(reportUserError).not.toHaveBeenCalled();
-    expect(addLog).toHaveBeenCalledWith(
-      "info",
-      "Connection save refusal not shown: the page was closed",
-      expect.anything(),
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Connection not saved",
+        description: expect.stringMatching(/couldn’t reach/),
+        alwaysVisible: true,
+      }),
     );
   }, 15000);
 
@@ -1064,11 +1078,127 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
+  it("leaves the password field of the newly selected device alone when the selection changed during the save", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        { ...savedDevicesRef.current.devices[0], hasPassword: false },
+        {
+          ...savedDevicesRef.current.devices[0],
+          id: "saved-device-2",
+          name: "Other",
+          host: "other",
+          hasPassword: true,
+        },
+      ],
+    };
+    const answer = pendingProbe();
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
+    changeField("settings-device-telnet", "65");
+    await waitFor(() => expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument(), {
+      timeout: 8000,
+    });
+    await act(async () => {
+      answer({ status: "reachable" });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument();
+  }, 15000);
+
+  it("does not show the refusal of the edited device in the editor of the newly selected device", async () => {
+    addSecondSavedDevice();
+    const answer = pendingProbe();
+    renderSettingsPage();
+    changeField("settings-device-host", "192.0.2.77");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
+    changeField("settings-device-telnet", "65");
+    await act(async () => {
+      answer({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
+    });
+
+    expect(screen.queryByText(/couldn’t reach “192\.0\.2\.77”/)).not.toBeInTheDocument();
+  }, 15000);
+
+  it("does not connect to the edited device when the page is gone and another device was selected meanwhile", async () => {
+    addSecondSavedDevice();
+    const answer = pendingProbe();
+    const view = renderSettingsPage();
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    view.unmount();
+    savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
+    await act(async () => {
+      answer({ status: "reachable" });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("disables deleting a device while its connection settings are being saved", async () => {
+    addSecondSavedDevice();
+    pendingProbe();
+    renderSettingsPage();
+    expect(screen.getByTestId("settings-delete-device")).toBeEnabled();
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expect(screen.getByTestId("settings-delete-device")).toBeDisabled());
+  }, 15000);
+
+  it("stores nothing for a device that was deleted while its connection settings were being saved", async () => {
+    addSecondSavedDevice();
+    const answer = pendingProbe();
+    renderSettingsPage();
+    fireEvent.change(screen.getByLabelText(/password|network password/i), { target: { value: "new-password" } });
+    changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      selectedDeviceId: "saved-device-2",
+      devices: savedDevicesRef.current.devices.filter((device) => device.id === "saved-device-2"),
+    };
+    await act(async () => {
+      answer({ status: "reachable" });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+  }, 15000);
+
   it("neither reports success nor failure when the switch was superseded by another one", async () => {
     const { SAVED_DEVICE_SWITCH_SUPERSEDED } = await import("@/lib/savedDevices/savedDeviceSwitchOutcome");
     mockSwitchSavedDevice.mockResolvedValueOnce(SAVED_DEVICE_SWITCH_SUPERSEDED as never);
+    mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
     renderSettingsPage();
     changeField("settings-device-host", "192.0.2.50");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expectRefusalReported(/couldn’t reach/i));
+    vi.mocked(clearToastForSuccessfulOperation).mockClear();
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalled());
@@ -1077,7 +1207,8 @@ describe("SettingsPage", () => {
     });
 
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
-    expect(reportUserError).not.toHaveBeenCalled();
+    expect(reportUserError).not.toHaveBeenCalledWith(expect.objectContaining({ operation: "CONNECTION_SAVE" }));
+    expect(clearToastForSuccessfulOperation).toHaveBeenCalledWith("CONNECTION_SAVE_REFUSED", "c64u");
   }, 15000);
 
   it("disables the device rows from the moment Save & Connect is pressed, including while the stored password is read", async () => {

@@ -217,12 +217,21 @@ describe("uiErrors", () => {
     },
   );
 
-  it.each(["Host unreachable (DNS)", "DNS lookup failed", "DNS resolution error for c64u"])(
-    "classifies the name resolution failure %s as a transient connectivity failure",
-    (message) => {
-      expect(isTransientConnectivityFailure(message)).toBe(true);
-    },
-  );
+  it.each([
+    "Host unreachable (DNS)",
+    "DNS lookup failed",
+    "DNS resolution error for c64u",
+    "net::ERR_NAME_NOT_RESOLVED",
+    "DNS_PROBE_FINISHED_NXDOMAIN",
+    "DNS server failure",
+    "DNS query failed",
+    "dns: no such host",
+    "Name or service not known",
+    "java.net.UnknownHostException: c64u",
+    "getaddrinfo EAI_AGAIN c64u",
+  ])("classifies the name resolution failure %s as a transient connectivity failure", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(true);
+  });
 
   it.each([
     "We couldn’t reach “c64.ddns.net”. Make sure it’s powered on and on the same Wi‑Fi.",

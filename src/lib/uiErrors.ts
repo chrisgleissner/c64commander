@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
@@ -153,8 +154,11 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|did not answer within|service unavailable|http 503|failed to fetch|failed to connect|net::err|request timed out|networkerror|\(dns\)|\bdns (?:lookup|resolution|error|failure|failed)|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)|device not connected/.test(
-    normalized,
+  return (
+    isDnsFailureMessage(normalized) ||
+    /host unreachable|did not answer within|service unavailable|http 503|failed to fetch|failed to connect|net::err|request timed out|networkerror|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)|device not connected/.test(
+      normalized,
+    )
   );
 };
 

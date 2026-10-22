@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import { isNetworkKnownOffline, isNetworkSettling } from "@/lib/connection/networkStatusWatch";
 
@@ -48,9 +49,8 @@ const isAbortError = (error: Error, message: string) =>
 const isTimeoutError = (message: string) => /timed out|timeout/i.test(message);
 
 const isNetworkError = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|\(dns\)|\bdns (?:lookup|resolution|error|failure|failed)|offline|econn|socket/i.test(
-    message,
-  );
+  /failed to fetch|networkerror|network request failed|offline|econn|socket/i.test(message) ||
+  isDnsFailureMessage(message);
 
 const isUserError = (message: string) =>
   /no file selected|no directory selected|selection canceled|selection cancelled|permission rejected|permission denied/i.test(
@@ -131,9 +131,7 @@ export const classifyError = (error: unknown, categoryHint?: FailureCategory): F
     failureClass = "network-transient";
   } else if (isNetworkError(message)) {
     failureClass =
-      /unknown host|enotfound|\(dns\)|\bdns (?:lookup|resolution|error|failure|failed)|unreachable|ehostunreach|enetunreach/i.test(
-        message,
-      )
+      isDnsFailureMessage(message) || /unreachable|ehostunreach|enetunreach/i.test(message)
         ? "network-unreachable"
         : "network-transient";
   } else if (

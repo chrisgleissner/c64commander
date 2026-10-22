@@ -641,7 +641,7 @@ past it to anything below.
   Cancel — button — `settings-add-device-cancel`, and Add — button —
   `settings-add-device-confirm`, which probes the host, saves the device and connects
   to it _(dialog code-verified, not yet hardware-verified)_ ; Delete device — button —
-  `settings-delete-device` — R✅ I✅ `[disabled: single device]` — the confirmation
+  `settings-delete-device` — R✅ I✅ `[disabled: single device; while Save & Connect waits for the device]` — the confirmation
   names the device selected when it opened, by name and address, and deletes that
   device even if the selection changes while it is open (its red confirm button is `settings-delete-device-confirm`) ; device row — button — `settings-device-row-*` — R✅ I✅ `[disabled: while Save & Connect waits for the device]` ; host — text —
   `settings-device-host` — R✅ I✅ (T9 hostname) ; HTTP/FTP/Telnet ports — text —

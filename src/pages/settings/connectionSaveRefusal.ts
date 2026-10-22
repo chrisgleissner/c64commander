@@ -9,12 +9,16 @@
 import { useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useIsMounted } from "@/hooks/useIsMounted";
-import { addLog } from "@/lib/logging";
 import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
 
 const REFUSED_OPERATION = "CONNECTION_SAVE_REFUSED";
 const FAILED_OPERATION = "CONNECTION_SAVE";
 const REFUSED_TITLE = "Connection not saved";
+
+export const describeUnreachableHost = (host: string, suggestedAddress: string | null | undefined): string =>
+  suggestedAddress
+    ? `We couldn’t reach “${host}”, but found a device at ${suggestedAddress}. Use that address in the host field.`
+    : `We couldn’t reach “${host}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(host) ? "" : ", or enter its IP address"}.`;
 
 const reportedHosts = new Set<string>();
 let invalidDraftToast: { dismiss: () => void } | null = null;
@@ -55,7 +59,7 @@ export const reportConnectionSaveFailed = (description: string, error: unknown, 
   });
 };
 
-/** What a save tells the user. A refusal is dropped once the page is gone; the save itself is never. */
+/** What a save tells the user. Once the page is gone a refusal is a notice, not an error that waits to be dismissed. */
 export const useConnectionSaveReporter = () => {
   const isMounted = useIsMounted();
   return useMemo(
@@ -65,7 +69,7 @@ export const useConnectionSaveReporter = () => {
       dismiss: dismissConnectionSaveToasts,
       refused: (description: string, deviceHost: string) => {
         if (isMounted.current) reportConnectionSaveRefused(description, deviceHost);
-        else addLog("info", "Connection save refusal not shown: the page was closed", { description, deviceHost });
+        else reportInvalidConnectionDraft(description);
       },
     }),
     [isMounted],

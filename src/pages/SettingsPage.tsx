@@ -75,7 +75,7 @@ import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { useConnectionSaveReporter } from "@/pages/settings/connectionSaveRefusal";
+import { describeUnreachableHost, useConnectionSaveReporter } from "@/pages/settings/connectionSaveRefusal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -409,8 +409,6 @@ export default function SettingsPage() {
     null;
   const [isSaving, setIsSaving] = useState(false);
   const saveReport = useConnectionSaveReporter();
-  const selectedDeviceIdRef = useRef(savedDevices.selectedDeviceId);
-  selectedDeviceIdRef.current = savedDevices.selectedDeviceId;
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
   // CTAs so the touch-off device can save/connect, refresh, and scan with no taps. Inert
@@ -853,26 +851,26 @@ export default function SettingsPage() {
             deviceHost: nextDeviceHost,
             password: hasPassword ? effectivePassword : null,
           });
+      const savedDevicesNow = getSavedDevicesSnapshot();
+      if (!savedDevicesNow.devices.some((device) => device.id === selectedSavedDevice.id)) {
+        saveReport.dismiss();
+        return;
+      }
+      const isStillSelected = savedDevicesNow.selectedDeviceId === selectedSavedDevice.id;
       if (reachability?.status === "unreachable") {
-        if (reachability.suggestedAddress) {
-          setReachabilitySuggestion({ address: reachability.suggestedAddress });
-          setHostnameError(null);
-          saveReport.refused(
-            `We couldn’t reach “${nextHost}”, but found a device at ${reachability.suggestedAddress}. Use that address in the host field.`,
-            selectedSavedDevice.host,
-          );
-        } else {
-          setReachabilitySuggestion(null);
-          const unreachableMessage = `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`;
-          setHostnameError(unreachableMessage);
-          saveReport.refused(unreachableMessage, selectedSavedDevice.host);
+        const { suggestedAddress } = reachability;
+        const unreachableMessage = describeUnreachableHost(nextHost, suggestedAddress);
+        if (isStillSelected) {
+          setReachabilitySuggestion(suggestedAddress ? { address: suggestedAddress } : null);
+          setHostnameError(suggestedAddress ? null : unreachableMessage);
         }
+        saveReport.refused(unreachableMessage, selectedSavedDevice.host);
         return;
       }
       if (reachability?.status === "needs-password" && isChangingPassword && hasPassword) {
         // The just-typed password was itself rejected by the device. A wrong password
         // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
-        setPasswordError("Wrong password for this device.");
+        if (isStillSelected) setPasswordError("Wrong password for this device.");
         saveReport.refused("Wrong password for this device.", selectedSavedDevice.host);
         return;
       }
@@ -886,7 +884,6 @@ export default function SettingsPage() {
           await clearPasswordForDevice(selectedSavedDevice.id);
         }
       }
-      const isStillSelected = selectedDeviceIdRef.current === selectedSavedDevice.id;
       updateSavedDevice(selectedSavedDevice.id, {
         name: deviceDraft.name,
         nameSource: deviceDraft.nameSource,
@@ -896,13 +893,21 @@ export default function SettingsPage() {
         telnetPort: Number(deviceDraft.telnetPort),
         hasPassword,
       });
-      if (isStillSelected) updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
+      if (!isStillSelected) {
+        saveReport.dismiss();
+        toast({ title: "Connection settings saved" });
+        return;
+      }
+      updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
       // A local-only edit still re-applies to a live connection, but a device that is
       // not connected is not made to answer: that wait and its failure are exactly what
       // HARD27-037 removed.
-      if (isStillSelected && (!isLocalOnlyEdit || status.isConnected)) {
+      if (!isLocalOnlyEdit || status.isConnected) {
         const verification = await switchSavedDevice(selectedSavedDevice.id);
-        if (isSupersededSavedDeviceSwitch(verification)) return;
+        if (isSupersededSavedDeviceSwitch(verification)) {
+          saveReport.dismiss();
+          return;
+        }
         if (isOfflineSwitchResult(verification) && !isLocalOnlyEdit) {
           throw new Error(
             describeSwitchFailure(
@@ -1645,7 +1650,7 @@ export default function SettingsPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={handleDeleteSelectedDevice}
-                        disabled={!selectedSavedDevice || deleteDependencyBusy}
+                        disabled={!selectedSavedDevice || deleteDependencyBusy || isSaving}
                         aria-label="Delete device"
                         title="Delete device"
                         data-testid="settings-delete-device"
