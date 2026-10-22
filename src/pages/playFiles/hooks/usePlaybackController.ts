@@ -40,6 +40,7 @@ import {
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
 import {
+  isLaunchOvertaken,
   isSongCategory,
   resolveLaunchedItemIndex,
   resolvePlayTargetIndex,
@@ -688,6 +689,8 @@ export function usePlaybackController({
         outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
+        /** The track instance when the request was made; a request that a later launch overtook is dropped. */
+        expectedTrackInstanceId?: number;
       },
     ) => {
       const stopsAtRequest = options?.stopsAtRequest ?? stopCountRef.current;
@@ -695,6 +698,10 @@ export function usePlaybackController({
         // A play queued behind a launch that Stop then overtook would otherwise start after Stop.
         if (stopCountRef.current !== stopsAtRequest) {
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
+          return;
+        }
+        if (isLaunchOvertaken(trackInstanceIdRef.current, options?.expectedTrackInstanceId)) {
+          addLog("info", "Playback request dropped: a newer tune launched while it waited", { itemId: item.id });
           return;
         }
         nextTunePrefetch.cancel();
@@ -1377,14 +1384,8 @@ export function usePlaybackController({
       }
     },
     onRestartFailed: (error, item) => {
-      if (!isHandledUiError(error)) {
-        reportPlaybackStartFailure({
-          operation: "PLAYBACK_START",
-          title: "Playback failed",
-          error,
-          context: { item: item.label },
-        });
-      }
+      const report = { operation: "PLAYBACK_START", title: "Playback failed", error, context: { item: item.label } };
+      if (!isHandledUiError(error)) reportPlaybackStartFailure(report);
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;

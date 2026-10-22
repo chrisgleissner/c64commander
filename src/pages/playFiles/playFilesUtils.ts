@@ -533,3 +533,7 @@ export const createPlaylistTraversal = (
   previous: (index: number) =>
     resolvePreviousPlaylistIndex(playlist, index, ordering.repeatEnabled, ordering.shuffleEnabled, seed, anchorId),
 });
+
+/** A request made when `expected` tune launches had completed is stale once another launch has completed. */
+export const isLaunchOvertaken = (current: number, expected: number | undefined) =>
+  expected !== undefined && current !== expected;

@@ -312,6 +312,7 @@ const renderPlaybackController = (
 describe("usePlaybackController", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(reportUserError).mockReset();
     storedRomsAvailable.current = false;
     clearArchivePlaybackCacheForTests();
     pollingPauseRegistry.__resetForTest();
@@ -1591,6 +1592,32 @@ describe("usePlaybackController", () => {
         description: "resume failed",
       }),
     );
+  });
+
+  it("reports a resume failure once when Play starts a tune on a paused machine that cannot resume", async () => {
+    const playlist = [createPlaylistItem()];
+    const machineResume = vi.fn().mockRejectedValue(new Error("resume failed"));
+    vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPaused: true });
+
+    await act(async () => {
+      await result.current.handlePlay();
+    });
+
+    expect(vi.mocked(reportUserError).mock.calls.map((call) => (call[0] as { title: string }).title)).toEqual([
+      "Resume failed",
+    ]);
+  });
+
+  it("drops a launch request that a newer tune launch overtook while it waited", async () => {
+    const playlist = [createPlaylistItem()];
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0 });
+
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0, expectedTrackInstanceId: -1 });
+    });
+
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 
   it("clears stale pause-mute bookkeeping refs when starting a new track (HARD9-063)", async () => {

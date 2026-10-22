@@ -13,6 +13,7 @@ import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlayback
 import { addLog } from "@/lib/logging";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import { isLaunchOvertaken } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 type PlaybackEngineSwitchOptions = {
@@ -30,7 +31,13 @@ type PlaybackEngineSwitchOptions = {
   enqueuePlayTransition: (task: () => Promise<void>) => Promise<void>;
   playItem: (
     item: PlaylistItem,
-    options: { playlistIndex: number; playlistSize: number; origin: "auto"; stopsAtRequest: number },
+    options: {
+      playlistIndex: number;
+      playlistSize: number;
+      origin: "auto";
+      stopsAtRequest: number;
+      expectedTrackInstanceId: number;
+    },
   ) => Promise<void>;
   /** Stops the tune on the C64. Reports its own failure; a tune that would not stop must not block the move. */
   stopOnC64: (item: PlaylistItem) => Promise<void>;
@@ -84,14 +91,16 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
           playlistSize: current.playlistRef.current.length,
           origin: "auto",
           stopsAtRequest,
+          expectedTrackInstanceId: trackInstanceId,
         });
         // §12.6 `engineSwitchMs`: press → the tune is audible again.
         updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
       } catch (error) {
-        if (!isLatest() || current.trackInstanceIdRef.current !== trackInstanceId) {
-          addLog("info", "A failed tune move was overtaken by a later choice or start; not reported", {
+        if (!isLatest() || isLaunchOvertaken(current.trackInstanceIdRef.current, trackInstanceId)) {
+          addLog("warn", "A failed tune move was overtaken by a later choice or start; not reported", {
             item: item.label,
-            error: (error as Error).message,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
           });
           return;
         }
