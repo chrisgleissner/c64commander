@@ -1115,17 +1115,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
-      const configLookupsSkipped = configListing.skippedLookups();
-      if (configLookupsSkipped > 0) {
-        addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
-          sourceId: source.id,
-          folders: configLookupsSkipped,
-        });
-      }
-      const notices = [
-        skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "",
-        configLookupsSkipped ? "Settings files were not looked up while the device could not be reached." : "",
-      ].filter(Boolean);
+      const notices = [skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "", configListing.skippedNotice()].filter(
+        Boolean,
+      );
       dispatchFeedback(() => {
         toast({
           title: "Items added",

@@ -15,6 +15,7 @@ import { isNativePlatform } from "@/lib/native/platform";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
 import { createDeepScanSearch } from "./deepScanSearch";
+import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
 
 type FtpCacheRecord = {
@@ -240,10 +241,12 @@ const listFilesRecursive = async (
     // broken socket) instead of cascading into more PASV connections against known-flaky
     // firmware - that early exit must be visible, not silently presented as a complete
     // listing. Reuses the existing partialFailures surface. See HARD9-078.
-    if (result.timedOut) {
+    if (result.timedOut || result.refused) {
       failures.push({
         path: normalizedPath,
-        message: "Listing incomplete: the device stopped answering",
+        message: result.refused
+          ? "Listing incomplete: the device refused connections"
+          : "Listing incomplete: the device stopped answering",
       });
     }
     return attachPartialFailures(entries, failures);
@@ -358,7 +361,8 @@ const listFilesRecursive = async (
 
 const peekCachedEntries = (path: string): SourceEntry[] | null => {
   const host = normalizeFtpHost(getC64APIConfigSnapshot().deviceHost);
-  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), path && path !== "" ? path : "/"));
+  const folder = normalizeSourcePath(path).replace(/(.)\/$/, "$1");
+  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), folder));
 };
 
 export const createUltimateSourceLocation = (options?: { name?: string }): SourceLocation => ({

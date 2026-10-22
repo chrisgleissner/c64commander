@@ -115,6 +115,7 @@ import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { describeDisksAdded } from "@/components/disks/disksAddedMessage";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
@@ -1572,7 +1573,8 @@ export const HomeDiskManager = () => {
         );
 
         const runtimeFiles: Record<string, File> = {};
-        const configSource = { ...source, listEntries: createConfigListing(source).listEntries };
+        const configListing = createConfigListing(source);
+        const configSource = { ...source, listEntries: configListing.listEntries };
         const disks = await Promise.all(
           diskCandidates.map(async (entry, index) => {
             const normalized = normalizeDiskPath(entry.path);
@@ -1648,9 +1650,7 @@ export const HomeDiskManager = () => {
         }));
         toast({
           title: "Items added",
-          description: partialScanFailures.length
-            ? `${disks.length} disk(s) added. Some folders could not be scanned.`
-            : `${disks.length} disk(s) added to library.`,
+          description: describeDisksAdded(disks.length, partialScanFailures.length > 0, configListing.skippedNotice()),
         });
         return true;
       } catch (error) {

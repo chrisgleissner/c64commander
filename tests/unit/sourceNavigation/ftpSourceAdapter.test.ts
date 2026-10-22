@@ -377,6 +377,23 @@ describe("ftpSourceAdapter", () => {
     ]);
   });
 
+  it("says the device refused connections when the native walk ended after repeated refusals", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockResolvedValue({
+      path: "/",
+      entries: [],
+      partialFailures: [],
+      timedOut: false,
+      refused: true,
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(results.partialFailures).toEqual([
+      { path: "/", message: "Listing incomplete: the device refused connections" },
+    ]);
+  });
+
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {
     // Regression for S2-DISKS-FTP-RECURSIVE-SCAN-STALL: a broad-folder scan must
     // report progress as it goes, not only once at the end (which showed a stuck

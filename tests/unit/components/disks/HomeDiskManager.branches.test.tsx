@@ -889,6 +889,39 @@ describe("HomeDiskManager targeted branch coverage", () => {
     });
   });
 
+  it("names the settings files it did not look up when the device stops answering during a disk add", async () => {
+    const { toast } = await import("@/hooks/use-toast");
+    const listEntries = vi.fn().mockRejectedValue(new Error("FTP listDirectory timed out after connect 1500ms"));
+    dialogMockState.addItemsSource = createDialogSource({
+      listEntries,
+      listFilesRecursive: vi.fn().mockResolvedValue([
+        { type: "file", path: "/games/one/a.d64", name: "a.d64", sizeBytes: 1024 },
+        { type: "file", path: "/games/two/b.d64", name: "b.d64", sizeBytes: 1024 },
+        { type: "file", path: "/games/three/c.d64", name: "c.d64", sizeBytes: 1024 },
+      ]),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Items added",
+          description:
+            "3 disk(s) added to library. Settings files were not looked up while the device could not be reached.",
+        }),
+      );
+    });
+    expect(listEntries.mock.calls.length).toBeLessThan(6);
+  });
+
   it("supports auto-confirm add flow after closing the browser first", async () => {
     dialogMockState.addItemsSource = createDialogSource({
       listFilesRecursive: vi.fn().mockResolvedValue([{ type: "file", path: "/games/demo.d64", name: "demo.d64" }]),

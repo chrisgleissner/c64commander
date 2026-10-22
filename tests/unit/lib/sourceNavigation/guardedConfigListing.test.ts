@@ -27,7 +27,8 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
-import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { CONFIG_LOOKUP_PROBE_EVERY, createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const entry = { type: "file", name: "a.cfg", path: "/USB2/Games/a.cfg" } as const;
@@ -65,7 +66,94 @@ describe("createConfigListing", () => {
     await expect(listing.listEntries("/USB2/Three")).resolves.toEqual([]);
 
     expect(listFtpDirectory).toHaveBeenCalledTimes(1);
-    expect(listing.skippedLookups()).toBe(2);
+    expect(listing.skippedLookups()).toBe(3);
+  });
+
+  it.each([
+    "FTP listDirectory timed out after connect 1500ms / transfer 3000ms",
+    'Unable to resolve host "c64u": No address associated with hostname',
+    "Connection reset",
+    "Software caused connection abort",
+    "Network is unreachable",
+  ])("treats %s as a lost connection", async (message) => {
+    vi.mocked(listFtpDirectory).mockRejectedValue(new Error(message));
+    const listing = createConfigListing(createUltimateSourceLocation());
+
+    await expect(listing.listEntries("/USB2/One")).rejects.toThrow();
+    await expect(listing.listEntries("/USB2/Two")).resolves.toEqual([]);
+
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers a folder that discovery asks for with a trailing slash from the cache of the browsed folder", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({
+      entries: [{ type: "file", name: "demo.cfg", path: "/USB2/Games/demo.cfg" }],
+    } as never);
+    await source.listEntries("/USB2/Games");
+    vi.mocked(listFtpDirectory).mockClear();
+    networkOffline.mockReturnValue(true);
+    const listing = createConfigListing(source);
+
+    const candidates = await discoverConfigCandidates({
+      sourceType: "ultimate",
+      sourceId: null,
+      sourceRootPath: "/",
+      targetFile: { name: "demo.prg", path: "/USB2/Games/demo.prg" },
+      listEntries: listing.listEntries,
+    });
+
+    expect(
+      candidates.some(
+        (candidate) => candidate.ref?.fileName === "demo.cfg" || JSON.stringify(candidate).includes("demo.cfg"),
+      ),
+    ).toBe(true);
+    expect(listFtpDirectory).not.toHaveBeenCalled();
+  });
+
+  it("asks the device again every few lookups, and uses it again once it answers", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("failed to connect"));
+    const listing = createConfigListing(source);
+    await expect(listing.listEntries("/USB2/0")).rejects.toThrow();
+    vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
+
+    for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1) {
+      await expect(listing.listEntries(`/USB2/${lookup}`)).resolves.toEqual([]);
+    }
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+    await expect(listing.listEntries("/USB2/probe")).resolves.toHaveLength(1);
+    await expect(listing.listEntries("/USB2/after")).resolves.toHaveLength(1);
+
+    expect(listFtpDirectory).toHaveBeenCalledTimes(3);
+  });
+
+  it("waits for one lookup before starting the next, so the first failure is seen first", async () => {
+    const source = createUltimateSourceLocation();
+    let rejectFirst: (error: Error) => void = () => undefined;
+    vi.mocked(listFtpDirectory).mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)));
+    const listing = createConfigListing(source);
+
+    const first = listing.listEntries("/USB2/One");
+    const second = listing.listEntries("/USB2/Two");
+    await Promise.resolve();
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+    rejectFirst(new Error("timed out"));
+
+    await expect(first).rejects.toThrow("timed out");
+    await expect(second).resolves.toEqual([]);
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the skipped lookups once, including the one that failed", async () => {
+    const listing = createConfigListing(createUltimateSourceLocation());
+    expect(listing.skippedNotice()).toBe("");
+    vi.mocked(listFtpDirectory).mockRejectedValue(new Error("failed to connect"));
+
+    await expect(listing.listEntries("/USB2/One")).rejects.toThrow();
+
+    expect(listing.skippedLookups()).toBe(1);
+    expect(listing.skippedNotice()).toBe("Settings files were not looked up while the device could not be reached.");
   });
 
   it("keeps asking after a failure that is not about the connection", async () => {

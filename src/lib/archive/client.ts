@@ -162,11 +162,14 @@ const logArchiveFailure = (
 
 export type ArchiveRequestFailure = "connection" | "server";
 
-/** An archive request that failed: before any answer came back (connection), or with an answer that was not usable (server). */
+/**
+ * An archive request that failed: before any answer came back (connection), or with an answer that was not
+ * usable (server). A failure that is neither, such as a request that could not be built, has no kind.
+ */
 export class ArchiveRequestError extends Error {
   constructor(
     message: string,
-    readonly failure: ArchiveRequestFailure,
+    readonly failure: ArchiveRequestFailure | undefined,
     cause: Error,
   ) {
     super(message, { cause });
@@ -249,22 +252,30 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         addLog("debug", "Archive native request dropped after abort race", buildErrorLogDetails(error));
       });
       const response = signal ? await this.raceAgainstAbort(nativeRequestPromise, signal) : await nativeRequestPromise;
-      const headers = new Headers(
-        Object.entries((response.headers ?? {}) as Record<string, string>).map(([key, value]) => [key, String(value)]),
-      );
-      if (responseType === "arraybuffer") {
-        return new Response(decodeNativeBinaryData(response.data), {
+      try {
+        const headers = new Headers(
+          Object.entries((response.headers ?? {}) as Record<string, string>).map(([key, value]) => [
+            key,
+            String(value),
+          ]),
+        );
+        if (responseType === "arraybuffer") {
+          return new Response(decodeNativeBinaryData(response.data), {
+            status: response.status,
+            statusText: String(response.status),
+            headers,
+          });
+        }
+        const payload = typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? {});
+        return new Response(payload, {
           status: response.status,
           statusText: String(response.status),
           headers,
         });
+      } catch (error) {
+        const err = error as Error;
+        throw new ArchiveRequestError(`Archive response was not usable: ${err.message}`, "server", err);
       }
-      const payload = typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? {});
-      return new Response(payload, {
-        status: response.status,
-        statusText: String(response.status),
-        headers,
-      });
     }
 
     return runWithDeadline(
@@ -287,6 +298,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
     const url = this.buildUrl(path);
     const headers = this.getHeaders();
     const startedAt = performance.now();
+    let requested = false;
     let answered = false;
 
     try {
@@ -307,6 +319,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         headers: sanitizeArchiveHeadersForLogging(headers),
         operation: kind,
       });
+      requested = true;
       const response = await this.requestWithTransport(request, REQUEST_TIMEOUT_MS[kind], "json", options?.signal);
       answered = true;
       if (!response.ok) {
@@ -337,7 +350,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
       });
       throw new ArchiveRequestError(
         `${this.resolvedConfig.name} archive request failed for ${this.getHost()}: ${err.message}`,
-        answered ? "server" : "connection",
+        err instanceof ArchiveRequestError ? err.failure : answered ? "server" : requested ? "connection" : undefined,
         err,
       );
     }
