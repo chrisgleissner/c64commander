@@ -1348,6 +1348,19 @@ button:focus-visible,
     justify-content: center;
   }
 
+  /* A hidden label wider than its tab must not widen the scrolling bar. The tab's own focus outline is
+     drawn outside its box and is not clipped by its own overflow. */
+  .tab-bar-icons .tab-item:not(.active) {
+    overflow: hidden;
+  }
+
+  /* Icons-only tabs have little room to spare at the largest sizes; the padding stays wide enough for the
+     focus outline (2px offset, 2px wide). */
+  .tab-bar.tab-bar-icons {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
   /* Scrollable area with fade */
   .scroll-fade {
     @apply relative;

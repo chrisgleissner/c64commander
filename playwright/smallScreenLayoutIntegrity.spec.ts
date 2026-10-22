@@ -464,24 +464,31 @@ test.describe("Small screen layout integrity", () => {
         (scale) => document.documentElement.style.setProperty("--text-scale", String(scale)),
         fontScale,
       );
-      await page.waitForTimeout(300);
 
       const nav = page.locator("nav.tab-bar");
-      const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
-        scrollWidth: el.scrollWidth,
-        clientWidth: el.clientWidth,
-      }));
-      expect(scrollWidth, "the tab bar must not need to scroll").toBeLessThanOrEqual(clientWidth);
+      if (fontScale > 1) await expect(nav).toHaveClass(/tab-bar-icons/);
+      else await expect(nav).not.toHaveClass(/tab-bar-icons/);
 
       for (const route of TAB_ROUTES) {
         const tab = page.getByTestId(`tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`);
-        const box = await tab.boundingBox();
-        expect(box?.width ?? 0, `${route.label} tab width`).toBeGreaterThanOrEqual(43.5);
-        expect(box?.height ?? 0, `${route.label} tab height`).toBeGreaterThanOrEqual(43.5);
-        await expect(tab).toHaveAttribute("aria-label", route.label);
+        await tab.click();
+        await expect(tab).toHaveClass(/active/);
+        const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(scrollWidth, `${route.label} active: the tab bar must not need to scroll`).toBeLessThanOrEqual(
+          clientWidth,
+        );
+        await expect(page.locator("nav.tab-bar .tab-item.active .tab-item-label")).toBeVisible();
+        for (const other of TAB_ROUTES) {
+          const otherTab = page.getByTestId(`tab-${other.label.toLowerCase().replace(/\s+/g, "-")}`);
+          const box = await otherTab.boundingBox();
+          expect(box?.width ?? 0, `${other.label} tab width`).toBeGreaterThanOrEqual(43.5);
+          expect(box?.height ?? 0, `${other.label} tab height`).toBeGreaterThanOrEqual(43.5);
+          await expect(otherTab).toHaveAttribute("aria-label", other.label);
+        }
       }
-      const activeLabel = page.locator("nav.tab-bar .tab-item.active .tab-item-label");
-      await expect(activeLabel).toBeVisible();
     });
   }
 
