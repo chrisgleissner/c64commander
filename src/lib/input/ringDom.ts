@@ -10,7 +10,7 @@
 
 import { keepPlatformInputMethodAway } from "@/lib/input/hardwareKeypadInputMethod";
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { getInputModality } from "@/lib/input/inputModality";
@@ -156,6 +156,11 @@ export const focusRingElement = (element: HTMLElement | null): void => {
     // element the ring left rather than the one it is on.
     document.activeElement.blur();
   }
+  scrollRingElementIntoView(element);
+};
+
+/** Scrolls the element into the part of its scroll container the app chrome leaves free; it moves no focus. */
+const scrollRingElementIntoView = (element: HTMLElement): void => {
   const rect = element.getBoundingClientRect();
   const style = getComputedStyle(element);
   const scrollport = visibleBoundsOf(scrollContainerOf(element));
@@ -236,15 +241,21 @@ export const revealRingElementAfterLayout = (element: HTMLElement | null): (() =
  * as it does when a toast arrives and takes its strip from the page area.
  */
 export const revealRingElementOnReserveChange = (): (() => void) => {
-  const onReserveChange = () =>
-    window.requestAnimationFrame(() => {
+  let frame = 0;
+  const onReserveChange = () => {
+    window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(() => {
       const current = keypadScrollAnchorEl;
-      if (getInputModality() === "key-navigation" && current?.isConnected && needsReveal(current)) {
-        focusRingElement(current);
-      }
+      if (getInputModality() !== "key-navigation" || !current?.isConnected) return;
+      if (isEditableTarget(document.activeElement) || isAnyOverlayOpen()) return;
+      if (needsReveal(current)) scrollRingElementIntoView(current);
     });
+  };
   window.addEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
-  return () => window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
+  return () => {
+    window.cancelAnimationFrame(frame);
+    window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
+  };
 };
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";

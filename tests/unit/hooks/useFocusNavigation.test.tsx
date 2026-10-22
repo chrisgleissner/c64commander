@@ -7,6 +7,7 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1378,6 +1379,21 @@ describe("the ring's element stays on screen when a toast takes space from the p
   afterEach(() => resetInputModality());
 
   const renderWithSelectedB = () => {
+    const dialogControl: { open: () => void } = { open: () => undefined };
+    const Dialog = () => {
+      const [open, setOpen] = useState(false);
+      dialogControl.open = () => setOpen(true);
+      return (
+        <DialogPrimitive.Root open={open}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Content aria-describedby={undefined}>
+              <DialogPrimitive.Title>Dialog</DialogPrimitive.Title>
+              <button>Inside</button>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      );
+    };
     let top = 200;
     const measure = (page: HTMLDivElement | null) => {
       if (!page) return;
@@ -1390,6 +1406,9 @@ describe("the ring's element stays on screen when a toast takes space from the p
       <FocusNavigationProvider>
         <div ref={measure} style={{ overflowY: "auto" }}>
           <Toolbar onA={vi.fn()} onB={vi.fn()} />
+          <input aria-label="Host" />
+          <button>Plain</button>
+          <Dialog />
         </div>
       </FocusNavigationProvider>,
     );
@@ -1400,6 +1419,7 @@ describe("the ring's element stays on screen when a toast takes space from the p
     selected.scrollIntoView = scrollIntoView;
     return {
       scrollIntoView,
+      openDialog: () => act(() => dialogControl.open()),
       moveTo: (nextTop: number) => {
         top = nextTop;
       },
@@ -1427,6 +1447,55 @@ describe("the ring's element stays on screen when a toast takes space from the p
     });
 
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("does not blur the text field being edited, and does not scroll", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    const host = screen.getByLabelText("Host");
+    host.focus();
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(document.activeElement).toBe(host);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("leaves the page and the focus inside an open dialog alone", async () => {
+    const { scrollIntoView, moveTo, openDialog } = renderWithSelectedB();
+    openDialog();
+    const inside = await screen.findByRole("button", { name: "Inside" });
+    act(() => inside.focus());
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(document.activeElement).toBe(inside);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("moves no focus when it scrolls the selected control back into view", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    const before = screen.getByRole("button", { name: "Plain" });
+    before.focus();
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+
+    expect(document.activeElement).toBe(before);
   });
 
   it("does not scroll for a pointer user", async () => {
