@@ -283,6 +283,45 @@ describe("useRemotePlaybackHandover", () => {
     expect(seekBy).not.toHaveBeenCalled();
   });
 
+  it("reads ahead from the sounding tune's own row, not from the start of the playlist", async () => {
+    const playlist = ["one", "two", "three", "four", "five", "six"].map(ultimateSid);
+    const { options } = renderHandover(playlist, Date.now());
+    vi.mocked(tryFetchUltimateSidBlob).mockClear();
+    renderHook(() => useRemotePlaybackHandover({ ...options, soundingTune: playlist[2] }));
+
+    await waitFor(() =>
+      expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/USB2/MUSICIANS/six.sid", undefined),
+    );
+  });
+
+  it("says nothing when no tune sounds and none has a start time", async () => {
+    const { options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    options.soundingTuneRef.current = null;
+    options.trackStartedAtRef.current = null as never;
+    vi.mocked(addLog).mockClear();
+
+    setConnection("OFFLINE_NO_DEMO");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(addLog).not.toHaveBeenCalledWith("info", expect.stringContaining("another tune is starting"));
+  });
+
+  it("says why it does not carry on when the tune playing is no longer in the playlist", async () => {
+    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    options.soundingTuneRef.current = ultimateSid("gone");
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "info",
+        expect.stringContaining("no longer in the playlist"),
+        expect.anything(),
+      ),
+    );
+    expect(playItem).not.toHaveBeenCalled();
+  });
+
   it("carries on the sounding tune at its own index, not the row at the start of the playlist", async () => {
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
     const playlist = [ultimateSid("one"), ultimateSid("two")];

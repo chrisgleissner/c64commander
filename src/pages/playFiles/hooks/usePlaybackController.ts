@@ -405,6 +405,7 @@ export function usePlaybackController({
   const [durationMsItemId, setDurationMsItemId] = useState<string | null>(null);
   const userTransportQueueRef = useRef(Promise.resolve());
   const latestQueuedUserSkipRef = useRef(0);
+  const lastLaunchedItemIdRef = useRef<string | null>(null);
   const lastUserSkipTrackInstanceIdRef = useRef<number | null>(null);
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
@@ -702,7 +703,6 @@ export function usePlaybackController({
           return;
         }
         options?.onLaunchStarted?.();
-        setSoundingTune(null);
         nextTunePrefetch.cancel();
         if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
@@ -970,6 +970,8 @@ export function usePlaybackController({
             }
           }
         }
+        // Cleared only now: a launch that fails above leaves the previous tune sounding and on record.
+        setSoundingTune(null);
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"
@@ -1215,7 +1217,11 @@ export function usePlaybackController({
           return;
         }
 
-        setSoundingTune({ ...item, request: effectiveRequest, path: effectivePath });
+        lastLaunchedItemIdRef.current = item.id;
+        // Skipped past while it launched: the listener's choice stays visible and later skips count from it.
+        const skippedPastDuringLaunch =
+          pendingUserSkipRef.current !== null || latestQueuedUserSkipRef.current !== userSkipsQueuedAtLaunch;
+        if (!skippedPastDuringLaunch) setSoundingTune({ ...item, request: effectiveRequest, path: effectivePath });
         const now = Date.now();
         const nextTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = nextTrackInstanceId;
@@ -1228,9 +1234,6 @@ export function usePlaybackController({
         } else {
           setCurrentSubsongCount(null);
         }
-        // Skipped past while it launched: the listener's choice stays visible and later skips count from it.
-        const skippedPastDuringLaunch =
-          pendingUserSkipRef.current !== null || latestQueuedUserSkipRef.current !== userSkipsQueuedAtLaunch;
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0 && !skippedPastDuringLaunch) {
           setVisibleCurrentIndex(resolveLaunchedItemIndex(playlistRef.current, item.id, options.playlistIndex));
         }
@@ -1889,8 +1892,7 @@ export function usePlaybackController({
         }
         const activePlaylist = playlistRef.current;
         if (!activePlaylist.length || (!isPlayingRef.current && !isPausedRef.current)) return;
-        const launchedId = soundingTuneRef.current?.id ?? pending.originItemId;
-        const launchedIndex = activePlaylist.findIndex((item) => item.id === launchedId);
+        const launchedIndex = activePlaylist.findIndex((item) => item.id === lastLaunchedItemIdRef.current);
         const activeIndex = launchedIndex >= 0 ? launchedIndex : currentIndexRef.current;
         const { originIndex, targetIndex } = resolvePendingSkipIndices(activePlaylist, pending);
         const advancedByAnotherTransition =

@@ -5574,6 +5574,7 @@ describe("usePlaybackController hand-over to the phone (#555)", () => {
       preload: vi.fn(),
       holdSilence: vi.fn(() => () => undefined),
       positionSeconds: vi.fn(() => 0.2),
+      seekBy: vi.fn(async () => undefined),
       isActive: vi.fn(() => active),
     };
   };
@@ -5636,5 +5637,90 @@ describe("usePlaybackController hand-over to the phone (#555)", () => {
 
     await waitFor(() => expect(engine.play).toHaveBeenCalledTimes(1));
     expect(soundingTuneNow()?.id).toBe("tune-a");
+    await waitFor(() => expect(engine.seekBy).toHaveBeenCalledTimes(1));
+    const [delta] = engine.seekBy.mock.calls[0] as unknown as [number];
+    expect(delta).toBeGreaterThan(41);
+    expect(delta).toBeLessThan(43);
+  });
+
+  it("#555: declines while a launch is in flight, whichever path started it", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const engine = phoneEngine();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      trackStartedAtRef: { current: Date.now() - 42_000 },
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    vi.mocked(executePlayPlan).mockClear();
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => new Promise<void>(() => undefined));
+    act(() => {
+      void result.current.playItem(playlist[1], { playlistIndex: 1, origin: "auto" });
+    });
+    await act(async () => {
+      for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+    });
+    expect(soundingTuneNow()).toBeNull();
+
+    await goOffline();
+
+    expect(engine.play).not.toHaveBeenCalled();
+  });
+
+  it("#555: a launch that fails before it acts keeps the previous tune on record", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const ensurePlaybackConnection = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("down"));
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      ensurePlaybackConnection,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 }).catch(() => undefined);
+    });
+
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+  });
+
+  it("#555: a launch that a later skip has already moved past is not recorded", async () => {
+    vi.useFakeTimers();
+    try {
+      const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b"), ultimateSid("tune-c")];
+      const { result } = renderPlaybackController(playlist, { currentIndex: 0, isPlaying: true });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      let finishB: () => void = () => undefined;
+      vi.mocked(executePlayPlan).mockImplementationOnce(() => new Promise<void>((resolve) => (finishB = resolve)));
+      act(() => {
+        void result.current.handleNext();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS * 2);
+      });
+      act(() => {
+        void result.current.handleNext();
+      });
+
+      await act(async () => {
+        finishB();
+        for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+      });
+      expect(soundingTuneNow()?.id ?? "none").toBe("none");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS * 4);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

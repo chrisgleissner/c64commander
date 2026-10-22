@@ -144,11 +144,17 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
       const startedAt = current.trackStartedAtRef.current;
       if (!current.isPlayingRef.current || current.isPausedRef.current) return;
       if (!sounding || startedAt === null) {
-        addLog("info", "Playback: the C64 is out of reach while another tune is starting; not carrying on");
+        if (startedAt !== null)
+          addLog("info", "Playback: the C64 is out of reach while another tune is starting; not carrying on");
         return;
       }
       const index = current.playlistRef.current.findIndex((row) => row.id === sounding.id);
-      if (index < 0) return;
+      if (index < 0) {
+        addLog("info", "Playback: the C64 is out of reach and the tune playing is no longer in the playlist", {
+          item: sounding.label,
+        });
+        return;
+      }
       const item = { ...current.playlistRef.current[index], request: sounding.request };
       if (current.currentPlaybackIsLocalRef.current || !isRemotePlaybackActive() || wasTuneHandedOver(startedAt))
         return;
