@@ -26,8 +26,8 @@ The picker uses Android's native key map. On the Callback the right soft key
 produces Android Back and the left produces Menu. The app remaps these inside its
 own activity; DocumentsUI does not receive that remapping. Back can first close a
 menu or leave a folder, so the user may need to press the right soft key again.
-The cancellation exercise injected Android key events; it did not independently
-re-measure the physical scan codes.
+The cancellation exercise injected Android key events. The physical mapping (right
+soft key cancels the native picker) was confirmed by the maintainer.
 
 ## Automated regressions
 
