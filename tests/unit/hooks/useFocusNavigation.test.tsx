@@ -1498,6 +1498,83 @@ describe("the ring's element stays on screen when a toast takes space from the p
     expect(document.activeElement).toBe(before);
   });
 
+  it("scrolls when the focused field is part of the selected control, as a field row being edited is", async () => {
+    let top = 200;
+    const FieldRow = () => {
+      const firstRef = useFocusItem<HTMLButtonElement>({ id: "first", order: 5 });
+      const rowRef = useFocusItem<HTMLDivElement>({ id: "row", order: 10 });
+      return (
+        <>
+          <button ref={firstRef}>First</button>
+          <div ref={rowRef} tabIndex={-1} data-testid="field-row">
+            <input aria-label="Row field" />
+          </div>
+        </>
+      );
+    };
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 300 });
+      page.getBoundingClientRect = () => ({ top: 49, bottom: 349 }) as DOMRect;
+      page.scrollBy = vi.fn();
+      placeAt(page.querySelector("[data-testid=field-row]"), () => top);
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} style={{ overflowY: "auto" }}>
+          <FieldRow />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    const row = screen.getByTestId("field-row");
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    const scrollIntoView = vi.fn();
+    row.scrollIntoView = scrollIntoView;
+    const field = screen.getByLabelText("Row field");
+    field.focus();
+    top = 380;
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(document.activeElement).toBe(field);
+  });
+
+  it("scrolls while a dialog is still in its closing animation", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    const closing = document.createElement("div");
+    closing.setAttribute("role", "dialog");
+    closing.setAttribute("data-state", "closed");
+    document.body.append(closing);
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    closing.remove();
+  });
+
+  it("scrolls once when the reserved height changes several times within a frame", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it("does not scroll for a pointer user", async () => {
     const { scrollIntoView, moveTo } = renderWithSelectedB();
     setInputModality("pointer");

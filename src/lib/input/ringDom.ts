@@ -10,7 +10,7 @@
 
 import { keepPlatformInputMethodAway } from "@/lib/input/hardwareKeypadInputMethod";
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
-import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { getInputModality } from "@/lib/input/inputModality";
@@ -236,6 +236,16 @@ export const revealRingElementAfterLayout = (element: HTMLElement | null): (() =
   return cancel;
 };
 
+/** A text field has focus and is not part of the ring's element, so a scroll would pull the page from under it. */
+const isEditedOutside = (ring: HTMLElement): boolean =>
+  isEditableTarget(document.activeElement) && !ring.contains(document.activeElement);
+
+/** An overlay that is closing keeps its markup for the exit animation, and no longer counts. */
+const hasOpenOverlay = (): boolean =>
+  Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some(
+    (overlay) => overlay.getAttribute("data-state") !== "closed",
+  );
+
 /**
  * Keeps the ring's element on screen when the space the page may use changes while the keypad is in use,
  * as it does when a toast arrives and takes its strip from the page area.
@@ -247,7 +257,7 @@ export const revealRingElementOnReserveChange = (): (() => void) => {
     frame = window.requestAnimationFrame(() => {
       const current = keypadScrollAnchorEl;
       if (getInputModality() !== "key-navigation" || !current?.isConnected) return;
-      if (isEditableTarget(document.activeElement) || isAnyOverlayOpen()) return;
+      if (isEditedOutside(current) || hasOpenOverlay()) return;
       if (needsReveal(current)) scrollRingElementIntoView(current);
     });
   };
