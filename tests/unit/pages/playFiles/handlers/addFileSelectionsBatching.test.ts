@@ -5,6 +5,7 @@ import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 import { addLog } from "@/lib/logging";
 import { toast } from "@/hooks/use-toast";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { reportUserError } from "@/lib/uiErrors";
 import { collectSonglengthsSearchPaths } from "@/lib/sid/songlengthsDiscovery";
 
@@ -88,6 +89,10 @@ vi.mock("@/lib/sid/songlengthsDiscovery", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/sid/songlengthsDiscovery")>()),
   isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name) || /songlengths\.md5$/i.test(name)),
 }));
+
+const { deviceOutOfReach } = vi.hoisted(() => ({ deviceOutOfReach: vi.fn(() => false) }));
+
+vi.mock("@/pages/playFiles/playableWithoutDevice", () => ({ isDeviceOutOfReach: deviceOutOfReach }));
 
 vi.mock("@/lib/config/configDiscovery", () => ({
   discoverConfigCandidates: vi.fn(async () => []),
@@ -710,6 +715,33 @@ describe("addFileSelections batching", () => {
       "Playlist scan skipped folders",
       expect.objectContaining({ skippedCount: 1 }),
     );
+  });
+
+  it("does not look for settings files beside each tune while the device is out of reach", async () => {
+    const deps = { ...createDeps(), recurseFolders: true };
+    const listing = Object.assign(
+      [
+        { type: "file" as const, name: "a.sid", path: "/USB2/Games/a.sid" },
+        { type: "file" as const, name: "b.sid", path: "/USB2/Games/Arcade/b.sid" },
+      ],
+      {},
+    );
+    const source = createUltimateSource(
+      async () => [],
+      async () => listing,
+    );
+    vi.mocked(discoverConfigCandidates).mockClear();
+    deviceOutOfReach.mockReturnValue(true);
+    try {
+      const result = await createAddFileSelectionsHandler(deps as any)(source, [
+        { type: "dir", name: "Games", path: "/USB2/Games" },
+      ]);
+
+      expect(result).toBe(true);
+      expect(discoverConfigCandidates).not.toHaveBeenCalled();
+    } finally {
+      deviceOutOfReach.mockReturnValue(false);
+    }
   });
 
   it("lists only folders that exist while looking for a songlengths file", async () => {

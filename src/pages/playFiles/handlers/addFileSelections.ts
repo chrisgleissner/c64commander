@@ -39,6 +39,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
@@ -688,25 +689,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
                 : undefined)
             : undefined;
-        const playbackConfig =
-          source.type === "local" || source.type === "ultimate"
-            ? resolvePlaybackConfig({
-                candidates: await discoverConfigCandidates({
-                  sourceType: source.type,
-                  sourceId: source.type === "local" ? source.id : null,
-                  sourceRootPath: source.rootPath,
-                  targetFile: file,
-                  listEntries: source.listEntries,
-                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                  localEntriesBySourceId,
-                }),
-              })
-            : {
-                configRef: null as ConfigFileReference | null,
-                configOrigin: "none" as const,
-                configCandidates: [],
-                configOverrides: null,
-              };
+        const looksForConfig = source.type === "local" || (source.type === "ultimate" && !isDeviceOutOfReach());
+        const playbackConfig = looksForConfig
+          ? resolvePlaybackConfig({
+              candidates: await discoverConfigCandidates({
+                sourceType: source.type,
+                sourceId: source.type === "local" ? source.id : null,
+                sourceRootPath: source.rootPath,
+                targetFile: file,
+                listEntries: source.listEntries,
+                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                localEntriesBySourceId,
+              }),
+            })
+          : {
+              configRef: null as ConfigFileReference | null,
+              configOrigin: "none" as const,
+              configCandidates: [],
+              configOverrides: null,
+            };
         throwIfAborted();
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
