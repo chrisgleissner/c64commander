@@ -340,6 +340,48 @@ describe("ArchiveSelectionView", () => {
     });
   });
 
+  it("says the search failed and that the list is from the previous search once an error clears", () => {
+    const result = makeResult();
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      state: { phase: "error", message: "offline", recoverableState: null },
+    } as never);
+    const view = render(
+      <ArchiveSelectionView
+        config={defaultConfig}
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onSelectAll={vi.fn()}
+        onClearSelection={vi.fn()}
+      />,
+    );
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      state: { phase: "results", params: {}, results: [result] },
+    } as never);
+    view.rerender(
+      <ArchiveSelectionView
+        config={defaultConfig}
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onSelectAll={vi.fn()}
+        onClearSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("archive-search-failed")).toHaveTextContent(
+      "The search failed. The list below is from your previous search.",
+    );
+    expect(screen.getAllByTestId("archive-result-row")).toHaveLength(1);
+  });
+
+  it("does not say there are no results when the first search failed", () => {
+    renderView({}, { phase: "error", message: "offline", recoverableState: null });
+
+    expect(screen.getByTestId("archive-search-failed")).toHaveTextContent("The search failed.");
+    expect(screen.queryByText("No results found.")).toBeNull();
+  });
+
   it("uses aqlKey as display label when preset value has no name", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,

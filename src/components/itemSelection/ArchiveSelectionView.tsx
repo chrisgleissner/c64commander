@@ -88,6 +88,8 @@ export const ArchiveSelectionView = ({
   const [aboutOpen, setAboutOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  const [searchFailed, setSearchFailed] = useState(false);
+
   useEffect(() => {
     if (state.phase === "error") {
       reportUserError({
@@ -95,7 +97,10 @@ export const ArchiveSelectionView = ({
         title: "Online archive failed",
         description: state.message,
       });
+      setSearchFailed(true);
       clearError();
+    } else if (state.phase === "searching") {
+      setSearchFailed(false);
     }
   }, [clearError, state]);
 
@@ -265,7 +270,14 @@ export const ArchiveSelectionView = ({
             {LEGAL_NOTICE}
           </p>
         ) : null}
-        {state.phase !== "searching" && resultRows.length === 0 ? (
+        {searchFailed && state.phase !== "searching" ? (
+          <p role="alert" className="text-sm text-destructive" data-testid="archive-search-failed">
+            {resultRows.length > 0
+              ? "The search failed. The list below is from your previous search."
+              : "The search failed."}
+          </p>
+        ) : null}
+        {state.phase !== "searching" && resultRows.length === 0 && !searchFailed ? (
           <p className="text-xs text-muted-foreground">
             {state.phase === "idle" ? "Search results appear here." : "No results found."}
           </p>
