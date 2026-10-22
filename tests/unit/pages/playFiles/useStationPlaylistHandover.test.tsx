@@ -88,7 +88,16 @@ const useHarness = (props: HarnessProps) => {
     },
     station: { active: props.stationActive, resumeSettled: props.resumeSettled ?? true, stop: stationStop },
   });
-  return { playlist, currentIndex, selectedPlaylistIds, stationActiveRef, handover, setPlaylist, setCurrentIndex };
+  return {
+    playlist,
+    currentIndex,
+    selectedPlaylistIds,
+    stationActiveRef,
+    handover,
+    setPlaylist,
+    setCurrentIndex,
+    setSelectedPlaylistIds,
+  };
 };
 
 const renderHarness = (props: HarnessProps) =>
@@ -112,6 +121,108 @@ beforeEach(() => {
 });
 
 describe("useStationPlaylistHandover", () => {
+  it("keeps radio and the saved playlist untouched when shuffle is canceled, then shuffles only after keeping its queue", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    const enableShuffle = vi.fn();
+    act(() => harness.result.current.handover.requestShuffleQueue(enableShuffle));
+    expect(harness.result.current.handover.editedPrompt.shuffleRequested).toBe(true);
+    expect(harness.result.current.handover.editedPrompt.open).toBe(true);
+    expect(stationStop).not.toHaveBeenCalled();
+    act(() => harness.result.current.handover.editedPrompt.onDismiss());
+    expect(rememberedHandover()!.items).toEqual(mine);
+    expect(enableShuffle).not.toHaveBeenCalled();
+    act(() => harness.result.current.handover.requestShuffleQueue(enableShuffle));
+    act(() => harness.result.current.handover.editedPrompt.onKeepStationTunes());
+    harness.rerender({ stationActive: false, isPlaying: true });
+    expect(stationStop).toHaveBeenCalledOnce();
+    expect(enableShuffle).toHaveBeenCalledOnce();
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:1", "radio:2", "radio:3"]);
+    expect(rememberedHandover()).toBeNull();
+  });
+
+  it("appends to a queued station replacement instead of restoring the previous queue snapshot", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    act(() => {
+      harness.result.current.setPlaylist(stationB);
+      harness.result.current.handover.appendStationItems([item("radio:9")]);
+    });
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:7", "radio:8", "radio:9"]);
+  });
+
+  it("keeps a user addition and both refills queued before the next render", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    act(() => {
+      harness.result.current.setPlaylist((items) => [...items, item("user-added")]);
+      harness.result.current.handover.appendStationItems([item("radio:4")]);
+      harness.result.current.handover.appendStationItems([item("radio:5")]);
+    });
+    expect(ids(harness.result.current.playlist)).toEqual([
+      "radio:1",
+      "radio:2",
+      "radio:3",
+      "user-added",
+      "radio:4",
+      "radio:5",
+    ]);
+  });
+
+  it("bounds radio history and handover IDs at 200 while repeatedly selecting the last tune and refilling", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    let ordinal = 4;
+    for (let refill = 0; refill < 1000; refill++) {
+      act(() => harness.result.current.setCurrentIndex(harness.result.current.playlist.length - 1));
+      const playingId = harness.result.current.playlist.at(-1)!.id;
+      const batch = Array.from({ length: 10 }, () => item(`radio:${ordinal++}`));
+      act(() => harness.result.current.handover.appendStationItems(batch));
+      const { playlist, currentIndex } = harness.result.current;
+      expect(playlist.length).toBeLessThanOrEqual(200);
+      expect(playlist[currentIndex].id).toBe(playingId);
+      expect(playlist[currentIndex + 1].id).toBe(batch[0].id);
+      expect(rememberedHandover()!.stationItemIds.length).toBeLessThanOrEqual(200);
+    }
+    act(() => harness.result.current.handover.requestStop());
+    expect(harness.result.current.handover.editedPrompt.open).toBe(false);
+    expect(stationStop).toHaveBeenCalledOnce();
+    harness.rerender({ stationActive: false, isPlaying: false });
+    expect(ids(harness.result.current.playlist)).toEqual(["a", "b", "c"]);
+  });
+
+  it("removes selected IDs only when their radio rows are evicted", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(
+      harness,
+      Array.from({ length: 200 }, (_, index) => item(`radio:${index}`)),
+    );
+    act(() => {
+      harness.result.current.setCurrentIndex(199);
+      harness.result.current.setSelectedPlaylistIds(new Set(["radio:0", "radio:199"]));
+    });
+    act(() => harness.result.current.handover.appendStationItems([item("radio:200")]));
+    expect([...harness.result.current.selectedPlaylistIds]).toEqual(["radio:199"]);
+  });
+
+  it("keeps user additions and remembers a removed radio tune after history eviction", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(
+      harness,
+      Array.from({ length: 200 }, (_, i) => item(`radio:${i}`)),
+    );
+    act(() => {
+      harness.result.current.setPlaylist((items) => [item("user-added"), ...items.slice(1)]);
+      harness.result.current.setCurrentIndex(199);
+    });
+    act(() => harness.result.current.handover.appendStationItems([item("radio:200"), item("radio:201")]));
+    expect(harness.result.current.playlist[0].id).toBe("user-added");
+    expect(harness.result.current.playlist[harness.result.current.currentIndex].id).toBe("radio:199");
+    expect(harness.result.current.playlist.filter((entry) => entry.id.startsWith("radio:")).length).toBe(200);
+    act(() => harness.result.current.handover.requestStop());
+    expect(harness.result.current.handover.editedPrompt.open).toBe(true);
+  });
+
   it("lets the station's current tune finish, then brings the listener's playlist back", async () => {
     const harness = renderHarness({ stationActive: false, isPlaying: true });
     await startStation(harness, stationA);

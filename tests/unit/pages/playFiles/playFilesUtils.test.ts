@@ -586,6 +586,32 @@ describe("playFilesUtils", () => {
     });
     const playlist = [shuffleItem("a"), shuffleItem("b"), shuffleItem("c"), shuffleItem("d"), shuffleItem("e")];
 
+    it("includes every other song once after enabling shuffle mid-playlist, without requiring repeat", () => {
+      const ids = playlist.map((item) => item.id);
+      const anchor = seededShuffleIds(ids, 42).at(-1)!;
+      let current = playlist.findIndex((item) => item.id === anchor);
+      const visited = [anchor];
+      for (let step = 0; step < playlist.length; step++) {
+        const next = resolveNextPlaylistIndex(playlist, current, false, true, 42, anchor);
+        if (next === null) break;
+        visited.push(playlist[next].id);
+        current = next;
+      }
+      expect(visited).toHaveLength(playlist.length);
+      expect(new Set(visited)).toEqual(new Set(ids));
+      expect(resolvePlayOrderIndices(playlist, true, 42, anchor).map((index) => playlist[index].id)).toEqual(visited);
+      expect(
+        canAdvancePrevious(
+          playlist,
+          playlist.findIndex((item) => item.id === anchor),
+          false,
+          true,
+          42,
+          anchor,
+        ),
+      ).toBe(false);
+    });
+
     describe("generateShuffleSeed", () => {
       it("returns an integer within the 32-bit unsigned range", () => {
         const seed = generateShuffleSeed();

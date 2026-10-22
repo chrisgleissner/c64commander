@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { assertPlaybackModeLayout } from "./playbackModeLayout";
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import type { Page, TestInfo } from "@playwright/test";
@@ -126,7 +127,115 @@ test.describe("Playlist controls and advanced features", () => {
     },
   );
 
-  test("shuffle mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist title and filter scroll away with the rows and return for editing @layout", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem(
+        "c64u_playlist:v1:default",
+        JSON.stringify({
+          currentIndex: -1,
+          items: Array.from({ length: 80 }, (_, i) => ({
+            source: "ultimate",
+            path: "/Usb0/Track-" + i + ".sid",
+            name: "Track-" + i + ".sid",
+            durationMs: 60000,
+          })),
+        }),
+      );
+    });
+    await page.goto("/play");
+    const playlist = page.getByTestId("play-section-playlist");
+    await playlist.getByRole("button", { name: "View all" }).click();
+    const sheet = page.getByRole("dialog");
+    const title = sheet.getByRole("heading", { name: "Playlist", exact: true });
+    const toggle = sheet.getByTestId("view-all-filter-toggle");
+    await toggle.click();
+    const filter = sheet.getByTestId("view-all-filter-input");
+    await expect(filter).toBeVisible();
+    const scroller = sheet.locator('[data-virtuoso-scroller="true"]');
+    await scroller.evaluate((element) => {
+      element.scrollTop = 500;
+    });
+    await expect
+      .poll(async () =>
+        title.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().bottom < viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await expect
+      .poll(async () =>
+        filter.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().bottom < viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await snap(page, testInfo, "playlist-scrolled-without-fixed-header");
+    await filter.focus();
+    await expect(filter).toBeFocused();
+    await expect
+      .poll(async () =>
+        filter.evaluate((element) => {
+          const viewport = element.closest('[data-virtuoso-scroller="true"]')!;
+          return element.getBoundingClientRect().top >= viewport.getBoundingClientRect().top;
+        }),
+      )
+      .toBe(true);
+    await filter.fill("no matching tune");
+    await expect(sheet.getByText(/No items match the filter/)).toBeVisible();
+    await filter.clear();
+    await expect(sheet.getByTestId("playlist-item").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+  });
+
+  test("playlist order icons share one accessible 44-pixel row on the Callback viewport @layout", async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 426 });
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_sid_radio_enabled", "1");
+      localStorage.setItem("c64u_sid_ranking_enabled", "1");
+    });
+    await page.goto("/play");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+    // A disk has no SID credits or output selector, but keeps the same volume/mode layout.
+    await page.getByTestId("playlist-play").click();
+    const shuffle = page.getByTestId("playback-shuffle");
+    await shuffle.scrollIntoViewIfNeeded();
+    await assertPlaybackModeLayout(page);
+    const slider = page.getByTestId("volume-slider").getByRole("slider");
+    const before = await slider.getAttribute("aria-valuenow");
+    await slider.focus();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("ArrowRight");
+    await expect(slider).not.toHaveAttribute("aria-valuenow", before!);
+    await shuffle.click();
+    const controls = [page.getByTestId("volume-mute"), shuffle, page.getByTestId("playback-repeat")];
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
+    for (let index = 0; index < controls.length; index += 1) {
+      const box = boxes[index]!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThan(1);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      await expect(controls[index]).toHaveRole("button");
+      expect((await controls[index].textContent())?.trim()).toBe("");
+    }
+    await expect(shuffle).toHaveAccessibleName("Shuffle");
+    await expect(controls[2]).toHaveAccessibleName("Repeat: off");
+    await expect(page.getByRole("button", { name: "Reshuffle", exact: true })).toHaveCount(0);
+    await snap(page, testInfo, "compact-playlist-order-icons");
+  });
+
+  test("shuffle icon toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
@@ -139,22 +248,21 @@ test.describe("Playlist controls and advanced features", () => {
     await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    // Now find the shuffle checkbox - it's the second checkbox in the options area
-    const shuffleCheckbox = page.getByTestId("playback-shuffle");
-    await expect(shuffleCheckbox).toBeVisible();
-    await expect(shuffleCheckbox).not.toBeChecked();
+    const shuffleButton = page.getByTestId("playback-shuffle");
+    await expect(shuffleButton).toBeVisible();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "false");
     await snap(page, testInfo, "shuffle-off");
 
-    await shuffleCheckbox.click();
-    await expect(shuffleCheckbox).toBeChecked();
+    await shuffleButton.click();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "true");
     await snap(page, testInfo, "shuffle-enabled");
 
-    await shuffleCheckbox.click();
-    await expect(shuffleCheckbox).not.toBeChecked();
+    await shuffleButton.click();
+    await expect(shuffleButton).toHaveAttribute("aria-pressed", "false");
     await snap(page, testInfo, "shuffle-disabled");
   });
 
-  test("reshuffle re-seeds the playback order without disturbing the curated list @layout", async ({
+  test("shuffle off/on re-seeds the playback order without disturbing the curated list @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
@@ -166,8 +274,8 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
     await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
-    const shuffleCheckbox = page.getByTestId("playback-shuffle");
-    await shuffleCheckbox.click();
+    const shuffleButton = page.getByTestId("playback-shuffle");
+    await shuffleButton.click();
     await snap(page, testInfo, "shuffle-enabled");
 
     const initialOrder = await getPlaylistOrder(page);
@@ -178,10 +286,11 @@ test.describe("Playlist controls and advanced features", () => {
     // a NEW seed - it never reorders the curated visible list. Assert both: the
     // seed changes (Reshuffle is functional) and the visible order is
     // preserved (the curated order is no longer destroyed irreversibly).
-    const reshuffleButton = page.getByTestId("playlist-reshuffle");
+    const reshuffleButton = page.getByTestId("playback-shuffle");
     await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe("");
     const seedBefore = await reshuffleButton.getAttribute("data-shuffle-seed");
 
+    await reshuffleButton.click();
     await reshuffleButton.click();
     await expect.poll(async () => reshuffleButton.getAttribute("data-shuffle-seed")).not.toBe(seedBefore);
     expect((await getPlaylistOrder(page)).join("|")).toBe(initialOrder.join("|"));
@@ -210,7 +319,9 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(page.getByTestId("playlist-list")).not.toContainText(/demo\s?SID/i);
   });
 
-  test("repeat mode checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("repeat cycles through off, playlist and current tune @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
@@ -221,10 +332,15 @@ test.describe("Playlist controls and advanced features", () => {
     await page.getByTestId("playback-repeat").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    const repeatCheckbox = page.getByTestId("playback-repeat");
+    const repeatButton = page.getByTestId("playback-repeat");
 
-    await repeatCheckbox.click();
-    await expect(repeatCheckbox).toBeChecked();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: off");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: playlist");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: tune");
+    await repeatButton.click();
+    await expect(repeatButton).toHaveAccessibleName("Repeat: off");
     await snap(page, testInfo, "repeat-enabled");
   });
 

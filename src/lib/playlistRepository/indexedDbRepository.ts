@@ -108,6 +108,9 @@ const PLAYLIST_ITEM_KEY_PREFIX = "playlist-item:";
 // replaces coalesces into a single global scan instead of one scan per write.
 // See HARD10-009.
 const TRACK_GC_DEBOUNCE_MS = 5000;
+// Item reads are issued this many at a time, each batch from the previous batch's last callback, so
+// that no single main-thread task issues a request per playlist item (thousands for a large playlist).
+const ORPHAN_SWEEP_BATCH_SIZE = 100;
 
 // Module-level so resetIndexedDbPlaylistRepositoryForTests can cancel a pending
 // sweep even though it discards the singleton instance (a stray timer would
@@ -210,26 +213,35 @@ const findOrphanTrackKeys = async (): Promise<string[]> => {
           return;
         }
         const referenced = new Set<string>();
-        let remaining = itemKeys.length;
         let settled = false;
-        itemKeys.forEach((key) => {
-          const itemRequest = store.get(key);
-          itemRequest.onerror = () => {
-            if (settled) return;
-            settled = true;
-            reject(itemRequest.error ?? new Error("IndexedDB read failed"));
-          };
-          itemRequest.onsuccess = () => {
-            if (settled) return;
-            const trackId = (itemRequest.result as { trackId?: string } | undefined)?.trackId;
-            if (trackId) referenced.add(trackId);
-            remaining -= 1;
-            if (remaining === 0) {
+        let nextIndex = 0;
+        const readNextBatch = () => {
+          const batchKeys = itemKeys.slice(nextIndex, nextIndex + ORPHAN_SWEEP_BATCH_SIZE);
+          nextIndex += batchKeys.length;
+          let batchRemaining = batchKeys.length;
+          batchKeys.forEach((key) => {
+            const itemRequest = store.get(key);
+            itemRequest.onerror = () => {
+              if (settled) return;
+              settled = true;
+              reject(itemRequest.error ?? new Error("IndexedDB read failed"));
+            };
+            itemRequest.onsuccess = () => {
+              if (settled) return;
+              const trackId = (itemRequest.result as { trackId?: string } | undefined)?.trackId;
+              if (trackId) referenced.add(trackId);
+              batchRemaining -= 1;
+              if (batchRemaining > 0) return;
+              if (nextIndex < itemKeys.length) {
+                readNextBatch();
+                return;
+              }
               settled = true;
               resolve(trackKeys.filter((candidate) => !referenced.has(candidate.slice(TRACK_KEY_PREFIX.length))));
-            }
-          };
-        });
+            };
+          });
+        };
+        readNextBatch();
       };
     });
   } finally {

@@ -65,7 +65,7 @@ describe("NowPlayingRanking", () => {
     for (const testId of ["now-playing-like", "now-playing-notforme"]) {
       const button = screen.getByTestId(testId);
       // 44 px square: the transport's `size="icon"`, and above the project's own 40 px floor.
-      expect(button).toHaveClass("h-11", "w-11");
+      expect(button).toHaveClass("size-[44px]", "min-h-[44px]", "min-w-[44px]");
       expect(button.className).not.toMatch(/\bh-8\b|\bw-8\b/);
       // A border is what makes these read as buttons beside the transport — and, for the ✕, what
       // distinguishes it from the app's shared close control, which is defined as a bare × with no
@@ -79,7 +79,8 @@ describe("NowPlayingRanking", () => {
     const like = screen.getByTestId("now-playing-like");
     const notForMe = screen.getByTestId("now-playing-notforme");
 
-    // At rest: an outline heart and an outline thumbs-down.
+    // The neutral cross remains distinct from the heart.
+    expect(notForMe.querySelector("svg")).toHaveClass("lucide-x");
     expect(like.querySelector("svg")).not.toHaveClass("fill-current");
     expect(notForMe.querySelector("svg")).not.toHaveClass("fill-current");
 
@@ -90,8 +91,8 @@ describe("NowPlayingRanking", () => {
 
     fireEvent.click(notForMe);
     await waitFor(() => expect(getRanking(MD5)).toBe("notForMe"));
-    // Not-for-me: the thumbs-down fills in, and the surface fills.
-    expect(notForMe.querySelector("svg")).toHaveClass("fill-current");
+    // Not-for-me keeps its neutral cross, adds a dot and fills the surface.
+    expect(screen.getByTestId("notforme-active")).toBeInTheDocument();
     expect(screen.getByTestId("now-playing-notforme")).toHaveClass("bg-accent");
   });
 

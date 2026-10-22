@@ -23,6 +23,7 @@ export type StationHandover = {
   selectedIds: string[];
   stationItemIds: string[];
   phase: "station" | "finishing";
+  queueEdited?: boolean;
   /**
    * The station's last tune was left playing in this launch, so a pause is the listener's and the
    * playlist waits for the tune to end or be stopped. Not persisted: after a relaunch the tune comes
@@ -71,7 +72,15 @@ export const handoverForStationStart = (
             existing.carriedItems,
           )
         : undefined;
-    return { ...existing, items, stationItemIds, phase: "station", playsOutLastTune: undefined, carriedItems };
+    return {
+      ...existing,
+      items,
+      stationItemIds,
+      phase: "station",
+      queueEdited: false,
+      playsOutLastTune: undefined,
+      carriedItems,
+    };
   }
   return {
     items: [...current.playlist],

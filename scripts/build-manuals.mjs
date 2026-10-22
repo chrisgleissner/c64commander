@@ -562,11 +562,7 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "hvsc_enabled")) sources.push("HVSC");
   if (includeFeature(features, "commoserve_enabled")) sources.push("CommoServe");
   rows.push(["Add playlist items", "**Play → Add items**", `Sources: ${sources.join(", ")}.`]);
-  rows.push([
-    "Playback controls",
-    "**Play**",
-    "Play, stop, pause, previous and next, shuffle, repeat, reshuffle, volume.",
-  ]);
+  rows.push(["Playback controls", "**Play**", "Play, stop, pause, previous and next, shuffle, repeat, volume."]);
   rows.push(["Sleep timer, default duration, songlengths file", "**Play**", "Beneath the transport controls."]);
   rows.push([
     "Per-item playback config",
@@ -726,6 +722,8 @@ const renderKeyboardReference = ({ features, variant }) => {
           ),
           "",
           `The word is always about the key on the same side, not about a key called ${variant.runtime.keyLabels.backWord} or ${variant.runtime.keyLabels.menuWord}: your phone has no keys with those names.`,
+          "",
+          "**Android system picker exception:** right soft key is **Back**, left soft key opens the menu. Press the right soft key again if it first closes a menu or leaves a folder; repeat until the app returns. **C=** opens Home and does not cancel the picker.",
           "",
         ]
       : []),
@@ -1051,6 +1049,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The picker stays inside the source you chose, so **Up** never wanders off somewhere else. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means just that folder or everything beneath it. That can be the difference between adding twelve files and twelve thousand.",
     "",
+    isC64uRemoteVariant(variant)
+      ? "**Leaving Android's system picker.** Local files, folders and `.cfg` imports can open Android's own picker. Its soft keys are the opposite of this app's: **right soft key = Back**, **left soft key = menu**. Press the right soft key to cancel without selecting anything. Back may first close a menu, search or folder; repeat it until C64U Remote returns. **C=** opens the phone's Home screen; it does not cancel the selection."
+      : "**Leaving Android's system picker.** Use Android **Back** to cancel a local file, folder or `.cfg` selection without choosing anything. Back may first close a menu or leave a folder; press it again to return to the app.",
+    "",
+
     "> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue. On a small screen the button sits at the top of the sheet and reads **Add** with the count.",
     "",
     image("C64U file picker", profile, "play/import/profiles/{profile}/02-c64u-file-picker.png"),
@@ -1059,7 +1062,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Playlist view all", profile, "play/profiles/{profile}/02-view-all.png"),
     "",
-    "A playlist can hold a single song, or a whole evening's worth.",
+    image(
+      "Playlist while scrolling, with title and filter out of view",
+      profile,
+      "play/profiles/{profile}/03-view-all-scrolled.png",
+    ),
+    "",
+
+    "A playlist can hold a single song, or a whole evening's worth. In **View all**, the title and filter scroll out of view with the rows. Scroll to the top to filter again, or press **Back** to close the sheet.",
     "",
     "A short list fits on the Play page. When it grows, open **View all**. There you have room to scan, filter, select and remove, with the playback controls still in sight. **Settings → Play and disk → List preview limit** sets how many rows Play shows before you need View all; it starts at 50.",
     "",
@@ -1079,11 +1089,15 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and disk → Friendly SID names**.",
     "",
-    "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, reshuffle, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
+    "The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.",
+    "",
+    "The volume row holds speaker/mute, the slider, the dB value, **Shuffle** (crossed arrows) and **Repeat** (loop arrows). The mode buttons align with × and heart beside the metadata above the transport. Highlighted buttons with a dot are on; a **1** inside Repeat means only this tune.",
+    "",
+    "Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.",
     "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
-    "Each row's **⋮** button opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
+    "Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,
@@ -1545,7 +1559,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.",
     "",
-    "While a station runs, it chooses what comes next, so Shuffle, Repeat and Reshuffle step aside. They come back, settings intact, the moment you stop it.",
+    "Radio keeps at most **200 automatically queued tunes**, including the current tune and lookahead. Older played tunes leave the playlist. Change **Settings → SID Radio → Radio playlist limit** from **20** to **1000**; older history is trimmed as playback advances. Your own additions, the playing tune and upcoming tunes are kept. The limit does not remove files from HVSC or affect your saved playlist.",
+    "",
+    "While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Repeat** cycles **off → playlist → tune → off**: playlist wraps the retained queue if it runs out, and tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if Repeat was on.",
     "",
     "The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.",
     "",
@@ -1595,7 +1611,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "#### Stopping later",
     "",
-    "A station never stops on its own, so set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.",
+    "Set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.",
     "",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")

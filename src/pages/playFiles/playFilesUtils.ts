@@ -373,7 +373,7 @@ export const shuffleArray = <T>(items: T[]) => {
  */
 export const generateShuffleSeed = () => Math.floor(Math.random() * 0xffffffff);
 
-export const seededShuffleIds = (ids: string[], seed: number) => {
+export const seededShuffleIds = (ids: string[], seed: number, anchorId?: string | null) => {
   const shuffled = [...ids];
   let state = seed >>> 0;
   const nextRandom = () => {
@@ -384,7 +384,9 @@ export const seededShuffleIds = (ids: string[], seed: number) => {
     const j = Math.floor(nextRandom() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled;
+  // Start this shuffle cycle at the tune already playing, then visit every other tune once.
+  const anchor = anchorId ? shuffled.indexOf(anchorId) : -1;
+  return anchor > 0 ? [...shuffled.slice(anchor), ...shuffled.slice(0, anchor)] : shuffled;
 };
 
 /** Playlist indices in the order Next walks them, from the same seeded order the resolvers below use. */
@@ -392,6 +394,7 @@ export const resolvePlayOrderIndices = (
   playlist: PlaylistItem[],
   shuffleEnabled: boolean,
   shuffleSeed: number | null,
+  shuffleAnchorId?: string | null,
 ): number[] => {
   if (!shuffleEnabled || shuffleSeed === null) return playlist.map((_, index) => index);
   const indexById = new Map<string, number>();
@@ -401,6 +404,7 @@ export const resolvePlayOrderIndices = (
   return seededShuffleIds(
     playlist.map((item) => item.id),
     shuffleSeed,
+    shuffleAnchorId,
   ).map((id) => indexById.get(id) ?? -1);
 };
 
@@ -427,6 +431,7 @@ export const resolveNextPlaylistIndex = (
   repeatEnabled: boolean,
   shuffleEnabled: boolean,
   shuffleSeed: number | null,
+  shuffleAnchorId?: string | null,
 ): number | null => {
   if (!playlist.length) return null;
   if (!shuffleEnabled || shuffleSeed === null) {
@@ -440,6 +445,7 @@ export const resolveNextPlaylistIndex = (
   const order = seededShuffleIds(
     playlist.map((item) => item.id),
     shuffleSeed,
+    shuffleAnchorId,
   );
   let nextPosition = resolveShuffleOrderPosition(playlist, currentIndex, order) + 1;
   if (nextPosition >= order.length) {
@@ -462,6 +468,7 @@ export const resolvePreviousPlaylistIndex = (
   repeatEnabled: boolean,
   shuffleEnabled: boolean,
   shuffleSeed: number | null,
+  shuffleAnchorId?: string | null,
 ): number => {
   if (!playlist.length) return 0;
   if (!shuffleEnabled || shuffleSeed === null) {
@@ -470,6 +477,7 @@ export const resolvePreviousPlaylistIndex = (
   const order = seededShuffleIds(
     playlist.map((item) => item.id),
     shuffleSeed,
+    shuffleAnchorId,
   );
   const currentPosition = resolveShuffleOrderPosition(playlist, currentIndex, order);
   const prevPosition =
@@ -488,7 +496,10 @@ export const canAdvanceNext = (
   repeatEnabled: boolean,
   shuffleEnabled: boolean,
   shuffleSeed: number | null,
-) => resolveNextPlaylistIndex(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed) !== null;
+  shuffleAnchorId?: string | null,
+) =>
+  resolveNextPlaylistIndex(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed, shuffleAnchorId) !==
+  null;
 
 export const canAdvancePrevious = (
   playlist: PlaylistItem[],
@@ -496,6 +507,7 @@ export const canAdvancePrevious = (
   repeatEnabled: boolean,
   shuffleEnabled: boolean,
   shuffleSeed: number | null,
+  shuffleAnchorId?: string | null,
 ) => {
   if (!playlist.length) return false;
   if (!shuffleEnabled || shuffleSeed === null) {
@@ -504,6 +516,20 @@ export const canAdvancePrevious = (
   const order = seededShuffleIds(
     playlist.map((item) => item.id),
     shuffleSeed,
+    shuffleAnchorId,
   );
   return resolveShuffleOrderPosition(playlist, currentIndex, order) > 0 || repeatEnabled;
 };
+
+/** Bind both directions to one traversal snapshot, including the current shuffle cycle's anchor. */
+export const createPlaylistTraversal = (
+  playlist: PlaylistItem[],
+  ordering: { repeatEnabled: boolean; shuffleEnabled: boolean },
+  seed: number | null,
+  anchorId?: string | null,
+) => ({
+  next: (index: number) =>
+    resolveNextPlaylistIndex(playlist, index, ordering.repeatEnabled, ordering.shuffleEnabled, seed, anchorId),
+  previous: (index: number) =>
+    resolvePreviousPlaylistIndex(playlist, index, ordering.repeatEnabled, ordering.shuffleEnabled, seed, anchorId),
+});

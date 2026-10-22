@@ -69,6 +69,7 @@ export type PlaylistSessionRecord = {
   shuffleEnabled: boolean;
   repeatEnabled: boolean;
   randomSeed?: number | null;
+  shuffleAnchorId?: string | null;
   randomCursor?: number | null;
   activeQuery?: string | null;
   updatedAt: string;

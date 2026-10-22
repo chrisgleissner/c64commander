@@ -81,9 +81,8 @@ export interface SidRadioStats {
   /**
    * True while a station drives the queue (§5.3).
    *
-   * The station owns the play order, so Shuffle and Repeat are removed from the card and — more to
-   * the point — taken out of the traversal itself by `resolveTraversalOrdering`. The two used to
-   * disagree: the card stopped drawing them while the traversal went on reading the stored values.
+   * The station owns the play order, so queue shuffle and repeat-all are disabled in traversal.
+   * Shuffle offers conversion to a regular playlist; repeat-one operates separately on the current tune.
    */
   transportShuffleDisabled: boolean;
   transportRepeatDisabled: boolean;

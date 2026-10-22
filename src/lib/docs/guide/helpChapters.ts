@@ -201,7 +201,15 @@ export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
           `Press the ${menuKeyName(variantId)} for the selected item's menu, or the Quick menu where it has none.`,
         ],
       },
-      ...(keypad ? [keypadSoftKeysBlock(variantId)] : []),
+      ...(keypad
+        ? [
+            keypadSoftKeysBlock(variantId),
+            {
+              kind: "text" as const,
+              text: "Android's system file picker uses its own key map: right soft key = Back, left soft key = menu. Press the right soft key again if Back first closes a menu or leaves a folder; repeat until the app returns. C= opens Home and does not cancel the picker.",
+            },
+          ]
+        : []),
       {
         kind: "keys",
         heading: "Keys",

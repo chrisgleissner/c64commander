@@ -20,12 +20,13 @@ export const usePlaylistTotals = (
     currentIndex,
     shuffleEnabled,
     shuffleSeed,
-  }: { currentIndex: number; shuffleEnabled: boolean; shuffleSeed: number | null },
+    shuffleAnchorId,
+  }: { currentIndex: number; shuffleEnabled: boolean; shuffleSeed: number | null; shuffleAnchorId?: string | null },
 ): ((elapsedMs: number) => PlaylistTotals) => {
   const durations = useMemo(() => playlist.map((item, index) => durationOf(item, index)), [playlist, durationOf]);
   const playOrder = useMemo(
-    () => resolvePlayOrderIndices(playlist, shuffleEnabled, shuffleSeed),
-    [playlist, shuffleEnabled, shuffleSeed],
+    () => resolvePlayOrderIndices(playlist, shuffleEnabled, shuffleSeed, shuffleAnchorId),
+    [playlist, shuffleEnabled, shuffleSeed, shuffleAnchorId],
   );
   return useCallback(
     (elapsedMs: number) => calculatePlaylistTotals(durations, { playOrder, currentIndex, elapsedMs }),

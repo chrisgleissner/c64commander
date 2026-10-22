@@ -77,7 +77,10 @@ const createPlaylistItem = (id: string, durationMs: number): PlaylistItem => ({
   unavailableReason: null,
 });
 
-const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repeatEnabled?: boolean }) =>
+const renderPlaybackHarness = (
+  initialPlaylist: PlaylistItem[],
+  options?: { repeatEnabled?: boolean; repeatOneEnabled?: boolean; stationFinishing?: boolean },
+) =>
   renderHook(() => {
     const [playlist, setPlaylist] = useState(initialPlaylist);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -128,6 +131,8 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
       setCurrentSubsongCount,
       setTrackInstanceId,
       repeatEnabled: options?.repeatEnabled ?? false,
+      repeatOneEnabled: options?.repeatOneEnabled ?? false,
+      stationFinishingRef: { current: options?.stationFinishing ?? false },
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       deviceProduct: "Ultimate 64 Elite",
@@ -163,6 +168,8 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
     return {
       ...controller,
       playlist,
+      setPlaylist,
+      setCurrentIndex,
       currentIndex,
       isPlaying,
       isPaused,
@@ -179,6 +186,150 @@ const renderPlaybackHarness = (initialPlaylist: PlaylistItem[], options?: { repe
   });
 
 describe("usePlaybackController auto advance", () => {
+  it("manual Next chooses the following available tune if its queued target is removed before launch", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem("one", 1000),
+      createPlaylistItem("removed", 1000),
+      createPlaylistItem("three", 1000),
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    let next!: Promise<void>;
+    act(() => {
+      next = result.current.handleNext("user");
+    });
+    act(() => {
+      result.current.setPlaylist([playlist[0], playlist[2]]);
+      result.current.setCurrentIndex(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      await next;
+    });
+    expect(result.current.currentIndex).toBe(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/three.prg" }),
+      expect.anything(),
+    );
+    expect(result.current.autoAdvanceGuardRef.current).not.toBeNull();
+  });
+
+  it("manual Next during a repeat-one restart plays the immediate next song without skipping it", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem("one", 1000),
+      createPlaylistItem("two", 1000),
+      createPlaylistItem("three", 1000),
+    ];
+    const { result } = renderPlaybackHarness(playlist, { repeatOneEnabled: true });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    let release!: () => void;
+    const restarting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(executePlayPlan).mockImplementationOnce(() => restarting);
+    let auto!: Promise<void>;
+    act(() => {
+      auto = result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    let next!: Promise<void>;
+    act(() => {
+      next = result.current.handleNext("user");
+    });
+    await act(async () => {
+      release();
+      await auto;
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      await next;
+    });
+    expect(result.current.currentIndex).toBe(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ path: "/PROGRAMS/two.prg" }),
+      expect.anything(),
+    );
+  });
+
+  it("replays the current tune on every automatic completion while manual Next still advances", async () => {
+    vi.useFakeTimers();
+    const playlist = [createPlaylistItem("one", 1000), createPlaylistItem("two", 1000)];
+    const { result } = renderPlaybackHarness(playlist, { repeatOneEnabled: true });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    for (let pass = 0; pass < 3; pass++) {
+      await act(async () => {
+        await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+      });
+      expect(result.current.currentIndex).toBe(0);
+      expect(result.current.playlistEnded).toBe(false);
+    }
+    let skipped!: Promise<void>;
+    act(() => {
+      skipped = result.current.handleNext("user");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      await skipped;
+    });
+    expect(result.current.currentIndex).toBe(1);
+  });
+
+  it.each(["playlist", "tune"])("lets a stopped station finish its last tune despite repeat %s", async (mode) => {
+    const playlist = [createPlaylistItem("last", 1000)];
+    const { result } = renderPlaybackHarness(playlist, {
+      repeatOneEnabled: mode === "tune",
+      repeatEnabled: mode === "playlist",
+      stationFinishing: true,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    await act(async () => {
+      await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+    });
+    expect(result.current.playlistEnded).toBe(true);
+  });
+
+  it("launches the requested Next tune when radio history is evicted during the skip debounce", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem("old", 1000),
+      createPlaylistItem("playing", 1000),
+      createPlaylistItem("next", 1000),
+    ];
+    const { result } = renderPlaybackHarness(playlist);
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 });
+    });
+    let skipped!: Promise<void>;
+    act(() => {
+      skipped = result.current.handleNext("user");
+    });
+    act(() => {
+      result.current.setPlaylist(playlist.slice(1));
+      result.current.setCurrentIndex(1);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      await skipped;
+    });
+    expect(result.current.currentIndex).toBe(1);
+    expect(result.current.playlist[result.current.currentIndex].id).toBe("next");
+    expect(vi.mocked(executePlayPlan).mock.calls.at(-1)?.[1]).toMatchObject({ path: "/PROGRAMS/next.prg" });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

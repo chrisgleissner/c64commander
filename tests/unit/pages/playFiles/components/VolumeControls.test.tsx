@@ -124,7 +124,7 @@ describe("VolumeControls", () => {
     const longLabel = screen.getByTestId("volume-label");
 
     expect(longLabel.className).toBe(shortClass);
-    expect(longLabel.className).toContain("w-[52px]");
+    expect(longLabel.className).toContain("w-[5ch]");
     expect(longLabel.className).toContain("shrink-0");
     // Proportional digits are a second source of width jitter, one figure to the next.
     expect(longLabel.className).toContain("tabular-nums");
@@ -134,9 +134,9 @@ describe("VolumeControls", () => {
   it("keeps a 44px touch target on both controls even though the row is shorter", () => {
     renderVolumeControls({ volumeMuted: false });
 
-    // h-11 is 44px in this project's scale, and the same size the transport buttons above use.
-    expect(screen.getByTestId("volume-mute").className).toContain("h-11");
-    expect(screen.getByTestId("volume-mute").className).toContain("w-11");
+    expect(screen.getByTestId("volume-mute").className).toContain("size-[44px]");
+    expect(screen.getByTestId("volume-mute").className).toContain("min-h-[44px]");
+    expect(screen.getByTestId("volume-mute").className).toContain("min-w-[44px]");
     // The slider's hit area is the whole row height, not just the 20px the thumb occupies; on Android
     // the transparent range input that receives the touch is sized from this element.
     expect(screen.getByTestId("volume-slider").className).toContain("h-11");

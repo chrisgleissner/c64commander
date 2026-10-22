@@ -84,12 +84,10 @@ const buildProps = ({
   volumeControls: <div data-testid="volume-controls-placeholder" />,
   shuffleEnabled: false,
   onShuffleChange: vi.fn(),
+  repeatOneEnabled: false,
+  onRepeatOneChange: vi.fn(),
   repeatEnabled: false,
   onRepeatChange: vi.fn(),
-  onReshuffle: vi.fn(),
-  reshuffleActive: false,
-  reshuffleDisabled: true,
-  shuffleSeed: null,
   ...overrides,
 });
 
@@ -274,7 +272,11 @@ describe("PlaybackControlsCard", () => {
     // Below the title, which keeps the full width to itself.
     expect(titleRow.compareDocumentPosition(rankingRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // shrink-0 so the actions keep their targets whatever the facts line does.
-    expect(rankingRow.className).toContain("shrink-0");
+    expect(rankingRow).toHaveClass("col-span-2");
+    const credits = screen.getByTestId("playback-current-credits");
+    const transport = screen.getByTestId("playback-transport-row");
+    expect(titleRow.compareDocumentPosition(credits) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rankingRow.compareDocumentPosition(transport) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("keeps a long title on one line and does not lose any of it", () => {
@@ -332,49 +334,57 @@ describe("PlaybackControlsCard", () => {
     }
   });
 
-  /**
-   * A station is a mode, not a passing unavailability: nothing the user can do re-enables Shuffle,
-   * Repeat or Reshuffle while one runs, because the station owns the play order by definition. So
-   * they are removed rather than greyed, and the row they sat in goes with them — a row left holding
-   * one control, or a row of greyed controls, would spend vertical space on nothing.
-   */
-  it("drops the whole order row while a station runs, leaving the transport and the ranking pair", () => {
-    const { container } = render(
-      <PlaybackControlsCard {...buildProps({ stationActive: true, reshuffleDisabled: false })} />,
-    );
-
-    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
-    expect(screen.queryByTestId("playback-repeat")).toBeNull();
+  it("offers the same shuffle and repeat cycle during a station", () => {
+    const props = buildProps({ stationActive: true });
+    render(<PlaybackControlsCard {...props} />);
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
-    // Recurse is no longer a playback control at all; it lives in the Add items sheet.
-    expect(screen.queryByTestId("playback-recurse")).toBeNull();
-    // What a listener still needs is untouched.
-    expect(screen.getByTestId("playback-transport-row")).toBeInTheDocument();
-    // And the space is actually given back, rather than an empty row being left behind. Counted
-    // against the same render with no station, so the assertion cannot pass by naming a class that
-    // is never present.
-    const rowsDuringStation = container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length;
-    cleanup();
-    const idle = render(<PlaybackControlsCard {...buildProps({ reshuffleDisabled: false })} />);
-    expect(idle.container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length).toBeGreaterThan(
-      rowsDuringStation,
-    );
-    expect(rowsDuringStation).toBe(0);
+    fireEvent.click(screen.getByTestId("playback-shuffle"));
+    expect(props.onShuffleChange).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: off");
+    fireEvent.click(screen.getByTestId("playback-repeat"));
+    expect(props.onRepeatChange).toHaveBeenCalledWith(true);
+  });
+
+  it("uses named icon buttons with pressed states and a toggle action for shuffle", () => {
+    const props = buildProps();
+    const { rerender } = render(<PlaybackControlsCard {...props} />);
+    const shuffle = screen.getByRole("button", { name: "Shuffle", exact: true });
+    fireEvent.click(shuffle);
+    expect(props.onShuffleChange).toHaveBeenLastCalledWith(true);
+    rerender(<PlaybackControlsCard {...props} shuffleEnabled repeatOneEnabled />);
+    expect(shuffle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Repeat: tune" })).toHaveAttribute("aria-pressed", "true");
+    for (const name of ["Shuffle", "Repeat: tune"]) {
+      const button = screen.getByRole("button", { name, exact: true });
+      expect(button.textContent).toBe("");
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+    fireEvent.click(shuffle);
+    expect(props.onShuffleChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("cycles repeat from playlist to tune to off with a single control", () => {
+    const props = buildProps({ repeatEnabled: true });
+    const { rerender } = render(<PlaybackControlsCard {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Repeat: playlist" }));
+    expect(props.onRepeatChange).toHaveBeenCalledWith(false);
+    expect(props.onRepeatOneChange).toHaveBeenCalledWith(true);
+    rerender(<PlaybackControlsCard {...props} repeatEnabled={false} repeatOneEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Repeat: tune" }));
+    expect(props.onRepeatOneChange).toHaveBeenLastCalledWith(false);
   });
 
   it("puts the order controls back, with the values the user had, once the station stops", () => {
-    // Nothing is mutated while they are hidden: the card only stops drawing them, so stopping a
-    // station returns the playlist exactly as it was left.
-    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
+    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true });
     const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
 
-    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "false");
 
     rerender(<PlaybackControlsCard {...props} stationActive={false} />);
 
-    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "checked");
-    expect(screen.getByTestId("playback-repeat")).toHaveAttribute("data-state", "checked");
-    expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("playback-repeat")).toHaveAccessibleName("Repeat: playlist");
   });
 
   it("centres the transport around a single filled Play, so the card has one focal point", () => {
@@ -415,7 +425,6 @@ describe("PlaybackControlsCard", () => {
       hasPrev: true,
       hasNext: true,
       canPause: true,
-      reshuffleDisabled: false,
     });
 
     // HARD27-039: a keypad user arrives here by key, so the discovery engine is
@@ -433,7 +442,8 @@ describe("PlaybackControlsCard", () => {
     expect(focusContext.current?.engine.sourceForId("play-transport-play")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-pause")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("play-transport-next")).toBe("dom+explicit");
-    expect(focusContext.current?.engine.sourceForId("play-transport-reshuffle")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-shuffle")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("play-transport-repeat")).toBe("dom+explicit");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(props.onPrevious).toHaveBeenCalledTimes(1);
@@ -447,13 +457,13 @@ describe("PlaybackControlsCard", () => {
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(screen.getByTestId("playlist-next")).toHaveFocus();
 
-    for (let step = 0; step < 8 && document.activeElement !== screen.getByTestId("playlist-reshuffle"); step += 1) {
+    for (let step = 0; step < 8 && document.activeElement !== screen.getByTestId("playback-repeat"); step += 1) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
     }
-    expect(screen.getByTestId("playlist-reshuffle")).toHaveFocus();
+    expect(screen.getByTestId("playback-repeat")).toHaveFocus();
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    expect(props.onReshuffle).toHaveBeenCalledTimes(1);
+    expect(props.onRepeatChange).toHaveBeenCalledTimes(1);
   });
 
   it("skips disabled transport CTAs in the keypad focus ring", () => {
@@ -461,7 +471,6 @@ describe("PlaybackControlsCard", () => {
       hasPrev: false,
       canPause: false,
       hasNext: true,
-      reshuffleDisabled: true,
     });
 
     render(
@@ -480,7 +489,6 @@ describe("PlaybackControlsCard", () => {
     expect(props.onNext).toHaveBeenCalledTimes(1);
     expect(props.onPrevious).not.toHaveBeenCalled();
     expect(props.onPauseResume).not.toHaveBeenCalled();
-    expect(props.onReshuffle).not.toHaveBeenCalled();
   });
 
   it("shows what the tune says about itself under the title, smaller than it", () => {

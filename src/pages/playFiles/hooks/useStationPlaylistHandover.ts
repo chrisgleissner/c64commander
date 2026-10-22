@@ -31,6 +31,8 @@ import {
   clearHandoverRecord,
   type StationHandover,
 } from "@/pages/playFiles/stationPlaylistHandover";
+import { loadSidRadioQueueLimit } from "@/lib/config/appSettings";
+import { retainStationQueue } from "@/pages/playFiles/stationQueueRetention";
 import { SHARED_PLAYLIST_STORAGE_KEY } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
@@ -64,10 +66,12 @@ export type UseStationPlaylistHandoverParams = {
     isPlaying: boolean;
     isPaused: boolean;
     playlistEnded: boolean;
+    isPlaylistLoading?: boolean;
     startPlaylist: (items: PlaylistItem[], startIndex: number, options: { replaceQueue: boolean }) => Promise<boolean>;
     stopPlayback: () => void;
     /** Read by the playback traversal: the stopped station's last tune must not repeat or shuffle on. */
     stationActiveRef: { current: boolean };
+    stationFinishingRef?: { current: boolean };
   };
   persistence: {
     /** The stored playlist and playback session have been applied, so they cannot overwrite a restore. */
@@ -90,11 +94,15 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
   const { isPlaying, isPaused, playlistEnded } = params.playback;
   const [handover, setHandoverState] = useState<StationHandover | null>(rememberedHandover);
   const [editedPromptOpen, setEditedPromptOpen] = useState(false);
+  const [shuffleRequested, setShuffleRequested] = useState(false);
+  const onQueueKeptRef = useRef<(() => void) | null>(null);
   const handoverRef = useRef(handover);
   const latestRef = useRef(params);
   latestRef.current = params;
   const stationOrdersQueue = stationActive || handover?.phase === "finishing";
   params.playback.stationActiveRef.current = stationOrdersQueue;
+  if (params.playback.stationFinishingRef)
+    params.playback.stationFinishingRef.current = !stationActive && handover !== null;
 
   const commit = useCallback((next: StationHandover | null) => {
     handoverRef.current = next;
@@ -145,10 +153,36 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     [commit],
   );
 
+  // Append with a functional update first: a station start or a user addition may already have
+  // queued a change that has not rendered. Retain history only from the queue that actually committed.
+  const { playlist, currentIndex } = params.queue;
+  useEffect(() => {
+    const current = handoverRef.current;
+    if (!stationActive || !ready || params.playback.isPlaylistLoading || current?.phase !== "station") return;
+    const retained = retainStationQueue(playlist, currentIndex, loadSidRadioQueueLimit());
+    if (!retained.removedIds.size) return;
+    const keptIds = new Set(retained.items.map((item) => item.id));
+    commit({
+      ...current,
+      queueEdited: current.queueEdited || isStationQueueEdited(playlist, current.stationItemIds),
+      stationItemIds: current.stationItemIds.filter((id) => keptIds.has(id)),
+    });
+    const { queue } = latestRef.current;
+    queue.setPlaylist(retained.items);
+    queue.setCurrentIndex(retained.currentIndex);
+    const retainedSelection = new Set([...queue.selectedPlaylistIds].filter((id) => !retained.removedIds.has(id)));
+    if (retainedSelection.size !== queue.selectedPlaylistIds.size) queue.setSelectedPlaylistIds(retainedSelection);
+  }, [playlist, currentIndex, stationActive, ready, params.playback.isPlaylistLoading, commit]);
+
   const requestStop = useCallback(() => {
+    setShuffleRequested(false);
+    onQueueKeptRef.current = null;
     const current = handoverRef.current;
     const { queue, station } = latestRef.current;
-    if (current?.phase === "station" && isStationQueueEdited(queue.playlist, current.stationItemIds)) {
+    if (
+      current?.phase === "station" &&
+      (current.queueEdited || isStationQueueEdited(queue.playlist, current.stationItemIds))
+    ) {
       setEditedPromptOpen(true);
       return;
     }
@@ -159,6 +193,9 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     setEditedPromptOpen(false);
     discard();
     latestRef.current.station.stop();
+    onQueueKeptRef.current?.();
+    onQueueKeptRef.current = null;
+    setShuffleRequested(false);
   }, [discard]);
 
   const returnToPlaylist = useCallback(() => {
@@ -262,13 +299,23 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     startStationQueue,
     appendStationItems,
     requestStop,
+    requestShuffleQueue: (onKept: () => void) => {
+      onQueueKeptRef.current = onKept;
+      setShuffleRequested(true);
+      setEditedPromptOpen(true);
+    },
     editedPrompt: {
+      shuffleRequested,
       open: editedPromptOpen,
       stationTuneCount: params.queue.playlist.length,
       playlistTuneCount: handover?.items?.length ?? null,
       onKeepStationTunes: keepStationTunes,
       onReturnToPlaylist: returnToPlaylist,
-      onDismiss: () => setEditedPromptOpen(false),
+      onDismiss: () => {
+        onQueueKeptRef.current = null;
+        setShuffleRequested(false);
+        setEditedPromptOpen(false);
+      },
     },
   };
 };

@@ -30,7 +30,20 @@ const createPlaylistItem = (id: string): PlaylistItem => ({
 });
 
 describe("usePlaylistManager", () => {
+  it("remembers repeat-one across Play page remounts and lets the listener turn it off", () => {
+    const first = renderHook(() => usePlaylistManager());
+    expect(first.result.current.repeatOneEnabled).toBe(false);
+    act(() => first.result.current.setRepeatOneEnabled(true));
+    first.unmount();
+    const next = renderHook(() => usePlaylistManager());
+    expect(next.result.current.repeatOneEnabled).toBe(true);
+    act(() => next.result.current.setRepeatOneEnabled(false));
+    expect(next.result.current.repeatOneEnabled).toBe(false);
+    expect(localStorage.getItem("c64u_repeat_one_enabled")).toBe("0");
+  });
+
   beforeEach(() => {
+    localStorage.clear();
     vi.useFakeTimers();
   });
 
@@ -92,101 +105,42 @@ describe("usePlaylistManager", () => {
     expect(result.current.playlist).toEqual(items);
   });
 
-  it("keeps handleReshuffle as a no-op when shuffle is disabled", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b")];
+  it("anchors a queue added after Shuffle was enabled and repairs a legacy missing seed", () => {
     const { result } = renderHook(() => usePlaylistManager());
-
+    act(() => result.current.setShuffleEnabled(true));
     act(() => {
-      result.current.setPlaylist(items);
-      result.current.setCurrentIndex(0);
+      result.current.setPlaylist([createPlaylistItem("a"), createPlaylistItem("b")]);
+      result.current.setShuffleSeed(null);
     });
-
-    act(() => {
-      result.current.handleReshuffle();
-    });
-
-    expect(result.current.playlist).toEqual(items);
-    expect(result.current.reshuffleActive).toBe(false);
+    expect(result.current.shuffleSeed).not.toBeNull();
+    expect(result.current.shuffleAnchorId).toBe("a");
   });
 
-  it("keeps handleReshuffle as a no-op when the playlist is empty", () => {
+  it("anchors the first item when the current index points past the end of the queue", () => {
     const { result } = renderHook(() => usePlaylistManager());
-
+    act(() => result.current.setShuffleEnabled(true));
     act(() => {
-      result.current.setShuffleEnabled(true);
-      result.current.handleReshuffle();
+      result.current.setCurrentIndex(9);
+      result.current.setPlaylist([createPlaylistItem("a"), createPlaylistItem("b")]);
     });
-
-    expect(result.current.playlist).toEqual([]);
-    expect(result.current.reshuffleActive).toBe(false);
+    expect(result.current.shuffleAnchorId).toBe("a");
   });
 
-  it("reshuffle activates reshuffle state and generates a new seed without reordering the curated playlist (HARD9-007)", () => {
+  it("creates a fresh upcoming shuffle order on off/on without changing the current item or curated queue", () => {
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.7);
     const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
     const { result } = renderHook(() => usePlaylistManager());
-
     act(() => {
       result.current.setPlaylist(items);
       result.current.setCurrentIndex(1);
       result.current.setShuffleEnabled(true);
     });
-
-    const seedAfterEnable = result.current.shuffleSeed;
-
-    act(() => {
-      result.current.handleReshuffle();
-    });
-
-    expect(result.current.reshuffleActive).toBe(true);
-    // The curated playlist array is never reordered - only the shuffle seed changes.
+    const firstSeed = result.current.shuffleSeed;
+    act(() => result.current.setShuffleEnabled(false));
+    act(() => result.current.setShuffleEnabled(true));
+    expect(result.current.shuffleSeed).not.toBe(firstSeed);
+    expect(result.current.currentIndex).toBe(1);
+    expect(result.current.shuffleAnchorId).toBe("b");
     expect(result.current.playlist).toBe(items);
-    expect(result.current.shuffleSeed).not.toBe(seedAfterEnable);
-
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
-    expect(result.current.reshuffleActive).toBe(false);
-  });
-
-  it("clears the in-flight reshuffle timer before starting a new one", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
-    const { result } = renderHook(() => usePlaylistManager());
-
-    act(() => {
-      result.current.setPlaylist(items);
-      result.current.setCurrentIndex(1);
-      result.current.setShuffleEnabled(true);
-    });
-
-    act(() => {
-      result.current.handleReshuffle();
-      result.current.handleReshuffle();
-    });
-
-    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
-    expect(result.current.reshuffleActive).toBe(true);
-  });
-
-  it("clears an in-flight reshuffle timer when the hook unmounts", () => {
-    const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];
-    const { result, unmount } = renderHook(() => usePlaylistManager());
-
-    act(() => {
-      result.current.setPlaylist(items);
-      result.current.setCurrentIndex(1);
-      result.current.setShuffleEnabled(true);
-    });
-
-    act(() => {
-      result.current.handleReshuffle();
-    });
-
-    unmount();
-
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
   });
 });

@@ -14,9 +14,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Loader2, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -138,15 +137,15 @@ export type PlaybackControlsCardProps = {
    * will not.
    */
   renderedPercent?: number;
+  outputSelector?: ReactNode;
   volumeControls: ReactNode;
+  shuffleSeed?: number | null;
   shuffleEnabled: boolean;
   onShuffleChange: (value: boolean) => void;
+  repeatOneEnabled: boolean;
+  onRepeatOneChange: (value: boolean) => void;
   repeatEnabled: boolean;
   onRepeatChange: (value: boolean) => void;
-  onReshuffle: () => void;
-  reshuffleActive: boolean;
-  reshuffleDisabled: boolean;
-  shuffleSeed: number | null;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
   /**
@@ -158,7 +157,7 @@ export type PlaybackControlsCardProps = {
    * station never moves the title or the transport underneath it.
    */
   stationIndicator?: ReactNode;
-  /** True while a SID Radio station drives the queue — hides Shuffle/Repeat/Reshuffle (§5.3, principle 9). */
+  /** True while a SID Radio station drives the queue — Shuffle offers to keep its queue as a regular playlist. */
   stationActive?: boolean;
 };
 
@@ -167,7 +166,8 @@ const PLAY_TRANSPORT_FOCUS_ORDER = {
   play: 110,
   pause: 120,
   next: 130,
-  reshuffle: 180,
+  shuffle: 160,
+  repeat: 170,
 } as const;
 
 /** How long Previous/Next must be held before it scrubs instead of skipping. */
@@ -358,22 +358,22 @@ export const PlaybackControlsCard = ({
   timeline,
   renderedPercent,
   pendingSeek,
+  outputSelector,
   volumeControls,
+  shuffleSeed,
   shuffleEnabled,
   onShuffleChange,
+  repeatOneEnabled = false,
+  onRepeatOneChange,
   repeatEnabled,
   onRepeatChange,
-  onReshuffle,
-  reshuffleActive,
-  reshuffleDisabled,
-  shuffleSeed,
   rankingControls,
   stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
-  // The composer link grows upward by up to 44px, so the details need room above it that no control occupies.
+  // Credits clip the composer link's 44px target so it cannot cover the title.
   const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
   const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
@@ -390,7 +390,7 @@ export const PlaybackControlsCard = ({
       part.kind === "author" && onComposerSelected ? (
         <button
           type="button"
-          className="hit-area-44-above z-[1] underline decoration-dotted underline-offset-2 hover:text-foreground"
+          className="hit-area-44-clipped z-[1] underline decoration-dotted underline-offset-2 hover:text-foreground"
           onClick={() => onComposerSelected(part.text)}
           data-testid="playback-current-composer"
           title={`Find more by ${part.text}`}
@@ -412,7 +412,7 @@ export const PlaybackControlsCard = ({
       );
     return (
       <span key={`${part.kind}-${index}`}>
-        <span className="whitespace-nowrap">
+        <span className={part.row === "credits" ? "[overflow-wrap:anywhere]" : "whitespace-nowrap"}>
           {body}
           {hasNext ? NOW_PLAYING_METADATA_SEPARATOR.trimEnd() : null}
         </span>
@@ -425,6 +425,9 @@ export const PlaybackControlsCard = ({
     title: stil?.title ?? null,
     originalArtist: stil?.originalArtist ?? null,
   });
+  const shuffleOn = !stationActive && shuffleEnabled;
+  const repeatMode = repeatOneEnabled ? "tune" : repeatEnabled ? "playlist" : "off";
+  const repeatOn = repeatMode !== "off";
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
   const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
@@ -458,18 +461,25 @@ export const PlaybackControlsCard = ({
     group: "play-transport",
     disabled: !canTransport || !hasNext,
   });
-  const reshuffleFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-reshuffle",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.reshuffle,
+  const shuffleFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-shuffle",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.shuffle,
     group: "play-transport",
-    disabled: reshuffleDisabled || stationActive,
+  });
+  const repeatFocusRef = useFocusItem<HTMLButtonElement>({
+    id: "play-transport-repeat",
+    order: PLAY_TRANSPORT_FOCUS_ORDER.repeat,
+    group: "play-transport",
   });
 
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
       {stationIndicator}
-      <div className="w-full" data-testid="playback-current-track">
-        <div className="mb-3 text-xs text-muted-foreground">
+      <div
+        className="grid w-full grid-cols-[minmax(0,1fr)_max-content_max-content] items-center gap-x-2"
+        data-testid="playback-current-track"
+      >
+        <div className="col-span-3 mb-0.5 text-xs text-muted-foreground">
           {hasCurrentItem ? (
             <>
               {/* The title now has the full width of the card to itself.
@@ -498,7 +508,72 @@ export const PlaybackControlsCard = ({
             "Select a playlist item to start"
           )}
         </div>
-        <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
+        {/* Credits and facts belong immediately below the title, before the transport. */}
+        {hasCurrentItem ? (
+          <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
+            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
+                their own.
+
+                Credits first - the author and the HVSC `released` value, which is one field
+                holding both year and publisher and is printed whole. Then the facts: chip, video
+                standard, which tune of how many, and how long. On a 320px screen that is the
+                difference between three rows and two, and the row the actions used to occupy was
+                otherwise empty.
+
+                Each segment carries its own trailing separator inside a nowrap span, so a wrap
+                happens after the separator rather than before it. Putting the separator in front
+                of the following segment reads the same on one line but leaves a stranded "·" at
+                the start of the next one as soon as the line is too narrow. */}
+            {creditsParts.length ? (
+              <p
+                className={cn(
+                  "col-span-3 min-w-0 break-words text-sm leading-snug text-muted-foreground",
+                  hasComposerLink && "mb-1 min-h-11 overflow-clip [overflow-clip-margin:4px]",
+                )}
+                data-testid="playback-current-credits"
+              >
+                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
+              </p>
+            ) : null}
+            {factsParts.length || rankingControls ? (
+              <div className="contents">
+                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
+                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
+                <p
+                  className={cn(
+                    "min-w-0 self-stretch overflow-clip break-words text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]",
+                    hasTunesLink && "min-h-11",
+                  )}
+                  data-testid="playback-current-facts"
+                >
+                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
+                </p>
+                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
+                {rankingControls ? (
+                  <div className="col-span-2 self-start" data-testid="playback-ranking-row">
+                    {rankingControls}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {/* What STIL says about this tune, folded away by default.
+
+                STIL is the archive's editorial record rather than the file's own header: what this
+                particular tune is called, who wrote the music being arranged, and a note about it. A
+                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
+                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
+                names Rob Hubbard, who arranged it.
+
+                All of it is worth reading and none of it is needed to identify the tune or to work
+                the transport, so it is the part of the card that gives way on a small screen. See
+                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
+                archive, which STIL does not cover. */}
+            <div className="col-span-3 min-w-0">
+              <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
+            </div>
+          </div>
+        ) : null}
+        <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
           {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
             44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
             were, and the row stopped 33 px short of the right edge — visibly ragged against the
@@ -795,129 +870,67 @@ export const PlaybackControlsCard = ({
               data-testid="playback-counters"
             />
           </div>
-          {volumeControls}
-          {/* The whole order row goes while a station drives the queue — removed, not greyed.
-
-            A station is a mode, not a passing unavailability. The rule is to disable what will come
-            back on its own and to remove what has no meaning in the current mode, and nothing the
-            listener can do brings Shuffle, Repeat or Reshuffle back while a station runs: the
-            station owns the order by definition, so they return only by stopping it. Greying is
-            usually defended as teaching that a control exists, but that argument is paid for here by
-            the source line at the top of the card, which names the station and carries Stop — and it
-            was never actually being made, because the only explanation these controls carried was a
-            `title` tooltip and there is no hover on the phone this ships to.
-
-            The row holds nothing else. Recurse used to sit here and would have been left alone in an
-            otherwise empty row; it is now in the Add items sheet, next to the folders it applies to.
-            A radio station is something you listen to, so what is left on this card during one is
-            the transport and the ranking pair, and the vertical space is given back rather than
-            spent on controls that do nothing.
-
-            Nothing above this moves: the row is the last thing in the card, so dropping it only
-            shortens the card from the bottom. */}
-          {stationActive ? null : (
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex min-h-11 items-center gap-2 text-xs">
-                <Checkbox
-                  checked={shuffleEnabled}
-                  onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-                  aria-label="Shuffle"
-                  data-testid="playback-shuffle"
-                />
-                <span className="flex items-center gap-1">
-                  <Shuffle className="h-3.5 w-3.5" /> Shuffle
-                </span>
-              </label>
-              <label className="flex min-h-11 items-center gap-2 text-xs">
-                <Checkbox
-                  checked={repeatEnabled}
-                  onCheckedChange={(value) => onRepeatChange(Boolean(value))}
-                  aria-label="Repeat"
-                  data-testid="playback-repeat"
-                />
-                <span className="flex items-center gap-1">
-                  <Repeat className="h-3.5 w-3.5" /> Repeat
-                </span>
-              </label>
-              <Button
-                ref={reshuffleFocusRef}
-                variant="outline"
-                size="sm"
-                onClick={onReshuffle}
-                disabled={reshuffleDisabled}
-                id="playlist-reshuffle"
-                data-testid="playlist-reshuffle"
-                data-active={reshuffleActive ? "true" : "false"}
-                // Non-destructive shuffle (HARD9-007) never reorders the visible
-                // playlist, so the live seed of the next/prev order layer is
-                // surfaced here as a diagnostic: a changed value proves Reshuffle
-                // re-seeded the traversal without disturbing the curated list.
-                data-shuffle-seed={shuffleSeed ?? ""}
-                className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
-              >
-                <Shuffle className="h-4 w-4 mr-1" />
-                Reshuffle
-              </Button>
-            </div>
-          )}
         </div>
-        {/* Below the transport: credits, facts and STIL change height between tunes, and the buttons must not. */}
-        {hasCurrentItem ? (
-          <div
-            className={cn("text-xs text-muted-foreground", hasComposerLink ? "mt-7" : "mt-3")}
-            data-testid="playback-current-details"
-          >
-            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
-                their own.
-
-                Credits first - the author and the HVSC `released` value, which is one field
-                holding both year and publisher and is printed whole. Then the facts: chip, video
-                standard, which tune of how many, and how long. On a 320px screen that is the
-                difference between three rows and two, and the row the actions used to occupy was
-                otherwise empty.
-
-                Each segment carries its own trailing separator inside a nowrap span, so a wrap
-                happens after the separator rather than before it. Putting the separator in front
-                of the following segment reads the same on one line but leaves a stranded "·" at
-                the start of the next one as soon as the line is too narrow. */}
-            {creditsParts.length ? (
-              <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
-              </p>
-            ) : null}
-            {factsParts.length || rankingControls ? (
-              <div className={cn("mt-0.5 flex items-start justify-between gap-2", hasTunesLink && "min-h-11")}>
-                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
-                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
-                <p
-                  className="min-w-0 flex-1 self-stretch overflow-clip text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]"
-                  data-testid="playback-current-facts"
-                >
-                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
-                </p>
-                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
-                {rankingControls ? (
-                  <div className="flex shrink-0 items-center" data-testid="playback-ranking-row">
-                    {rankingControls}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {/* What STIL says about this tune, folded away by default.
-
-                STIL is the archive's editorial record rather than the file's own header: what this
-                particular tune is called, who wrote the music being arranged, and a note about it. A
-                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
-                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
-                names Rob Hubbard, who arranged it.
-
-                All of it is worth reading and none of it is needed to identify the tune or to work
-                the transport, so it is the part of the card that gives way on a small screen. See
-                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
-                archive, which STIL does not cover. */}
-            <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
+        {outputSelector ? <div className="col-span-3 mt-3">{outputSelector}</div> : null}
+        {/* One grid owns both button pairs, so wrapping metadata cannot move their columns. */}
+        <div className="contents" data-testid="playback-volume-metadata-grid">
+          <div className="mt-3 min-w-0">{volumeControls}</div>
+          <div className="contents" role="group" aria-label="Playback order" data-testid="playback-order-controls">
+            <Button
+              ref={shuffleFocusRef}
+              variant="outline"
+              size="icon"
+              className={cn(
+                "relative mt-3 shrink-0 size-[44px] min-h-[44px] min-w-[44px] [&_svg]:size-[20px]",
+                shuffleOn && "bg-accent text-accent-foreground",
+              )}
+              onClick={() => onShuffleChange(stationActive || !shuffleEnabled)}
+              aria-label="Shuffle"
+              aria-pressed={shuffleOn}
+              title={`Shuffle: ${shuffleOn ? "on" : "off"}`}
+              data-testid="playback-shuffle"
+              data-shuffle-seed={shuffleSeed ?? ""}
+            >
+              <Shuffle aria-hidden="true" className="h-4 w-4" />
+              {shuffleOn ? (
+                <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-current" />
+              ) : null}
+            </Button>
+            <Button
+              ref={repeatFocusRef}
+              variant="outline"
+              size="icon"
+              className={cn(
+                "relative mt-3 shrink-0 size-[44px] min-h-[44px] min-w-[44px] [&_svg]:size-[20px]",
+                repeatOn && "bg-accent text-accent-foreground",
+              )}
+              data-testid="playback-repeat"
+              aria-label={`Repeat: ${repeatMode}`}
+              aria-pressed={repeatOn}
+              title={`Repeat: ${repeatMode}`}
+              onClick={() => {
+                if (repeatOneEnabled) {
+                  onRepeatOneChange(false);
+                  onRepeatChange(false);
+                } else if (repeatEnabled) {
+                  onRepeatChange(false);
+                  onRepeatOneChange(true);
+                } else {
+                  onRepeatChange(true);
+                }
+              }}
+            >
+              {repeatOneEnabled ? (
+                <Repeat1 aria-hidden="true" className="h-4 w-4" />
+              ) : (
+                <Repeat aria-hidden="true" className="h-4 w-4" />
+              )}
+              {repeatOn ? (
+                <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-current" />
+              ) : null}
+            </Button>
           </div>
-        ) : null}
+        </div>
       </div>
     </div>
   );

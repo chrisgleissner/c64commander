@@ -174,6 +174,7 @@ const renderPlaybackController = (
     repeatEnabled?: boolean;
     shuffleEnabled?: boolean;
     shuffleSeed?: number | null;
+    shuffleAnchorId?: string | null;
     setPlaylist?: ReturnType<typeof vi.fn>;
     setCurrentIndex?: ReturnType<typeof vi.fn>;
     setIsPlaying?: ReturnType<typeof vi.fn>;
@@ -252,6 +253,7 @@ const renderPlaybackController = (
       repeatEnabled: options?.repeatEnabled ?? false,
       shuffleEnabled: options?.shuffleEnabled ?? false,
       shuffleSeed: options?.shuffleSeed ?? null,
+      shuffleAnchorId: options?.shuffleAnchorId,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
       buildHvscLocalPlayFile: options?.buildHvscLocalPlayFile,
@@ -3096,6 +3098,29 @@ describe("usePlaybackController", () => {
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
   });
 
+  it("Next after enabling shuffle on the old shuffled tail plays another tune instead of ending", async () => {
+    const playlist = ["a", "b", "c"].map((id) =>
+      createPlaylistItem({ id, label: id + ".prg", path: "/PROGRAMS/" + id + ".prg" }),
+    );
+    const order = seededShuffleIds(
+      playlist.map((item) => item.id),
+      42,
+    );
+    const anchor = order.at(-1)!;
+    const setCurrentIndex = vi.fn();
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: playlist.findIndex((item) => item.id === anchor),
+      isPlaying: true,
+      shuffleEnabled: true,
+      shuffleSeed: 42,
+      shuffleAnchorId: anchor,
+      setCurrentIndex,
+    });
+    await result.current.handleNext("user");
+    expect(setCurrentIndex).toHaveBeenCalledWith(playlist.findIndex((item) => item.id === order[0]));
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
   it("handleNext walks the shuffled order instead of the curated array order when shuffle is enabled (HARD9-007)", async () => {
     const playlist = [
       createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
@@ -3206,9 +3231,8 @@ describe("usePlaybackController", () => {
       expect(setCurrentIndex).toHaveBeenCalledWith(1);
     });
 
-    it("does not send the cursor back into tracks the station already played when repeat is on", async () => {
-      // With Repeat on, the end of the queue wraps to index 0 — tunes the station has already
-      // served. A station instead ends the run and waits for the refill.
+    it("wraps the retained station queue when the listener explicitly enables repeat playlist", async () => {
+      // Repeat playlist has the same explicit meaning for a station queue.
       const playlist = threeTracks();
       const setCurrentIndex = vi.fn();
       const { result } = renderPlaybackController(playlist, {
@@ -3221,7 +3245,7 @@ describe("usePlaybackController", () => {
 
       await result.current.handleNext("user");
 
-      expect(setCurrentIndex).not.toHaveBeenCalledWith(0);
+      expect(setCurrentIndex).toHaveBeenCalledWith(0);
     });
 
     it("hands the order back the moment the station stops", async () => {

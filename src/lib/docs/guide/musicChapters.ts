@@ -124,19 +124,25 @@ export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
       ],
     },
     {
+      kind: "text",
+      text: isKeypadEdition(variantId)
+        ? "In Android's picker, right soft key = Back and left = menu, opposite to this app. Press right to cancel files, folders or .cfg imports. Back may first close a menu or leave a folder; repeat until the app returns."
+        : "In Android's system file or folder picker, use Android Back to cancel without choosing anything. Back may first close a menu or leave a folder; press it again to return to the app.",
+    },
+    {
       kind: "steps",
       heading: "Choose the order",
       items: [
         "Items play in the order you added them. Rows cannot be moved, so add folders in the order you want to hear them.",
-        "Tick **Shuffle** to play in a random order; **Reshuffle** picks a new one. The list itself keeps its order.",
-        "Tick **Repeat** to start again after the last item.",
+        "**Shuffle** (crossed arrows) sits beside volume. Turn it off and on for a fresh order; the current tune, playback position and list stay put.",
+        "Press **Repeat** beside Shuffle to cycle **off → playlist → tune → off**. A **1** in the loop means one tune. Highlighted buttons with a dot are on; Shuffle and Repeat work independently.",
       ],
     },
     {
       kind: "steps",
       heading: "Trim it",
       items: [
-        "Open **View all** when the list is long.",
+        "Open **View all** when the list is long. Its title and filter scroll away with the rows; scroll back to the top to filter again, or use Back to close the sheet.",
         "Tick the rows you do not want, or **Select all**.",
         "Choose **Remove selected items**. **Clear playlist** empties it after asking.",
       ],
@@ -178,8 +184,20 @@ export const sidRadioChapter = ({ variantId }: GuideContext): GuideChapter => ({
       text: `Likes stay on your ${appDeviceName(variantId)}. Once five tunes carry a heart, **From tunes you like** builds a station from them.`,
     },
     {
-      kind: "tip",
-      text: "Set a **Sleep timer** under the transport controls if you listen at bedtime. A station never stops on its own.",
+      kind: "text",
+      text: "Radio keeps at most 200 automatically queued tunes, including the current tune and those queued next. Older played tunes leave the list. Change **Settings → SID Radio → Radio playlist limit** (20–1000). Tunes you added yourself stay.",
+    },
+    {
+      kind: "text",
+      text: "The **Repeat** loop with **1** holds the current tune indefinitely. Turn it off to continue the station. Next and Previous still change tunes.",
+    },
+    {
+      kind: "text",
+      text: "**Shuffle** offers to stop radio and use its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; Cancel keeps radio running. Repeat keeps the same off, playlist and tune modes during radio.",
+    },
+    {
+      kind: "text",
+      text: "Set a **Sleep timer** under the transport controls if you listen at bedtime.",
     },
   ],
 });

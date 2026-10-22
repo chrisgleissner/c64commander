@@ -16,6 +16,7 @@ const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
 type FakeIndexedDbOptions = {
   failOpen?: boolean;
   failGet?: boolean;
+  failItemGet?: boolean;
   failPut?: boolean;
   failGetWithoutError?: boolean;
   failPutWithoutError?: boolean;
@@ -36,6 +37,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
     stores.set("state", new Map());
   }
   let upgraded = false;
+  const getBursts = { sinceLastCallback: 0, largest: 0 };
 
   const objectStoreNames = {
     contains: (name: string) => stores.has(name),
@@ -77,6 +79,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       const runRequest = (request: Record<string, unknown>, settle: () => boolean) => {
         pendingRequests += 1;
         queueMicrotask(() => {
+          getBursts.sinceLastCallback = 0;
           if (!settle()) {
             failedRequest = request;
             if (options.bubbleRequestErrors) (tx.onerror as (() => void) | undefined)?.();
@@ -88,9 +91,11 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       };
       tx.objectStore = () => ({
         get: (key: string) => {
+          getBursts.sinceLastCallback += 1;
+          getBursts.largest = Math.max(getBursts.largest, getBursts.sinceLastCallback);
           const request: Record<string, unknown> = {};
           return runRequest(request, () => {
-            if (options.failGet) {
+            if (options.failGet || (options.failItemGet && key.startsWith("playlist-item:"))) {
               request.error = options.failGetWithoutError ? null : new Error("fake get failure");
               (request.onerror as (() => void) | undefined)?.();
               return false;
@@ -169,6 +174,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       return request;
     },
     __stores: stores,
+    __getBursts: getBursts,
   } as IDBFactory;
 };
 
@@ -461,6 +467,50 @@ describe("indexedDB playlist repository", () => {
     await repository.replacePlaylistSnapshot?.("playlist-b", { tracks: [], playlistItems: [] });
     expect(await collectOrphanTracksForTests()).toBe(1);
     expect(stateStore.get("state")?.has("track:track-shared")).toBe(false);
+  });
+
+  it("reads the playlist items of the orphan sweep in bounded batches instead of one request per item at once", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const fake = globalThis.indexedDB as IDBFactory & { __getBursts: { sinceLastCallback: number; largest: number } };
+    const itemCount = 450;
+    await repository.replacePlaylistSnapshot?.("playlist-large", {
+      tracks: [buildTrack({ trackId: "track-used" }), buildTrack({ trackId: "track-unused" })],
+      playlistItems: Array.from({ length: itemCount }, (_, index) =>
+        buildItem(`item-${index}`, "track-used", String(index).padStart(6, "0")),
+      ),
+    });
+    fake.__getBursts.largest = 0;
+
+    expect(await collectOrphanTracksForTests()).toBe(1);
+
+    expect(fake.__getBursts.largest).toBeGreaterThan(0);
+    expect(fake.__getBursts.largest).toBeLessThanOrEqual(100);
+  });
+
+  it("keeps every track and logs a warning when a playlist item cannot be read during the orphan sweep", async () => {
+    const repository = getIndexedDbPlaylistDataRepository({
+      preferDurableStorage: false,
+    });
+    const stateStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> }).__stores;
+    await repository.replacePlaylistSnapshot?.("playlist-a", {
+      tracks: [buildTrack({ trackId: "track-a" }), buildTrack({ trackId: "track-unused" })],
+      playlistItems: [buildItem("item-a", "track-a", "0001")],
+    });
+    Object.defineProperty(globalThis, "indexedDB", {
+      value: createFakeIndexedDb({ failItemGet: true }),
+      configurable: true,
+      writable: true,
+    });
+    const failingStore = (globalThis.indexedDB as IDBFactory & { __stores: Map<string, Map<string, unknown>> })
+      .__stores;
+    failingStore.set("state", stateStore.get("state")!);
+
+    expect(await collectOrphanTracksForTests()).toBe(0);
+
+    expect(failingStore.get("state")?.has("track:track-unused")).toBe(true);
+    expect(addLog).toHaveBeenCalledWith("warn", expect.any(String), expect.anything());
   });
 
   it("deletes stale playlist-item records for items removed by a later replacePlaylistItems", async () => {

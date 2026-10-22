@@ -90,6 +90,8 @@ export type SelectableActionListProps = {
   onRemoveSelected?: () => void;
   maxVisible: number;
   viewAllTitle?: string;
+  /** Let the title and filter scroll away with playlist rows in the virtual scroller. */
+  scrollViewAllHeader?: boolean;
   viewAllLabel?: string;
   listTestId?: string;
   rowTestId?: string;
@@ -337,6 +339,14 @@ const ActionListRow = React.memo(function ActionListRow({
   );
 });
 
+type ViewAllListContext = { header: React.ReactNode; emptyLabel: string };
+const ScrollingViewAllHeader = ({ context }: { context?: ViewAllListContext }) => <>{context?.header}</>;
+const EmptyViewAllList = ({ context }: { context?: ViewAllListContext }) => (
+  <p className="px-3 py-3 text-xs text-muted-foreground">{context?.emptyLabel}</p>
+);
+const PINNED_LIST_COMPONENTS = {};
+const SCROLLING_LIST_COMPONENTS = { Header: ScrollingViewAllHeader, EmptyPlaceholder: EmptyViewAllList };
+
 export const SelectableActionList = ({
   title,
   items,
@@ -353,6 +363,7 @@ export const SelectableActionList = ({
   onRemoveSelected,
   maxVisible,
   viewAllTitle,
+  scrollViewAllHeader = false,
   viewAllLabel = "View all",
   listTestId,
   rowTestId,
@@ -384,6 +395,8 @@ export const SelectableActionList = ({
   const menuPresentation = isCompact ? "sheet" : "dropdown";
   const listRootRef = useRef<HTMLDivElement>(null);
   const inlineListRef = useRef<HTMLDivElement>(null);
+  const viewAllHeaderRef = useRef<HTMLDivElement>(null);
+  const letterRailOverlayRef = useRef<HTMLDivElement>(null);
   const viewAllBodyRef = useRef<HTMLDivElement>(null);
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
@@ -484,9 +497,15 @@ export const SelectableActionList = ({
     estimatedItemHeight,
     viewAllOpen ? letterIndexSource : undefined,
   );
-  // The rail's 2.75rem strip spans the sheet's and card's right padding; rows give up only the rest,
-  // and its letters are centred over the card padding plus that lane.
-  const letterRailLaneClass = letterRail.eligible ? (isCompact ? "pr-5" : "pr-3") : undefined;
+  // Scrolling headers use the whole sheet width, so reserve the rail's full 2.75rem touch strip.
+  // Pinned headers retain the card padding that already supplies part of that strip.
+  const letterRailLaneClass = letterRail.eligible
+    ? scrollViewAllHeader
+      ? "pr-11"
+      : isCompact
+        ? "pr-5"
+        : "pr-3"
+    : undefined;
   const letterColumnClass = isCompact ? "pr-3.5" : "pr-9";
   // Level with the list itself, inside the card's rounded corners: body padding, border, card padding.
   const letterRailBoundsClass = isCompact
@@ -544,14 +563,74 @@ export const SelectableActionList = ({
   const viewAllScroller = letterRail.scroller;
   const viewAllFilterRegion = useMemo<ListFilterRegion>(
     () => ({
-      focusRegion: () => viewAllBodyRef.current,
+      focusRegion: () =>
+        scrollViewAllHeader
+          ? (viewAllBodyRef.current?.querySelector<HTMLElement>('[data-testid="virtuoso-item-list"]') ?? null)
+          : viewAllBodyRef.current,
       scrollAnchor: () => {
         const scroller = viewAllScroller;
-        const anchor = scroller?.firstElementChild;
+        const anchor = scrollViewAllHeader ? scroller?.querySelector("[data-item-index]") : scroller?.firstElementChild;
         return scroller && anchor instanceof HTMLElement ? { anchor, scroller } : null;
       },
     }),
-    [viewAllScroller],
+    [viewAllScroller, scrollViewAllHeader],
+  );
+
+  // The alphabet rail stays beside the rows as the title/filter leave the viewport; it never
+  // intercepts their controls. Update its bounds directly without rerendering on every scroll.
+  React.useLayoutEffect(() => {
+    if (!scrollViewAllHeader || !viewAllScroller) return;
+    const header = viewAllHeaderRef.current;
+    const overlay = letterRailOverlayRef.current;
+    if (!header || !overlay) return;
+    let headerHeight = header.offsetHeight;
+    const sync = () => {
+      overlay.style.top = `${Math.max(0, headerHeight - viewAllScroller.scrollTop)}px`;
+    };
+    sync();
+    const observer = new ResizeObserver(() => {
+      headerHeight = header.offsetHeight;
+      sync();
+    });
+    observer.observe(header);
+    viewAllScroller.addEventListener("scroll", sync, { passive: true });
+    return () => {
+      observer.disconnect();
+      viewAllScroller.removeEventListener("scroll", sync);
+    };
+  }, [scrollViewAllHeader, viewAllScroller, letterRail.eligible]);
+
+  const viewAllHeader = (
+    <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
+      <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
+      <AppSheetDescription>Review all items in this list.</AppSheetDescription>
+      {collapsibleFilter ? (
+        <CollapsibleListFilter
+          value={expandedFilterText}
+          onChange={setExpandedFilterText}
+          placeholder={filterPlaceholder}
+          testId="view-all-filter-input"
+          toggleTestId="view-all-filter-toggle"
+          header={viewAllFilterHeader ?? filterHeader}
+          headerSummary={filterHeaderSummary}
+          region={viewAllFilterRegion}
+        />
+      ) : (
+        <>
+          <ListFilterField
+            value={expandedFilterText}
+            onChange={setExpandedFilterText}
+            placeholder={filterPlaceholder}
+            testId="view-all-filter-input"
+          />
+          {(viewAllFilterHeader ?? filterHeader) ? (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+              {viewAllFilterHeader ?? filterHeader}
+            </div>
+          ) : null}
+        </>
+      )}
+    </AppSheetHeader>
   );
 
   const renderList = (list: ActionListItem[]) => (
@@ -683,49 +762,31 @@ export const SelectableActionList = ({
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <AppSheetHeader className={cn(isCompact ? "space-y-2" : "space-y-3")}>
-                <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
-                <AppSheetDescription>Review all items in this list.</AppSheetDescription>
-                {collapsibleFilter ? (
-                  <CollapsibleListFilter
-                    value={expandedFilterText}
-                    onChange={setExpandedFilterText}
-                    placeholder={filterPlaceholder}
-                    testId="view-all-filter-input"
-                    toggleTestId="view-all-filter-toggle"
-                    header={viewAllFilterHeader ?? filterHeader}
-                    headerSummary={filterHeaderSummary}
-                    region={viewAllFilterRegion}
-                  />
-                ) : (
-                  <>
-                    <ListFilterField
-                      value={expandedFilterText}
-                      onChange={setExpandedFilterText}
-                      placeholder={filterPlaceholder}
-                      testId="view-all-filter-input"
-                    />
-                    {(viewAllFilterHeader ?? filterHeader) ? (
-                      <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                        {viewAllFilterHeader ?? filterHeader}
-                      </div>
-                    ) : null}
-                  </>
+              {scrollViewAllHeader ? null : viewAllHeader}
+              <AppSheetBody
+                className={cn(
+                  "relative flex flex-col",
+                  scrollViewAllHeader ? "p-0 overflow-hidden" : isCompact ? "px-3 py-3" : "px-6 py-4",
                 )}
-              </AppSheetHeader>
-              <AppSheetBody className={cn("relative flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
+              >
                 <div
                   ref={viewAllBodyRef}
                   className={cn(
-                    "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
-                    isCompact ? "p-3" : "p-4",
+                    "overflow-hidden flex-1 h-full min-h-0 flex flex-col",
+                    !scrollViewAllHeader && "bg-card border border-border rounded-panel",
+                    !scrollViewAllHeader && (isCompact ? "p-3" : "p-4"),
                   )}
                 >
-                  {viewAllFilteredItems.length === 0 ? (
+                  {viewAllFilteredItems.length === 0 && !scrollViewAllHeader ? (
                     <p className="text-xs text-muted-foreground">{viewAllEmptyLabel}</p>
                   ) : (
-                    <Virtuoso
+                    <Virtuoso<ActionListItem, ViewAllListContext>
                       ref={virtuosoRef}
+                      components={scrollViewAllHeader ? SCROLLING_LIST_COMPONENTS : PINNED_LIST_COMPONENTS}
+                      context={{
+                        header: <div ref={viewAllHeaderRef}>{viewAllHeader}</div>,
+                        emptyLabel: viewAllEmptyLabel,
+                      }}
                       style={{ height: "100%" }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={estimatedItemHeight}
@@ -737,7 +798,14 @@ export const SelectableActionList = ({
                       }}
                       scrollerRef={letterRail.setScroller}
                       itemContent={(index, item) => (
-                        <div className={cn(denseRows ? "mb-0.5" : "mb-2", "last:mb-0", letterRailLaneClass)}>
+                        <div
+                          className={cn(
+                            denseRows ? "mb-0.5" : "mb-2",
+                            "last:mb-0",
+                            scrollViewAllHeader && (isCompact ? "px-3" : "px-6"),
+                            letterRailLaneClass,
+                          )}
+                        >
                           <ActionListRow
                             item={item}
                             rowTestId={rowTestId}
@@ -751,13 +819,21 @@ export const SelectableActionList = ({
                   )}
                 </div>
                 {letterRail.eligible ? (
-                  <LetterIndexRail
-                    model={letterRail}
-                    scrollToListIndex={(index) => virtuosoRef.current?.scrollToIndex({ index, align: "start" })}
-                    keyScope={viewAllSheet}
-                    className={letterRailBoundsClass}
-                    letterColumnClassName={letterColumnClass}
-                  />
+                  <div
+                    ref={letterRailOverlayRef}
+                    className={scrollViewAllHeader ? "absolute right-0 bottom-0 w-11 pointer-events-none" : "contents"}
+                  >
+                    <LetterIndexRail
+                      model={letterRail}
+                      scrollToListIndex={(index) => virtuosoRef.current?.scrollToIndex({ index, align: "start" })}
+                      keyScope={viewAllSheet}
+                      className={cn(
+                        scrollViewAllHeader ? "top-3 bottom-3" : letterRailBoundsClass,
+                        "pointer-events-auto",
+                      )}
+                      letterColumnClassName={letterColumnClass}
+                    />
+                  </div>
                 ) : null}
               </AppSheetBody>
             </div>

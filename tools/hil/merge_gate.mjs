@@ -351,13 +351,18 @@ const readVolume = async () => {
  * where it was when the stream is muted, so a run that trusted it played at whatever the phone
  * happened to be on — which is how this gate once ran at 11 of 25 in someone's room.
  */
+export const nextVolumeKey = ({ muted, index }, target) => {
+  if (index === target && (!muted || target === 0)) return null;
+  return index < target || (muted && target > 0) ? 24 : 25;
+};
+
 const setVolume = async (target) => {
   if (!controlsVolume(active?.kind))
     throw new Error(`the ${active?.kind ?? "unbound"} phone's volume is not the gate's`);
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const { muted, index } = await readVolume();
-    if (!muted && index === target) return;
-    await (await phone()).pressKey(index < target || muted ? 24 : 25);
+    const key = nextVolumeKey(await readVolume(), target);
+    if (key === null) return;
+    await (await phone()).pressKey(key);
     await sleep(250);
   }
   throw new Error(`could not set the media volume to ${target}`);

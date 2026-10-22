@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 type StationQueueEditedDialogProps = {
   open: boolean;
+  shuffleRequested?: boolean;
   stationTuneCount: number;
   /** Null when the saved playlist has not been read back since the app started. */
   playlistTuneCount: number | null;
@@ -32,6 +33,7 @@ const tunes = (count: number) => `${count} ${count === 1 ? "tune" : "tunes"}`;
 
 export const StationQueueEditedDialog = ({
   open,
+  shuffleRequested = false,
   stationTuneCount,
   playlistTuneCount,
   onKeepStationTunes,
@@ -41,11 +43,28 @@ export const StationQueueEditedDialog = ({
   <AlertDialog open={open} onOpenChange={(next) => (next ? undefined : onDismiss())}>
     <AlertDialogContent data-testid="station-queue-edited-dialog">
       <AlertDialogHeader>
-        <AlertDialogTitle>Keep the radio tunes or your playlist?</AlertDialogTitle>
+        <AlertDialogTitle>
+          {shuffleRequested ? "Shuffle these radio tunes?" : "Keep the radio tunes or your playlist?"}
+        </AlertDialogTitle>
         <AlertDialogDescription className="not-sr-only">
-          You changed the queue while the station was playing. Keep the {tunes(stationTuneCount)} now queued, or put
-          back{" "}
-          {playlistTuneCount === null ? "the playlist you had before the station" : `your ${tunes(playlistTuneCount)}`}.
+          {shuffleRequested ? (
+            <>
+              Stop the station and shuffle the {tunes(stationTuneCount)} now queued. This replaces{" "}
+              {playlistTuneCount === null
+                ? "the playlist you had before radio"
+                : "your saved playlist of " + tunes(playlistTuneCount)}
+              . Cancel to keep the station running.
+            </>
+          ) : (
+            <>
+              You changed the queue while the station was playing. Keep the {tunes(stationTuneCount)} now queued, or put
+              back{" "}
+              {playlistTuneCount === null
+                ? "the playlist you had before the station"
+                : "your " + tunes(playlistTuneCount)}
+              .
+            </>
+          )}
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
@@ -54,10 +73,13 @@ export const StationQueueEditedDialog = ({
           data-testid="station-queue-keep"
           onClick={onKeepStationTunes}
         >
-          Keep station tunes
+          {shuffleRequested ? "Shuffle radio tunes" : "Keep station tunes"}
         </AlertDialogAction>
-        <AlertDialogAction data-testid="station-queue-return" onClick={onReturnToPlaylist}>
-          Return to my playlist
+        <AlertDialogAction
+          data-testid="station-queue-return"
+          onClick={shuffleRequested ? undefined : onReturnToPlaylist}
+        >
+          {shuffleRequested ? "Cancel" : "Return to my playlist"}
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>

@@ -211,7 +211,7 @@ On Android, the Spectrum card on Play draws the sound your phone is playing as i
 
 ### SID Radio
 
-Create an endless playlist of similar SID tunes from HVSC. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections. A station never repeats a tune, and never plays two pieces from the same SID file back to back.
+Create an endless playlist of similar SID tunes from HVSC. Radio keeps the newest 200 queued tunes by default; change the limit under **Settings → SID Radio**. **Repeat: tune** loops the current tune, and **Shuffle** can turn the radio queue into a shuffled playlist after confirmation. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections. A station never repeats a tune, and never plays two pieces from the same SID file back to back.
 
 Collections play a fixed list instead, taken from the HVSC tune notes (STIL): competition winners, movie and TV themes, music from games on other machines, electronic pioneers, synth-pop, classical, C64 remixes, and Christmas songs in season. A collection plays only its own tunes, each once, and your likes decide which come first.
 

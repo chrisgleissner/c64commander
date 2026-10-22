@@ -127,6 +127,7 @@ export const PlaylistPanel = ({
         onRemoveSelected={onRemoveSelected}
         maxVisible={maxVisible}
         viewAllTitle="Playlist"
+        scrollViewAllHeader
         listTestId="playlist-list"
         rowTestId="playlist-item"
         filterHeader={typeFilters}
