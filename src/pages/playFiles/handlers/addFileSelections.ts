@@ -1080,7 +1080,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         dispatchFeedback(() => {
           reportUserError({
             operation: "PLAYLIST_ADD",
-            title: "No supported files",
+            title: skippedFolders.length ? "Scan incomplete" : "No supported files",
             description: skippedFolders.length
               ? `Found no supported files. ${INCOMPLETE_SCAN_NOTICE}`
               : "Found no supported files.",
@@ -1094,7 +1094,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "error",
-          message: "No supported files found.",
+          message: skippedFolders.length ? "No supported files found in scanned folders." : "No supported files found.",
         }));
         return false;
       }

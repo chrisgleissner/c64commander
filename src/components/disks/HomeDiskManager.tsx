@@ -1476,6 +1476,7 @@ export const HomeDiskManager = () => {
                 sourceId: source.id,
                 sourceType: source.type,
                 selectionPath: selection.path,
+                skippedCount: nested.partialFailures.length,
                 skippedFolders: nested.partialFailures,
               });
             }
@@ -1643,7 +1644,7 @@ export const HomeDiskManager = () => {
         toast({
           title: "Items added",
           description: partialScanFailures.length
-            ? `${disks.length} disk(s) added. ${partialScanFailures.length} folder(s) could not be scanned.`
+            ? `${disks.length} disk(s) added. Some folders could not be scanned.`
             : `${disks.length} disk(s) added to library.`,
         });
         return true;

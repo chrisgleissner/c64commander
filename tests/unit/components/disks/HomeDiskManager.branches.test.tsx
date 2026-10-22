@@ -842,7 +842,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Items added",
-          description: "1 disk(s) added. 1 folder(s) could not be scanned.",
+          description: "1 disk(s) added. Some folders could not be scanned.",
         }),
       );
     });

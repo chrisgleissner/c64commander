@@ -695,9 +695,20 @@ describe("addFileSelections batching", () => {
     expect(result).toBe(false);
     expect(reportUserError).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "No supported files",
+        title: "Scan incomplete",
         description: "Found no supported files. Some folders could not be scanned.",
       }),
+    );
+    const progress = deps.setAddItemsProgress.mock.calls.map(([update]) =>
+      typeof update === "function" ? update({} as never) : update,
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({ status: "error", message: "No supported files found in scanned folders." }),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Playlist scan skipped folders",
+      expect.objectContaining({ skippedCount: 1 }),
     );
   });
 
