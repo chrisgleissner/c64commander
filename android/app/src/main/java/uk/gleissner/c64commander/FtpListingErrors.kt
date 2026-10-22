@@ -12,11 +12,19 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import org.apache.commons.net.ftp.FTPConnectionClosedException
 
-/** A timeout, a closed control connection, or a socket that broke; a refused connection is not one. */
-internal fun isFtpConnectionLost(error: Exception) =
+/** The firmware refused a connection: it may be out of sockets rather than gone. */
+internal fun isFtpConnectionRefused(error: Exception) =
+        error is SocketException && error.message?.contains("refused", ignoreCase = true) == true
+
+/** A timeout (also one that only says so in its message), a closed control connection, or a socket that broke. */
+internal fun isFtpConnectionLost(error: Exception, timeoutMessagePattern: Regex) =
         error is SocketTimeoutException ||
                 error is FTPConnectionClosedException ||
-                (error is SocketException && error.message?.contains("refused", ignoreCase = true) != true)
+                timeoutMessagePattern.containsMatchIn(error.message ?: "") ||
+                (error is SocketException && !isFtpConnectionRefused(error))
+
+/** How many folders in a row may be refused before the walk gives up. */
+internal const val maxConsecutiveRefusals = 2
 
 /** The NLST fallback failed; carries the cause so the folder can be reported as skipped. */
 internal class NameListingFailedException(cause: Exception) : Exception(cause.message, cause)

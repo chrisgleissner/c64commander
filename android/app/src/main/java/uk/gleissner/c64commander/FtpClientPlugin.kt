@@ -65,7 +65,6 @@ class FtpClientPlugin : Plugin() {
   private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
   private val maxTrackedCompletedReads = 256
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
-
   internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
@@ -315,13 +314,14 @@ class FtpClientPlugin : Plugin() {
                 var examinedEntries = 0
                 var capped = false
                 var timedOut = false
+                var consecutiveRefusals = 0
 
                 while (queue.isNotEmpty() && !capped && !timedOut) {
                   val (currentPath, depth) = queue.removeFirst()
                   if (!visited.add(currentPath)) continue
                   val files =
                           try {
-                            resolveListing(client, currentPath)
+                            resolveListing(client, currentPath).also { consecutiveRefusals = 0 }
                           } catch (error: Exception) {
                           failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
                           AppLogger.warn(
@@ -336,8 +336,10 @@ class FtpClientPlugin : Plugin() {
                           // on more data channels against known-flaky firmware. Bail the
                           // whole walk (surfacing this one failure) instead of churning.
                           // A lost connection is the same: every later folder would fail the same way and
-                          // write its own warnings.
-                          if (isFtpConnectionLost(error)) {
+                          // write its own warnings. A firmware that refuses data connections is given a
+                          // second folder, then the walk ends too.
+                          consecutiveRefusals = if (isFtpConnectionRefused(error)) consecutiveRefusals + 1 else 0
+                          if (isFtpConnectionLost(error, timeoutMessagePattern) || consecutiveRefusals >= maxConsecutiveRefusals) {
                             timedOut = true
                             break
                           }
@@ -877,8 +879,8 @@ class FtpClientPlugin : Plugin() {
       // Fail fast on a timeout so the firmware gets breathing room; only cascade for
       // genuine LIST-unsupported / capability errors (which surface as other errors).
       if (error is FtpListRefusedException ||
-              isFtpConnectionLost(error) ||
-              timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
+              isFtpConnectionLost(error, timeoutMessagePattern) ||
+              isFtpConnectionRefused(error)) {
         throw error
       }
       AppLogger.warn(
