@@ -4077,9 +4077,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     focusByDpadDown(screen.getByRole("button", { name: /save & connect/i }));
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined));
     expect(discoverConnection).not.toHaveBeenCalledWith("manual");
   });
 

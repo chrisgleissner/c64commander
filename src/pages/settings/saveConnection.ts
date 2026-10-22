@@ -8,6 +8,7 @@
 
 import { useSyncExternalStore } from "react";
 import { toast } from "@/hooks/use-toast";
+import { addLog } from "@/lib/logging";
 import { C64_DEFAULTS } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
@@ -44,6 +45,24 @@ export const describeSwitchFailure = (
   verification.authRequired
     ? "The device rejected the password. Check the password and try again."
     : (verification.error ?? fallbackMessage);
+
+const SAVE_TIMEOUT_MS = 30_000;
+
+/** One deadline for the whole save: a device or a secure store that never answers must not disable the page for good. */
+const startSaveDeadline = () => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Saving the connection took too long. Check the device and try again.")),
+      SAVE_TIMEOUT_MS,
+    );
+  });
+  expired.catch(() => undefined);
+  return {
+    guard: <T>(work: Promise<T>): Promise<T> => Promise.race([work, expired]),
+    stop: () => clearTimeout(timer),
+  };
+};
 
 let saveInFlight = 0;
 const saveListeners = new Set<() => void>();
@@ -107,6 +126,7 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
   editor.setPasswordError(null);
   saveInFlight += 1;
   notifySaveListeners();
+  const deadline = startSaveDeadline();
   try {
     // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
     // is false the user hasn't touched it, so reuse the stored password unchanged instead
@@ -115,7 +135,7 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
     const effectivePassword = isChangingPassword
       ? context.typedPassword
       : device.hasPassword
-        ? ((await getPasswordForDevice(device.id)) ?? "")
+        ? ((await deadline.guard(getPasswordForDevice(device.id))) ?? "")
         : "";
     const hasPassword = effectivePassword.length > 0;
     // HARD27-037: a rename or an FTP/Telnet port correction cannot make the device
@@ -140,11 +160,13 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
     // steer the user to its IP address instead of failing silently.
     const reachability = isLocalOnlyEdit
       ? null
-      : await evaluateNewDeviceReachability({
-          host: nextHost,
-          deviceHost: nextDeviceHost,
-          password: hasPassword ? effectivePassword : null,
-        });
+      : await deadline.guard(
+          evaluateNewDeviceReachability({
+            host: nextHost,
+            deviceHost: nextDeviceHost,
+            password: hasPassword ? effectivePassword : null,
+          }),
+        );
     let saved = getSavedDevicesSnapshot();
     if (!saved.devices.some((entry) => entry.id === device.id)) {
       report.dismiss();
@@ -171,14 +193,21 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
     if (isStillSelected) editor.setReachabilitySuggestion(null);
     if (isChangingPassword) {
       if (hasPassword) {
-        await setPasswordForDevice(device.id, effectivePassword);
+        await deadline.guard(setPasswordForDevice(device.id, effectivePassword));
       } else {
-        await clearPasswordForDevice(device.id);
+        await deadline.guard(clearPasswordForDevice(device.id));
       }
     }
     saved = getSavedDevicesSnapshot();
     if (!saved.devices.some((entry) => entry.id === device.id)) {
-      if (isChangingPassword) await clearPasswordForDevice(device.id);
+      if (isChangingPassword) {
+        await clearPasswordForDevice(device.id).catch((error: unknown) =>
+          addLog("warn", "Could not remove the password stored for a device that was deleted during the save", {
+            deviceId: device.id,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
       report.dismiss();
       return;
     }
@@ -206,7 +235,7 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
     // not connected is not made to answer: that wait and its failure are exactly what
     // HARD27-037 removed.
     if (!isLocalOnlyEdit || context.isConnected) {
-      const verification = await context.switchSavedDevice(device.id);
+      const verification = await deadline.guard(context.switchSavedDevice(device.id));
       if (isSupersededSavedDeviceSwitch(verification)) {
         report.dismiss();
         return;
@@ -226,6 +255,7 @@ export const saveConnection = async (context: SaveConnectionContext): Promise<vo
   } catch (error) {
     report.failed((error as Error).message, error, nextHost);
   } finally {
+    deadline.stop();
     saveInFlight = Math.max(0, saveInFlight - 1);
     notifySaveListeners();
   }

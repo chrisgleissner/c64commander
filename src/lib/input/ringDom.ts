@@ -244,7 +244,7 @@ const isEditedOutside = (ring: HTMLElement): boolean =>
 const hasOpenOverlay = (): boolean =>
   Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some((overlay) => {
     const state =
-      overlay.getAttribute("data-state") ?? overlay.querySelector("[data-state]")?.getAttribute("data-state");
+      overlay.getAttribute("data-state") ?? overlay.querySelector(":scope > [data-state]")?.getAttribute("data-state");
     return state !== "closed";
   });
 

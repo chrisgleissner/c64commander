@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { addLog } from "@/lib/logging";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { buildSavedDeviceEditorDraft } from "@/lib/savedDevices/deviceEditor";
@@ -22,6 +23,7 @@ import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import { isConnectionSaveInFlight, saveConnection, type SaveConnectionContext } from "@/pages/settings/saveConnection";
 
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 vi.mock("@/lib/connection/addDeviceReachability", () => ({ evaluateNewDeviceReachability: vi.fn() }));
 vi.mock("@/lib/ftp/ftpConfig", () => ({ setStoredFtpPort: vi.fn(), getStoredFtpPort: vi.fn(() => 21) }));
 vi.mock("@/lib/telnet/telnetConfig", () => ({ setStoredTelnetPort: vi.fn(), getStoredTelnetPort: vi.fn(() => 64) }));
@@ -181,5 +183,63 @@ describe("saveConnection against the real saved devices store", () => {
     await saving;
 
     expect(isConnectionSaveInFlight()).toBe(false);
+  });
+
+  describe("when something never answers", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("gives up after 30 seconds, reports why and releases the in-flight state", async () => {
+      vi.useFakeTimers();
+      const context = buildContext({ switchSavedDevice: vi.fn(() => new Promise<never>(() => undefined)) });
+      const saving = saveConnection(context);
+      expect(isConnectionSaveInFlight()).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await saving;
+
+      expect(context.report.failed).toHaveBeenCalledWith(
+        "Saving the connection took too long. Check the device and try again.",
+        expect.any(Error),
+        "192.0.2.50",
+      );
+      expect(isConnectionSaveInFlight()).toBe(false);
+    });
+
+    it("does not report a timeout for a save that finished in time", async () => {
+      vi.useFakeTimers();
+      const context = buildContext();
+
+      const started = vi.spyOn(globalThis, "setTimeout");
+      const stopped = vi.spyOn(globalThis, "clearTimeout");
+
+      await saveConnection(context);
+
+      const deadlineIndex = started.mock.calls.findIndex(([, delay]) => delay === 30_000);
+      expect(deadlineIndex).toBeGreaterThanOrEqual(0);
+      expect(stopped).toHaveBeenCalledWith(started.mock.results[deadlineIndex].value);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(context.report.failed).not.toHaveBeenCalled();
+    });
+  });
+
+  it("logs a warning, not a failure, when the password of a deleted device cannot be removed", async () => {
+    const storing = deferred<void>();
+    vi.mocked(setPasswordForDevice).mockReturnValueOnce(storing.promise);
+    vi.mocked(clearPasswordForDevice).mockRejectedValueOnce(new Error("secure storage unavailable"));
+    const context = buildContext({ passwordEditing: true, typedPassword: "new-password" });
+    const saving = saveConnection(context);
+    await vi.waitFor(() => expect(setPasswordForDevice).toHaveBeenCalled());
+
+    selectSavedDevice("device-b");
+    removeSavedDevice("device-a");
+    storing.resolve();
+    await saving;
+
+    expect(context.report.failed).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Could not remove the password stored for a device that was deleted during the save",
+      expect.objectContaining({ deviceId: "device-a", error: "secure storage unavailable" }),
+    );
   });
 });

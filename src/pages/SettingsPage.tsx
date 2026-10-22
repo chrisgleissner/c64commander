@@ -392,6 +392,7 @@ export default function SettingsPage() {
     savedDevices.devices[0] ??
     null;
   const isSaving = useConnectionSaveInFlight();
+  const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const saveReport = useConnectionSaveReporter();
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
@@ -404,7 +405,7 @@ export default function SettingsPage() {
     id: "settings-save-connection",
     order: 300,
     group: "settings-connection",
-    disabled: isSaving,
+    disabled: isSaving || deleteDependencyBusy,
   });
   const refreshConnectionFocusRef = useFocusItem<HTMLButtonElement>({
     id: "settings-refresh-connection",
@@ -424,7 +425,6 @@ export default function SettingsPage() {
   const deleteTargetLabel = deleteTargetDevice ? describeSavedDeviceForConfirmation(deleteTargetDevice) : "this device";
   const deleteReferenceCount = deleteDependencySummary?.totalCount ?? 0;
   const [addDeviceOpen, setAddDeviceOpen] = useState(false);
-  const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
