@@ -31,13 +31,13 @@ describe("check-reference-docs: the architecture stack line", () => {
   it("does not confuse React with React Router, whose majors differ", () => {
     expect(majors["react"]).toBe("19");
     expect(majors["react-router-dom"]).toBe("7");
-    expect(findStackDrift("- **UI/runtime**: React 19, React Router 6, Vite 6, Capacitor 8", majors)).toEqual([
+    expect(findStackDrift("- **UI/runtime**: React 19, React Router 6, Vite 7, Capacitor 8", majors)).toEqual([
       { label: "React Router", reason: "the stack line says React Router 6, package.json ships 7" },
     ]);
   });
 
   it("reports a version the line omits altogether", () => {
-    const drift = findStackDrift("- **UI/runtime**: React 19, React Router 7, Vite 6", majors);
+    const drift = findStackDrift("- **UI/runtime**: React 19, React Router 7, Vite 7", majors);
     expect(drift).toEqual([{ label: "Capacitor", reason: "the stack line does not state a Capacitor version" }]);
   });
 
