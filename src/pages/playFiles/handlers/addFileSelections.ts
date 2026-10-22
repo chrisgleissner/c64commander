@@ -88,6 +88,8 @@ export type AddFileSelectionsDeps = {
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
 
+const INCOMPLETE_SCAN_NOTICE = "Some folders could not be scanned.";
+
 export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
   const {
     addItemsStartedAtRef,
@@ -774,10 +776,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               throwIfAborted();
               if (nested.partialFailures?.length) {
                 skippedFolders.push(...nested.partialFailures);
-                addLog("warn", "Playlist add completed with skipped folders", {
+                addLog("warn", "Playlist scan skipped folders", {
                   sourceId: source.id,
                   sourceType: source.type,
                   selectionPath: selection.path,
+                  skippedCount: nested.partialFailures.length,
                   skippedFolders: nested.partialFailures,
                 });
               }
@@ -1078,7 +1081,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           reportUserError({
             operation: "PLAYLIST_ADD",
             title: "No supported files",
-            description: "Found no supported files.",
+            description: skippedFolders.length
+              ? `Found no supported files. ${INCOMPLETE_SCAN_NOTICE}`
+              : "Found no supported files.",
             context: {
               sourceId: source.id,
               sourceType: source.type,
@@ -1112,7 +1117,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         toast({
           title: "Items added",
           description: skippedFolders.length
-            ? `${appendedPlaylistItems} file(s) added to playlist. ${skippedFolders.length} folder(s) could not be scanned.`
+            ? `${appendedPlaylistItems} file(s) added to playlist. ${INCOMPLETE_SCAN_NOTICE}`
             : `${appendedPlaylistItems} file(s) added to playlist.`,
         });
       });
