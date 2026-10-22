@@ -528,7 +528,7 @@ export const PlaybackControlsCard = ({
               <p
                 className={cn(
                   "col-span-3 min-w-0 break-words text-sm leading-snug text-muted-foreground",
-                  hasComposerLink && "min-h-11 overflow-clip [overflow-clip-margin:4px]",
+                  hasComposerLink && "mb-1 min-h-11 overflow-clip [overflow-clip-margin:4px]",
                 )}
                 data-testid="playback-current-credits"
               >

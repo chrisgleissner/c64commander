@@ -583,13 +583,16 @@ export const SelectableActionList = ({
     const header = viewAllHeaderRef.current;
     const overlay = letterRailOverlayRef.current;
     if (!header || !overlay) return;
+    let headerHeight = header.offsetHeight;
     const sync = () => {
-      overlay.style.top = `${Math.max(0, header.getBoundingClientRect().bottom - viewAllScroller.getBoundingClientRect().top)}px`;
+      overlay.style.top = `${Math.max(0, headerHeight - viewAllScroller.scrollTop)}px`;
     };
     sync();
-    const observer = new ResizeObserver(sync);
+    const observer = new ResizeObserver(() => {
+      headerHeight = header.offsetHeight;
+      sync();
+    });
     observer.observe(header);
-    observer.observe(viewAllScroller);
     viewAllScroller.addEventListener("scroll", sync, { passive: true });
     return () => {
       observer.disconnect();
