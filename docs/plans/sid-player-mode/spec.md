@@ -3,13 +3,54 @@
 Status: draft for implementation. Spec IDs (`SPM-…`) are stable. Commits, tests and PR descriptions cite them.
 Baseline: integration branch at `6d8463b85`. Line counts quoted below were measured there.
 
+## Audience principles
+
+The app serves two audiences: people who control a C64 Ultimate from their phone (Full App), and people who
+use it as a stand-alone SID music player (SID Player). Apply these rules when the spec is silent.
+
+1. **Music first in SID Player.** The first screen plays music, or offers one press that leads to music. Setup,
+   files and ROMs come later and only when they are needed.
+2. **Each mode keeps its own vocabulary.** Full App uses precise machine terms (KERNAL, REU, IEC, SID model,
+   dB, PAL). SID Player surfaces use plain words; a technical term may appear only as secondary detail under a
+   plain label.
+3. **Never burden the other audience.** A user with a connected C64 Ultimate never sees a SID Player prompt.
+   A SID Player user never sees a prompt to connect hardware.
+4. **The way back is always one press away and visible.** Every mode, view and setting has an exit the user
+   can find without the manual: the badge, the Quick menu, Back, Settings.
+5. **Readable and reachable by everyone.** Text floors, 44 px targets, keypad operation and contrast apply in
+   both modes. Nothing is shrunk to make room.
+6. **Nothing happens behind the user's back.** No sound starts by itself at launch, no large download without
+   consent, no device traffic in SID Player, no telemetry.
+7. **One code path.** A difference between modes is a visibility or wording decision in a choke point, never
+   a copied screen.
+
+## Decisions
+
+Recorded by the delegated principal engineer. Each decision supersedes earlier text in the features it names.
+
+| ID | Question | Decision | Rationale for both audiences | Consequence | Spec IDs |
+| --- | --- | --- | --- | --- | --- |
+| D-01 | Bundle a replacement ROM set? | No. Nothing is bundled. ROMs come from the user's own files or own device, and the guide explains lawful sources. A free-form URL download is cut. | Retro fans already own ROMs or a device. Newcomers do not need ROMs, because most tunes play on the built-in minimal KERNAL. Bundling would need a licence review and a timing measurement for a small gain. | Skip plus import plus device read is the whole ROM story. | SPM-ROM-16, -22, -24, -25, -26 |
+| D-02 | How does a brand-new user with no device reach SID Player in the first minute? | Default variant: the existing bounded startup discovery runs (a probe window of about 3 s, then the one-time network scan). If it finds nothing and no device has ever connected, one dialog offers "Use SID Player" first. No question is asked before discovery. SID Player variant: no discovery and no question; it opens on Play. | A retro fan's device is found silently, so they are never asked anything. A newcomer gets one plain choice within seconds. Asking first would burden every device owner. The no-traffic rule binds SID Player, and the scan happens before SID Player exists. | First-run copy is plain (SPM-FRST-01). | SPM-FRST-01..03, SPM-START-01 |
+| D-03 | Wording and tone | SID Player-only copy uses plain words (song, music, collection, this phone, C64 ROM files). It avoids REST, FTP, host, IP, PAL/NTSC, dB, chip numbers and KERNAL/BASIC as primary labels. Shared surfaces keep their current wording. Full App keeps precise terms. | Newcomers meet no jargon. Retro fans keep the terms they search for and that match the machine's own menus. | `SPM-TONE-01/02`; plain volume labels (`SPM-PLAY-09`). | SPM-TONE-01, SPM-TONE-02, SPM-PLAY-09, SPM-ROM-09/11 |
+| D-04 | Landing screen and tab set in SID Player | No Home. Play is the landing page. The tabs are Play, Settings, Docs (digits 1 to 3). Search and the listen tiles are composed into Play. | Play is the product for newcomers. A Home that repeats Play's content costs a tab and a press. Retro fans in Full App keep Home unchanged. | `/` redirects to `/play`; tour steps re-anchored. | SPM-NAV-01..04, SPM-HOME-01..04, SPM-TOUR-01, SPM-ED-03, SPM-FS-08 |
+| D-05 | Out-of-the-box listening without files | Play's empty state is "Start listening". Its primary action is "Get the free C64 music collection" (HVSC). The size is shown and Wi-Fi is recommended before the download starts; there is no automatic download. After it finishes, SID Radio is offered as "Play a station". Secondary actions are "Add your own SID files" and "Browse the online archive". Offline, the primary action is replaced by "Add your own SID files" with one line explaining that the collection needs internet. ROMs are never part of this flow. No music is bundled: the Demo Mode collection is generated filler, not music. | Newcomers own no SID files; HVSC and SID Radio are the instant path. Data use stays a choice. Retro fans already know HVSC and skip straight to their library. | `SPM-START-01..03` | SPM-START-01, SPM-START-02, SPM-START-03, SPM-HOME-03 |
+| D-06 | Accessibility and sound safety | The existing floors apply unchanged in both modes: text at least 14 px (16 px body), targets at least 44x44 px, WCAG AA contrast (4.5:1 text, 3:1 controls), and reduced motion respected. No sound starts at launch; a restored session waits paused. The app never changes the system media volume. The app volume starts at unity (0 dB) and never boosts by itself. | Older eyes and hands (retro fans) and younger users on small screens (newcomers) need the same floors. Sound at launch is a startle and a safety risk for headphone users. | `SPM-A11Y-01..03` | SPM-A11Y-01, SPM-A11Y-02, SPM-A11Y-03 |
+| D-07 | Switching discoverability | In SID Player the badge reads "SID Player" and a tap opens the mode sheet. Settings shows the App mode section first in SID Player. The Quick menu always lists "Leave SID Player". SID Player never prompts users to connect hardware. In Full App, SID Player is offered only while no device is connected (the offline Home card and the Quick menu), and permanently in Settings. | A retro fan who lands in SID Player by accident sees the mode named on every page and leaves in two presses. A newcomer who never wants the Full App is never nagged. | Badge tap behavior changes in SID Player only. | SPM-ERR-02, SPM-QM-01, SPM-SET-01, SPM-HOME-04, SPM-SWT-01 |
+| D-08 | Store listing and APK naming for the SID Player variant | Name "SID Player". Short description "Play Commodore 64 SID music on your phone. Free, offline, no account." The listing is music first; the C64 Ultimate link and ROM files are mentioned once, near the end. Screenshots are generated by Playwright. The manual is in the SID Player scope. Publishing stays opt-in. | Newcomers find a music app. Retro fans keep "C64 Commander" as their app. | `SPM-VAR-06` becomes Not started. | SPM-VAR-03..06 |
+| D-09 | Analytics and telemetry | None. No analytics, no remote crash reporting, no usage pings. Diagnostics leave the phone only when the user shares a report. | Trust for both audiences; nothing to disclose or consent to. | `SPM-PRIV-01` | SPM-PRIV-01 |
+| D-10 | What is stored locally | App-private storage only: mode and full-screen settings, app settings, playlists, HVSC library and index, liked and recently played lists, SID Radio rankings, ROM images (never exported), saved devices, and device passwords (secure storage). The SID Radio similarity data ships inside the app. Network use: the HVSC mirror and the online archive configured in the variant endpoints, and the user's own device in Full App or through "Get ROMs from my Ultimate". | Both audiences can see exactly what stays on the phone; the guide states it. | `SPM-PRIV-02` | SPM-PRIV-02, SPM-ROM-03 |
+| D-11 | Remaining SHOULD and MAY items | Made binding: share target (SPM-ROM-20, phase 4c); the repeat notice after a ROM change (SPM-ROM-08); feeding the measured silent set into `romNeedFor` when it is exact (SPM-ROM-23); the SID Player launch smoke (SPM-TST-03); the handset device-read check (SPM-ROM-04). Deferred with a reason: character ROM (SPM-ROM-16), FTP or SMB (SPM-ROM-22), replacement ROMs (SPM-ROM-24), ROM export (SPM-ROM-25), the Home offline arrangement in SID Player (SPM-HOME-01). | No ambiguity is left for implementers. | Statuses updated in §10. | as listed |
+| D-12 | Digits past the visible tabs | The first press in a session shows "Pages are on keys 1 to 3"; later presses do nothing. | Keypad users learn the mapping once without being nagged. | SPM-NAV-03 | SPM-NAV-03, SPM-ED-03 |
+| D-13 | A retro fan whose device is off at first launch | They see the first-run dialog with "Retry connection" visible and the line "Is your C64 Ultimate switched on?". Choosing nothing keeps today's decline semantics. A later successful connection never shows the dialog again. | Device owners are not pushed into SID Player by a powered-off machine; newcomers lose nothing. | FRST-01 copy | SPM-FRST-01 |
+
 ## 1. Summary
 
 SID Player is a mode of the app for people who own no C64 Ultimate-family device and want to listen to C64
 music on their phone. In SID Player the app shows only what works without a device: on-device SID playback,
 playlists, local files, HVSC browsing and download, CommoServe, SID Radio, search, a subset of Settings, a
 subset of the in-app guide, and the tour. Everything that needs a machine is hidden, not greyed out: the Disks
-and Config tabs, Home's machine sections, Live View, Remote Input, Game Mode, the device switcher, device
+and Config tabs, Home, Live View, Remote Input, Game Mode, the device switcher, device
 health probing, connection errors and "device unreachable" notices. The app sends no request to any device
 while SID Player is active.
 
@@ -76,6 +117,10 @@ Confirmation copy (sentence case, American English):
 - Compact profile body (two lines maximum, see `DemoModeInterstitial` sizing note): Enter "Only music on this
   phone. Machine controls are hidden. You can switch back." Leave "Show the C64 Ultimate controls again?"
 
+Tone (D-03, `SPM-TONE-01`): the Enter and Leave dialogs are reached from Full App and may use Full App terms.
+Every SID Player-only surface uses plain words. The first-run dialog and the mode sheet copy is fixed in
+`SPM-TONE-02`.
+
 ## 4. Current state (findings that shape the design)
 
 1. `TAB_ROUTES` (`src/lib/navigation/tabRoutes.ts`) is a const of six routes. Page identity everywhere is an
@@ -87,7 +132,7 @@ Confirmation copy (sentence case, American English):
    `drives`, `printers`, `streams`, `config-actions`.
 3. Home already has an offline arrangement (`useOfflineArrangement`, `src/lib/home/offlineArrangement.ts`):
    promoted listen tiles (SID Radio, Last, Recent, Live View greyed), `ConnectC64Card`, device sections
-   force-closed. It is the natural SID Player Home.
+   force-closed. SID Player does not use it: Home is hidden and Play is the landing page (D-04).
 4. `OFFLINE_NO_DEMO` already means "play on the phone": `isDeviceOutOfReach()`
    (`src/pages/playFiles/playableWithoutDevice.ts`), `preRouteEngine` `noDeviceConnected`, the
    `noMachineForRoms` branch in `usePlaybackController` (no ROM fetch), and `deviceStateStore` maps it to
@@ -243,8 +288,8 @@ Status · Evidence.
 
 - Requirement: One component, `src/components/appMode/DeviceLessChoices.tsx`, MUST render the sibling
   choices (Full App, Demo Mode, SID Player, with the current one marked) and run the transitions in
-  `SPM-SWT-02`. It MUST be used by the Settings `app-mode` section, the Leave confirmation, the Home
-  `ConnectC64Card` in SID Player, `DiagnosticsConnectionActions` in SID Player and the first-run offer.
+  `SPM-SWT-02`. It MUST be used by the Settings `app-mode` section, the Leave confirmation, the badge sheet
+  (`SPM-ERR-02`), the Home `ConnectC64Card` in offline Full App, `DiagnosticsConnectionActions` in SID Player and the first-run offer.
 - Rationale: The same three choices appear in five places; one component prevents five copies drifting apart.
 - Files: new component; consumers listed.
 - Choke point: this component.
@@ -297,13 +342,14 @@ Status · Evidence.
   | Surface | Demo Mode | SID Player |
   | --- | --- | --- |
   | Disks, Config tabs | shown (simulated device) | hidden |
-  | Home machine sections, Live View, Remote Input, Game Mode | shown | hidden |
+  | Home tab and machine sections, Live View, Remote Input, Game Mode | shown | hidden (Play is the landing page) |
   | Health badge | "Demo" | "SID Player" |
   | Device switcher, saved-device health probes | shown | hidden, stopped |
   | Simulated HVSC release (480 tunes) | installed, removed on leaving | never installed |
   | "Play on" C64 / this device choice | shown | hidden (phone only) |
   | App mode section and Leave SID Player entries | Full App / Demo Mode / SID Player choices | same choices |
-  | Home listen tiles, Play page, HVSC, SID Radio | shown | shown |
+  | Listen tiles (SID Radio, resume, recent) | on Home | on Play, while the playlist is empty |
+  | Play page, HVSC, SID Radio | shown | shown |
 
 - Rationale: The coordinator's sibling requirement; makes the difference reviewable.
 - Files: `src/lib/appMode/surfaces.ts`.
@@ -389,12 +435,12 @@ Status · Evidence.
 
 - Requirement: `TAB_ROUTES` MUST stay unchanged (page indices are identities). A new
   `visibleTabIndexes(appMode)` in `tabRoutes.ts` MUST return the indices whose `route:` surface is visible.
-  In SID Player that is Home, Play, Settings, Docs. `TabBar` MUST render only those.
+  In SID Player that is Play, Settings, Docs (decision D-04). `TabBar` MUST render only those.
 - Rationale: Index stability keeps `SwipeNavigationLayer`, cached pages and page positions untouched.
 - Files: `src/lib/navigation/tabRoutes.ts`, `src/components/TabBar.tsx`.
 - Choke point: `visibleTabIndexes`.
-- Acceptance: In SID Player the tab bar shows four tabs, each at least 44x44 px, labels at the compact floor.
-- Tests: `tests/unit/lib/navigation/tabRoutes.test.ts` — "SID Player shows Home, Play, Settings and Docs";
+- Acceptance: In SID Player the tab bar shows three tabs, each at least 44x44 px, labels at the compact floor.
+- Tests: `tests/unit/lib/navigation/tabRoutes.test.ts` — "SID Player shows Play, Settings and Docs";
   `tests/unit/components/TabBar.test.tsx` — "renders only the visible tabs in SID Player".
 - Verification: unit, Playwright.
 - Status: Not started. Evidence: —
@@ -402,11 +448,11 @@ Status · Evidence.
 #### SPM-NAV-02 Swipe skips hidden pages
 
 - Requirement: `resolveSwipeTarget`, `resolveAdjacentIndexes` and `resolveNavigationDirection` MUST step over
-  hidden indices and wrap within the visible set. Their default argument MUST be all indices, so full-app
+  hidden indices and wrap within the visible set. Their default argument MUST be all indices, so Full App
   behavior is unchanged.
 - Files: `tabRoutes.ts`, `src/lib/navigation/swipeNavigationModel.ts`, `src/components/SwipeNavigationLayer.tsx`.
 - Choke point: the three model functions.
-- Acceptance: Swiping left from Play in SID Player opens Settings; right from Home opens Docs.
+- Acceptance: In SID Player, swiping left from Play opens Settings and swiping right from Play opens Docs.
 - Tests: `tests/unit/lib/navigation/swipeNavigationModel.test.ts` — "adjacent pages skip hidden tabs",
   "swipe wraps within the visible tabs"; existing cases unchanged.
 - Verification: unit, Playwright.
@@ -414,79 +460,84 @@ Status · Evidence.
 
 #### SPM-NAV-03 Keypad digit jumps follow visible tabs
 
-- Requirement: Digits 1..n MUST open the n visible tabs in order; higher digits up to 6 MUST do nothing; 7
-  MUST still open search. `createTabJumpShortcut` and the digit bound in `useFocusNavigation` MUST use the
-  visible count.
+- Requirement: Digits 1..n MUST open the n visible tabs in order. Higher digits up to 6 MUST NOT be silent:
+  the first press in a session shows the toast "Pages are on keys 1 to 3"; later presses do nothing. 7 MUST still open search. `createTabJumpShortcut` and the digit bound in
+  `useFocusNavigation` MUST use the visible count.
 - Files: `tabRoutes.ts`, `src/hooks/useFocusNavigation.tsx`, `src/components/search/SearchKeyListener.tsx`
   (comment and test only).
 - Choke point: `createTabJumpShortcut`.
-- Acceptance: In SID Player, 3 opens Settings, 5 is ignored, 7 opens search.
+- Acceptance: In SID Player, 1 opens Play, 2 Settings, 3 Docs; 5 shows the one-time hint; 7 opens search.
 - Tests: `tests/unit/lib/navigation/tabJumpShortcut.test.ts` — "digit jumps map to visible tabs in SID
-  Player", "digits past the visible tabs do nothing"; `SearchKeyListener.test.tsx` updated assertion.
+  Player", "a digit past the visible tabs shows the hint once"; `SearchKeyListener.test.tsx` updated assertion.
 - Verification: unit, Playwright keypad spec, handset.
 - Status: Not started. Evidence: —
 
-#### SPM-NAV-04 Hidden routes redirect to Home
+#### SPM-NAV-04 Hidden routes redirect to Play
 
 - Requirement: Navigating to a hidden route (deep link, history Back, search target, toast action, restored
-  location, `/diagnostics` sub-route of a hidden page) MUST replace the location with `/` and log one
-  `info` entry naming the path. No error page, no toast.
-- Files: `src/App.tsx` (a `HiddenRouteRedirect` beside `NotFoundForUnknownPaths`).
-- Choke point: `HiddenRouteRedirect`.
-- Acceptance: Opening `/config` in SID Player shows Home.
-- Tests: `tests/unit/AppRoutes.sidPlayer.test.tsx` — "a hidden route in SID Player redirects to Home";
-  `playwright/sidPlayerMode.spec.ts` — "deep link to Disks in SID Player lands on Home".
+  location, `/diagnostics` sub-route of a hidden page, and `/` itself) MUST replace the location with `/play`
+  and log one `info` entry naming the path. No error page, no toast. At launch, `main.tsx` MUST normalize the
+  initial location before the first render, so a hidden page never paints for a frame.
+- Files: `src/App.tsx` (a `HiddenRouteRedirect` beside `NotFoundForUnknownPaths`), `src/main.tsx`
+  (`normalizeInitialLocation`).
+- Choke point: `HiddenRouteRedirect` and `normalizeInitialLocation`.
+- Acceptance: Opening `/` or `/config` in SID Player shows Play.
+- Tests: `tests/unit/AppRoutes.sidPlayer.test.tsx` — "a hidden route in SID Player redirects to Play",
+  "launching at / in SID Player opens Play without painting Home"; `playwright/sidPlayerMode.spec.ts` —
+  "deep link to Disks in SID Player lands on Play".
 - Verification: unit, Playwright.
 - Status: Not started. Evidence: —
 
-### 5.5 Home
+### 5.5 Home and the Play landing
+
+Decision D-04: SID Player has no Home tab. Play is the landing page. What Home offered a listener (search, SID
+Radio, resume, recently played) is composed into Play from the existing components.
 
 #### SPM-HOME-01 Home uses the offline arrangement
 
-- Requirement: In SID Player `useOfflineArrangement` MUST return `true` immediately, without the settle delay.
-- Files: `src/hooks/useOfflineArrangement.ts`.
-- Choke point: `useOfflineArrangement`.
-- Acceptance: Home shows the search field and listen tiles first on the first frame.
-- Tests: `tests/unit/hooks/useOfflineArrangement.test.ts` — "SID Player arranges Home offline at once".
-- Verification: unit.
-- Status: Not started. Evidence: —
+- Requirement: none in SID Player, where Home is hidden (D-04). Full App keeps its existing offline arrangement.
+- Status: Deferred (out of scope: superseded by D-04, nothing to build). Evidence: —
 
-#### SPM-HOME-02 Device sections are hidden, not closed
+#### SPM-HOME-02 Sections hidden by the mode render nothing
 
 - Requirement: `CollapsibleSection` MUST render nothing when `isSurfaceVisible({scope, id})` is false. The
-  check MUST sit in a wrapper so the section body's hooks never run. In SID Player this hides Home sections
-  `quick-actions`, `live-view`, `cpu-ram`, `ports`, `video`, `audio`, `user-interface`, `lighting`,
-  `drives`, `printers`, `streams`, `config-actions`, and the `home-offline-sections-note` paragraph.
-  `DeviceStepsOffer` MUST not render. `SystemInfo` stays (`appVersionOnly`).
-- Files: `src/components/CollapsibleSection.tsx`, `src/pages/HomePage.tsx` (note paragraph only),
-  `src/components/tour/DeviceStepsOffer.tsx`.
+  check MUST sit in a wrapper so the section body's hooks never run. In SID Player this hides the Settings and
+  Docs sections listed in `SPM-SET-01` and `SPM-DOC-01`. Home sections are classified `needs-device` in the
+  surface map for completeness; they never render because Home is hidden.
+- Files: `src/components/CollapsibleSection.tsx`.
 - Choke point: `CollapsibleSection`.
-- Acceptance: SID Player Home contains search, listen tiles, the SID Player card and the version line only.
+- Acceptance: No hidden section mounts in SID Player.
 - Tests: `tests/unit/components/CollapsibleSection.test.tsx` — "a section hidden by the app mode renders
-  nothing and runs no body effect"; `tests/unit/pages/HomePage.sidPlayer.test.tsx` — "SID Player Home shows
-  no device section".
+  nothing and runs no body effect".
+- Verification: unit, Playwright.
+- Status: Not started. Evidence: —
+
+#### SPM-HOME-03 Listening shortcuts on Play
+
+- Requirement: In SID Player the Play page MUST show, above the playback card, the existing `HomeSearchField`
+  and, while the playlist is empty, the existing listen tiles (`useListenActions` in a `ProfileActionGrid`)
+  as the "Start listening" area (`SPM-START-01`). `useListenActions` MUST omit tiles whose search entry is not
+  shown (`isSearchEntryShown`), which removes the Live View tile. The components are composed, not copied.
+- Files: `src/pages/PlayFilesPage.tsx` (one composed block; check its 19 lines of headroom, otherwise extract a
+  `PlayListeningShortcuts` component), `src/pages/home/components/useListenActions.ts`.
+- Choke point: `isSearchEntryShown` (`SPM-SRCH-01`).
+- Acceptance: A new SID Player install opens on Play with search and the Start listening tiles.
+- Tests: `tests/unit/pages/home/useListenActions.test.ts` — "SID Player omits the Live View tile";
+  `tests/unit/pages/PlayFilesPage.sidPlayer.test.tsx` — "an empty playlist in SID Player shows search and the
+  Start listening tiles".
 - Verification: unit, Playwright, handset.
 - Status: Not started. Evidence: —
 
-#### SPM-HOME-03 Listen tiles drop device tiles
+#### SPM-HOME-04 The connect card offers SID Player in Full App
 
-- Requirement: `useListenActions` MUST omit tiles whose search entry is not shown (`isSearchEntryShown`). In
-  SID Player the Live View tile is removed rather than greyed.
-- Files: `src/pages/home/components/useListenActions.ts`.
-- Choke point: `isSearchEntryShown` (`SPM-SRCH-01`).
-- Acceptance: SID Player Home shows SID Radio, Last and Recent tiles.
-- Tests: `tests/unit/pages/home/useListenActions.test.ts` — "SID Player omits the Live View tile".
-- Verification: unit.
-- Status: Not started. Evidence: —
-
-#### SPM-HOME-04 The connect card becomes the SID Player card
-
-- Requirement: In SID Player `ConnectC64Card` MUST say that SID Player is on and render `DeviceLessChoices`
-  (Leave SID Player). Same `data-testid` root, new child test ids.
+- Requirement: In Full App, while Home shows its offline arrangement, `ConnectC64Card` MUST add a secondary
+  button "Use SID Player" that opens the Enter confirmation (`SPM-SWT-02`) through `DeviceLessChoices`. In
+  SID Player the card is not shown (Home is hidden); leaving is offered by the badge sheet, Settings and the
+  Quick menu.
 - Files: `src/pages/home/components/ConnectC64Card.tsx`.
 - Choke point: `ConnectC64Card`.
-- Acceptance: A keypad user can leave SID Player from Home.
-- Tests: `tests/unit/pages/home/ConnectC64Card.test.tsx` — "SID Player shows the leave choice".
+- Acceptance: A Full App user with no device reaches SID Player from Home in two presses.
+- Tests: `tests/unit/pages/home/ConnectC64Card.test.tsx` — "offline Full App offers Use SID Player".
 - Verification: unit, Playwright.
 - Status: Not started. Evidence: —
 
@@ -570,9 +621,6 @@ Status · Evidence.
 - Verification: Playwright, handset.
 - Status: Not started. Evidence: —
 
-### 5.7 Settings
-
-
 #### SPM-PLAY-08 CommoServe stays and opens narrowed to SID files
 
 - Requirement: CommoServe MUST stay available in Add items in SID Player. Its search MUST open with the type
@@ -590,6 +638,9 @@ Status · Evidence.
   sid type", "SID Player does not offer a result without a SID file", "the Full App keeps all types".
 - Verification: unit, Playwright with the existing archive mock.
 - Status: Not started. Evidence: —
+
+### 5.7 Settings
+
 
 #### SPM-SET-01 Section visibility
 
@@ -683,7 +734,9 @@ Status · Evidence.
 
 - Requirement: `tourStepsFor(appMode)` MUST drop steps with `requiresDevice` or a hidden anchor (`disks`) in
   SID Player. `TourContext` MUST carry the app mode so "Welcome", "Build a playlist" and "Keys work too" use
-  SID Player wording ("1 to 4 open pages"). `TourDriver` MUST use the filtered list; `deviceStepsPending`
+  SID Player wording ("1 to 3 open pages"). The steps anchored on Home (`search`, `listening-without-a-c64`,
+  `your-tunes`) MUST be re-anchored in SID Player to the same components on Play (`SPM-HOME-03`) through an
+  `anchorFor(appMode)` field, not duplicated steps. `TourDriver` MUST use the filtered list; `deviceStepsPending`
   MUST stay false in SID Player.
 - Files: `src/lib/tour/steps.ts`, `src/components/tour/TourDriver.tsx`.
 - Choke point: `tourStepsFor`.
@@ -721,12 +774,15 @@ Status · Evidence.
 #### SPM-ERR-02 The badge says SID Player
 
 - Requirement: `deriveConnectivityState` MUST return a new `"SID Player"` state for `OFFLINE_NO_DEMO` while SID
-  Player is active. `UnifiedHealthBadge` MUST render it without a severity glyph, with no long-press switcher,
-  and a tap MUST open Diagnostics as it does today.
-- Files: `src/lib/diagnostics/healthModel.ts`, `UnifiedHealthBadge.tsx`.
+  Player is active. `UnifiedHealthBadge` MUST render it without a severity glyph and with no long-press
+  switcher. A tap MUST open the mode sheet, `src/components/appMode/ModeSheet.tsx`: `DeviceLessChoices` plus a
+  "Diagnostics" link. The sheet is a separate file because `UnifiedHealthBadge.tsx` is at 962 of 1000 lines.
+  The badge is the one control on every page that names the mode, so it is where a user who arrived by
+  accident looks first (D-07).
+- Files: `src/lib/diagnostics/healthModel.ts`, `UnifiedHealthBadge.tsx`, new `ModeSheet.tsx`.
 - Choke point: `deriveConnectivityState`.
 - Tests: `tests/unit/lib/diagnostics/healthModel.test.ts` — "SID Player maps offline to the SID Player state";
-  `UnifiedHealthBadge.sidPlayer.test.tsx` — "the badge reads SID Player and opens no switcher".
+  `UnifiedHealthBadge.sidPlayer.test.tsx` — "the badge reads SID Player and a tap opens the mode sheet".
 - Verification: unit, Playwright.
 - Status: Not started. Evidence: —
 
@@ -755,21 +811,21 @@ Status · Evidence.
 #### SPM-SWT-01 Entry points
 
 - Requirement: SID Player MUST be reachable from: the Settings `app-mode` section (both modes), the Quick menu
-  (`SPM-QM-01`), Home's connect card while offline in Full App, the first-run offer (`SPM-FRST-01`), and
-  Diagnostics in SID Player. Leaving MUST be reachable from the Settings `app-mode` section, the Quick menu,
-  the Home card and Diagnostics. Every entry MUST be operable with the focus ring alone, scroll into view
+  (`SPM-QM-01`), Home's connect card while offline in Full App (`SPM-HOME-04`) and the first-run offer
+  (`SPM-FRST-01`). Leaving MUST be reachable from the Settings `app-mode` section, the Quick menu, the health
+  badge sheet (`SPM-ERR-02`) and Diagnostics. Every entry MUST be operable with the focus ring alone, scroll into view
   when focused, be at least 44x44 CSS px, and use text at or above the 14/16 px floors.
 - Files: `src/pages/settings/AppModeSettingsSection.tsx` (new, placed after Appearance), consumers in
   `SPM-ARCH-06`.
 - Tests: `playwright/keypadOnlyNavigation.spec.ts` gains "SID Player can be entered and left by keypad only";
-  `playwright/smallScreenErgonomics.spec.ts` gains the SID Player Settings and Home states.
+  `playwright/smallScreenErgonomics.spec.ts` gains the SID Player Play and Settings states.
 - Verification: Playwright, handset.
 - Status: Not started. Evidence: —
 
 #### SPM-SWT-02 Transitions and confirmation
 
 - Requirement: Entering SID Player MUST show the Enter confirmation, then persist `sid-player`, settle the
-  connection (`SPM-MODE-01`) and navigate to Home if the current route becomes hidden. Leaving MUST show the
+  connection (`SPM-MODE-01`) and navigate to Play. Leaving MUST show the
   Leave confirmation; "Full App" persists `default` and runs `discoverConnection("settings")`; "Demo Mode"
   persists `demo` and pins Demo Mode. Cancel changes nothing. Back and the left soft key MUST cancel.
 - Files: `src/lib/appMode/appModeTransitions.ts`, `DeviceLessChoices.tsx`.
@@ -794,9 +850,10 @@ Status · Evidence.
 
 - Requirement: In a variant whose start-up mode is `default`, when startup discovery ends without a device and
   no saved device has ever connected (`lastSuccessfulConnectionAt` absent on all), the existing
-  `DemoModeInterstitial` MUST offer, in this order: "Use SID Player" (primary), "Continue in Demo Mode",
-  "Retry connection". The host field and Save & retry MUST stay on non-compact profiles only. The copy MUST
-  say the choice can be changed in Settings. Closing the dialog MUST keep today's decline semantics.
+  `DemoModeInterstitial` MUST offer, in this order: "Use SID Player" (primary), "Try Demo Mode", "Retry
+  connection", with the copy of `SPM-TONE-02`. The host field and Save & retry MUST stay on non-compact
+  profiles only. Closing the dialog MUST keep today's decline semantics. No question is asked before
+  discovery (D-02).
 - Rationale: The person with no device should not be led into a simulated machine they do not own.
 - Files: `src/components/DemoModeInterstitial.tsx`, `src/lib/connection/demoOfferMemory.ts` (first-run
   predicate).
@@ -896,16 +953,24 @@ Status · Evidence.
 
 #### SPM-VAR-06 Store listing metadata
 
-- Requirement: Store listing text (short and full description, feature list) SHOULD live in
-  `variants/assets/sid-player/store/` and be generic about phones.
-- Status: Deferred until publishing is decided. Evidence: —
+- Requirement (D-08): Store listing text MUST live in `variants/assets/sid-player/store/` as `title.txt`
+  ("SID Player"), `short_description.txt` ("Play Commodore 64 SID music on your phone. Free, offline, no
+  account.") and `full_description.txt` (music first; the C64 Ultimate link and ROM files are mentioned once,
+  near the end, as optional). Screenshots MUST be generated by the Playwright screenshot job for the SID
+  Player start-up at the medium profile: Play empty with Start listening, Play playing with SID Radio, the
+  full-screen player, and Settings. The APK keeps `exported_file_basename: sid-player`; the manual is
+  "SID Player Manual" in the SID Player scope (`SPM-VAR-05`). Publishing stays opt-in (`SPM-VAR-04`).
+- Tests: `tests/unit/scripts/generateVariant.test.ts` — "the SID Player variant has its store listing files";
+  `tests/unit/lib/appMode/copy.test.ts` — "store listing text names no phone and no unannounced product".
+- Verification: unit, review. Phase 5.
+- Status: Not started. Evidence: —
 
 ### 5.13 Documentation and inventory
 
 #### SPM-DOC-02 CTA inventory and reference-docs lint
 
 - Requirement: `docs/cta-inventory.md` MUST add the Settings `app-mode` section, `DeviceLessChoices` test ids,
-  Quick menu entries, the SID Player Home card, and a §3 count row and §4 notes for SID Player per page.
+  Quick menu entries, the Play listening shortcuts, the badge sheet, and a §3 count row and §4 notes for SID Player per page.
   `npm run lint:reference-docs` MUST pass without baseline additions.
 - Verification: lint, on-device scope enumeration (inventory §7).
 - Status: Not started. Evidence: —
@@ -919,7 +984,8 @@ Status · Evidence.
 #### SPM-DOC-04 Manual and screenshots
 
 - Requirement: Both existing manuals MUST gain a SID Player chapter. Screenshots MUST be added for SID Player
-  Home, Play, Settings `app-mode` and the first-run offer at the compact and medium profiles under
+  Play (empty and playing), Settings `app-mode`, the badge sheet and the first-run offer at the compact and
+  medium profiles under
   `docs/img/app/sid-player/`. No other screenshot is refreshed.
 - Status: Not started. Evidence: —
 
@@ -942,9 +1008,10 @@ Status · Evidence.
 #### SPM-TST-03 Variant start-up per APK
 
 - Requirement: The CI packaging job MUST verify each APK's application id and display name. A launch smoke
-  per variant (Maestro flow `.maestro/sid-player-launch.yaml` asserting the SID Player badge and four tabs)
-  SHOULD run where the emulator job can take the variant matrix.
-- Status: Not started (launch smoke may be Deferred). Evidence: —
+  per variant MUST run: the Maestro flow `.maestro/sid-player-launch.yaml` installs the SID Player APK on the
+  emulator the Maestro job already boots, after the default suite, and asserts the SID Player badge, three
+  tabs and the Start listening area.
+- Status: Not started. Evidence: —
 
 #### SPM-TST-04 Coverage
 
@@ -954,7 +1021,7 @@ Status · Evidence.
 
 #### SPM-TST-05 Handset validation
 
-- Requirement: On a compact keypad phone with the SID Player APK: keypad-only walk of all four tabs, enter and
+- Requirement: On a compact keypad phone with the SID Player APK: keypad-only walk of all three tabs, enter and
   leave SID Player, play HVSC and SID Radio, background and resume, and a CDP request log showing no
   device-addressed request. On a standard phone with the default APK in flight mode: first-run offer and
   switch. No Ultimate is driven by these checks.
@@ -1002,25 +1069,25 @@ per combination.
 #### SPM-ED-03 Keypad operation of SID Player in the compact keypad edition
 
 - Requirement: In the compact keypad edition SID Player MUST be fully operable from the keypad:
-  1. Digits map to visible tabs: 1 Home, 2 Play, 3 Settings, 4 Docs; 5 and 6 do nothing; 7 opens search
+  1. Digits map to visible tabs: 1 Play, 2 Settings, 3 Docs; 4 to 6 show the one-time hint; 7 opens search
      (`SPM-NAV-03`).
-  2. The right soft key (Menu) opens the Quick menu, which lists the four tabs and "Leave SID Player"
+  2. The right soft key (Menu) opens the Quick menu, which lists the three tabs and "Leave SID Player"
      (`SPM-QM-01`).
   3. The left soft key (Back) cancels the Enter and Leave confirmations and the first-run offer; at a page
      root it keeps today's behavior (`navigateBackOrLeave`: history back, else send the app to the
      background). A hidden-route redirect uses `replace`, so Back never returns to a hidden page.
-  4. Initial focus on SID Player Home is the search field; on Settings it is the first visible section. A
+  4. Initial focus on SID Player Play is the search field; on Settings it is the first visible section. A
      hidden section is never a focus target because it does not render (`SPM-HOME-02`).
   5. The keypad guidance bar labels follow the focus ring and need no change; the Enter and Leave
      confirmations MUST expose their buttons to the ring so the bar names OK and Back correctly.
-  6. The tour runs the SID Player step list (`SPM-TOUR-01`) and its key step reads "1 to 4 open pages".
+  6. The tour runs the SID Player step list (`SPM-TOUR-01`) and its key step reads "1 to 3 open pages".
   7. Every new control is at least 44x44 CSS px and every new text at least 14 px (16 px body) at the
      compact profile; nothing is shrunk to fit.
 - Files: `tabRoutes.ts`, `useFocusNavigation.tsx`, `KeypadQuickMenu.tsx`, `DeviceLessChoices.tsx`,
   `src/lib/tour/steps.ts`.
 - Choke point: the navigation, Quick menu and tour choke points in §7.
 - Tests: `playwright/keypadOnlyNavigation.spec.ts` — "SID Player can be entered and left by keypad only",
-  "SID Player digit keys open the four visible tabs"; `playwright/smallScreenErgonomics.spec.ts` — "SID
+  "SID Player digit keys open the three visible tabs"; `playwright/smallScreenErgonomics.spec.ts` — "SID
   Player screens meet the target and text floors at the compact profile"; `tests/unit/lib/navigation/navigateBack.test.ts`
   — "Back after a hidden-route redirect does not return to the hidden page".
 - Verification: Playwright at the compact profile; handset (`SPM-TST-05`).
@@ -1031,7 +1098,7 @@ per combination.
 - Requirement: Each edition's manual MUST document SID Player through the existing naming helpers in
   `scripts/build-manuals.mjs` (`appDeviceName`, `targetDeviceShortName`) and the key-label fields, never
   literal device or phone names. The compact keypad edition's chapter MUST give the keypad route (Menu key,
-  "Leave SID Player"; digits 1 to 4) using `key_labels`; the broad edition's chapter MUST give the touch route.
+  "Leave SID Player"; digits 1 to 3) using `key_labels`; the broad edition's chapter MUST give the touch route.
   A build whose start-up mode is `sid-player` uses the SID Player scope (`SPM-VAR-05`) on top of its edition.
 - Files: `scripts/build-manuals.mjs`, generated `docs/manual/**`.
 - Tests: `tests/unit/scripts/buildManuals.test.ts` — "each edition's manual has a SID Player chapter",
@@ -1054,7 +1121,7 @@ per combination.
 #### SPM-ED-06 CTA inventory per edition
 
 - Requirement: `docs/cta-inventory.md` MUST record, for SID Player, the per-page counts in §3 and the scopes in
-  §4 for Home, Play, Settings and Docs, the digit-to-tab mapping above, and the Quick menu entries, at the
+  §4 for Play, Settings and Docs, the digit-to-tab mapping above, and the Quick menu entries, at the
   compact profile. The on-device enumeration in §7 MUST be rerun in SID Player on the compact keypad phone.
 - Verification: handset enumeration; `npm run lint:reference-docs`.
 - Status: Not started. Evidence: —
@@ -1147,7 +1214,7 @@ device as today. This section applies to SID Player and to Full App whenever no 
 - Choke point: `fetchSystemRomsFromDevice`.
 - Tests: `tests/unit/lib/roms/ensureSystemRoms.test.ts` — "the automatic read fills an empty slot and keeps a
   file slot", "an explicit read replaces a file slot after confirmation".
-- Verification: unit; handset with a device in Full App (optional).
+- Verification: unit; handset against `c64u` in Full App (one automatic read after a file import).
 - Status: Not started. Evidence: —
 
 #### SPM-ROM-05 Skip before opening when the header declares a need
@@ -1198,8 +1265,8 @@ device as today. This section applies to SID Player and to Full App whenever no 
 
 - Requirement: The first skip in a session MUST show one toast: title "Skipped a tune", description "It needs
   the C64 ROMs. You can add your own copies.", action "Add ROMs". The action opens the ROM sheet
-  (`SPM-ROM-09`). Further skips in the same session MUST NOT toast. The notice MAY appear once more after the
-  ROM set changes and a skip happens again. On the keypad, the action MUST be reachable through the existing
+  (`SPM-ROM-09`). Further skips in the same session MUST NOT toast. After the ROM set changes, the next skip
+  MUST show the notice once more, because the user's last action was meant to fix it. On the keypad, the action MUST be reachable through the existing
   Quick menu entry for the newest notification action (`findNewestToastAction`). The toast MUST use the
   existing toast component and notification settings.
 - Files: `src/lib/roms/romSkips.ts`, `src/lib/input/toastAction.ts` (no change expected).
@@ -1290,8 +1357,8 @@ device as today. This section applies to SID Player and to Full App whenever no 
 - Requirement: The ROM sheet MUST open from:
   - the skip notice action (`SPM-ROM-08`);
   - the Settings ROM row (`SPM-ROM-09`), shown in SID Player and in Full App;
-  - the SID Player card on Home (`SPM-HOME-04`), as "Add C64 ROMs (optional)" until the set is complete,
-    which also covers the first launch of a SID Player start-up;
+  - the Start listening area on Play, as "Add C64 ROM files (optional)", but only after the first ROM skip of
+    the installation (D-05: ROMs are never part of the first minute);
   - the "SID Player" chapter of the in-app guide, through a button.
   The search index MUST gain an entry "C64 ROMs" that targets the Settings row.
 - Files: `ConnectC64Card.tsx`, `LocalEngineRomsRow.tsx`, `helpChapters.ts`, `search/` sources.
@@ -1338,7 +1405,7 @@ device as today. This section applies to SID Player and to Full App whenever no 
 - Requirement: Store a 4096-byte character ROM and pass it to `setSystemROMs`.
 - Rationale for deferring: no header declares a need for it, and no measured tune has been shown to need it.
   Revisit when a tune is shown to need it.
-- Status: Deferred. Evidence: —
+- Status: Deferred (out of scope: no tune is known to need it). Evidence: —
 
 #### SPM-ROM-17 Full App without a device
 
@@ -1404,7 +1471,7 @@ device as today. This section applies to SID Player and to Full App whenever no 
 
 #### SPM-ROM-20 Open with and share to the app
 
-- Requirement: On Android the app SHOULD register for `ACTION_SEND` and `ACTION_SEND_MULTIPLE` (any type) and
+- Requirement: On Android the app MUST register for `ACTION_SEND` and `ACTION_SEND_MULTIPLE` (any type) and
   for `ACTION_VIEW` of `application/zip` and `application/x-7z-compressed`. A received item MUST be offered
   to the ROM import only after the user confirms in the ROM sheet ("Add these as C64 ROMs?"). It MUST work
   in every mode and on a cold start. Non-ROM content gets "File not recognised" and nothing else happens.
@@ -1417,7 +1484,7 @@ device as today. This section applies to SID Player and to Full App whenever no 
 - Tests: Android JVM — "a shared document reaches the app as one import request", "a view intent for an
   archive on a cold start opens the ROM sheet"; unit — "a received item is imported only after confirmation".
 - Verification: Android JVM, handset.
-- Status: Not started (recommended for the second ROM phase). Evidence: —
+- Status: Not started (phase 4c). Evidence: —
 
 #### SPM-ROM-21 Emulator ROM folders
 
@@ -1438,7 +1505,7 @@ device as today. This section applies to SID Player and to Full App whenever no 
   - FTP or SMB to the user's own NAS or PC: deferred. The native FTP client exists, but no SMB client does.
     Demand is unproven next to files, archives, share and the device read.
   - Any Ultimate-family device reachable by hostname is covered by `SPM-ROM-18`.
-- Status: Deferred (FTP or SMB); cut (URL). Evidence: —
+- Status: Deferred (out of scope: FTP or SMB has unproven demand; URL is cut by D-01). Evidence: —
 
 #### SPM-ROM-23 Honest ROM-less behavior and a measured skip set
 
@@ -1454,16 +1521,19 @@ device as today. This section applies to SID Player and to Full App whenever no 
   locally, never committed) on the WASM renderer and on the native libSidplayEZ backend. It classifies each
   tune as identical, different or silent, and records the counts and the method in
   `docs/plans/sid-player-mode/rom-less-measurement.md`. If the silent group can be identified by a cheap
-  check, it SHOULD feed `romNeedFor`, so the skip set is as small as is truthful.
+  check with no false positives over HVSC, it MUST feed `romNeedFor`, so the skip set is as small as is
+  truthful. Otherwise the result is documented and `romNeedFor` stays header-only.
 - Rationale: Users must not be told ROMs are needed when they are not, and the skip notice must not be the
   only signal when a tune fails quietly.
 - Tests: the measurement is evidence; `romNeedFor` changes, if any, get unit tests with synthetic headers.
 - Verification: offline render harness (development machine), handset spot check.
 - Status: Not started. Evidence: —
 
-#### SPM-ROM-24 Freely licensed replacement ROMs (open decision)
+#### SPM-ROM-24 Freely licensed replacement ROMs
 
-- Requirement: none until decided. Open questions:
+- Decision (D-01): nothing is bundled, neither Commodore ROMs nor a replacement set. ROMs come from the user's
+  files or the user's own device, and the guide explains lawful sources (`SPM-ROM-26`). The questions that
+  would have to be answered first are recorded for a future revisit:
   1. Licence: is an open-source C64 ROM replacement project's licence compatible with this app's
      GPL-3.0-or-later licence and with app store distribution? This needs a legal check of the actual licence
      text; nothing is assumed here.
@@ -1472,15 +1542,16 @@ device as today. This section applies to SID Player and to Full App whenever no 
   3. Product: would a bundled replacement set be presented as "built-in", with real ROMs as an optional
      upgrade?
   Commodore ROMs MUST NOT be bundled under any outcome.
-- Status: Deferred (open decision; legal check needed). Evidence: —
+- Status: Deferred (out of scope by D-01: a legal check plus a timing measurement would be needed for a gain the
+  minimal KERNAL already provides for most tunes). Evidence: —
 
 #### SPM-ROM-25 Export or back up the imported ROM set
 
-- Decision: not recommended; deferred. The user already holds the original files and can import them on
+- Decision: not pursued. The user already holds the original files and can import them on
   another device in the same way. An in-app export adds a redistribution path and no convenience. Android
   backup is disabled in the manifest (`allowBackup="false"`), so images do not leave the device through
   backups.
-- Status: Deferred (not recommended). Evidence: —
+- Status: Deferred (out of scope: not pursued, a redistribution path with no convenience gain). Evidence: —
 
 #### SPM-ROM-26 Guide page: where to get ROMs
 
@@ -1503,13 +1574,13 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | Archive (zip, 7z) | user's own archive | as above | small | build now | SPM-ROM-19 |
 | One-shot read from the user's Ultimate | user's own hardware | Add ROMs → Get ROMs from my Ultimate → pick device → OK | small | build now | SPM-ROM-18 |
 | Import folder when no picker exists | user's own files | copy files, then Check the folder | medium | build now (fallback) | SPM-ROM-12 |
-| Open with / share to the app | user's own files | file manager → Share → this app → confirm | medium | second ROM phase | SPM-ROM-20 |
+| Open with / share to the app | user's own files | file manager → Share → this app → confirm | medium | build (phase 4c) | SPM-ROM-20 |
 | Emulator folder | user's own install | Choose a folder | none | covered by the folder picker | SPM-ROM-21 |
 | URL download | invites third-party links | — | small | cut | SPM-ROM-22 |
 | FTP or SMB to the user's own share | user's own files | host, path, credentials | medium to large | defer | SPM-ROM-22 |
 | Honest ROM-less statement and measured skip set | none | — | small (measurement) | build now | SPM-ROM-23 |
-| Open replacement ROM set | licence to verify | none (built in) | small to medium | open decision | SPM-ROM-24 |
-| Export or back up the set | redistribution path | — | small | defer, not recommended | SPM-ROM-25 |
+| Open replacement ROM set | licence to verify | none (built in) | small to medium | not pursued (D-01) | SPM-ROM-24 |
+| Export or back up the set | redistribution path | — | small | not pursued | SPM-ROM-25 |
 | "Where to get ROMs" guide page | names lawful sources only | Docs → SID Player | small | build now | SPM-ROM-26 |
 
 ### 5.17 Full-screen player
@@ -1699,25 +1770,157 @@ Current state that shapes it:
 - Verification: `npm run lint:reference-docs`, review, `npm run manuals:build`. Phase 6.
 - Status: Not started. Evidence: —
 
+### 5.18 First minute, tone, accessibility and privacy
+
+#### SPM-START-01 Start listening on an empty Play page
+
+- Requirement: In SID Player, while the playlist is empty, Play MUST show a "Start listening" area built from
+  the composed listen tiles (`SPM-HOME-03`) and these actions, in order:
+  1. When HVSC is not installed and the network is available: "Get the free C64 music collection" (primary),
+     which opens the existing HVSC preparation sheet (`HvscPreparationSheet`).
+  2. When HVSC is installed: "Play a station" (primary), which opens the SID Radio launcher.
+  3. "Add your own SID files", which opens Add items.
+  4. "Browse the online archive", shown only while the network is available.
+  With no network, action 1 is replaced by action 3 as the primary, with the line "The free collection needs an
+  internet connection." The area MUST NOT mention ROMs (D-05).
+- Files: the composed block of `SPM-HOME-03`.
+- Tests: `tests/unit/pages/PlayFilesPage.sidPlayer.test.tsx` — "Start listening offers the collection first
+  when it is not installed", "Start listening offers a station first once the collection is installed",
+  "offline Start listening offers own files first and says why"; `playwright/sidPlayerMode.spec.ts` — "a new
+  SID Player install reaches a playing station through Start listening".
+- Verification: unit, Playwright, handset. Phase 3.
+- Status: Not started. Evidence: —
+
+#### SPM-START-02 Collection download consent
+
+- Requirement: Before the HVSC download starts, the sheet MUST show the download size (from the release
+  metadata, or "a large download" when the size is unknown), the space it needs (`hvscStorageBudget`) and
+  "Wi-Fi recommended", with "Download" and "Not now". Nothing downloads without that press. A cancelled or
+  interrupted download leaves Play in the Start listening state, with no error toast.
+- Files: `src/pages/playFiles/components/HvscPreparationSheet.tsx`.
+- Tests: `tests/unit/pages/playFiles/HvscPreparationSheet.test.tsx` — "the download waits for consent and
+  shows its size".
+- Verification: unit, Playwright. Phase 3.
+- Status: Not started. Evidence: —
+
+#### SPM-START-03 First minute, timed
+
+- Requirement: Measured from a cold launch on a mid-range phone:
+  - SID Player variant: the Start listening area is interactive within 2 s.
+  - Default variant without a device: the first-run dialog appears within 15 s (the startup probe window plus
+    the network scan).
+  - Default variant with a reachable device: the device connects and no SID Player prompt appears.
+  The numbers are recorded with the existing startup milestones (`startupMilestones.ts`).
+- Tests: `playwright/sidPlayerMode.spec.ts` — "SID Player start-up shows Start listening without probing";
+  startup milestone record in the handset evidence.
+- Verification: Playwright, handset. Phase 7.
+- Status: Not started. Evidence: —
+
+#### SPM-TONE-01 Plain words in SID Player-only copy
+
+- Requirement: Text that appears only in SID Player (Start listening, the mode sheet, the first-run dialog, the
+  ROM sheet's primary labels, SID Player notices, the SID Player guide chapter and the SID Player manual scope)
+  MUST avoid these terms: REST, FTP, Telnet, host, IP, PAL, NTSC, dB, chip part numbers, and KERNAL or BASIC as
+  primary labels. Technical detail may follow as secondary text, for example "C64 ROM files" with a
+  secondary line "KERNAL and BASIC". Shared surfaces keep their existing words. Full App text keeps its
+  precise terms. The words are "song" and "music" in SID Player-only copy and "tune" on shared surfaces, which
+  already use it.
+- Files: SID Player-only components; `src/lib/appMode/copy.ts` holds their strings.
+- Tests: `tests/unit/lib/appMode/copy.test.ts` — "SID Player-only copy avoids the jargon list", "SID Player
+  copy is sentence case and American English".
+- Verification: unit, review. Phases 3 and 4b.
+- Status: Not started. Evidence: —
+
+#### SPM-TONE-02 First-run and mode copy
+
+- Requirement: The first-run dialog (`SPM-FRST-01`) MUST read: title "No C64 Ultimate found"; body "Use SID
+  Player to play C64 music on this phone. Is your C64 Ultimate switched on? Retry once it is. You can change
+  this later in Settings."; buttons "Use SID Player" (primary), "Try Demo Mode", "Retry connection". The compact
+  body is "Play C64 music on this phone, or retry." The mode sheet reads: title "SID Player"; body "Music on
+  this phone only. Your C64 Ultimate controls are hidden."; then the `DeviceLessChoices` buttons.
+- Files: `src/lib/appMode/copy.ts`, `DemoModeInterstitial.tsx`, `ModeSheet.tsx`.
+- Tests: `tests/unit/lib/appMode/copy.test.ts` — "the compact first-run body fits two lines at the compact
+  profile".
+- Verification: unit, Playwright compact. Phase 3.
+- Status: Not started. Evidence: —
+
+#### SPM-PLAY-09 Plain volume labels in SID Player
+
+- Requirement: In SID Player, `resolvePlaybackVolumeBinding` MUST format the local volume steps as plain levels
+  ("Off", then "1" up to the step count, with 0 dB shown as the default level). Full App keeps the dB labels.
+  The steps and gains are unchanged.
+- Files: `src/pages/playFiles/playbackVolumeBinding.ts`, `src/lib/playback/localPlaybackVolume.ts`.
+- Choke point: `resolvePlaybackVolumeBinding`.
+- Tests: `tests/unit/pages/playFiles/playbackVolumeBinding.test.ts` — "SID Player labels volume steps as
+  levels", "Full App keeps dB labels".
+- Verification: unit. Phase 4.
+- Status: Not started. Evidence: —
+
+#### SPM-A11Y-01 Text, targets and contrast
+
+- Requirement: Every SID Player surface MUST meet the existing floors at every display profile: text at least
+  14 px (16 px body), interactive targets at least 44x44 CSS px, WCAG AA contrast (4.5:1 for text, 3:1 for
+  controls and focus rings) in light and dark themes and in every app style. No SID Player surface may lower
+  a floor for density.
+- Tests: `playwright/smallScreenErgonomics.spec.ts` and `playwright/accessibility.spec.ts` gain the SID Player
+  Play (empty and playing), Settings, mode sheet, ROM sheet and full-screen states.
+- Verification: Playwright (compact, medium, expanded), handset spot check. Phase 6.
+- Status: Not started. Evidence: —
+
+#### SPM-A11Y-02 Motion
+
+- Requirement: SID Player MUST follow the existing motion budget (`runtimeMotionBudget.ts`) and
+  `prefers-reduced-motion`. No new animation is added for the mode switch or the full-screen player beyond the
+  existing tab bar transition.
+- Tests: `tests/unit/components/TabBar.test.tsx` — "full screen respects reduced motion".
+- Verification: unit, Playwright. Phase 6.
+- Status: Not started. Evidence: —
+
+#### SPM-A11Y-03 Sound safety
+
+- Requirement: No sound MUST start at launch in any mode. A restored session waits paused until the user
+  presses play. The app MUST NOT change the system media volume. The app volume of a new installation starts at
+  unity (0 dB) and is never raised by the app; a boost above unity happens only by the user's choice.
+- Tests: `tests/unit/pages/playFiles/playbackSessionPersistence.test.ts` — "a restored session waits paused";
+  `tests/unit/lib/playback/localPlaybackVolume.test.ts` — "a new installation starts at unity".
+- Verification: unit, handset. Phase 4.
+- Status: Not started. Evidence: —
+
+#### SPM-PRIV-01 No telemetry
+
+- Requirement: The app MUST contain no analytics, no remote crash reporting and no usage reporting. Diagnostics
+  leave the phone only when the user shares a report. The SID Player guide chapter and the store listing state
+  this.
+- Tests: `tests/unit/lib/appMode/noTelemetry.test.ts` — "no module sends data to an analytics or crash service"
+  (dependency and endpoint scan).
+- Verification: unit, review. Phase 6.
+- Status: Not started. Evidence: —
+
+#### SPM-PRIV-02 Local data inventory
+
+- Requirement: The guide's SID Player chapter and both manuals MUST list what the app stores and where it
+  connects, as recorded in D-10.
+- Tests: `tests/unit/lib/docs/guide/chapters.test.ts` — "the SID Player chapter lists stored data and network
+  use".
+- Verification: unit, review. Phase 6.
+- Status: Not started. Evidence: —
+
 ## 6. Inventory of surfaces and their fate in SID Player
 
 | Area | Surface (file) | Fate | Mechanism |
 | --- | --- | --- | --- |
-| Tabs | Home `/` | keep (offline arrangement) | `SPM-HOME-01` |
+| Tabs | Home `/` | hide; `/` opens Play | `SPM-NAV-01/04`, D-04 |
 | Tabs | Play `/play` | keep, adapted | `SPM-PLAY-01..03` |
 | Tabs | Disks `/disks` (`DisksPage`, `HomeDiskManager`) | hide, redirect | `SPM-NAV-01/04` |
 | Tabs | Config `/config` (`ConfigBrowserPage`) | hide, redirect | `SPM-NAV-01/04` |
 | Tabs | Settings `/settings` | keep, adapted | `SPM-SET-01..03` |
 | Tabs | Docs `/docs` | keep, adapted | `SPM-DOC-01` |
-| Home | `HomeSearchField` | keep | — |
-| Home | `DeviceStepsOffer` | hide | `SPM-HOME-02` |
-| Home | `home-promoted-actions` tiles (SID Radio, Last, Recent) | keep | — |
-| Home | Live View tile | hide | `SPM-HOME-03` |
-| Home | `ConnectC64Card` | adapt to SID Player card | `SPM-HOME-04` |
-| Home | sections `quick-actions`, `live-view`, `cpu-ram`, `ports`, `video`, `audio`, `user-interface`, `lighting`, `drives`, `printers`, `streams`, `config-actions` | hide | `SPM-HOME-02` |
-| Home | `home-offline-sections-note` | hide | `SPM-HOME-02` |
-| Home | `SystemInfo` (version only) | keep | — |
-| Home dialogs | Save RAM, snapshots, config save/load/manage, clear flash, power off, REU | unreachable (sections hidden) | `SPM-HOME-02` |
+| Home | whole page, including its sections and dialogs | hidden with the tab | D-04 |
+| Play | `HomeSearchField` | composed at the top of Play | `SPM-HOME-03` |
+| Play | listen tiles (SID Radio, resume, recent) | composed as Start listening while the playlist is empty | `SPM-HOME-03`, `SPM-START-01` |
+| Play | Live View tile | removed | `SPM-HOME-03` |
+| Full App Home | `ConnectC64Card` (offline) | adds "Use SID Player" | `SPM-HOME-04` |
+| About | version line | in Settings `about` (unchanged) | — |
 | Play | Add items: Local, HVSC, CommoServe | keep, SID-only filter | `SPM-PLAY-02` |
 | Play | Add items: C64U source | hide | `SPM-PLAY-01` |
 | Play | `PlaybackEngineToggle` | hide | `SPM-PLAY-01` |
@@ -1771,7 +1974,7 @@ Current state that shapes it:
 | Classification | `isSurfaceVisible` | `src/lib/appMode/surfaces.ts` |
 | Tabs, swipe, digits | `visibleTabIndexes` and model functions | `tabRoutes.ts`, `swipeNavigationModel.ts` |
 | Hidden routes | `HiddenRouteRedirect` | `src/App.tsx` |
-| Page sections (Home, Settings, Docs) | `CollapsibleSection` wrapper | `src/components/CollapsibleSection.tsx` |
+| Page sections (Settings, Docs; Home in Full App) | `CollapsibleSection` wrapper | `src/components/CollapsibleSection.tsx` |
 | Feature-gated controls | `buildSnapshot` with `requires_device` | `src/lib/config/featureFlags.ts` |
 | Search and promoted tiles | `isSearchEntryShown` | `surfaces.ts`, `useSearchResults.ts` |
 | Tour | `tourStepsFor` | `src/lib/tour/steps.ts` |
@@ -1803,7 +2006,7 @@ Current state that shapes it:
 | The ROM-read exception widens into general device traffic | `SPM-ROM-18` scope bound to one host, three request kinds and 60 s; negative tests for every other channel |
 | ROM bytes leaking through exports or the repository | `SPM-ROM-03` exclusions, `SPM-ROM-15` single-writer check, synthetic fixtures only |
 | A user-supplied ROM variant changes tune timing | Accepted as "unrecognised variant" with a plain warning; `SPM-ROM-23` measures behavior |
-| Licence of a replacement ROM set | `SPM-ROM-24` stays an open decision until a legal check |
+| Pressure to bundle ROMs for a smoother first minute | D-01 and D-05: nothing bundled; most tunes play without ROMs, so ROMs are never in the first minute |
 | Worker protocol change overlaps the concurrent ROM-compatibility work | Land `SPM-ROM-14` after that work merges; `localSidEngine.ts` has 15 lines of headroom |
 | Bundle budget (index at most 250 KB gzip) | Store and surface map are a few KB; `AppModeSettingsSection` and `DeviceLessChoices` load with their pages; measure with `npm run lint:bundle-budgets` |
 | Health badge contract in UX guidelines | `SPM-DOC-03`, `SPM-FS-12` |
@@ -1820,16 +2023,17 @@ Current state that shapes it:
 | --- | --- | --- | --- | --- | --- |
 | 0 | Headroom extractions, no behavior change | SPM-ARCH-05 | existing suites | unit | 0 net / 0 |
 | 1 | Store, surface map, variant field, flag `requires_device`, discovery guard, traffic gate, health label | SPM-ARCH-01..03, SPM-VAR-01..02, SPM-SET-03, SPM-MODE-01..02, SPM-NET-02..03, SPM-ERR-02, SPM-FRST-02..03 | appModeStore, surfaces, connectionManager.sidPlayer, deviceTrafficGate, featureFlags.sidPlayer, generateVariant | unit | 450 / 700 |
-| 2 | Navigation, Home, Settings, Quick menu, search, tour, guide gating | SPM-NAV-01..04, SPM-HOME-01..04, SPM-SET-01..02, SPM-QM-01, SPM-SRCH-01, SPM-TOUR-01, SPM-DOC-01, SPM-ERR-03..04 | tabRoutes, swipeNavigationModel, CollapsibleSection, HomePage.sidPlayer, KeypadQuickMenu, sidPlayerSearch, steps, chapters | unit, Playwright | 350 / 600 |
+| 2 | Navigation, Home, Settings, Quick menu, search, tour, guide gating | SPM-NAV-01..04, SPM-HOME-01..04, SPM-SET-01..02, SPM-QM-01, SPM-SRCH-01, SPM-TOUR-01, SPM-DOC-01, SPM-ERR-03..04 | tabRoutes, swipeNavigationModel, CollapsibleSection, PlayFilesPage.sidPlayer, ConnectC64Card, KeypadQuickMenu, sidPlayerSearch, steps, chapters | unit, Playwright | 350 / 600 |
 | 3 | Switch UX and first run | SPM-ARCH-06, SPM-SWT-01..03, SPM-FRST-01, SPM-MODE-04 | DeviceLessChoices, appModeTransitions, DemoModeInterstitial, keypadOnlyNavigation addition | unit, Playwright, handset | 300 / 400 |
+| 3a | First minute and tone | SPM-START-01..02, SPM-TONE-01..02 | PlayFilesPage.sidPlayer, HvscPreparationSheet, copy | unit, Playwright, handset | 150 / 200 |
 | 3b | Full-screen player | SPM-FS-01..11 | appModeStore, chromeVisibility, AppBar, TabBar, navigateBack, resolveGuidanceLabels, KeypadQuickMenu, sidPlayerFullScreen.spec | unit, Playwright (compact and medium), handset | 220 / 350 |
-| 4 | Playback and notice policy | SPM-PLAY-01..03, SPM-PLAY-06..07, SPM-ERR-01 | playbackEngineRouting, PlayFilesPage.sidPlayer, uiErrors.sidPlayer, playlistRowSubtitle | unit, Playwright, handset | 120 / 250 |
+| 4 | Playback and notice policy | SPM-PLAY-01..03, SPM-PLAY-06..09, SPM-ERR-01, SPM-A11Y-03 | playbackEngineRouting, PlayFilesPage.sidPlayer, uiErrors.sidPlayer, playlistRowSubtitle | unit, Playwright, handset | 120 / 250 |
 | 4a | ROM skip (both modes), measurement | SPM-PLAY-04, SPM-ROM-01, SPM-ROM-05..08, SPM-ROM-17, SPM-ROM-23 | localSidWorkerCore, playbackEngineRouting, usePlaybackController.romSkip, romSkips, playableWithoutDevice | unit, Playwright, handset | 180 / 300 |
 | 4b | ROM supply: files, folder, archives, device read, sheet, entry points, guide | SPM-PLAY-05, SPM-ROM-02..04, SPM-ROM-09..15, SPM-ROM-18..19, SPM-ROM-26 | classifyRomFile, importRomFiles, romStore, RomSheet, deviceTrafficGate ROM exception, FolderPickerPluginTest, sidPlayerRoms.spec | unit, Android JVM, Playwright (fake picker), handset | 650 / 700 |
 | 4c | Share target | SPM-ROM-20 | Android JVM intent tests | Android JVM, handset | 150 / 120 |
 | 5 | SID Player variant, start-up override, CI, manuals per edition | SPM-VAR-03..05, SPM-ED-02, SPM-ED-04 | generateVariant, buildManuals | unit, CI | 180 + assets / 160 |
-| 6 | Docs, inventory, screenshots, per-edition Playwright | SPM-FS-12, SPM-DOC-02..04, SPM-MODE-03, SPM-ED-01, SPM-ED-03, SPM-ED-05..06 | sidPlayerMode.spec, keypadOnlyNavigation, smallScreenErgonomics | Playwright, handset | docs + 150 test |
-| 7 | Convergence | SPM-NET-01, SPM-TST-01..05 | full suites, coverage gate | Playwright, handset | — |
+| 6 | Docs, inventory, screenshots, per-edition Playwright | SPM-A11Y-01..02, SPM-PRIV-01..02, SPM-FS-12, SPM-DOC-02..04, SPM-MODE-03, SPM-ED-01, SPM-ED-03, SPM-ED-05..06 | sidPlayerMode.spec, keypadOnlyNavigation, smallScreenErgonomics | Playwright, handset | docs + 150 test |
+| 7 | Convergence | SPM-NET-01, SPM-START-03, SPM-TST-01..05 | full suites, coverage gate | Playwright, handset | — |
 
 Playwright can prove visibility, routing, keypad operation, target and text sizes, zero requests at the mock
 server and zero toasts. Only the handset can prove keypad behavior of the real key codes, focus scrolling on the
@@ -1855,11 +2059,11 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-NAV-01 | Visible tabs | Not started | tabRoutes.test.ts, TabBar.test.tsx | — |
 | SPM-NAV-02 | Swipe skips hidden pages | Not started | swipeNavigationModel.test.ts | — |
 | SPM-NAV-03 | Keypad digit jumps follow visible tabs | Not started | tabJumpShortcut.test.ts | — |
-| SPM-NAV-04 | Hidden routes redirect to Home | Not started | AppRoutes.sidPlayer.test.tsx | — |
-| SPM-HOME-01 | Home uses the offline arrangement | Not started | useOfflineArrangement.test.ts | — |
-| SPM-HOME-02 | Device sections are hidden, not closed | Not started | CollapsibleSection.test.tsx, HomePage.sidPlayer.test.tsx | — |
-| SPM-HOME-03 | Listen tiles drop device tiles | Not started | useListenActions.test.ts | — |
-| SPM-HOME-04 | The connect card becomes the SID Player card | Not started | ConnectC64Card.test.tsx | — |
+| SPM-NAV-04 | Hidden routes redirect to Play | Not started | AppRoutes.sidPlayer.test.tsx | — |
+| SPM-HOME-01 | Home uses the offline arrangement | Deferred (superseded by D-04) | — | — |
+| SPM-HOME-02 | Sections hidden by the mode render nothing | Not started | CollapsibleSection.test.tsx | — |
+| SPM-HOME-03 | Listening shortcuts on Play | Not started | useListenActions.test.ts, PlayFilesPage.sidPlayer.test.tsx | — |
+| SPM-HOME-04 | The connect card offers SID Player in Full App | Not started | ConnectC64Card.test.tsx | — |
 | SPM-PLAY-01 | Device sources and controls are hidden | Not started | PlayFilesPage.sidPlayer.test.tsx | — |
 | SPM-PLAY-02 | Add items accepts only what the phone can play | Not started | sidPlayerAddFilter.test.ts | — |
 | SPM-PLAY-03 | Existing non-SID rows stay, marked and skipped | Not started | playlistRowSubtitle.test.ts | — |
@@ -1890,7 +2094,7 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-VAR-03 | The SID Player variant | Not started | generateVariant.test.ts | — |
 | SPM-VAR-04 | CI builds it, release stays opt-in | Not started | generateVariant.test.ts | — |
 | SPM-VAR-05 | Manual scope follows the start-up mode | Not started | buildManuals.test.ts | — |
-| SPM-VAR-06 | Store listing metadata | Deferred | — | — |
+| SPM-VAR-06 | Store listing metadata | Not started | generateVariant.test.ts, copy.test.ts | — |
 | SPM-DOC-02 | CTA inventory and reference-docs lint | Not started | lint:reference-docs | — |
 | SPM-DOC-03 | UX guideline amendment | Not started | review | — |
 | SPM-DOC-04 | Manual and screenshots | Not started | manuals:build | — |
@@ -1920,16 +2124,16 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-ROM-13 | Entry points | Not started | ConnectC64Card.test.tsx, sidPlayerSearch.test.ts | — |
 | SPM-ROM-14 | After an import | Not started | romSkips.test.ts, renderedTuneCache.test.ts, wasmRendererCore.test.ts | — |
 | SPM-ROM-15 | Sources of ROM bytes | Not started | romSources.test.ts | — |
-| SPM-ROM-16 | Character ROM support | Deferred | — | — |
+| SPM-ROM-16 | Character ROM support | Deferred (no tune needs it) | — | — |
 | SPM-ROM-17 | Full App without a device | Not started | playbackEngineRouting.test.ts, sidPlayerRoms.spec.ts | — |
 | SPM-ROM-18 | Get ROMs from my Ultimate (one-shot exception) | Not started | deviceTrafficGate.test.ts, getRomsFromDevice.test.ts | — |
 | SPM-ROM-19 | Archives | Not started | importRomFiles.test.ts | — |
 | SPM-ROM-20 | Open with and share to the app | Not started | Android JVM intent tests | — |
 | SPM-ROM-21 | Emulator ROM folders | Not started | covered by SPM-ROM-10 | — |
-| SPM-ROM-22 | User-supplied URL, FTP or network share | Deferred | — | — |
+| SPM-ROM-22 | User-supplied URL, FTP or network share | Deferred (out of scope; URL cut) | — | — |
 | SPM-ROM-23 | Honest ROM-less behavior and a measured skip set | Not started | rom-less-measurement.md | — |
-| SPM-ROM-24 | Freely licensed replacement ROMs (open decision) | Deferred | — | — |
-| SPM-ROM-25 | Export or back up the imported ROM set | Deferred | — | — |
+| SPM-ROM-24 | Freely licensed replacement ROMs | Deferred (not pursued, D-01) | — | — |
+| SPM-ROM-25 | Export or back up the imported ROM set | Deferred (not pursued) | — | — |
 | SPM-ROM-26 | Guide page: where to get ROMs | Not started | chapters.test.ts, buildManuals.test.ts | — |
 | SPM-FS-01 | Setting and persistence | Not started | appModeStore.test.ts, settingsTransfer.test.ts | — |
 | SPM-FS-02 | One chrome-visibility flag | Not started | chromeVisibility.test.ts, TabBar.test.tsx, SwipeNavigationLayer.test.tsx | — |
@@ -1943,3 +2147,14 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-FS-10 | System bars, safe area and orientation | Not started | fullScreen.test.ts, sidPlayerFullScreen.spec.ts | — |
 | SPM-FS-11 | Interaction with the tour, Demo Mode and Full App | Not started | chromeVisibility.test.ts | — |
 | SPM-FS-12 | Documented badge exception and inventory | Not started | lint:reference-docs, review | — |
+| SPM-START-01 | Start listening on an empty Play page | Not started | PlayFilesPage.sidPlayer.test.tsx, sidPlayerMode.spec.ts | — |
+| SPM-START-02 | Collection download consent | Not started | HvscPreparationSheet.test.tsx | — |
+| SPM-START-03 | First minute, timed | Not started | sidPlayerMode.spec.ts, handset milestones | — |
+| SPM-TONE-01 | Plain words in SID Player-only copy | Not started | copy.test.ts | — |
+| SPM-TONE-02 | First-run and mode copy | Not started | copy.test.ts | — |
+| SPM-PLAY-09 | Plain volume labels in SID Player | Not started | playbackVolumeBinding.test.ts | — |
+| SPM-A11Y-01 | Text, targets and contrast | Not started | smallScreenErgonomics.spec.ts, accessibility.spec.ts | — |
+| SPM-A11Y-02 | Motion | Not started | TabBar.test.tsx | — |
+| SPM-A11Y-03 | Sound safety | Not started | playbackSessionPersistence.test.ts, localPlaybackVolume.test.ts | — |
+| SPM-PRIV-01 | No telemetry | Not started | noTelemetry.test.ts | — |
+| SPM-PRIV-02 | Local data inventory | Not started | chapters.test.ts | — |
