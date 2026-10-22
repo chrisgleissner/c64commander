@@ -1011,6 +1011,12 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeEnabled());
   }, 15000);
 
+  /** Lets every promise continuation that is already resolvable run, without waiting for a time. */
+  const drainPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  const saveFinished = () =>
+    waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i })).toBeEnabled());
+
   const pendingProbe = () => {
     let answer!: (value: Record<string, unknown>) => void;
     mockEvaluateNewDeviceReachability.mockReturnValue(
@@ -1071,9 +1077,7 @@ describe("SettingsPage", () => {
       answer({ status: "reachable" });
     });
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    });
+    await saveFinished();
     expect(mockUpdateConfig).not.toHaveBeenCalled();
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
@@ -1099,15 +1103,11 @@ describe("SettingsPage", () => {
 
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
     changeField("settings-device-telnet", "65");
-    await waitFor(() => expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument(), {
-      timeout: 8000,
-    });
+    expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument();
     await act(async () => {
       answer({ status: "reachable" });
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    });
+    await saveFinished();
 
     expect(screen.getByLabelText("Network Password saved")).toBeInTheDocument();
   }, 15000);
@@ -1141,9 +1141,7 @@ describe("SettingsPage", () => {
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
     await act(async () => {
       answer({ status: "reachable" });
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await drainPromises();
     });
 
     expect(mockUpdateConfig).not.toHaveBeenCalled();
@@ -1178,9 +1176,7 @@ describe("SettingsPage", () => {
     await act(async () => {
       answer({ status: "reachable" });
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    });
+    await saveFinished();
 
     expect(vi.mocked(setPasswordForDevice)).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
