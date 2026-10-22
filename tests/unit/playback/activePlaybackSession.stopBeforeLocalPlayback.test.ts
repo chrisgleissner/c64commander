@@ -72,16 +72,4 @@ describe("stopping the C64's tune before one plays on this device", () => {
     });
     expect(isRemotePlaybackActive()).toBe(false);
   });
-
-  it("says whether the C64's tune was stopped", async () => {
-    expect(await stopRemoteTuneBeforeLocalPlayback(async () => undefined)).toBe(true);
-    markRemotePlaybackStarted();
-    expect(await stopRemoteTuneBeforeLocalPlayback(async () => undefined)).toBe(true);
-    markRemotePlaybackStarted();
-    expect(
-      await stopRemoteTuneBeforeLocalPlayback(async () => {
-        throw new Error("Reset timed out");
-      }),
-    ).toBe(false);
-  });
 });

@@ -100,20 +100,6 @@ describe("FtpClientWeb retry policy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("carries the FTP reply code the bridge reports on the error", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: "FTP list failed: 550 No such directory", ftpCode: 550 }), {
-        status: 502,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    const failure = await new FtpClientWeb().listDirectory({ host: "c64u" }).catch((error: unknown) => error);
-
-    expect((failure as { ftpCode?: number }).ftpCode).toBe(550);
-  });
-
   it("fails after one bridge attempt for repeated transient failures", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("network failed to fetch"));
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);

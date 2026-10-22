@@ -333,6 +333,32 @@ describe("createConfigListing", () => {
     },
   );
 
+  it("marks the device reachable when a lookup that started after a slower failing lookup began is answered", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [] } as never);
+    const listing = createConfigListing(source);
+    await listing.listEntries("/USB2/First");
+    let failSlow: () => void = () => undefined;
+    let answerFast: () => void = () => undefined;
+    vi.mocked(listFtpDirectory).mockImplementationOnce(
+      () => new Promise((_, reject) => (failSlow = () => reject(new Error("timed out")))),
+    );
+    vi.mocked(listFtpDirectory).mockImplementationOnce(
+      () => new Promise((resolve) => (answerFast = () => resolve({ entries: [entry] } as never))),
+    );
+    const slow = listing.listEntries("/USB2/Slow");
+    const fast = listing.listEntries("/USB2/Fast");
+
+    failSlow();
+    await expect(slow).rejects.toThrow("timed out");
+    answerFast();
+    await fast;
+
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
+    await expect(listing.listEntries("/USB2/After")).resolves.toHaveLength(1);
+    expect(listFtpDirectory).toHaveBeenCalledTimes(4);
+  });
+
   it("stops waiting for a lookup that was already sent when the add is canceled", async () => {
     const controller = new AbortController();
     vi.mocked(listFtpDirectory).mockImplementation(() => new Promise(() => undefined));

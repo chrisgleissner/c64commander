@@ -8,6 +8,7 @@
 
 import type { PluginListenerHandle } from "@capacitor/core";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { ftpReplyCodeOf } from "@/lib/ftp/ftpReply";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import {
   FtpClient,
@@ -46,8 +47,7 @@ export type FtpRecursiveListResult = FtpListResult & {
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
 
 /** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
-export const isRefusedFtpListing = (error: unknown) =>
-  /\b(450|451|550)\b/.test(error instanceof Error ? error.message : String(error));
+export const isRefusedFtpListing = (error: unknown) => [450, 451, 550].includes(ftpReplyCodeOf(error) ?? 0);
 
 export type FtpReadProgress = { bytesRead: number; totalBytes: number };
 

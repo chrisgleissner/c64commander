@@ -6,10 +6,8 @@ import Foundation
  * so the copy cannot pass while the app has drifted away.
  */
 enum HostAddressCandidates {
-    enum Failure: Error, LocalizedError {
+    enum Failure: Error {
         case noAddresses
-
-        var errorDescription: String? { "Unable to resolve host: no addresses" }
     }
 
     static func orderIpv4First(_ addresses: [String]) -> [String] {

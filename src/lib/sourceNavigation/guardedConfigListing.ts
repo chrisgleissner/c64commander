@@ -9,7 +9,7 @@
 import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
-import { classifyListingFailure } from "@/lib/sourceNavigation/connectionFailure";
+import { isDeviceAnswer } from "@/lib/sourceNavigation/connectionFailure";
 import type { SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
 
 type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekCachedEntries">;
@@ -22,14 +22,15 @@ export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up w
 /**
  * The folder listing used to look for settings files beside the files of one add.
  *
- * Looking for a settings file is optional, so once the phone knows it is offline, or one listing from the device
- * has failed to connect, the remaining folders are answered from the source's cache (or as empty) instead of
- * each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the device again, so a
- * device that was only briefly refusing is used again. Until one
- * lookup has succeeded the lookups run one at a time, so a first failure is seen before the next folder is asked;
- * after that they run together, as many as the FTP client allows. Only a lookup that started after the latest
- * failure can mark the device reachable again, and only a success or a reply from the device does. What was skipped
- * is counted so the add can say so. A cancel ends lookups at once; the request already sent finishes unobserved.
+ * Looking for a settings file is optional, so once the phone knows it is offline, or a listing from the device has
+ * failed without an answer from the device, the remaining folders are answered from the source's cache (or as
+ * empty) instead of each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the
+ * device again. Until one lookup has been answered the lookups run one at a time, so a first failure is seen before
+ * the next folder is asked; after that they run together, as many as the FTP client allows.
+ *
+ * Lookups are ordered by when they started. A failure counts only if its lookup started after the latest answered
+ * lookup started, and an answer counts only if its lookup started after the latest failed lookup started. What was
+ * skipped is counted so the add can say so. A cancel ends lookups at once; a request already sent finishes unobserved.
  */
 export const createConfigListing = (source: ListingSource, signal?: AbortSignal) => {
   let deviceUnreachable = false;
@@ -74,8 +75,7 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
       return entries;
     } catch (error) {
       if (!fromDevice || (error as Error)?.name === "AbortError") throw error;
-      const failure = classifyListingFailure(error);
-      if (failure === "deviceReply") {
+      if (isDeviceAnswer(error)) {
         answered();
       } else {
         skipped += 1;
