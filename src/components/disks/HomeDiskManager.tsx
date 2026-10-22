@@ -665,13 +665,16 @@ export const HomeDiskManager = () => {
     addItemsOverlayActiveRef.current = true;
   }, []);
 
-  const showNoDiskWarning = useCallback(() => {
-    reportUserError({
-      operation: "DISK_IMPORT",
-      title: "No disks found",
-      description: "Found no disk file.",
-    });
-  }, [reportUserError]);
+  const showNoDiskWarning = useCallback(
+    (incompleteScan = false) => {
+      reportUserError({
+        operation: "DISK_IMPORT",
+        title: incompleteScan ? "Scan incomplete" : "No disks found",
+        description: incompleteScan ? "Found no disk file. Some folders could not be scanned." : "Found no disk file.",
+      });
+    },
+    [reportUserError],
+  );
 
   const toggleSelectAll = () => {
     setSelectedDiskIds(allSelected ? new Set() : new Set(allDiskIds));
@@ -1556,7 +1559,7 @@ export const HomeDiskManager = () => {
             status: "error",
             message: partialScanFailures.length ? "No disk files found in scanned folders." : "No disk files found.",
           }));
-          showNoDiskWarning();
+          showNoDiskWarning(partialScanFailures.length > 0);
           return false;
         }
 

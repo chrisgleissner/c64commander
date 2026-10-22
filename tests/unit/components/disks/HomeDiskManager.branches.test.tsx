@@ -33,6 +33,11 @@ const dialogMockState = {
 };
 
 // ── Minimal child component stubs ──────────────────────────────────────────────
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: vi.fn(),
+}));
+
 vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({ items, headerActions }: any) => (
     <div data-testid="mock-action-list">
@@ -778,6 +783,42 @@ describe("HomeDiskManager targeted branch coverage", () => {
         }),
       );
     });
+  });
+
+  it("says the scan was incomplete when no disk was found and some folders failed", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    const { addLog } = await import("@/lib/logging");
+    const nested = [{ type: "file", path: "/games/readme.txt", name: "readme.txt" }];
+    Object.defineProperty(nested, "partialFailures", {
+      value: [{ path: "/games/bad", message: "listing failed" }],
+    });
+    dialogMockState.addItemsSource = createDialogSource({
+      listFilesRecursive: vi.fn().mockResolvedValue(nested),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "DISK_IMPORT",
+          title: "Scan incomplete",
+          description: "Found no disk file. Some folders could not be scanned.",
+        }),
+      );
+    });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Disk import completed with skipped folders",
+      expect.objectContaining({ skippedCount: 1 }),
+    );
   });
 
   it("adds disk images from scanned selections", async () => {
