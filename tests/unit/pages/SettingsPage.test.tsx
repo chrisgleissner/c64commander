@@ -20,7 +20,7 @@ import {
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
-import { reportUserError } from "@/lib/uiErrors";
+import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
@@ -469,6 +469,7 @@ const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigation
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
+  clearToastForSuccessfulOperation: vi.fn(),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -891,7 +892,15 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
-  it("raises a toast when the save is blocked, because the inline error can sit above the visible screen", async () => {
+  const expectRefusalReported = (description: string | RegExp) =>
+    expect(reportUserError).toHaveBeenCalledWith({
+      operation: "CONNECTION_SAVE_REFUSED",
+      title: "Connection not saved",
+      description: typeof description === "string" ? description : expect.stringMatching(description),
+      deviceHost: "c64u",
+    });
+
+  it("reports the unreachable host as a refusal, because the inline error can sit above the visible screen", async () => {
     mockEvaluateNewDeviceReachability.mockResolvedValue({
       status: "unreachable",
       suggestedAddress: null,
@@ -902,28 +911,70 @@ describe("SettingsPage", () => {
     fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.0.2.248" } });
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
-    await waitFor(() => {
-      expect(toast).toHaveBeenCalledWith({
-        title: "Connection not saved",
-        description: expect.stringMatching(/couldn’t reach “192\.0\.2\.248”/i),
-        variant: "destructive",
-      });
-    });
+    await waitFor(() => expectRefusalReported(/couldn’t reach “192\.0\.2\.248”/i));
   }, 15000);
 
-  it("raises a toast naming the invalid port when Save & Connect is refused", async () => {
+  it("names the suggested address in the refusal when the device was found elsewhere on the network", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: "192.0.2.167",
+      suggestedHostname: "c64u",
+    });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expectRefusalReported(/found a device at 192\.0\.2\.167/));
+  }, 15000);
+
+  it("reports a rejected password as a refusal", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({ status: "needs-password" });
+
+    renderSettingsPage();
+    fireEvent.change(screen.getByLabelText("Network Password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expectRefusalReported("Wrong password for this device."));
+  }, 15000);
+
+  it("reports the invalid port when Save & Connect is refused", async () => {
     renderSettingsPage();
     fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "70000" } });
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
-    await waitFor(() => {
-      expect(toast).toHaveBeenCalledWith({
-        title: "Connection not saved",
-        description: "FTP port must be 1 to 65535.",
-        variant: "destructive",
-      });
-    });
+    await waitFor(() => expectRefusalReported("FTP port must be 1 to 65535."));
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("reports the name error before the port error when both refuse the save", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Other", host: "other" },
+      ],
+    };
+    renderSettingsPage();
+    fireEvent.change(document.getElementById("settings-device-name") as HTMLInputElement, {
+      target: { value: "Other" },
+    });
+    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "70000" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expectRefusalReported("Device name must be unique."));
+    expect(reportUserError).not.toHaveBeenCalledWith(
+      expect.objectContaining({ description: "FTP port must be 1 to 65535." }),
+    );
+  }, 15000);
+
+  it("dismisses the refusal toast when a later save succeeds", async () => {
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+    });
+    expect(clearToastForSuccessfulOperation).toHaveBeenCalledWith("CONNECTION_SAVE_REFUSED", "c64u");
   }, 15000);
 
   // Typing 192.0.2.248 was answered with "or enter its IP address", which the user had just done.

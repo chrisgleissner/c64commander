@@ -75,6 +75,7 @@ import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { clearConnectionSaveRefusal, reportConnectionSaveRefused } from "@/pages/settings/connectionSaveRefusal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -788,9 +789,6 @@ export default function SettingsPage() {
     }
   };
 
-  const rejectConnectionSave = (description: string) =>
-    toast({ title: "Connection not saved", description, variant: "destructive" });
-
   const handleSaveConnection = trace(async function handleSaveConnection() {
     if (!selectedSavedDevice) return;
     const hostError = validateDeviceHost(deviceDraft.host);
@@ -806,7 +804,7 @@ export default function SettingsPage() {
     setConnectionFieldError(portError);
     const validationError = nextDeviceNameError ?? hostError ?? portError;
     if (validationError) {
-      rejectConnectionSave(validationError);
+      reportConnectionSaveRefused(validationError, selectedSavedDevice.host);
       return;
     }
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
@@ -856,12 +854,15 @@ export default function SettingsPage() {
         if (reachability.suggestedAddress) {
           setReachabilitySuggestion({ address: reachability.suggestedAddress });
           setHostnameError(null);
-          rejectConnectionSave(`We couldn’t reach “${nextHost}”. Use the suggested address under the host field.`);
+          reportConnectionSaveRefused(
+            `We couldn’t reach “${nextHost}”, but found a device at ${reachability.suggestedAddress}. Use that address in the host field.`,
+            selectedSavedDevice.host,
+          );
         } else {
           setReachabilitySuggestion(null);
           const unreachableMessage = `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`;
           setHostnameError(unreachableMessage);
-          rejectConnectionSave(unreachableMessage);
+          reportConnectionSaveRefused(unreachableMessage, selectedSavedDevice.host);
         }
         return;
       }
@@ -869,6 +870,7 @@ export default function SettingsPage() {
         // The just-typed password was itself rejected by the device. A wrong password
         // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
         setPasswordError("Wrong password for this device.");
+        reportConnectionSaveRefused("Wrong password for this device.", selectedSavedDevice.host);
         return;
       }
       setReachabilitySuggestion(null);
@@ -909,6 +911,7 @@ export default function SettingsPage() {
       setPasswordInput("");
       passwordInputRef.current = "";
       setPasswordEditing(!hasPassword);
+      clearConnectionSaveRefusal(selectedSavedDevice.host);
       toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
