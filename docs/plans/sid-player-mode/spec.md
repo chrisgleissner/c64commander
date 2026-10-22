@@ -1512,6 +1512,193 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | Export or back up the set | redistribution path | — | small | defer, not recommended | SPM-ROM-25 |
 | "Where to get ROMs" guide page | names lawful sources only | Docs → SID Player | small | build now | SPM-ROM-26 |
 
+### 5.17 Full-screen player
+
+A user setting that, in SID Player, shows the Play page without the app bar and the tab bar. It reuses the
+page shell and the existing chrome components through one flag, so no second layout is added.
+
+Current state that shapes it:
+- `AppBar` is rendered by each page and measures its own height (`rememberSlotAppBarHeight`).
+- `TabBar` already hides itself while an interstitial is active (`useInterstitialActive`, `translate-y-full`).
+- The page runway height subtracts `--app-tab-bar-reserved-height`, defined in `src/index.css`.
+- `KeypadGuidanceBar` reserves its own height through `--keypad-guidance-reserved-height`.
+- Toasts sit at the bottom (`toast-viewport`, `max-h-[40dvh]`).
+- System bars follow the persisted "Hide status bar" and "Hide navigation bar" settings through
+  `applyFullScreenFromSettings` (`src/lib/native/fullScreen.ts`). Live View's immersive view lives inside the
+  Remote Input sheet and does not hide app chrome, so there is no chrome-hiding code to reuse from it; the
+  reusable parts are the system-bar helper and the sheet presentation.
+
+#### SPM-FS-01 Setting and persistence
+
+- Requirement: The setting "Full-screen player", default off, MUST be stored in `appModeStore.ts` under
+  `c64u_sid_player_full_screen`. It uses the same storage helpers and announces changes on the shared
+  `c64u-app-settings-updated` event.
+  - It applies only while SID Player is active. In Full App and in Demo Mode it is ignored, and its value is
+    kept.
+  - It persists across restarts, and screen-off and resume restore the same view.
+  - It is not part of settings export or import, consistent with the mode itself (`SPM-VAR-02`).
+- Rationale: `appSettings.ts` is at 997 of 1000 lines. The SID Player store is the cohesive home for a
+  SID Player preference.
+- Files: `src/lib/appMode/appModeStore.ts`.
+- Tests: `tests/unit/lib/appMode/appModeStore.test.ts` — "full screen defaults to off", "full screen persists
+  across a reload", "full screen is ignored outside SID Player and keeps its value";
+  `tests/unit/lib/config/settingsTransfer.test.ts` — "export does not carry the full-screen setting".
+- Verification: unit. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-02 One chrome-visibility flag
+
+- Requirement: `useAppChromeVisible()` in `src/lib/appMode/chromeVisibility.ts` MUST return false only when
+  all of these hold: SID Player is active, the setting is on, the route is `/play`, and no tour is running. Its
+  consumers MUST be:
+  - `AppBar`, which renders the exit strip (`SPM-FS-03`) instead of the title, badge and menu row;
+  - `TabBar`, which hides the way it does for an interstitial and is removed from the focus ring;
+  - one `data-app-chrome="hidden"` attribute on `<html>`, set by `TabBar`, under which `src/index.css` sets
+    `--app-tab-bar-reserved-height` to `0px`;
+  - `SwipeNavigationLayer`, which disables swipe while the flag is false, so the page cannot be left by a
+    gesture the user cannot see.
+  `KeypadGuidanceBar` stays, because it tells keypad users how to leave (`SPM-FS-05`). No component may test
+  the setting directly.
+- Files: new `chromeVisibility.ts`, `src/components/AppBar.tsx`, `src/components/TabBar.tsx`, `src/index.css`,
+  `src/components/SwipeNavigationLayer.tsx`.
+- Choke point: `useAppChromeVisible`.
+- Tests: `tests/unit/lib/appMode/chromeVisibility.test.ts` — "chrome hides only on Play in SID Player with the
+  setting on", "a running tour shows chrome"; `tests/unit/components/TabBar.test.tsx` — "the tab bar leaves
+  the ring and frees its height in full screen"; `tests/unit/components/SwipeNavigationLayer.test.tsx` —
+  "swipe is off in full screen".
+- Verification: unit, Playwright. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-03 The exit control
+
+- Requirement: In full screen, `AppBar` MUST render a slim strip with one button, "Exit full screen" (icon and
+  label), at least 44x44 CSS px, aligned to the end. The strip carries the top and side safe-area insets that
+  the full app bar carried, and keeps the `rememberSlotAppBarHeight` measurement so the page lays out under
+  it. The button MUST be the first item of the page's focus ring. Pressing it turns the setting off; the
+  change is persistent, and nothing is hidden or deferred. The button MUST stay visible and hittable while
+  toasts and the guidance bar show; toasts are at the bottom, the strip at the top.
+- Files: `AppBar.tsx`.
+- Tests: `tests/unit/components/AppBar.test.tsx` — "full screen shows only the exit control", "the exit
+  control turns full screen off"; `playwright/sidPlayerFullScreen.spec.ts` — "the exit control is
+  unobstructed while three error toasts show at the compact profile".
+- Verification: unit, Playwright (compact and medium), handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-04 Back leaves full screen
+
+- Requirement: On the Play page in full screen, Back (hardware, system gesture or the left soft key) MUST turn
+  full screen off, whatever the history depth. The next Back behaves as today (`navigateBackOrLeave`). A Back
+  consumed by an open dialog or sheet is not affected. The check MUST live in `navigateBackOrLeave` as one
+  call to `consumeBackForFullScreen()`.
+- Rationale: Back is the exit every phone user tries first. Making it the guaranteed exit means nobody is
+  stuck without chrome.
+- Files: `src/lib/navigation/navigateBack.ts`, `chromeVisibility.ts`.
+- Tests: `tests/unit/lib/navigation/navigateBack.test.ts` — "Back on Play in full screen turns full screen off
+  and does not leave the app", "Back with a sheet open closes the sheet first".
+- Verification: unit, Playwright keypad, handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-05 Guidance for keypad users
+
+- Requirement: In full screen at the Play page root, `resolveGuidanceLabels` MUST label the left soft key
+  "Exit full screen". The right soft key keeps "Menu", which opens the Quick menu whose first entry is "Exit
+  full screen" (`SPM-FS-06`).
+- Files: `src/components/input/KeypadGuidanceBar.tsx` (the pure resolver's input).
+- Tests: `tests/unit/components/input/resolveGuidanceLabels.test.ts` — "full screen names Back as the exit".
+- Verification: unit, handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-06 Entry points and quick toggles
+
+- Requirement: The setting MUST be reachable from:
+  - a switch row "Full-screen player" in the Settings `app-mode` section, shown in SID Player only;
+  - a "Full screen" button on the Play page, shown in SID Player while the setting is off, at least 44 px,
+    in the playback card's control row;
+  - a Quick menu entry, "Full screen" or "Exit full screen", in SID Player only; while full screen is active it
+    is the first entry.
+  All three call one function, `setSidPlayerFullScreen(on)`.
+- Files: `src/pages/settings/AppModeSettingsSection.tsx`, `src/pages/PlayFilesPage.tsx` (one element),
+  `KeypadQuickMenu.tsx`.
+- Tests: `tests/unit/components/input/KeypadQuickMenu.test.tsx` — "full screen puts Exit full screen first";
+  `tests/unit/pages/PlayFilesPage.sidPlayer.test.tsx` — "the Full screen button shows only in SID Player with the
+  setting off".
+- Verification: unit, Playwright. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-07 First use explains the exit
+
+- Requirement: The first time the setting is turned on, a dialog MUST say "Full screen shows only the player.
+  To show the tabs again, choose Exit full screen at the top or press Back." It has one button, "OK", and
+  records `c64u_sid_player_full_screen_explained`. Back and the left soft key close it. Full screen is never on
+  without this dialog having been shown once: the default is off and no start-up mode turns it on.
+- Files: `chromeVisibility.ts`, a small dialog built on the existing `Dialog` primitives (`src/components/ui/dialog.tsx`).
+- Tests: `tests/unit/lib/appMode/chromeVisibility.test.ts` — "the first activation shows the explanation once".
+- Verification: unit, Playwright, handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-08 Navigation while full screen
+
+- Requirement: Full screen is how the Play page looks; it does not change other pages.
+  - Digit keys keep their meaning (`SPM-NAV-03`). A digit for another tab opens that page with chrome. The
+    digit for Play on Play keeps today's page reset. A digit is never ignored.
+  - Deep links and search targets elsewhere open their page with chrome.
+  - Returning to Play shows full screen again while the setting is on.
+  - A launch that restores `/play` opens in full screen.
+- Tests: `tests/unit/lib/appMode/chromeVisibility.test.ts` — "another route shows chrome with the setting on";
+  `playwright/sidPlayerFullScreen.spec.ts` — "digit 3 opens Settings with chrome and digit 2 returns to full
+  screen".
+- Verification: unit, Playwright keypad, handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-09 Sheets, dialogs and toasts
+
+- Requirement: Every sheet and dialog opened from Play must work unchanged and return to full screen when
+  closed: Add items, playlist, SID Radio launcher, liked tunes, tune details, HVSC, the ROM sheet. They are
+  portals and do not depend on chrome. Toasts keep their viewport and notification settings. Toast actions stay
+  reachable through the Quick menu. T9 entry in sheet fields is unaffected.
+- Tests: `playwright/sidPlayerFullScreen.spec.ts` — "Add items opens and returns to full screen", "SID Radio
+  launcher opens and returns to full screen".
+- Verification: Playwright (compact and medium). Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-10 System bars, safe area and orientation
+
+- Requirement: Full screen MUST NOT change the system bars. They keep following "Hide status bar" and "Hide
+  navigation bar" through `applyFullScreenFromSettings`. Safe-area insets come from the exit strip
+  (`SPM-FS-03`). Landscape works with the side insets applied.
+- Rationale for not hiding the system bars:
+  - The status bar carries the clock and battery, which matter while listening, and the existing policy keeps
+    it at every profile.
+  - Hiding the navigation bar on a touch phone removes the system Back, which is an exit.
+  - Users who want both bars hidden already have the two existing settings, which combine with this one.
+- Tests: `tests/unit/lib/native/fullScreen.test.ts` — "the full-screen player does not change system bar
+  visibility"; `playwright/sidPlayerFullScreen.spec.ts` — "landscape keeps the exit control inside the safe
+  area".
+- Verification: unit, Playwright, handset. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-11 Interaction with the tour, Demo Mode and Full App
+
+- Requirement:
+  - A running tour shows chrome (`SPM-FS-02`), because its steps point at the tab bar and the menu button.
+  - Leaving SID Player shows chrome at once and keeps the setting.
+  - Entering Demo Mode from SID Player does the same.
+  - Returning to SID Player restores full screen if the setting is on.
+- Tests: `tests/unit/lib/appMode/chromeVisibility.test.ts` — "leaving SID Player shows chrome and keeps the
+  setting".
+- Verification: unit. Phase 3b.
+- Status: Not started. Evidence: —
+
+#### SPM-FS-12 Documented badge exception and inventory
+
+- Requirement: `docs/ux-guidelines.md` MUST list the full-screen player as a user-chosen exception to the
+  health-badge rule. `docs/cta-inventory.md` MUST add the exit control, the Play page Full screen button, the
+  Settings row and the Quick menu entry, and record the Play page scope in full screen at the compact profile.
+  The manuals and the guide's SID Player chapter MUST explain how to leave full screen, with keys named through
+  the key labels.
+- Verification: `npm run lint:reference-docs`, review, `npm run manuals:build`. Phase 6.
+- Status: Not started. Evidence: —
+
 ## 6. Inventory of surfaces and their fate in SID Player
 
 | Area | Surface (file) | Fate | Mechanism |
@@ -1548,6 +1735,12 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | Settings | Demo Mode rows in `connection` | moved into `app-mode` choices in SID Player | `SPM-ARCH-06` |
 | App bar | `UnifiedHealthBadge` | adapt: "SID Player", no switcher, no probes | `SPM-ERR-02`, `SPM-NET-02` |
 | App bar | Quick menu button | keep | — |
+| App bar | Whole bar on Play with the full-screen player on | replaced by the exit strip | `SPM-FS-02/03` |
+| Tab bar | With the full-screen player on, on Play | hidden, out of the ring, height freed | `SPM-FS-02` |
+| Guidance bar | With the full-screen player on | kept; Back labelled "Exit full screen" | `SPM-FS-05` |
+| Play | "Full screen" button | new, SID Player only | `SPM-FS-06` |
+| Settings | "Full-screen player" row in `app-mode` | new, SID Player only | `SPM-FS-06` |
+| Quick menu | Full screen / Exit full screen | new, SID Player only | `SPM-FS-06` |
 | Quick menu | search, notification action, section expand/collapse/descriptions, diagnostics | keep | — |
 | Quick menu | tab jumps | visible tabs only | `SPM-QM-01` |
 | Quick menu | machine pause, reset, Game Mode, switch device, stop Live View | hide | `SPM-QM-01` |
@@ -1590,6 +1783,8 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | Toast policy | `reportUserError` | `uiErrors.ts` |
 | Health label | `deriveConnectivityState` | `healthModel.ts` |
 | Mode switching UI | `DeviceLessChoices` | `src/components/appMode/DeviceLessChoices.tsx` |
+| App chrome in the full-screen player | `useAppChromeVisible` | `src/lib/appMode/chromeVisibility.ts` |
+| Back in the full-screen player | `consumeBackForFullScreen` | `src/lib/navigation/navigateBack.ts` |
 
 ## 8. Risks
 
@@ -1611,7 +1806,10 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | Licence of a replacement ROM set | `SPM-ROM-24` stays an open decision until a legal check |
 | Worker protocol change overlaps the concurrent ROM-compatibility work | Land `SPM-ROM-14` after that work merges; `localSidEngine.ts` has 15 lines of headroom |
 | Bundle budget (index at most 250 KB gzip) | Store and surface map are a few KB; `AppModeSettingsSection` and `DeviceLessChoices` load with their pages; measure with `npm run lint:bundle-budgets` |
-| Health badge contract in UX guidelines | `SPM-DOC-03` |
+| Health badge contract in UX guidelines | `SPM-DOC-03`, `SPM-FS-12` |
+| A user stuck without chrome | Back always exits (`SPM-FS-04`), a permanent exit control (`SPM-FS-03`), a first-use explanation (`SPM-FS-07`), a running tour shows chrome, default off |
+| Exit control hidden by toasts or insets | Strip at the top with safe-area insets, toasts at the bottom; Playwright hit-test with three error toasts |
+| Hidden tab bar breaks layout measurements | Reserved height set to 0 through one root attribute; the guidance bar keeps its own reservation |
 | CTA inventory and `lint:reference-docs` | `SPM-DOC-02` in the same commits as the controls |
 | Generated variant files drift | Run `node scripts/generate-variant.mjs`; `npm run variant:check` |
 | Manual workflow lists variants literally | `SPM-VAR-04` |
@@ -1624,12 +1822,13 @@ device as today. This section applies to SID Player and to Full App whenever no 
 | 1 | Store, surface map, variant field, flag `requires_device`, discovery guard, traffic gate, health label | SPM-ARCH-01..03, SPM-VAR-01..02, SPM-SET-03, SPM-MODE-01..02, SPM-NET-02..03, SPM-ERR-02, SPM-FRST-02..03 | appModeStore, surfaces, connectionManager.sidPlayer, deviceTrafficGate, featureFlags.sidPlayer, generateVariant | unit | 450 / 700 |
 | 2 | Navigation, Home, Settings, Quick menu, search, tour, guide gating | SPM-NAV-01..04, SPM-HOME-01..04, SPM-SET-01..02, SPM-QM-01, SPM-SRCH-01, SPM-TOUR-01, SPM-DOC-01, SPM-ERR-03..04 | tabRoutes, swipeNavigationModel, CollapsibleSection, HomePage.sidPlayer, KeypadQuickMenu, sidPlayerSearch, steps, chapters | unit, Playwright | 350 / 600 |
 | 3 | Switch UX and first run | SPM-ARCH-06, SPM-SWT-01..03, SPM-FRST-01, SPM-MODE-04 | DeviceLessChoices, appModeTransitions, DemoModeInterstitial, keypadOnlyNavigation addition | unit, Playwright, handset | 300 / 400 |
+| 3b | Full-screen player | SPM-FS-01..11 | appModeStore, chromeVisibility, AppBar, TabBar, navigateBack, resolveGuidanceLabels, KeypadQuickMenu, sidPlayerFullScreen.spec | unit, Playwright (compact and medium), handset | 220 / 350 |
 | 4 | Playback and notice policy | SPM-PLAY-01..03, SPM-PLAY-06..07, SPM-ERR-01 | playbackEngineRouting, PlayFilesPage.sidPlayer, uiErrors.sidPlayer, playlistRowSubtitle | unit, Playwright, handset | 120 / 250 |
 | 4a | ROM skip (both modes), measurement | SPM-PLAY-04, SPM-ROM-01, SPM-ROM-05..08, SPM-ROM-17, SPM-ROM-23 | localSidWorkerCore, playbackEngineRouting, usePlaybackController.romSkip, romSkips, playableWithoutDevice | unit, Playwright, handset | 180 / 300 |
 | 4b | ROM supply: files, folder, archives, device read, sheet, entry points, guide | SPM-PLAY-05, SPM-ROM-02..04, SPM-ROM-09..15, SPM-ROM-18..19, SPM-ROM-26 | classifyRomFile, importRomFiles, romStore, RomSheet, deviceTrafficGate ROM exception, FolderPickerPluginTest, sidPlayerRoms.spec | unit, Android JVM, Playwright (fake picker), handset | 650 / 700 |
 | 4c | Share target | SPM-ROM-20 | Android JVM intent tests | Android JVM, handset | 150 / 120 |
 | 5 | SID Player variant, start-up override, CI, manuals per edition | SPM-VAR-03..05, SPM-ED-02, SPM-ED-04 | generateVariant, buildManuals | unit, CI | 180 + assets / 160 |
-| 6 | Docs, inventory, screenshots, per-edition Playwright | SPM-DOC-02..04, SPM-MODE-03, SPM-ED-01, SPM-ED-03, SPM-ED-05..06 | sidPlayerMode.spec, keypadOnlyNavigation, smallScreenErgonomics | Playwright, handset | docs + 150 test |
+| 6 | Docs, inventory, screenshots, per-edition Playwright | SPM-FS-12, SPM-DOC-02..04, SPM-MODE-03, SPM-ED-01, SPM-ED-03, SPM-ED-05..06 | sidPlayerMode.spec, keypadOnlyNavigation, smallScreenErgonomics | Playwright, handset | docs + 150 test |
 | 7 | Convergence | SPM-NET-01, SPM-TST-01..05 | full suites, coverage gate | Playwright, handset | — |
 
 Playwright can prove visibility, routing, keypad operation, target and text sizes, zero requests at the mock
@@ -1732,3 +1931,15 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-ROM-24 | Freely licensed replacement ROMs (open decision) | Deferred | — | — |
 | SPM-ROM-25 | Export or back up the imported ROM set | Deferred | — | — |
 | SPM-ROM-26 | Guide page: where to get ROMs | Not started | chapters.test.ts, buildManuals.test.ts | — |
+| SPM-FS-01 | Setting and persistence | Not started | appModeStore.test.ts, settingsTransfer.test.ts | — |
+| SPM-FS-02 | One chrome-visibility flag | Not started | chromeVisibility.test.ts, TabBar.test.tsx, SwipeNavigationLayer.test.tsx | — |
+| SPM-FS-03 | The exit control | Not started | AppBar.test.tsx, sidPlayerFullScreen.spec.ts | — |
+| SPM-FS-04 | Back leaves full screen | Not started | navigateBack.test.ts | — |
+| SPM-FS-05 | Guidance for keypad users | Not started | resolveGuidanceLabels.test.ts | — |
+| SPM-FS-06 | Entry points and quick toggles | Not started | KeypadQuickMenu.test.tsx, PlayFilesPage.sidPlayer.test.tsx | — |
+| SPM-FS-07 | First use explains the exit | Not started | chromeVisibility.test.ts | — |
+| SPM-FS-08 | Navigation while full screen | Not started | chromeVisibility.test.ts, sidPlayerFullScreen.spec.ts | — |
+| SPM-FS-09 | Sheets, dialogs and toasts | Not started | sidPlayerFullScreen.spec.ts | — |
+| SPM-FS-10 | System bars, safe area and orientation | Not started | fullScreen.test.ts, sidPlayerFullScreen.spec.ts | — |
+| SPM-FS-11 | Interaction with the tour, Demo Mode and Full App | Not started | chromeVisibility.test.ts | — |
+| SPM-FS-12 | Documented badge exception and inventory | Not started | lint:reference-docs, review | — |
