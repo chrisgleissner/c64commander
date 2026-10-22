@@ -1543,19 +1543,27 @@ describe("the ring's element stays on screen when a toast takes space from the p
     expect(document.activeElement).toBe(field);
   });
 
-  it("scrolls while a dialog is still in its closing animation", async () => {
-    const { scrollIntoView, moveTo } = renderWithSelectedB();
-    const closing = document.createElement("div");
-    closing.setAttribute("role", "dialog");
-    closing.setAttribute("data-state", "closed");
-    document.body.append(closing);
-    moveTo(380);
-
-    act(() => {
-      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+  describe.each([
+    ["a dialog", '<div role="dialog" data-state="closed"></div>'],
+    ["a popover", '<div data-radix-popper-content-wrapper=""><div data-state="closed"></div></div>'],
+  ])("%s in its closing animation", (_label, markup) => {
+    afterEach(() => {
+      document.querySelectorAll("[data-closing-overlay]").forEach((element) => element.remove());
     });
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
-    closing.remove();
+
+    it("no longer holds back the scroll", async () => {
+      const { scrollIntoView, moveTo } = renderWithSelectedB();
+      const closing = document.createElement("div");
+      closing.setAttribute("data-closing-overlay", "");
+      closing.innerHTML = markup;
+      document.body.append(closing);
+      moveTo(380);
+
+      act(() => {
+        window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+      });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    });
   });
 
   it("scrolls once when the reserved height changes several times within a frame", async () => {

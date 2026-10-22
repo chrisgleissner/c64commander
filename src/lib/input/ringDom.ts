@@ -242,9 +242,11 @@ const isEditedOutside = (ring: HTMLElement): boolean =>
 
 /** An overlay that is closing keeps its markup for the exit animation, and no longer counts. */
 const hasOpenOverlay = (): boolean =>
-  Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some(
-    (overlay) => overlay.getAttribute("data-state") !== "closed",
-  );
+  Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some((overlay) => {
+    const state =
+      overlay.getAttribute("data-state") ?? overlay.querySelector("[data-state]")?.getAttribute("data-state");
+    return state !== "closed";
+  });
 
 /**
  * Keeps the ring's element on screen when the space the page may use changes while the keypad is in use,
