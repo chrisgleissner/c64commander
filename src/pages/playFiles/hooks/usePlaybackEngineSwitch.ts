@@ -13,15 +13,14 @@ import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlayback
 import { addLog } from "@/lib/logging";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
-import { isLaunchOvertaken } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 type PlaybackEngineSwitchOptions = {
   selectedEngineRef: MutableRefObject<PlaybackEngine>;
   /** Counts Stop presses; a move that a Stop overtook must not start the tune again. */
   stopCountRef: MutableRefObject<number>;
-  /** Advances when a tune launch completes; a failed restart that a newer launch overtook is not reported. */
-  trackInstanceIdRef: MutableRefObject<number>;
+  /** Advances at every launch, Stop and skip; a restart that a later one overtook is dropped. */
+  playGenerationRef: MutableRefObject<number>;
   currentPlaybackIsLocalRef: MutableRefObject<boolean>;
   currentIndexRef: MutableRefObject<number>;
   playlistRef: MutableRefObject<PlaylistItem[]>;
@@ -36,7 +35,8 @@ type PlaybackEngineSwitchOptions = {
       playlistSize: number;
       origin: "auto";
       stopsAtRequest: number;
-      expectedTrackInstanceId: number;
+      expectedPlayGeneration: number;
+      onLaunchStarted: () => void;
     },
   ) => Promise<void>;
   /** Stops the tune on the C64. Reports its own failure; a tune that would not stop must not block the move. */
@@ -62,7 +62,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
     const moveTune = async (move: number, startedAt: number, stopsAtRequest: number) => {
       const current = optionsRef.current;
       const isLatest = () => move === latestMoveRef.current && current.stopCountRef.current === stopsAtRequest;
-      const decided: { restart?: { item: PlaylistItem; index: number; trackInstanceId: number } } = {};
+      const decided: { restart?: { item: PlaylistItem; index: number; playGeneration: number } } = {};
       await current.enqueuePlayTransition(async () => {
         if (!isLatest()) return;
         const index = current.currentIndexRef.current;
@@ -80,10 +80,11 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
         if (soundsHere) current.getLocalSidPlayback().stop();
         current.setCurrentPlaybackIsLocal(false);
         if (soundsOnC64) await current.stopOnC64(item);
-        decided.restart = { item, index, trackInstanceId: current.trackInstanceIdRef.current };
+        decided.restart = { item, index, playGeneration: current.playGenerationRef.current };
       });
       if (!decided.restart || !isLatest()) return;
-      const { item, index, trackInstanceId } = decided.restart;
+      const { item, index, playGeneration } = decided.restart;
+      let launchStarted = false;
       try {
         // `playItem` reads the engine setting itself, so the tune lands on the latest choice.
         await current.playItem(item, {
@@ -91,13 +92,18 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
           playlistSize: current.playlistRef.current.length,
           origin: "auto",
           stopsAtRequest,
-          expectedTrackInstanceId: trackInstanceId,
+          expectedPlayGeneration: playGeneration,
+          onLaunchStarted: () => {
+            launchStarted = true;
+          },
         });
-        // §12.6 `engineSwitchMs`: press → the tune is audible again.
-        updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
+        // §12.6 `engineSwitchMs`: press → the tune is audible again. A request that was dropped launched nothing.
+        if (launchStarted) {
+          updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
+        }
       } catch (error) {
-        if (!isLatest() || isLaunchOvertaken(current.trackInstanceIdRef.current, trackInstanceId)) {
-          addLog("warn", "A failed tune move was overtaken by a later choice or start; not reported", {
+        if (!isLatest()) {
+          addLog("warn", "A failed tune move was overtaken by a later engine choice or Stop; not reported", {
             item: item.label,
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,

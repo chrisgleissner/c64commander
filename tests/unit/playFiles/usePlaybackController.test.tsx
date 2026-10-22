@@ -1610,14 +1610,23 @@ describe("usePlaybackController", () => {
   });
 
   it("drops a launch request that a newer tune launch overtook while it waited", async () => {
-    const playlist = [createPlaylistItem()];
+    const playlist = [createPlaylistItem({ id: "tune-a" }), createPlaylistItem({ id: "tune-b" })];
     const { result } = renderPlaybackController(playlist, { currentIndex: 0 });
+    const onLaunchStarted = vi.fn();
+    const startOfWaiting = { playlistIndex: 0, expectedPlayGeneration: 0, onLaunchStarted };
 
     await act(async () => {
-      await result.current.playItem(playlist[0], { playlistIndex: 0, expectedTrackInstanceId: -1 });
+      await result.current.playItem(playlist[0], startOfWaiting);
+    });
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(onLaunchStarted).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], startOfWaiting);
     });
 
-    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(onLaunchStarted).toHaveBeenCalledTimes(1);
   });
 
   it("clears stale pause-mute bookkeeping refs when starting a new track (HARD9-063)", async () => {

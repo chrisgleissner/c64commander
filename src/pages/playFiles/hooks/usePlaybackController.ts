@@ -689,8 +689,10 @@ export function usePlaybackController({
         outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
-        /** The track instance when the request was made; a request that a later launch overtook is dropped. */
-        expectedTrackInstanceId?: number;
+        /** The play generation when the request was made; a request that a later launch or Stop overtook is dropped. */
+        expectedPlayGeneration?: number;
+        /** Called when the request got past the checks above and the launch begins. */
+        onLaunchStarted?: () => void;
       },
     ) => {
       const stopsAtRequest = options?.stopsAtRequest ?? stopCountRef.current;
@@ -700,10 +702,11 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
-        if (isLaunchOvertaken(trackInstanceIdRef.current, options?.expectedTrackInstanceId)) {
+        if (isLaunchOvertaken(playGenerationRef.current, options?.expectedPlayGeneration)) {
           addLog("info", "Playback request dropped: a newer tune launched while it waited", { itemId: item.id });
           return;
         }
+        options?.onLaunchStarted?.();
         nextTunePrefetch.cancel();
         if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
@@ -1337,6 +1340,7 @@ export function usePlaybackController({
   // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
   const reportPlaybackStartFailure = useCallback(
     (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
+      if (isHandledUiError(report.error)) return;
       if (isAbortLikeError(report.error)) {
         reportUserError({
           operation: report.operation,
@@ -1362,7 +1366,7 @@ export function usePlaybackController({
   usePlaybackEngineSwitch({
     selectedEngineRef,
     stopCountRef,
-    trackInstanceIdRef,
+    playGenerationRef,
     currentPlaybackIsLocalRef,
     currentIndexRef,
     playlistRef,
@@ -1384,8 +1388,12 @@ export function usePlaybackController({
       }
     },
     onRestartFailed: (error, item) => {
-      const report = { operation: "PLAYBACK_START", title: "Playback failed", error, context: { item: item.label } };
-      if (!isHandledUiError(error)) reportPlaybackStartFailure(report);
+      reportPlaybackStartFailure({
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
+        error,
+        context: { item: item.label },
+      });
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;
@@ -1421,16 +1429,14 @@ export function usePlaybackController({
             stopsAtRequest: stopsAtStart,
           });
         } catch (error) {
-          if (!isHandledUiError(error)) {
-            reportPlaybackStartFailure({
-              operation: "PLAYBACK_START",
-              title: "Playback failed",
-              error,
-              context: {
-                item: resolvedItems[startIndex]?.label,
-              },
-            });
-          }
+          reportPlaybackStartFailure({
+            operation: "PLAYBACK_START",
+            title: "Playback failed",
+            error,
+            context: {
+              item: resolvedItems[startIndex]?.label,
+            },
+          });
           setIsPlaying(false);
           setIsPaused(false);
           trackStartedAtRef.current = null;
@@ -1476,16 +1482,14 @@ export function usePlaybackController({
         cancelAutoAdvance();
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportPlaybackStartFailure({
-            operation: "PLAYBACK_START",
-            title: "Playback failed",
-            error,
-            context: {
-              item: playlist[targetIndex]?.label,
-            },
-          });
-        }
+        reportPlaybackStartFailure({
+          operation: "PLAYBACK_START",
+          title: "Playback failed",
+          error,
+          context: {
+            item: playlist[targetIndex]?.label,
+          },
+        });
       } finally {
         releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
@@ -1703,9 +1707,7 @@ export function usePlaybackController({
         } catch (error) {
           // A tune kept on the Ultimate cannot start while it is out of reach; a later Resume starts it then.
           noteRestartedPhoneTune(restartedItemId);
-          if (!isHandledUiError(error)) {
-            reportPlaybackStartFailure({ operation: "PLAYBACK_RESUME", title: "Resume failed", error });
-          }
+          reportPlaybackStartFailure({ operation: "PLAYBACK_RESUME", title: "Resume failed", error });
           return;
         }
         if (currentPlaybackIsLocalRef.current && resumeAtSeconds >= 1) {
@@ -1928,17 +1930,15 @@ export function usePlaybackController({
       });
       settle();
     } catch (error) {
-      if (!isHandledUiError(error)) {
-        reportPlaybackStartFailure({
-          operation: pending.operation,
-          title: pending.title,
-          error,
-          context: {
-            originIndex: pending.originIndex,
-            targetIndex: pending.targetIndex,
-          },
-        });
-      }
+      reportPlaybackStartFailure({
+        operation: pending.operation,
+        title: pending.title,
+        error,
+        context: {
+          originIndex: pending.originIndex,
+          targetIndex: pending.targetIndex,
+        },
+      });
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;
@@ -2429,6 +2429,7 @@ export function usePlaybackController({
     resolveNextIndex: (from) => resolveReachableNextIndex(playlistRef.current, from).reachableIndex,
     playItem,
     seekBy: handleSeekBy,
+    playGenerationRef,
   });
 
   return {

@@ -534,6 +534,6 @@ export const createPlaylistTraversal = (
     resolvePreviousPlaylistIndex(playlist, index, ordering.repeatEnabled, ordering.shuffleEnabled, seed, anchorId),
 });
 
-/** A request made when `expected` tune launches had completed is stale once another launch has completed. */
+/** A request made at play generation `expected` is stale once a later launch, Stop or skip has moved the generation on. */
 export const isLaunchOvertaken = (current: number, expected: number | undefined) =>
   expected !== undefined && current !== expected;

@@ -51,6 +51,7 @@ type RemotePlaybackHandoverOptions = {
   isPlayingRef: MutableRefObject<boolean>;
   isPausedRef: MutableRefObject<boolean>;
   currentPlaybackIsLocalRef: MutableRefObject<boolean>;
+  playGenerationRef: MutableRefObject<number>;
   trackStartedAtRef: MutableRefObject<number | null>;
   durationMsRef: MutableRefObject<number | undefined>;
   isPlaying: boolean;
@@ -62,7 +63,10 @@ type RemotePlaybackHandoverOptions = {
   setCurrentPlaybackIsLocal: (isLocal: boolean) => void;
   resolveHvscRuntimeRequest: (item: PlaylistItem) => Promise<{ request: PlayRequest } | null>;
   resolveNextIndex: (from: number) => number | null;
-  playItem: (item: PlaylistItem, options: { playlistIndex: number; origin: "auto" }) => Promise<void>;
+  playItem: (
+    item: PlaylistItem,
+    options: { playlistIndex: number; origin: "auto"; expectedPlayGeneration: number },
+  ) => Promise<void>;
   seekBy: (deltaSeconds: number) => Promise<void>;
 };
 
@@ -146,6 +150,7 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         return;
       }
       noteTuneHandedOver(startedAt);
+      const expectedPlayGeneration = current.playGenerationRef.current;
       addLog("info", "Playback: the C64 is out of reach; carrying on with the tune on this phone", {
         item: item.label,
         positionSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
@@ -154,7 +159,7 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
       // Silent until the seek lands, or the opening of the tune would be heard first.
       const releaseSilence = controller.holdSilence();
       try {
-        await current.playItem(item, { playlistIndex: index, origin: "auto" });
+        await current.playItem(item, { playlistIndex: index, origin: "auto", expectedPlayGeneration });
         if (!current.currentPlaybackIsLocalRef.current) return;
         await current.seekBy((Date.now() - startedAt) / 1000 - controller.positionSeconds());
       } catch (error) {

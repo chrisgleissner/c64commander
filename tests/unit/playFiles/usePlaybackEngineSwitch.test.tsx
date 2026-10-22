@@ -15,6 +15,8 @@ import {
   markRemotePlaybackStopped,
 } from "@/lib/playback/activePlaybackSession";
 import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { getSidRadioStats, updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
+import { isLaunchOvertaken } from "@/pages/playFiles/playFilesUtils";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
@@ -48,26 +50,23 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     }),
   } as unknown as LocalSidPlaybackController;
   const currentPlaybackIsLocalRef = { current: localSounding };
-  const trackInstanceIdRef = { current: 0 };
+  const playGenerationRef = { current: 0 };
   const launched: string[] = [];
-  const playItem = vi.fn((item: PlaylistItem, options?: { expectedTrackInstanceId?: number }) =>
-    enqueuePlayTransition(async () => {
-      if (
-        options?.expectedTrackInstanceId !== undefined &&
-        trackInstanceIdRef.current !== options.expectedTrackInstanceId
-      ) {
-        return;
-      }
-      launched.push(item.id);
-      trackInstanceIdRef.current += 1;
-      if (localStorage.getItem("c64u_playback_engine") === "local") {
-        localSounding = true;
-        currentPlaybackIsLocalRef.current = true;
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, C64_LAUNCH_MS));
-      markRemotePlaybackStarted();
-    }),
+  const playItem = vi.fn(
+    (item: PlaylistItem, options?: { expectedPlayGeneration?: number; onLaunchStarted?: () => void }) =>
+      enqueuePlayTransition(async () => {
+        if (isLaunchOvertaken(playGenerationRef.current, options?.expectedPlayGeneration)) return;
+        options?.onLaunchStarted?.();
+        playGenerationRef.current += 1;
+        launched.push(item.id);
+        if (localStorage.getItem("c64u_playback_engine") === "local") {
+          localSounding = true;
+          currentPlaybackIsLocalRef.current = true;
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, C64_LAUNCH_MS));
+        markRemotePlaybackStarted();
+      }),
   );
   const stopOnC64 = vi.fn(async () => {
     if (stopOnC64Ms) await new Promise((resolve) => setTimeout(resolve, stopOnC64Ms));
@@ -79,7 +78,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     usePlaybackEngineSwitch({
       selectedEngineRef: { current: initialEngine },
       stopCountRef,
-      trackInstanceIdRef,
+      playGenerationRef,
       currentPlaybackIsLocalRef,
       currentIndexRef: { current: 0 },
       playlistRef: { current: [tune] },
@@ -116,7 +115,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     stopOnC64,
     onRestartFailed,
     stopCountRef,
-    trackInstanceIdRef,
+    playGenerationRef,
     launched,
     currentPlaybackIsLocalRef,
     soundsHere: () => localSounding,
@@ -230,17 +229,34 @@ describe("usePlaybackEngineSwitch", () => {
     expect(h.onRestartFailed).not.toHaveBeenCalled();
   });
 
-  it("does not report a restart failure after a launch completed since the move began", async () => {
-    const h = harness("c64");
-    const failure = new Error("open failed");
-    h.playItem.mockImplementationOnce(async () => {
-      h.trackInstanceIdRef.current += 1;
-      throw failure;
-    });
+  it("does not restart the old tune when the tune the listener started meanwhile failed to launch", async () => {
+    const h = harness("c64", { stopOnC64Ms: 300 });
+    const launch = h.playItem.getMockImplementation()!;
     h.choose("local");
+    await h.wait(100);
+    h.playItem.mockImplementationOnce(async (item, options) => {
+      await launch(item, options);
+      throw new Error("the new tune could not open");
+    });
+    void h.playItem({ ...tune, id: "other" } as PlaylistItem).catch(() => undefined);
     await h.settle();
 
+    expect(h.launched).toEqual(["other"]);
     expect(h.onRestartFailed).not.toHaveBeenCalled();
+  });
+
+  it("records the engine switch time only when the tune was started again", async () => {
+    const h = harness("c64", { stopOnC64Ms: 300 });
+    updateSidRadioStats({ engineSwitchMs: undefined });
+    h.choose("local");
+    await h.wait(100);
+    void h.playItem({ ...tune, id: "other" } as PlaylistItem);
+    await h.settle();
+    expect(getSidRadioStats().engineSwitchMs).toBeUndefined();
+
+    h.choose("c64");
+    await h.settle();
+    expect(getSidRadioStats().engineSwitchMs).toBeGreaterThanOrEqual(0);
   });
 
   it("does not report a failed restart that a later engine choice overtook", async () => {

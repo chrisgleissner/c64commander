@@ -105,6 +105,7 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
     isPlayingRef: { current: true },
     isPausedRef: { current: false },
     currentPlaybackIsLocalRef,
+    playGenerationRef: { current: 7 },
     trackStartedAtRef: { current: startedAt },
     durationMsRef: { current: 180_000 as number | undefined },
     isPlaying: true,
@@ -218,6 +219,7 @@ describe("useRemotePlaybackHandover", () => {
           isPlayingRef: { current: true },
           isPausedRef: { current: false },
           currentPlaybackIsLocalRef: { current: false },
+          playGenerationRef: { current: 0 },
           trackStartedAtRef: { current: hookOptions(startedAt) },
           durationMsRef: { current: 180_000 },
           isPlaying: true,
@@ -249,7 +251,11 @@ describe("useRemotePlaybackHandover", () => {
     setConnection("OFFLINE_NO_DEMO");
 
     await waitFor(() => expect(seekBy).toHaveBeenCalledTimes(1));
-    expect(playItem).toHaveBeenCalledWith(expect.objectContaining({ id: "one" }), { playlistIndex: 0, origin: "auto" });
+    expect(playItem).toHaveBeenCalledWith(expect.objectContaining({ id: "one" }), {
+      playlistIndex: 0,
+      origin: "auto",
+      expectedPlayGeneration: 7,
+    });
     const [delta] = seekBy.mock.calls[0] as unknown as [number];
     expect(delta).toBeGreaterThan(41);
     expect(delta).toBeLessThan(43);
