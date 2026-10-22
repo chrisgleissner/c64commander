@@ -23,7 +23,8 @@ import { DEFAULT_ARCHIVE_SOURCE_CONFIG, resolveArchiveClientConfig } from "@/lib
 import type { ArchivePreset, ArchivePresetType, ArchiveSearchParams, ArchiveSearchResult } from "@/lib/archive/types";
 import { useOnlineArchive } from "@/hooks/useOnlineArchive";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
-import { reportUserError } from "@/lib/uiErrors";
+import type { ArchiveRequestFailure } from "@/lib/archive/client";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
 
 const EMPTY_SEARCH: ArchiveSearchParams = {
@@ -73,10 +74,14 @@ const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) 
 
 const resultKey = (result: ArchiveSearchResult) => `${result.id}:${result.category}`;
 
-const OFFLINE_PATTERN = /unable to resolve host|no address associated|network is unreachable|failed to fetch|offline/i;
-
-const describeSearchFailure = (message: string) =>
-  OFFLINE_PATTERN.test(message) ? "The search failed: no internet connection." : "The search failed.";
+const describeSearchFailure = (failure: ArchiveRequestFailure | undefined) => {
+  if (failure === "connection") {
+    return isNetworkKnownOffline()
+      ? "The search failed: no internet connection."
+      : "The search failed: the archive could not be reached.";
+  }
+  return failure === "server" ? "The search failed: the archive answered with an error." : "The search failed.";
+};
 
 export const ArchiveSelectionView = ({
   config,
@@ -97,13 +102,11 @@ export const ArchiveSelectionView = ({
 
   useEffect(() => {
     if (state.phase === "error") {
-      reportUserError({
-        operation: "ONLINE_ARCHIVE",
-        title: "Online archive failed",
-        description: state.message,
-      });
-      setSearchFailure(describeSearchFailure(state.message));
+      addLog("warn", "Online archive search failed", { failure: state.failure ?? null, message: state.message });
+      setSearchFailure(describeSearchFailure(state.failure));
       clearError();
+    } else if (state.phase === "searching") {
+      setSearchFailure(null);
     }
   }, [clearError, state]);
 
@@ -131,7 +134,6 @@ export const ArchiveSelectionView = ({
   }, [searchFinished]);
 
   const handleSearch = useCallback(async () => {
-    setSearchFailure(null);
     await search(form);
   }, [form, search]);
 

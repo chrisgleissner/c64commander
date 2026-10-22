@@ -146,6 +146,29 @@ describe("archive client", () => {
     );
   });
 
+  it("marks a request that never got an answer as a connection failure", async () => {
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: "connection",
+    });
+  });
+
+  it("marks a request that was answered with an error status as a server failure", async () => {
+    const client = createArchiveClient(
+      buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
+      async () => new Response("nope", { status: 500, statusText: "Server Error" }),
+    );
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: "server",
+    });
+  });
+
   it("rejects timed out requests", async () => {
     vi.useFakeTimers();
     const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));

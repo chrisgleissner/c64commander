@@ -18,6 +18,10 @@ vi.mock("@/hooks/useOnlineArchive", () => ({
   useOnlineArchive: vi.fn(),
 }));
 
+const { networkOffline } = vi.hoisted(() => ({ networkOffline: vi.fn(() => false) }));
+
+vi.mock("@/lib/connection/networkStatusWatch", () => ({ isNetworkKnownOffline: networkOffline }));
+
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
@@ -318,7 +322,7 @@ describe("ArchiveSelectionView", () => {
     expect(onToggleSelect).toHaveBeenCalledWith(result);
   });
 
-  it("calls reportUserError and clearError when phase is error", async () => {
+  it("shows one inline message and clears the error when phase is error, without a second toast", async () => {
     const clearError = vi.fn();
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
@@ -335,16 +339,17 @@ describe("ArchiveSelectionView", () => {
       />,
     );
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({ description: "Connection refused" }));
       expect(clearError).toHaveBeenCalledTimes(1);
     });
+    expect(screen.getByTestId("archive-search-failed")).toHaveTextContent("The search failed.");
+    expect(reportUserError).not.toHaveBeenCalled();
   });
 
   it("says the search failed and that the list is from the previous search once an error clears", () => {
     const result = makeResult();
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      state: { phase: "error", message: "Unable to resolve host", recoverableState: null },
+      state: { phase: "error", message: "failed", failure: "connection", recoverableState: null },
     } as never);
     const view = render(
       <ArchiveSelectionView
@@ -370,15 +375,15 @@ describe("ArchiveSelectionView", () => {
     );
 
     expect(screen.getByTestId("archive-search-failed")).toHaveTextContent(
-      "The search failed: no internet connection. The list below is from your previous search.",
+      "The search failed: the archive could not be reached. The list below is from your previous search.",
     );
     expect(screen.getAllByTestId("archive-result-row")).toHaveLength(1);
   });
 
-  it("clears the failure notice when a new search starts", () => {
+  it("clears the failure notice when the hook reports a new search", () => {
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      state: { phase: "error", message: "HTTP 500", recoverableState: null },
+      state: { phase: "error", message: "HTTP 500", failure: "server", recoverableState: null },
     } as never);
     const props = {
       config: defaultConfig,
@@ -390,12 +395,33 @@ describe("ArchiveSelectionView", () => {
     const view = render(<ArchiveSelectionView {...props} />);
     vi.mocked(useOnlineArchive).mockReturnValue({ ...baseReturn, state: { phase: "idle" } } as never);
     view.rerender(<ArchiveSelectionView {...props} />);
-    expect(screen.getByTestId("archive-search-failed")).toBeInTheDocument();
+    expect(screen.getByTestId("archive-search-failed")).toHaveTextContent(
+      "The search failed: the archive answered with an error.",
+    );
 
-    fireEvent.change(screen.getByPlaceholderText("Search title"), { target: { value: "jungle" } });
-    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    vi.mocked(useOnlineArchive).mockReturnValue({ ...baseReturn, state: { phase: "searching" } } as never);
+    view.rerender(<ArchiveSelectionView {...props} />);
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      state: { phase: "results", params: {}, results: [makeResult()] },
+    } as never);
+    view.rerender(<ArchiveSelectionView {...props} />);
 
+    expect(screen.getAllByTestId("archive-result-row")).toHaveLength(1);
     expect(screen.queryByTestId("archive-search-failed")).toBeNull();
+  });
+
+  it("says there is no internet connection when the phone is offline and the request never got an answer", () => {
+    networkOffline.mockReturnValue(true);
+    try {
+      renderView({}, { phase: "error", message: "failed", failure: "connection", recoverableState: null });
+
+      expect(screen.getByTestId("archive-search-failed")).toHaveTextContent(
+        "The search failed: no internet connection.",
+      );
+    } finally {
+      networkOffline.mockReturnValue(false);
+    }
   });
 
   it("does not say there are no results when the first search failed", () => {

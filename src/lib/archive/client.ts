@@ -160,6 +160,20 @@ const logArchiveFailure = (
   addErrorLog(message, buildErrorLogDetails(error, context));
 };
 
+export type ArchiveRequestFailure = "connection" | "server";
+
+/** An archive request that failed: before any answer came back (connection), or with an answer that was not usable (server). */
+export class ArchiveRequestError extends Error {
+  constructor(
+    message: string,
+    readonly failure: ArchiveRequestFailure,
+    cause: Error,
+  ) {
+    super(message, { cause });
+    this.name = "ArchiveRequestError";
+  }
+}
+
 export abstract class BaseArchiveClient implements ArchiveClient {
   private readonly resolvedConfig: ArchiveClientResolvedConfig;
   private readonly fetchImpl: ArchiveFetch;
@@ -273,6 +287,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
     const url = this.buildUrl(path);
     const headers = this.getHeaders();
     const startedAt = performance.now();
+    let answered = false;
 
     try {
       let request: RequestInit & { url: string } = {
@@ -293,6 +308,7 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         operation: kind,
       });
       const response = await this.requestWithTransport(request, REQUEST_TIMEOUT_MS[kind], "json", options?.signal);
+      answered = true;
       if (!response.ok) {
         throw new Error(`Archive request failed with ${response.status} ${response.statusText}`);
       }
@@ -319,7 +335,11 @@ export abstract class BaseArchiveClient implements ArchiveClient {
         headers: sanitizeArchiveHeadersForLogging(headers),
         timingMs: Math.round(performance.now() - startedAt),
       });
-      throw new Error(`${this.resolvedConfig.name} archive request failed for ${this.getHost()}: ${err.message}`);
+      throw new ArchiveRequestError(
+        `${this.resolvedConfig.name} archive request failed for ${this.getHost()}: ${err.message}`,
+        answered ? "server" : "connection",
+        err,
+      );
     }
   }
 

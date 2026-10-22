@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createArchiveClient } from "@/lib/archive/client";
+import { ArchiveRequestError, createArchiveClient, type ArchiveRequestFailure } from "@/lib/archive/client";
 import { executeArchiveEntry } from "@/lib/archive/execution";
 import { resolveArchiveClientConfig } from "@/lib/archive/config";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
@@ -172,7 +172,15 @@ export type OnlineArchiveState =
       entry: ArchiveEntry;
       entries: ArchiveEntry[];
     }
-  | { phase: "error"; message: string; recoverableState: Exclude<OnlineArchiveState, { phase: "error" }> | null };
+  | {
+      phase: "error";
+      message: string;
+      failure?: ArchiveRequestFailure;
+      recoverableState: Exclude<OnlineArchiveState, { phase: "error" }> | null;
+    };
+
+const toFailure = (error: unknown): ArchiveRequestFailure | undefined =>
+  error instanceof ArchiveRequestError ? error.failure : undefined;
 
 const toErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
@@ -336,6 +344,7 @@ export const useOnlineArchive = (config: ArchiveClientConfigInput) => {
         setState({
           phase: "error",
           message: toErrorMessage(error, fallbackMessage),
+          failure: toFailure(error),
           recoverableState: recoverableState ?? null,
         });
       }
