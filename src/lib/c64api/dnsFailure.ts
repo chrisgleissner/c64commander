@@ -8,22 +8,34 @@
 
 /**
  * Failures to turn a host name into an address, as each platform words them. The letters dns are matched only
- * as the word before a failure noun, never inside a host name (c64.ddns.net, dns-server.local), a path
- * (/Usb0/dns_error.prg) or a device setting (Static DNS: error 400).
+ * as the word before a resolver noun, never inside a host name (c64.ddns.net, dns-server.local), a path
+ * (/Usb0/dns_error.prg) or a device setting (Static DNS: error 400, "DNS Server": HTTP 500).
+ *
+ * A phone that has lost its network gets the same wording as one that was given a mistyped name, so every
+ * name resolution failure counts as a connectivity failure that may pass.
  */
-const DNS_WORDING =
-  /\(dns\)|(?<![\w./-])dns (?:lookup|resolution|resolve|query|server|error|failure|failed)\b|dns_probe_finished|err_name_not_resolved/i;
+const DNS_FAILURE_PATTERN = new RegExp(
+  [
+    String.raw`\(dns\)`,
+    String.raw`(?<![\w./-])dns (?:lookup|resolution|resolve|query)\b`,
+    "dns server failure",
+    "dns_probe_finished",
+    "err_name_not_resolved",
+    "temporary failure in name resolution",
+    "eai_again",
+    "name or service not known",
+    "unknownhostexception",
+    "unknown host",
+    "unable to resolve host",
+    "cannot resolve host",
+    "no such host",
+    "enotfound",
+    "ename_not_found",
+    "getaddrinfo",
+    "nodename nor servname",
+    "server with the specified hostname could not be found",
+  ].join("|"),
+  "i",
+);
 
-/** The resolver said it could not answer now, so asking again may work. */
-const TEMPORARY_RESOLVER_FAILURE = /eai_again|temporary failure in name resolution/i;
-
-/** The resolver answered that the name does not exist or cannot be resolved here. */
-const NAME_NOT_FOUND =
-  /name or service not known|unknownhostexception|unknown host|unable to resolve host|cannot resolve|no such host|enotfound|ename_not_found|getaddrinfo|nodename nor servname|server with the specified hostname could not be found/i;
-
-export const isDnsFailureMessage = (message: string): boolean =>
-  DNS_WORDING.test(message) || TEMPORARY_RESOLVER_FAILURE.test(message) || NAME_NOT_FOUND.test(message);
-
-/** Failures that justify a retry and count as a connectivity problem; a name that does not exist does not. */
-export const isTransientDnsFailureMessage = (message: string): boolean =>
-  DNS_WORDING.test(message) || TEMPORARY_RESOLVER_FAILURE.test(message);
+export const isDnsFailureMessage = (message: string): boolean => DNS_FAILURE_PATTERN.test(message);

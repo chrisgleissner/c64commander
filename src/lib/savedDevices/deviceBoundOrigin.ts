@@ -48,7 +48,7 @@ const normalizeOriginPath = (value: string) => {
 const ORIGIN_CONNECTIVITY_FAILURE_PATTERN =
   /host unreachable|service unavailable|http 503|failed to fetch|request timed out|networkerror|timed out|connection reset|econnreset|econnrefused|connection refused/i;
 
-const isOriginConnectivityFailure = (message: string) =>
+export const isOriginConnectivityFailure = (message: string) =>
   isDnsFailureMessage(message) || ORIGIN_CONNECTIVITY_FAILURE_PATTERN.test(message);
 
 const ORIGIN_FILE_MISSING_PATTERN = /550|not found|no such file/i;
