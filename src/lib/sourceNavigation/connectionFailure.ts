@@ -31,11 +31,31 @@ export class UnreadableFolderError extends Error {
   }
 }
 
-/** A three-digit reply code that is not part of a path, a longer word or a duration. */
-const replyCode = (code: string) => new RegExp(`(?<![\\w/.-])${code}(?![\\w/.-]|\\s*ms\\b)`);
-const FTP_421 = replyCode("421");
-const BRIDGE_UNAVAILABLE = /ftp bridge error: http 50[234]/i;
-const FTP_REPLY_REFUSING = replyCode("[45]\\d\\d");
+/**
+ * Where an FTP client puts the reply code it received. A number elsewhere in a message is a path, a port, an
+ * address or a duration and says nothing about the device.
+ */
+const REPLY_CODE_POSITIONS = [
+  /^(?:FTP [a-z ]+ failed: )?(\d{3})(?:[ -]|$)/i,
+  /FTP command failed \((\d{3})\)/i,
+  /FTP response (\d{3}) received/i,
+  / refused \((\d{3})\)/i,
+  /\((\d{3})\)\.?$/,
+];
+
+const BRIDGE_HTTP_ERROR = /^FTP bridge error: HTTP \d+/i;
+
+const replyCodeOf = (error: unknown, message: string): number | undefined => {
+  const fields = error as { ftpCode?: unknown; code?: unknown } | null;
+  if (typeof fields?.ftpCode === "number") return fields.ftpCode;
+  const nativeCode = typeof fields?.code === "string" ? /^FTP_REPLY_(\d{3})$/.exec(fields.code) : null;
+  if (nativeCode) return Number(nativeCode[1]);
+  for (const position of REPLY_CODE_POSITIONS) {
+    const found = position.exec(message);
+    if (found) return Number(found[1]);
+  }
+  return undefined;
+};
 
 const LOST_CONNECTION_PATTERN = new RegExp(
   [
@@ -63,9 +83,13 @@ const kindOf = (error: unknown) => (error as { kind?: unknown } | null)?.kind;
 
 export const classifyListingFailure = (error: unknown): ListingFailureKind => {
   if (kindOf(error) === UNREADABLE_FOLDER_KIND) return "deviceReply";
+  const cause = (error as { cause?: unknown } | null)?.cause;
+  if (cause !== undefined && cause !== null) return classifyListingFailure(cause);
   const message = error instanceof Error ? error.message : String(error);
-  if (FTP_421.test(message) || BRIDGE_UNAVAILABLE.test(message)) return "lost";
-  if (FTP_REPLY_REFUSING.test(message)) return "deviceReply";
+  if (BRIDGE_HTTP_ERROR.test(message)) return "lost";
+  const code = replyCodeOf(error, message);
+  if (code === 421) return "lost";
+  if (code !== undefined && code >= 400 && code <= 599) return "deviceReply";
   if (isDnsFailureMessage(message)) return "nameFailure";
   if (LOST_CONNECTION_PATTERN.test(message) || isTransientConnectivityFailure(message)) return "lost";
   return "unknown";

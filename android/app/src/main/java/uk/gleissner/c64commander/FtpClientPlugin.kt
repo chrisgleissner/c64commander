@@ -251,7 +251,11 @@ class FtpClientPlugin : Plugin() {
                           traceFields(call),
                   )
                 }
-                call.reject(message, error)
+                if (error is FtpListRefusedException) {
+                  call.reject(message, "FTP_REPLY_${error.code}", error)
+                } else {
+                  call.reject(message, error)
+                }
               } finally {
                 try {
                   if (client.isConnected) client.disconnect()

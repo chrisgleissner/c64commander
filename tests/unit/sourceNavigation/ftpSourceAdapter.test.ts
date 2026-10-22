@@ -421,7 +421,7 @@ describe("ftpSourceAdapter", () => {
 
   describe("TypeScript walk: consecutive lost folders", () => {
     const dir = (name: string) => ({ type: "dir", name, path: `/${name}`, size: 0, modifiedAt: "now" });
-    const walkWith = async (outcomes: Record<string, "lost" | "reply" | "empty">) => {
+    const walkWith = async (outcomes: Record<string, "lost" | "reply" | "empty" | "unknown" | "noname">) => {
       listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
         if (path === "/") return { entries: Object.keys(outcomes).map(dir) };
         const name = path.slice(1);
@@ -429,6 +429,8 @@ describe("ftpSourceAdapter", () => {
         await new Promise((resolve) => setTimeout(resolve, 15 * (Object.keys(outcomes).indexOf(name) + 1)));
         if (outcome === "lost") throw new Error("FTP list failed: Timeout (data socket)");
         if (outcome === "reply") throw new Error("FTP list failed: 550 No such directory");
+        if (outcome === "unknown") throw new Error("Something unexpected happened");
+        if (outcome === "noname") throw new Error("FTP list failed: getaddrinfo ENOTFOUND u64");
         return { entries: [] };
       });
       return createUltimateSourceLocation().listFilesRecursive("/");
@@ -444,6 +446,16 @@ describe("ftpSourceAdapter", () => {
     it("counts again from zero after a folder that listed", async () => {
       const results = await walkWith({ a: "lost", b: "empty", c: "lost" });
       expect(stopped(results)).toBe(false);
+    });
+
+    it("does not count a folder that failed in an unrecognized way as an answer from the device", async () => {
+      const results = await walkWith({ a: "lost", b: "unknown", c: "lost" });
+      expect(stopped(results)).toBe(true);
+    });
+
+    it("ends the walk at the first folder whose name does not resolve", async () => {
+      const results = await walkWith({ a: "noname", b: "empty", c: "empty" });
+      expect(stopped(results)).toBe(true);
     });
 
     it("ends after two lost folders that finish one after the other (count follows completion order)", async () => {
@@ -710,6 +722,23 @@ describe("ftpSourceAdapter", () => {
     await source.listEntries("/");
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
   });
+
+  it.each(["/USB0//Games", "/USB0/Games/", "/USB0//Games//"])(
+    "clearCacheForPath %s clears the entries cached for /USB0/Games and those below it",
+    async (refreshed) => {
+      listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+      const source = createUltimateSourceLocation();
+      await source.listEntries("/USB0/Games");
+      await source.listEntries("/USB0/Games/Arcade");
+      listFtpDirectoryMock.mockClear();
+
+      source.clearCacheForPath(refreshed);
+      await source.listEntries("/USB0/Games");
+      await source.listEntries("/USB0/Games/Arcade");
+
+      expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("evicts oldest cache entries when exceeding limit", async () => {
     // Fill cache beyond MAX_CACHE_ENTRIES (200)

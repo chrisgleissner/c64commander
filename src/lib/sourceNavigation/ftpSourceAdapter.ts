@@ -402,6 +402,6 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   clearCacheForPath: (path) => {
     const { deviceHost: rawHost } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
-    clearCachedEntriesUnderPrefix(host, getStoredFtpPort(), path || "/");
+    clearCachedEntriesUnderPrefix(host, getStoredFtpPort(), listingFolderPath(path || "/"));
   },
 });

@@ -503,6 +503,7 @@ export const HomeDiskManager = () => {
           configCandidates: resolved.configCandidates,
         };
       } catch (error) {
+        if ((error as { name?: string } | null)?.name === "AbortError") throw error;
         addErrorLog("Disk playback config discovery failed", {
           sourceType: source.type,
           sourceId: source.type === "local" ? source.id : null,

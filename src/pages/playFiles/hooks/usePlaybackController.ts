@@ -913,15 +913,17 @@ export function usePlaybackController({
         }
         const api = getC64API();
         const c64PlaysCurrentTune = !currentPlaybackIsLocalRef.current && !isLocalPlaybackActive();
+        let c64TuneStillPlaying = false;
         if (routeToLocal && c64PlaysCurrentTune && !isDeviceOutOfReach()) {
           // Out of reach, the tune left on the C64 is stopped when it returns (see remoteTuneHandover).
-          await stopRemoteTuneBeforeLocalPlayback(async () => {
+          const stopped = await stopRemoteTuneBeforeLocalPlayback(async () => {
             if (isPausedRef.current) await resumeMachineWithRetry(api);
             await stopMachineWithGracePeriod(api, false);
             // As Stop does: a paused tune muted the C64, and nothing on this path would unmute it.
             writeMachineExecutionFromPlay("running");
             await restoreVolumeOverrides("stop");
           });
+          c64TuneStillPlaying = !stopped;
         }
         if (!routeToLocal) {
           try {
@@ -962,7 +964,7 @@ export function usePlaybackController({
           }
         }
         // Cleared by the first step that silences a tune; a launch failing before that leaves it sounding and on record.
-        setSoundingTune(null);
+        if (!c64TuneStillPlaying) setSoundingTune(null);
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"

@@ -309,7 +309,12 @@ class FtpClientPluginTest {
     ShadowLog.clear()
     plugin.listDirectory(call)
 
-    verify(call).reject(eq("FTP LIST /SD/SD refused (451): 451 Requested action aborted"), any(Exception::class.java))
+    verify(call)
+            .reject(
+                    eq("FTP LIST /SD/SD refused (451): 451 Requested action aborted"),
+                    eq("FTP_REPLY_451"),
+                    any(Exception::class.java)
+            )
     return ShadowLog.getLogsForTag("FtpClientPlugin")
   }
 

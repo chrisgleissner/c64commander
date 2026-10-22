@@ -27,6 +27,12 @@ const lost = [
   "FTP command failed (421)",
   "FTP response 421 received.  Server closed connection.",
   "FTP bridge error: HTTP 502",
+  "FTP bridge error: HTTP 500",
+  "FTP bridge error: HTTP 404",
+  "FTP bridge error: HTTP 401",
+  "FTP bridge error: HTTP 429",
+  "FTP list failed: connect ETIMEDOUT 1.2.3.4:550",
+  "FTP list failed: connect ECONNREFUSED ::1:450",
   "FTP stream read failed",
   "FTP data read failed",
   "Device circuit open",
@@ -47,6 +53,7 @@ const nameFailure = [
   "dial tcp: lookup c64u: no such host",
   "nodename nor servname provided, or not known",
   "Cannot resolve host c64u",
+  "Unable to resolve host: no addresses",
   "Host unreachable (DNS)",
   "getaddrinfo EAI_AGAIN c64u",
 ];
@@ -58,6 +65,9 @@ const deviceReply = [
   "FTP LIST /USB0/Demos/Timeout refused (450): busy",
   "451 Requested action aborted",
   "550 /Usb0/dns_error.prg: not found",
+  "FTP LIST /Usb0/Demos 421 refused (550): no such folder",
+  Object.assign(new Error("anything at all"), { ftpCode: 550 }),
+  Object.assign(new Error("anything at all"), { code: "FTP_REPLY_451" }),
   new UnreadableFolderError("/USB0/My Timeout Folder"),
   new UnreadableFolderError("/"),
 ];
@@ -65,18 +75,33 @@ const deviceReply = [
 const unknown = [
   "Something unexpected happened",
   "Cannot read properties of undefined (reading 'entries')",
+  "FTP listDirectory failed after 450 ms",
   "No entries in /USB0/421/Demos",
+  new Error("Could not check whether /USB0/Timeouts can be read: FTP login failed", {
+    cause: new Error("FTP login failed"),
+  }),
   "No entries in /USB0/550/Demos",
 ];
 
+const lostWithCause = [
+  new Error("Could not check whether /USB0/Top 450 Games can be read: Timeout (control socket)", {
+    cause: new Error("FTP list failed: Timeout (control socket)"),
+  }),
+  Object.assign(new Error("anything at all"), { code: "FTP_REPLY_421" }),
+];
+
 const table: Array<[ListingFailureKind, unknown]> = [
+  ...lostWithCause.map((error): [ListingFailureKind, unknown] => ["lost", error]),
   ...lost.map((message): [ListingFailureKind, unknown] => ["lost", new Error(message)]),
   ...nameFailure.map((message): [ListingFailureKind, unknown] => ["nameFailure", new Error(message)]),
   ...deviceReply.map((entry): [ListingFailureKind, unknown] => [
     "deviceReply",
     typeof entry === "string" ? new Error(entry) : entry,
   ]),
-  ...unknown.map((message): [ListingFailureKind, unknown] => ["unknown", new Error(message)]),
+  ...unknown.map((entry): [ListingFailureKind, unknown] => [
+    "unknown",
+    typeof entry === "string" ? new Error(entry) : entry,
+  ]),
 ];
 
 describe("classifyListingFailure", () => {

@@ -504,8 +504,11 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
       path: payload.path ?? "/",
       ...errorDetails(error),
     });
-    // The FTP reply code tells the app a folder the device could not open from a lost connection.
-    writeJson(res, 502, { error: `FTP list failed: ${error instanceof Error ? error.message : String(error)}` });
+    const code = (error as { code?: unknown }).code;
+    writeJson(res, 502, {
+      error: `FTP list failed: ${error instanceof Error ? error.message : String(error)}`,
+      ...(typeof code === "number" ? { ftpCode: code } : {}),
+    });
   } finally {
     try {
       ftp.close();

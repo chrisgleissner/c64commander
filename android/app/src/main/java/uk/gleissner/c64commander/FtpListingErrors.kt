@@ -72,5 +72,5 @@ internal class WalkFailureTracker(private val timeoutMessagePattern: Regex) {
 /** The NLST fallback failed; carries the cause so the folder can be reported as skipped. */
 internal class NameListingFailedException(cause: Exception) : Exception(cause.message, cause)
 
-class FtpListRefusedException(path: String, code: Int, reply: String) :
+class FtpListRefusedException(path: String, val code: Int, reply: String) :
         java.io.IOException("FTP LIST $path refused ($code): $reply")

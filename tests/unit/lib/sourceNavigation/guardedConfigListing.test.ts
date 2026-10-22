@@ -353,4 +353,44 @@ describe("createConfigListing", () => {
     expect(source.peekCachedEntries?.("/USB2//Games//")).toHaveLength(1);
     expect(listFtpDirectory).not.toHaveBeenCalled();
   });
+
+  it("keeps the device marked unreachable when a reply from a lookup that started before the failure arrives afterwards", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [] } as never);
+    const listing = createConfigListing(source);
+    await listing.listEntries("/USB2/First");
+    let replyLate: () => void = () => undefined;
+    vi.mocked(listFtpDirectory).mockImplementationOnce(
+      () => new Promise((_, reject) => (replyLate = () => reject(new Error("550 No such directory")))),
+    );
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("timed out"));
+    const late = listing.listEntries("/USB2/Late");
+    await expect(listing.listEntries("/USB2/Down")).rejects.toThrow("timed out");
+
+    replyLate();
+    await expect(late).rejects.toThrow("550");
+
+    await expect(listing.listEntries("/USB2/After")).resolves.toEqual([]);
+  });
+
+  it("does not mark the device unreachable again for a failure from a lookup that started before the last success", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [] } as never);
+    const listing = createConfigListing(source);
+    await listing.listEntries("/USB2/First");
+    let failLate: () => void = () => undefined;
+    vi.mocked(listFtpDirectory).mockImplementationOnce(
+      () => new Promise((_, reject) => (failLate = () => reject(new Error("timed out")))),
+    );
+    const late = listing.listEntries("/USB2/Late");
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
+    await listing.listEntries("/USB2/Fresh");
+
+    failLate();
+    await expect(late).rejects.toThrow("timed out");
+
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
+    await expect(listing.listEntries("/USB2/After")).resolves.toHaveLength(1);
+    expect(listFtpDirectory).toHaveBeenCalledTimes(4);
+  });
 });

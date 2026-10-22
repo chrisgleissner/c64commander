@@ -1154,8 +1154,10 @@ final class FtpSession {
  * `ios/native-tests` holds a byte-identical copy of this enum and tests it.
  */
 enum HostAddressCandidates {
-    enum Failure: Error {
+    enum Failure: Error, LocalizedError {
         case noAddresses
+
+        var errorDescription: String? { "Unable to resolve host: no addresses" }
     }
 
     static func orderIpv4First(_ addresses: [String]) -> [String] {

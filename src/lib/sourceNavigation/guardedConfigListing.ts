@@ -35,7 +35,9 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
   let deviceUnreachable = false;
   let nameNotFound = false;
   let deviceAnswered = false;
-  let failures = 0;
+  let lookupsStarted = 0;
+  let lastFailureStart = 0;
+  let lastSuccessStart = 0;
   let skipped = 0;
   let sinceLastProbe = 0;
   let noticeLogged = false;
@@ -59,9 +61,10 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
       return source.peekCachedEntries?.(path) ?? [];
     }
     if (probing) sinceLastProbe = 0;
-    const startedAfterLastFailure = failures;
+    const started = (lookupsStarted += 1);
     const answered = () => {
-      if (failures !== startedAfterLastFailure) return;
+      if (started < lastFailureStart) return;
+      lastSuccessStart = Math.max(lastSuccessStart, started);
       deviceUnreachable = false;
       nameNotFound = false;
       deviceAnswered = true;
@@ -77,11 +80,13 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
       if (failure === "deviceReply") {
         answered();
       } else {
-        failures += 1;
-        deviceUnreachable = true;
-        deviceAnswered = false;
-        nameNotFound = failure === "nameFailure" && !isTemporaryNameFailure(error);
         skipped += 1;
+        if (started > lastSuccessStart) {
+          lastFailureStart = Math.max(lastFailureStart, started);
+          deviceUnreachable = true;
+          deviceAnswered = false;
+          nameNotFound = failure === "nameFailure" && !isTemporaryNameFailure(error);
+        }
       }
       throw error;
     }

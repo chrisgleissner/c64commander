@@ -4279,6 +4279,31 @@ describe("usePlaybackController", () => {
       expect(isRemotePlaybackActive()).toBe(false);
     });
 
+    it("keeps the C64's tune on record while a tune for this device starts after the C64 could not be stopped", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const machineReset = vi.fn().mockRejectedValue(new Error("C64 not answering"));
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      const playlist = [sidItem(rsid, 1, "rsid-1"), sidItem(psid, 1, "psid-1")];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect(soundingTuneNow()?.id).toBe("rsid-1");
+      markRemotePlaybackStarted();
+      controller.play.mockImplementation(() => new Promise(() => undefined));
+
+      act(() => {
+        void result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
+      await act(async () => {
+        for (let tick = 0; tick < 30; tick += 1) await Promise.resolve();
+      });
+
+      expect(machineReset).toHaveBeenCalled();
+      expect(soundingTuneNow()?.id).toBe("rsid-1");
+    });
+
     it("restores the C64's volume after stopping its tune for one that plays on this device", async () => {
       enableLocal();
       const controller = fakeController();

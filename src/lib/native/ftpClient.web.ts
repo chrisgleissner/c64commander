@@ -90,8 +90,9 @@ export class FtpClientWeb implements FtpClientPlugin {
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
         const message = errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
-        const error = new Error(message) as Error & { status?: number };
+        const error = new Error(message) as Error & { status?: number; ftpCode?: number };
         error.status = response.status;
+        if (typeof errorPayload?.ftpCode === "number") error.ftpCode = errorPayload.ftpCode;
         if (isRetryableFtpBridgeFailure(error, response.status)) {
           throw error;
         }
