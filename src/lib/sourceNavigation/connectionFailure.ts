@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { isDnsFailureMessage, isTransientDnsFailureMessage } from "@/lib/c64api/dnsFailure";
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 
 /**
@@ -73,4 +73,4 @@ export const classifyListingFailure = (error: unknown): ListingFailureKind => {
 
 /** A name failure that is worth asking again: the resolver said it was temporary. */
 export const isTemporaryNameFailure = (error: unknown) =>
-  isTransientDnsFailureMessage(error instanceof Error ? error.message : String(error));
+  isDnsFailureMessage(error instanceof Error ? error.message : String(error));

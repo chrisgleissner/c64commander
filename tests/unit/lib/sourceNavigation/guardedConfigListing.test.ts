@@ -315,24 +315,19 @@ describe("createConfigListing", () => {
     expect(listFtpDirectory).toHaveBeenCalledTimes(3);
   });
 
-  it("does not ask again for a name that does not resolve, but does for a temporary resolver failure", async () => {
-    const source = createUltimateSourceLocation();
-    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("FTP list failed: getaddrinfo ENOTFOUND u64"));
-    const listing = createConfigListing(source);
-    await expect(listing.listEntries("/USB2/0")).rejects.toThrow();
-    for (let lookup = 1; lookup <= CONFIG_LOOKUP_PROBE_EVERY * 2; lookup += 1) {
-      await expect(listing.listEntries(`/USB2/${lookup}`)).resolves.toEqual([]);
-    }
-    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
-
-    vi.mocked(listFtpDirectory).mockClear();
-    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("getaddrinfo EAI_AGAIN u64"));
-    const retrying = createConfigListing(source);
-    await expect(retrying.listEntries("/USB2/0")).rejects.toThrow();
-    vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
-    for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1) await retrying.listEntries(`/USB2/${lookup}`);
-    await expect(retrying.listEntries("/USB2/probe")).resolves.toHaveLength(1);
-  });
+  it.each(["FTP list failed: getaddrinfo ENOTFOUND u64", "getaddrinfo EAI_AGAIN u64"])(
+    "asks again after %s, because a dropped network produces the same wording",
+    async (message) => {
+      const source = createUltimateSourceLocation();
+      vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error(message));
+      const listing = createConfigListing(source);
+      await expect(listing.listEntries("/USB2/0")).rejects.toThrow();
+      vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
+      for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1)
+        await listing.listEntries(`/USB2/${lookup}`);
+      await expect(listing.listEntries("/USB2/probe")).resolves.toHaveLength(1);
+    },
+  );
 
   it("stops waiting for a lookup that was already sent when the add is canceled", async () => {
     const controller = new AbortController();

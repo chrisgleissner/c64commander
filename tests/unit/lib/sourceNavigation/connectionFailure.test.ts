@@ -97,6 +97,6 @@ describe("classifyListingFailure", () => {
 describe("isTemporaryNameFailure", () => {
   it("is true only where the resolver said to try again", () => {
     expect(isTemporaryNameFailure(new Error("getaddrinfo EAI_AGAIN c64u"))).toBe(true);
-    expect(isTemporaryNameFailure(new Error("getaddrinfo ENOTFOUND c64u"))).toBe(false);
+    expect(isTemporaryNameFailure(new Error("getaddrinfo ENOTFOUND c64u"))).toBe(true);
   });
 });
