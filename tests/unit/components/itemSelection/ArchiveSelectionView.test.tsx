@@ -344,7 +344,7 @@ describe("ArchiveSelectionView", () => {
     const result = makeResult();
     vi.mocked(useOnlineArchive).mockReturnValue({
       ...baseReturn,
-      state: { phase: "error", message: "offline", recoverableState: null },
+      state: { phase: "error", message: "Unable to resolve host", recoverableState: null },
     } as never);
     const view = render(
       <ArchiveSelectionView
@@ -370,13 +370,36 @@ describe("ArchiveSelectionView", () => {
     );
 
     expect(screen.getByTestId("archive-search-failed")).toHaveTextContent(
-      "The search failed. The list below is from your previous search.",
+      "The search failed: no internet connection. The list below is from your previous search.",
     );
     expect(screen.getAllByTestId("archive-result-row")).toHaveLength(1);
   });
 
+  it("clears the failure notice when a new search starts", () => {
+    vi.mocked(useOnlineArchive).mockReturnValue({
+      ...baseReturn,
+      state: { phase: "error", message: "HTTP 500", recoverableState: null },
+    } as never);
+    const props = {
+      config: defaultConfig,
+      selection: new Map(),
+      onToggleSelect: vi.fn(),
+      onSelectAll: vi.fn(),
+      onClearSelection: vi.fn(),
+    };
+    const view = render(<ArchiveSelectionView {...props} />);
+    vi.mocked(useOnlineArchive).mockReturnValue({ ...baseReturn, state: { phase: "idle" } } as never);
+    view.rerender(<ArchiveSelectionView {...props} />);
+    expect(screen.getByTestId("archive-search-failed")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search title"), { target: { value: "jungle" } });
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    expect(screen.queryByTestId("archive-search-failed")).toBeNull();
+  });
+
   it("does not say there are no results when the first search failed", () => {
-    renderView({}, { phase: "error", message: "offline", recoverableState: null });
+    renderView({}, { phase: "error", message: "HTTP 500", recoverableState: null });
 
     expect(screen.getByTestId("archive-search-failed")).toHaveTextContent("The search failed.");
     expect(screen.queryByText("No results found.")).toBeNull();

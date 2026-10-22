@@ -73,6 +73,11 @@ const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) 
 
 const resultKey = (result: ArchiveSearchResult) => `${result.id}:${result.category}`;
 
+const OFFLINE_PATTERN = /unable to resolve host|no address associated|network is unreachable|failed to fetch|offline/i;
+
+const describeSearchFailure = (message: string) =>
+  OFFLINE_PATTERN.test(message) ? "The search failed: no internet connection." : "The search failed.";
+
 export const ArchiveSelectionView = ({
   config,
   selection,
@@ -88,7 +93,7 @@ export const ArchiveSelectionView = ({
   const [aboutOpen, setAboutOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const [searchFailed, setSearchFailed] = useState(false);
+  const [searchFailure, setSearchFailure] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.phase === "error") {
@@ -97,10 +102,8 @@ export const ArchiveSelectionView = ({
         title: "Online archive failed",
         description: state.message,
       });
-      setSearchFailed(true);
+      setSearchFailure(describeSearchFailure(state.message));
       clearError();
-    } else if (state.phase === "searching") {
-      setSearchFailed(false);
     }
   }, [clearError, state]);
 
@@ -128,6 +131,7 @@ export const ArchiveSelectionView = ({
   }, [searchFinished]);
 
   const handleSearch = useCallback(async () => {
+    setSearchFailure(null);
     await search(form);
   }, [form, search]);
 
@@ -270,14 +274,12 @@ export const ArchiveSelectionView = ({
             {LEGAL_NOTICE}
           </p>
         ) : null}
-        {searchFailed && state.phase !== "searching" ? (
+        {searchFailure && state.phase !== "searching" ? (
           <p role="alert" className="text-sm text-destructive" data-testid="archive-search-failed">
-            {resultRows.length > 0
-              ? "The search failed. The list below is from your previous search."
-              : "The search failed."}
+            {resultRows.length > 0 ? `${searchFailure} The list below is from your previous search.` : searchFailure}
           </p>
         ) : null}
-        {state.phase !== "searching" && resultRows.length === 0 && !searchFailed ? (
+        {state.phase !== "searching" && resultRows.length === 0 && !searchFailure ? (
           <p className="text-xs text-muted-foreground">
             {state.phase === "idle" ? "Search results appear here." : "No results found."}
           </p>
