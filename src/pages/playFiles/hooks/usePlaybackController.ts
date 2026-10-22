@@ -2430,6 +2430,7 @@ export function usePlaybackController({
     playItem,
     seekBy: handleSeekBy,
     playGenerationRef,
+    lastLaunchedItemIdRef,
   });
 
   return {

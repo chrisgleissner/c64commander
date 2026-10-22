@@ -52,6 +52,8 @@ type RemotePlaybackHandoverOptions = {
   isPausedRef: MutableRefObject<boolean>;
   currentPlaybackIsLocalRef: MutableRefObject<boolean>;
   playGenerationRef: MutableRefObject<number>;
+  /** The tune whose start time trackStartedAtRef holds; the current index moves before a launch completes. */
+  lastLaunchedItemIdRef: MutableRefObject<string | null>;
   trackStartedAtRef: MutableRefObject<number | null>;
   durationMsRef: MutableRefObject<number | undefined>;
   isPlaying: boolean;
@@ -142,6 +144,13 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
       const item = current.playlistRef.current[index];
       const startedAt = current.trackStartedAtRef.current;
       if (!item || startedAt === null || !current.isPlayingRef.current || current.isPausedRef.current) return;
+      const launchedId = current.lastLaunchedItemIdRef.current;
+      if (launchedId !== null && item.id !== launchedId) {
+        addLog("info", "Playback: the C64 is out of reach while another tune is starting; not carrying on", {
+          item: item.label,
+        });
+        return;
+      }
       if (current.currentPlaybackIsLocalRef.current || !isRemotePlaybackActive() || wasTuneHandedOver(startedAt))
         return;
       const duration = current.durationMsRef.current;

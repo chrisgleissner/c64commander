@@ -107,6 +107,7 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
     isPausedRef: { current: false },
     currentPlaybackIsLocalRef,
     playGenerationRef: { current: 7 },
+    lastLaunchedItemIdRef: { current: playlist[0]?.id ?? null },
     trackStartedAtRef: { current: startedAt },
     durationMsRef: { current: 180_000 as number | undefined },
     isPlaying: true,
@@ -221,6 +222,7 @@ describe("useRemotePlaybackHandover", () => {
           isPausedRef: { current: false },
           currentPlaybackIsLocalRef: { current: false },
           playGenerationRef: { current: 0 },
+          lastLaunchedItemIdRef: { current: "one" },
           trackStartedAtRef: { current: hookOptions(startedAt) },
           durationMsRef: { current: 180_000 },
           isPlaying: true,
@@ -267,6 +269,28 @@ describe("useRemotePlaybackHandover", () => {
     expect(engine.releaseSilence.mock.invocationCallOrder[0]).toBeGreaterThan(seekBy.mock.invocationCallOrder[0]);
     // Recorded, so the C64 is reset when it is back.
     expect(wasTuneHandedOver(startedAt)).toBe(true);
+  });
+
+  it("does not carry on the tune a Next press moved to while the start time still belongs to the previous tune", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { playItem, seekBy, options } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
+    options.currentIndexRef.current = 1;
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(playItem).not.toHaveBeenCalled();
+    expect(seekBy).not.toHaveBeenCalled();
+  });
+
+  it("still carries the tune on when the page was remounted and has not launched a tune itself", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    options.lastLaunchedItemIdRef.current = null;
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
   });
 
   it("does not seek when the hand-over was dropped because a newer tune launched on the phone", async () => {
