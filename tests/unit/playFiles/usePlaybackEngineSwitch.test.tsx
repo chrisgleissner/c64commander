@@ -259,6 +259,19 @@ describe("usePlaybackEngineSwitch", () => {
     expect(getSidRadioStats().engineSwitchMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("does not record the engine switch time when Stop overtook the launch", async () => {
+    const h = harness("c64");
+    updateSidRadioStats({ engineSwitchMs: undefined });
+    h.playItem.mockImplementationOnce(async (_item, options) => {
+      options?.onLaunchStarted?.();
+      h.stopCountRef.current += 1;
+    });
+    h.choose("local");
+    await h.settle();
+
+    expect(getSidRadioStats().engineSwitchMs).toBeUndefined();
+  });
+
   it("does not report a failed restart that a later engine choice overtook", async () => {
     const h = harness("c64");
     const failure = new Error("open failed");

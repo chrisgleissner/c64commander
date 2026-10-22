@@ -65,7 +65,7 @@ type RemotePlaybackHandoverOptions = {
   resolveNextIndex: (from: number) => number | null;
   playItem: (
     item: PlaylistItem,
-    options: { playlistIndex: number; origin: "auto"; expectedPlayGeneration: number },
+    options: { playlistIndex: number; origin: "auto"; expectedPlayGeneration: number; onLaunchStarted: () => void },
   ) => Promise<void>;
   seekBy: (deltaSeconds: number) => Promise<void>;
 };
@@ -155,12 +155,20 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         item: item.label,
         positionSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
       });
+      let launchStarted = false;
       const controller = current.getLocalSidPlayback();
       // Silent until the seek lands, or the opening of the tune would be heard first.
       const releaseSilence = controller.holdSilence();
       try {
-        await current.playItem(item, { playlistIndex: index, origin: "auto", expectedPlayGeneration });
-        if (!current.currentPlaybackIsLocalRef.current) return;
+        await current.playItem(item, {
+          playlistIndex: index,
+          origin: "auto",
+          expectedPlayGeneration,
+          onLaunchStarted: () => {
+            launchStarted = true;
+          },
+        });
+        if (!launchStarted || !current.currentPlaybackIsLocalRef.current) return;
         await current.seekBy((Date.now() - startedAt) / 1000 - controller.positionSeconds());
       } catch (error) {
         addLog("warn", "Playback: could not carry on with the tune on this phone", {

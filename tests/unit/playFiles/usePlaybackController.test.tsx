@@ -1629,6 +1629,22 @@ describe("usePlaybackController", () => {
     expect(onLaunchStarted).toHaveBeenCalledTimes(1);
   });
 
+  it("drops a request made before a later launch that failed to open", async () => {
+    const playlist = [createPlaylistItem({ id: "tune-a" }), createPlaylistItem({ id: "tune-b" })];
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0 });
+    vi.mocked(executePlayPlan).mockRejectedValueOnce(new Error("the new tune could not open"));
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 }).catch(() => undefined);
+    });
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0, expectedPlayGeneration: 0 });
+    });
+
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+  });
+
   it("clears stale pause-mute bookkeeping refs when starting a new track (HARD9-063)", async () => {
     const playlist = [createPlaylistItem()];
     const pauseMuteSnapshotRef = { current: { volumes: { "SID 1": "0 dB" }, enablement: {} } as any };

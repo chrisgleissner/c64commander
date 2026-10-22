@@ -98,7 +98,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
           },
         });
         // §12.6 `engineSwitchMs`: press → the tune is audible again. A request that was dropped launched nothing.
-        if (launchStarted) {
+        if (launchStarted && isLatest()) {
           updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
         }
       } catch (error) {

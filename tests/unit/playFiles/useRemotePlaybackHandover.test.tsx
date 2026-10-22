@@ -95,7 +95,8 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
   const setCurrentPlaybackIsLocal = vi.fn((isLocal: boolean) => {
     currentPlaybackIsLocalRef.current = isLocal;
   });
-  const playItem = vi.fn(async () => {
+  const playItem = vi.fn(async (_item: unknown, options?: { onLaunchStarted?: () => void }) => {
+    options?.onLaunchStarted?.();
     currentPlaybackIsLocalRef.current = true;
   });
   const seekBy = vi.fn(async () => undefined);
@@ -255,6 +256,7 @@ describe("useRemotePlaybackHandover", () => {
       playlistIndex: 0,
       origin: "auto",
       expectedPlayGeneration: 7,
+      onLaunchStarted: expect.any(Function),
     });
     const [delta] = seekBy.mock.calls[0] as unknown as [number];
     expect(delta).toBeGreaterThan(41);
@@ -265,6 +267,20 @@ describe("useRemotePlaybackHandover", () => {
     expect(engine.releaseSilence.mock.invocationCallOrder[0]).toBeGreaterThan(seekBy.mock.invocationCallOrder[0]);
     // Recorded, so the C64 is reset when it is back.
     expect(wasTuneHandedOver(startedAt)).toBe(true);
+  });
+
+  it("does not seek when the hand-over was dropped because a newer tune launched on the phone", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { engine, playItem, seekBy, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    playItem.mockImplementationOnce(async () => {
+      options.currentPlaybackIsLocalRef.current = true;
+    });
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(engine.releaseSilence).toHaveBeenCalledTimes(1));
+    expect(seekBy).not.toHaveBeenCalled();
   });
 
   it("warns and gives the listener their level back when the phone cannot start the tune", async () => {
