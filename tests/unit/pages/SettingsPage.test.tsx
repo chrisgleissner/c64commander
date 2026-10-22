@@ -1772,6 +1772,19 @@ describe("SettingsPage", () => {
       expect(persistedDeviceIds()).toEqual(["saved-device-1"]);
     });
 
+    it("reports only the missing host, not a name clash, when Add device is confirmed with an empty host", async () => {
+      const [first] = savedDevicesRef.current.devices;
+      await seedStore([{ ...first, name: "c64u", nameSource: "USER", host: "192.168.1.146" }], "saved-device-1");
+      renderSettingsPage();
+      fireEvent.click(screen.getByTestId("settings-add-device"));
+      const dialog = await screen.findByTestId("settings-add-device-dialog");
+
+      fireEvent.click(within(dialog).getByTestId("settings-add-device-confirm"));
+
+      expect(await within(dialog).findByText("Enter a host or IP address.")).toBeInTheDocument();
+      expect(within(dialog).queryByText("Device name must be unique.")).toBeNull();
+    });
+
     it("keeps the current connection when the device to add does not answer", async () => {
       mockEvaluateNewDeviceReachability.mockResolvedValue({
         status: "unreachable",
