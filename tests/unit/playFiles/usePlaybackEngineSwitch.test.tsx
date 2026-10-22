@@ -48,8 +48,10 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     }),
   } as unknown as LocalSidPlaybackController;
   const currentPlaybackIsLocalRef = { current: localSounding };
+  const trackInstanceIdRef = { current: 0 };
   const playItem = vi.fn((_item: PlaylistItem) =>
     enqueuePlayTransition(async () => {
+      trackInstanceIdRef.current += 1;
       if (localStorage.getItem("c64u_playback_engine") === "local") {
         localSounding = true;
         currentPlaybackIsLocalRef.current = true;
@@ -69,6 +71,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     usePlaybackEngineSwitch({
       selectedEngineRef: { current: initialEngine },
       stopCountRef,
+      trackInstanceIdRef,
       currentPlaybackIsLocalRef,
       currentIndexRef: { current: 0 },
       playlistRef: { current: [tune] },
@@ -105,6 +108,7 @@ const harness = (initialEngine: PlaybackEngine, { stopOnC64Ms = 0 } = {}) => {
     stopOnC64,
     onRestartFailed,
     stopCountRef,
+    trackInstanceIdRef,
     currentPlaybackIsLocalRef,
     soundsHere: () => localSounding,
     silenceHere: () => {
@@ -204,5 +208,32 @@ describe("usePlaybackEngineSwitch", () => {
     await h.settle();
 
     expect(h.onRestartFailed).toHaveBeenCalledWith(failure, tune);
+  });
+
+  it("does not report a failed restart when a tune the listener started meanwhile launched first", async () => {
+    const h = harness("c64", { stopOnC64Ms: 300 });
+    const failure = new Error("open failed");
+    const launch = h.playItem.getMockImplementation()!;
+    let calls = 0;
+    h.playItem.mockImplementation((item) => (calls++ === 0 ? launch(item) : Promise.reject(failure)));
+    h.choose("local");
+    await h.wait(100);
+    void h.playItem({ ...tune, id: "other" } as PlaylistItem);
+    await h.settle();
+
+    expect(h.playItem).toHaveBeenCalledTimes(2);
+    expect(h.onRestartFailed).not.toHaveBeenCalled();
+  });
+
+  it("does not report a failed restart that a later engine choice overtook", async () => {
+    const h = harness("c64");
+    const failure = new Error("open failed");
+    h.playItem.mockImplementationOnce(() => new Promise((_, reject) => setTimeout(() => reject(failure), 200)));
+    h.choose("local");
+    await h.wait(50);
+    h.choose("c64");
+    await h.settle();
+
+    expect(h.onRestartFailed).not.toHaveBeenCalled();
   });
 });

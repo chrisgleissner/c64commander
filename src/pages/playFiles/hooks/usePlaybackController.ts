@@ -939,6 +939,7 @@ export function usePlaybackController({
                 item: item.label,
               },
             });
+            markHandledUiError(error);
             throw error;
           }
           await ensureUnmuted({ refreshItems: true });
@@ -958,6 +959,7 @@ export function usePlaybackController({
                   item: item.label,
                 },
               });
+              markHandledUiError(error);
               throw error;
             }
           }
@@ -1353,6 +1355,7 @@ export function usePlaybackController({
   usePlaybackEngineSwitch({
     selectedEngineRef,
     stopCountRef,
+    trackInstanceIdRef,
     currentPlaybackIsLocalRef,
     currentIndexRef,
     playlistRef,
@@ -1375,10 +1378,6 @@ export function usePlaybackController({
     },
     onRestartFailed: (error, item) => {
       if (!isHandledUiError(error)) {
-        addErrorLog("Restarting the tune on the new playback engine failed", {
-          error: (error as Error).message,
-          item: item.label,
-        });
         reportPlaybackStartFailure({
           operation: "PLAYBACK_START",
           title: "Playback failed",

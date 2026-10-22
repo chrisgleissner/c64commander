@@ -4113,17 +4113,25 @@ describe("usePlaybackController", () => {
       const controller = fakeController();
       const setIsPlaying = vi.fn();
       const setIsPaused = vi.fn();
+      const setAutoAdvanceDueAtMs = vi.fn();
+      const trackStartedAtRef = { current: null as number | null };
+      const autoAdvanceGuardRef = { current: null as unknown };
       const playlist = [sidItem(psid)];
       const { result } = renderPlaybackController(playlist, {
         localSidPlaybackController: controller,
         isPlaying: true,
         setIsPlaying,
         setIsPaused,
+        setAutoAdvanceDueAtMs,
+        trackStartedAtRef,
+        autoAdvanceGuardRef,
       });
       await act(async () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
       expect(controller.isActive()).toBe(true);
+      expect(trackStartedAtRef.current).not.toBeNull();
+      expect(autoAdvanceGuardRef.current).not.toBeNull();
       vi.mocked(executePlayPlan).mockRejectedValueOnce(new Error("The C64 could not be reached"));
 
       await act(async () => {
@@ -4137,6 +4145,51 @@ describe("usePlaybackController", () => {
       );
       expect(setIsPlaying).toHaveBeenCalledWith(false);
       expect(setIsPaused).toHaveBeenCalledWith(false);
+      expect(trackStartedAtRef.current).toBeNull();
+      expect(autoAdvanceGuardRef.current).toBeNull();
+      expect(setAutoAdvanceDueAtMs).toHaveBeenLastCalledWith(null);
+      expect(vi.mocked(reportUserError)).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a connection failure once when the tune cannot restart on the C64", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(psid)];
+      const ensurePlaybackConnection = vi.fn().mockRejectedValue(new Error("The C64 could not be reached"));
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+        ensurePlaybackConnection,
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      await act(async () => {
+        savePlaybackEngine("c64");
+      });
+
+      await waitFor(() => expect(ensurePlaybackConnection).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(vi.mocked(reportUserError).mock.calls.map((call) => (call[0] as { title: string }).title)).toEqual([
+          "Connection failed",
+        ]),
+      );
+    });
+
+    it("reports a connection failure once when Play cannot reach the C64", async () => {
+      localStorage.setItem("c64u_playback_engine", "c64");
+      const playlist = [sidItem(psid)];
+      const ensurePlaybackConnection = vi.fn().mockRejectedValue(new Error("The C64 could not be reached"));
+      const { result } = renderPlaybackController(playlist, { currentIndex: 0, ensurePlaybackConnection });
+
+      await act(async () => {
+        await result.current.handlePlay();
+      });
+
+      expect(vi.mocked(reportUserError).mock.calls.map((call) => (call[0] as { title: string }).title)).toEqual([
+        "Connection failed",
+      ]);
     });
 
     // A paused tune leaves the C64 frozen; the reset that stops it has to reach a running machine.
@@ -4637,7 +4690,7 @@ describe("usePlaybackController", () => {
         );
       });
 
-      it("logs a tune that could not be started on its new output", async () => {
+      it("reports a tune that could not be started on its new output", async () => {
         localStorage.setItem("c64u_local_engine_enabled", "1");
         localStorage.setItem("c64u_playback_engine", "c64");
         vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
@@ -4650,16 +4703,19 @@ describe("usePlaybackController", () => {
         });
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
         controller.play.mockRejectedValueOnce(new Error("worker gone"));
-        vi.mocked(addErrorLog).mockClear();
+        vi.mocked(reportUserError).mockClear();
 
         await act(async () => {
           savePlaybackEngine("local");
         });
 
         await waitFor(() =>
-          expect(addErrorLog).toHaveBeenCalledWith(
-            "Restarting the tune on the new playback engine failed",
-            expect.objectContaining({ error: expect.stringContaining("worker gone") }),
+          expect(reportUserError).toHaveBeenCalledWith(
+            expect.objectContaining({
+              operation: "PLAYBACK_START",
+              title: "Playback failed",
+              description: expect.stringContaining("worker gone"),
+            }),
           ),
         );
       });
