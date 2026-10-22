@@ -12,8 +12,8 @@ import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 /**
  * What a failed folder listing says about the device.
  * - lost: the link or the device is gone (timeout, refused, unreachable, reset, closed, FTP 421, open circuit).
- * - nameFailure: the device's name could not be resolved. Treated like lost, and not asked again unless the
- *   resolver said the failure is temporary.
+ * - nameFailure: the device's name could not be resolved. A phone that lost its network is told the same, so it
+ *   is treated like lost.
  * - deviceReply: the device answered, with a 4xx/5xx FTP reply other than 421 or an unreadable folder.
  * - unknown: anything else. Never taken as the device having answered.
  */
@@ -94,7 +94,3 @@ export const classifyListingFailure = (error: unknown): ListingFailureKind => {
   if (LOST_CONNECTION_PATTERN.test(message) || isTransientConnectivityFailure(message)) return "lost";
   return "unknown";
 };
-
-/** A name failure that is worth asking again: the resolver said it was temporary. */
-export const isTemporaryNameFailure = (error: unknown) =>
-  isDnsFailureMessage(error instanceof Error ? error.message : String(error));

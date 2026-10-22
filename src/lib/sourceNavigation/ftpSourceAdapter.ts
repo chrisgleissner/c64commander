@@ -14,7 +14,7 @@ import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
-import { classifyListingFailure, isTemporaryNameFailure, UnreadableFolderError } from "./connectionFailure";
+import { classifyListingFailure, UnreadableFolderError } from "./connectionFailure";
 import { createDeepScanSearch } from "./deepScanSearch";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -297,8 +297,6 @@ const listFilesRecursive = async (
       });
       const failure = classifyListingFailure(err);
       if (failure === "deviceReply") consecutiveLostFolders = 0;
-      else if (failure === "nameFailure" && !isTemporaryNameFailure(err))
-        consecutiveLostFolders = FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP;
       else consecutiveLostFolders += 1;
       if (consecutiveLostFolders >= FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP) {
         // Every later folder would fail the same way, each after its own timeout.

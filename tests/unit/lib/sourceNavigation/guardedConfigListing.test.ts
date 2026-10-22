@@ -316,16 +316,20 @@ describe("createConfigListing", () => {
   });
 
   it.each(["FTP list failed: getaddrinfo ENOTFOUND u64", "getaddrinfo EAI_AGAIN u64"])(
-    "asks again after %s, because a dropped network produces the same wording",
+    "asks again every few lookups after the name failure %s, as after any lost connection",
     async (message) => {
       const source = createUltimateSourceLocation();
       vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error(message));
       const listing = createConfigListing(source);
       await expect(listing.listEntries("/USB2/0")).rejects.toThrow();
       vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
-      for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1)
-        await listing.listEntries(`/USB2/${lookup}`);
+      for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1) {
+        await expect(listing.listEntries(`/USB2/${lookup}`)).resolves.toEqual([]);
+      }
+      expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+
       await expect(listing.listEntries("/USB2/probe")).resolves.toHaveLength(1);
+      await expect(listing.listEntries("/USB2/after")).resolves.toHaveLength(1);
     },
   );
 

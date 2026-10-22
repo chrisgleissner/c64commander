@@ -9,7 +9,6 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyListingFailure,
-  isTemporaryNameFailure,
   UnreadableFolderError,
   type ListingFailureKind,
 } from "@/lib/sourceNavigation/connectionFailure";
@@ -116,12 +115,5 @@ describe("classifyListingFailure", () => {
 
   it("goes by the kind of an unreadable folder error, whatever the folder is called", () => {
     expect(classifyListingFailure(new UnreadableFolderError("/USB0/Connection reset/timed out"))).toBe("deviceReply");
-  });
-});
-
-describe("isTemporaryNameFailure", () => {
-  it("is true only where the resolver said to try again", () => {
-    expect(isTemporaryNameFailure(new Error("getaddrinfo EAI_AGAIN c64u"))).toBe(true);
-    expect(isTemporaryNameFailure(new Error("getaddrinfo ENOTFOUND c64u"))).toBe(true);
   });
 });

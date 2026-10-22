@@ -453,9 +453,9 @@ describe("ftpSourceAdapter", () => {
       expect(stopped(results)).toBe(true);
     });
 
-    it("ends the walk at the first folder whose name does not resolve", async () => {
-      const results = await walkWith({ a: "noname", b: "empty", c: "empty" });
-      expect(stopped(results)).toBe(true);
+    it("counts a name failure like a lost folder", async () => {
+      expect(stopped(await walkWith({ a: "noname", b: "noname", c: "empty" }))).toBe(true);
+      expect(stopped(await walkWith({ a: "noname", b: "reply", c: "noname" }))).toBe(false);
     });
 
     it("ends after two lost folders that finish one after the other (count follows completion order)", async () => {
