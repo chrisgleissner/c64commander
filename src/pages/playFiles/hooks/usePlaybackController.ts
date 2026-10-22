@@ -239,10 +239,7 @@ interface UsePlaybackControllerProps {
   isManualMuteHeld: () => boolean;
 
   // Refs
-  // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
-  // base), not `playing`. The earlier `playing: boolean` typing invited the
-  // regression where every track start passed `true`, resetting the cumulative
-  // "Remaining" clock each track.
+  // HARD12-007: the second parameter is `reset` (zero the cumulative base), not `playing`.
   playedClockRef: MutableRefObject<{
     start: (now: number, reset?: boolean) => void;
     stop: (now: number, reset?: boolean) => void;
@@ -357,8 +354,7 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
-  // Track B (LE2): the on-device engine, created lazily so the worker/WASM cost
-  // is only paid once the user actually plays a SID on the device.
+  // Track B (LE2): the on-device engine, created lazily on the first SID played on the device.
   const localSidPlaybackRef = useRef<LocalSidPlaybackController | null>(localSidPlaybackController ?? null);
   // True while the current track is playing on the device (no C64 to stop).
   const currentPlaybackIsLocalRef = useRef(false);
@@ -418,9 +414,7 @@ export function usePlaybackController({
     pending.resolvers.forEach(({ resolve }) => resolve());
   }, []);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
-  // HARD18-009 (M5): Stop and playItem each take a fresh generation on entry, and the transition
-  // holding the current one when its work resolves wins, so a Play right after a Stop is never
-  // mistaken for the transition the Stop superseded.
+  // HARD18-009 (M5): Stop and playItem each take a fresh generation; the holder of the current one wins.
   const playGenerationRef = useRef(0);
   const stopCountRef = useRef(0);
 
@@ -443,9 +437,7 @@ export function usePlaybackController({
       playInitiatedMachineTransitionRef.current = true;
       try {
         if (next === "paused") {
-          // HARD21-004: tag Play's own pause with source "play" so opening then
-          // closing the Home Ultimate menu never resumes a pause the user set
-          // from Play (the menu-close resume only re-runs a pausedBy === "menu").
+          // HARD21-004: closing the Home Ultimate menu must not resume a pause set from Play.
           setMachineExecutionPaused({ ...options, pausedBy: "play" });
         } else {
           setMachineExecutionRunning();
@@ -855,15 +847,9 @@ export function usePlaybackController({
             simulatedDevice,
             noDeviceConnected,
           });
-          // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
-          // commoserve, HVSC and local sources and for no other. The on-device engine needs the
-          // bytes, so without this the local branch was skipped for every Ultimate-hosted SID and
-          // "Listen on: this device" quietly played it on the C64 instead. The fetch already existed;
-          // it was only ever used to look a duration up.
+          // An Ultimate-hosted tune has no local blob, and the on-device engine needs the bytes.
           if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
-            // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
-            // could only ever catch something it does not throw — and the log inside it read as though
-            // it were the place a failed fetch is reported, which it was not.
+            // No try/catch: the fetch reports its own failures and answers with null.
             const remembered =
               noDeviceConnected || deviceOutOfReach
                 ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
@@ -918,6 +904,7 @@ export function usePlaybackController({
         // Silence any prior on-device tune before the C64 takes over (a local→C64
         // switch); consecutive local plays are handled inside the engine.
         if (!routeToLocal && localSidPlaybackRef.current) {
+          if (localSidPlaybackRef.current.isActive()) setSoundingTune(null);
           localSidPlaybackRef.current.stop();
         }
         const api = getC64API();
@@ -925,6 +912,7 @@ export function usePlaybackController({
         if (routeToLocal && c64PlaysCurrentTune && !isDeviceOutOfReach()) {
           // Out of reach, the tune left on the C64 is stopped when it returns (see remoteTuneHandover).
           await stopRemoteTuneBeforeLocalPlayback(async () => {
+            setSoundingTune(null);
             if (isPausedRef.current) await resumeMachineWithRetry(api);
             await stopMachineWithGracePeriod(api, false);
             // As Stop does: a paused tune muted the C64, and nothing on this path would unmute it.
@@ -970,7 +958,7 @@ export function usePlaybackController({
             }
           }
         }
-        // Cleared only now: a launch that fails above leaves the previous tune sounding and on record.
+        // Cleared by the first step that silences a tune; a launch failing before that leaves it sounding and on record.
         setSoundingTune(null);
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =

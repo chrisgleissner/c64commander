@@ -5723,4 +5723,49 @@ describe("usePlaybackController hand-over to the phone (#555)", () => {
       vi.useRealTimers();
     }
   });
+
+  it("#555: a launch that fails after the phone tune was silenced no longer records that tune", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const engine = phoneEngine();
+    const ensurePlaybackConnection = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("down"));
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      ensurePlaybackConnection,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    await engine.play();
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 }).catch(() => undefined);
+    });
+
+    expect(engine.stop).toHaveBeenCalled();
+    expect(soundingTuneNow()).toBeNull();
+  });
+
+  it("#555: a launch that fails while the phone is not sounding keeps the tune playing on the C64 on record", async () => {
+    const playlist = [ultimateSid("tune-a"), ultimateSid("tune-b")];
+    const engine = phoneEngine();
+    const ensurePlaybackConnection = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("down"));
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      ensurePlaybackConnection,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+
+    await act(async () => {
+      await result.current.playItem(playlist[1], { playlistIndex: 1 }).catch(() => undefined);
+    });
+
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+  });
 });

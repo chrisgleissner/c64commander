@@ -294,16 +294,17 @@ describe("useRemotePlaybackHandover", () => {
     );
   });
 
-  it("says nothing when no tune sounds and none has a start time", async () => {
-    const { options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+  it("says why it does not carry on when no tune sounds and none has a start time", async () => {
+    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
     options.soundingTuneRef.current = null;
     options.trackStartedAtRef.current = null as never;
     vi.mocked(addLog).mockClear();
 
     setConnection("OFFLINE_NO_DEMO");
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
+    await waitFor(() => expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("no start time")));
     expect(addLog).not.toHaveBeenCalledWith("info", expect.stringContaining("another tune is starting"));
+    expect(playItem).not.toHaveBeenCalled();
   });
 
   it("says why it does not carry on when the tune playing is no longer in the playlist", async () => {
