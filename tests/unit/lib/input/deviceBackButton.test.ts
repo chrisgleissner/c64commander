@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import { __resetDeviceBackStateForTests, installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { addLog } from "@/lib/logging";
 
@@ -22,6 +22,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("the Android Back key", () => {
   beforeEach(() => {
+    __resetDeviceBackStateForTests();
     appListener.backButton = null;
     appListener.remove.mockClear();
     addLogMock.mockClear();
@@ -235,5 +236,63 @@ describe("the Android Back key", () => {
       "Failed to register the Android Back handler; the Back key will do nothing",
       { error: "listener unavailable" },
     );
+  });
+
+  describe("a second Back soon after one that closed a dialog", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      document.body.replaceChildren();
+    });
+
+    const closeDialogOnBack = () => {
+      const dialog = document.createElement("div");
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("data-state", "open");
+      document.body.append(dialog);
+      const handler = () => dialog.remove();
+      window.addEventListener("keydown", handler, { once: true });
+    };
+
+    it("waits for focus to return to the opener instead of acting on the stop the ring rests on meanwhile", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-10-22T12:00:00Z"));
+      const uninstall = installDeviceBackButton(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
+      const opener = document.createElement("button");
+      document.body.append(opener);
+      opener.focus();
+      closeDialogOnBack();
+      const seen: Event[] = [];
+      window.addEventListener("keydown", (event) => seen.push(event));
+
+      appListener.backButton?.();
+      opener.blur();
+      appListener.backButton?.();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(seen).toHaveLength(1);
+
+      opener.focus();
+      await vi.advanceTimersByTimeAsync(40);
+
+      expect(seen).toHaveLength(2);
+      uninstall();
+    });
+
+    it("gives up waiting when focus never returns", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-10-22T13:00:00Z"));
+      const uninstall = installDeviceBackButton(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
+      closeDialogOnBack();
+      const seen: Event[] = [];
+      window.addEventListener("keydown", (event) => seen.push(event));
+
+      appListener.backButton?.();
+      appListener.backButton?.();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(seen).toHaveLength(2);
+      uninstall();
+    });
   });
 });

@@ -21,6 +21,20 @@ const CLOSING_OVERLAY_SELECTOR =
   '[data-state="closed"][role="dialog"],[data-state="closed"][role="alertdialog"],[data-state="closed"][role="menu"],[data-state="closed"][role="listbox"]';
 const CLOSING_POLL_MS = 16;
 const CLOSING_WAIT_LIMIT_MS = 600;
+const FOCUS_RETURN_WAIT_MS = 400;
+let focusReturnDeadlineMs = 0;
+
+/** A Back that closed an overlay is followed by focus returning to what opened it; until then the ring rests on a stop it will leave. */
+const isFocusReturning = () =>
+  Date.now() < focusReturnDeadlineMs && (document.activeElement === document.body || document.activeElement === null);
+
+const isSettled = () => document.querySelector(CLOSING_OVERLAY_SELECTOR) === null && !isFocusReturning();
+
+/** Forgets queued presses and the focus wait of an earlier test. Never call in production code. */
+export const __resetDeviceBackStateForTests = (): void => {
+  focusReturnDeadlineMs = 0;
+  queuedBacks.length = 0;
+};
 
 type QueuedBack = { run: () => void; deadlineMs: number };
 const queuedBacks: QueuedBack[] = [];
@@ -30,7 +44,7 @@ const drainQueuedBacks = () => {
   queuePolling = false;
   const next = queuedBacks[0];
   if (!next) return;
-  if (document.querySelector(CLOSING_OVERLAY_SELECTOR) === null || Date.now() >= next.deadlineMs) {
+  if (isSettled() || Date.now() >= next.deadlineMs) {
     queuedBacks.shift();
     next.run();
   }
@@ -45,14 +59,21 @@ const drainQueuedBacks = () => {
  *
  * Radix keeps a closing layer on its stack until the exit animation ends, so a second Back about
  * 50 ms after the first reached the closing layer and was absorbed; the dialog beneath it stayed
- * open. Presses wait their turn, in order, for at most {@link CLOSING_WAIT_LIMIT_MS} each.
+ * open. Presses wait their turn, in order, for at most {@link CLOSING_WAIT_LIMIT_MS} each. After a press
+ * that closed an overlay they also wait for focus to return to its opener, because a press that lands
+ * in between acts on the stop the ring rests on meanwhile and is lost.
  */
 export const runBackWhenOverlaysSettled = (run: () => void): void => {
-  if (queuedBacks.length === 0 && document.querySelector(CLOSING_OVERLAY_SELECTOR) === null) {
+  const runNotingClose = () => {
+    const overlayWasOpen = isAnyOverlayOpen();
     run();
+    if (overlayWasOpen) focusReturnDeadlineMs = Date.now() + FOCUS_RETURN_WAIT_MS;
+  };
+  if (queuedBacks.length === 0 && isSettled()) {
+    runNotingClose();
     return;
   }
-  queuedBacks.push({ run, deadlineMs: Date.now() + CLOSING_WAIT_LIMIT_MS });
+  queuedBacks.push({ run: runNotingClose, deadlineMs: Date.now() + CLOSING_WAIT_LIMIT_MS });
   if (!queuePolling) {
     queuePolling = true;
     window.setTimeout(drainQueuedBacks, CLOSING_POLL_MS);
