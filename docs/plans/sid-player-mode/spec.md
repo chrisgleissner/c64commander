@@ -14,7 +14,7 @@ health probing, connection errors and "device unreachable" notices. The app send
 while SID Player is active.
 
 SID Player is a sibling of Demo Mode. Both are device-less states and they are mutually exclusive. Demo Mode
-simulates a machine so the full app can be explored. SID Player removes the machine from the app.
+simulates a machine so the whole app can be explored. SID Player removes the machine from the app.
 
 The design adds no second UI. It is a visibility and gating layer over the existing pages, routes, settings,
 playback and source code:
@@ -69,7 +69,7 @@ Confirmation copy (sentence case, American English):
   phone, playlists, HVSC, SID Radio and search. Machine controls, disks, config and Live View are put away.
   Your playlists, settings and saved devices are kept. You can leave SID Player at any time from Settings or
   the menu." Buttons: "Use SID Player" (primary), "Cancel".
-- Leave, title "Leave SID Player?", body: "The full app looks for your C64 Ultimate and shows its controls
+- Leave, title "Leave SID Player?", body: "Full App looks for your C64 Ultimate and shows its controls
   again. Nothing you saved is changed." Buttons: "Full App" (primary), "Demo Mode", "Cancel".
 - Compact profile body (two lines maximum, see `DemoModeInterstitial` sizing note): Enter "Only music on this
   phone. Machine controls are hidden. You can switch back." Leave "Show the C64 Ultimate controls again?"
@@ -105,10 +105,28 @@ Confirmation copy (sentence case, American English):
 9. The health badge owns the device switcher and the saved-device health checks
    (`UnifiedHealthBadge` → `useSavedDeviceHealthChecks`). `deriveConnectivityState` in
    `src/lib/diagnostics/healthModel.ts` already has a `"Demo"` label.
-10. On-device playback needs the C64 KERNAL and BASIC ROMs for full accuracy. They can only be read from a
-    connected device today (`fetchSystemRomsFromDevice`). Without them the engine falls back to the
-    kernal-free emulation, and a tune that needs the ROMs (`detectRomRequired`, RSID) is routed to the C64
-    by `romFallbackDecision`, which ends in "Device not connected" when there is none.
+10. ROMs today (details in §5.16):
+    - Only KERNAL and BASIC are known (`C64RomKind`, 8192 bytes each). `validateRomImage`
+      (`src/lib/roms/c64SystemRoms.ts`) checks size, non-uniform content, at least 64 distinct byte values,
+      the KERNAL reset vector (at least `$E000`) and the BASIC `CBMBASIC` signature. `KNOWN_FINGERPRINTS`
+      names 901227-03 and 901226-01 by FNV-1a fingerprint; any other image that passes is accepted as an
+      "unrecognised variant".
+    - The only writer is `fetchSystemRomsFromDevice` (`romFetchService.ts`), called by `ensureSystemRoms`
+      (automatic, once per session) and by the developer-only `LocalEngineRomsRow` ("Read from C64").
+    - `romStore.ts` keeps base64 images in `localStorage` key `c64commander.localEngine.systemRoms.v1`.
+      `settingsTransfer.ts` does not export it.
+    - `LocalSidEngine` reads the store on every open (`loadStoredRoms()`), so a change applies from the next
+      tune. It sends the images only when both are present. The character ROM argument of `setSystemROMs` is
+      always `null`.
+    - Without images the WASM renderer synthesizes a minimal KERNAL. A tune whose RSID v2+ header declares
+      BASIC (`detectRomRequired`) is refused with `romRequired: true` unless a BASIC image is supplied.
+    - `usePlaybackController` pre-routes a header-declared tune to the C64 when the set is incomplete
+      (`romFallbackDecision`), which ends in "Device not connected" when there is no device.
+    - The `romRequired` result of `getLocalSidPlayback().play()` is ignored. A tune refused at open therefore
+      plays silence until its songlength runs out.
+    - The rendered-tune cache key carries a `/noroms` suffix (`renderedTuneCache.ts`).
+    - The keypad phone class this app targets may have no system document picker. `canPickDocuments()`
+      (`src/lib/native/folderPicker.ts`) reports that, and Add items then hides local sources.
 11. File-size ceilings leave little room in the files this work touches (lines now / ceiling + 25 allowance):
     `connectionManager.ts` 1521 / 1522, `c64api.ts` 3489 / 3493, `usePlaybackController.ts` 2460 / 2463,
     `DiagnosticsDialog.tsx` 2013 / 2016, `SettingsPage.tsx` 3477 / 3498, `HomePage.tsx` 2199 / 2222,
@@ -164,8 +182,8 @@ Status · Evidence.
 - Acceptance: No component compares the app mode itself; components ask `isSurfaceVisible` or a
   derived helper (`visibleTabIndexes`, `isSearchEntryShown`, `tourStepsFor`, `guideChaptersFor`).
 - Tests: `tests/unit/lib/appMode/surfaces.test.ts` — "every needs-device surface is hidden in SID Player and
-  shown in the full app", "always surfaces are shown in both modes", "sid-player-only surfaces are hidden in
-  the full app".
+  shown in Full App", "always surfaces are shown in both modes", "sid-player-only surfaces are hidden in
+  Full App".
 - Verification: unit.
 - Status: Not started. Evidence: —
 
@@ -179,7 +197,7 @@ Status · Evidence.
 - Choke point: compile-time `Record` over the id unions plus a render scan.
 - Acceptance: Adding a new Home section without a map entry turns the test red.
 - Tests: `tests/unit/lib/appMode/surfaceCoverage.test.tsx` — "every Home, Settings and Docs section rendered in
-  the full app has a surface classification", "every tab route and feature flag has a surface classification".
+  Full App has a surface classification", "every tab route and feature flag has a surface classification".
 - Verification: unit.
 - Status: Not started. Evidence: —
 
@@ -265,7 +283,7 @@ Status · Evidence.
 - Choke point: `appModeTransitions` plus the `SPM-MODE-01` guard.
 - Acceptance: No sequence of user actions produces `appMode === "sid-player"` with `DEMO_ACTIVE`.
 - Tests: `tests/unit/lib/appMode/appModeTransitions.test.ts` — "entering SID Player from Demo Mode stops the
-  demo server", "entering Demo Mode from SID Player switches to the full app first", "pinning Demo Mode is
+  demo server", "entering Demo Mode from SID Player switches to Full App first", "pinning Demo Mode is
   refused while SID Player is active".
 - Verification: unit.
 - Status: Not started. Evidence: —
@@ -314,7 +332,7 @@ Status · Evidence.
 #### SPM-NET-01 No device traffic in SID Player
 
 - Requirement: While SID Player is active the app MUST send no REST, FTP, Telnet, stream-control, mDNS or
-  LAN-scan packet to any device. Internet traffic for HVSC, CommoServe and SID Radio data stays allowed.
+  LAN-scan packet to any device. The only exception is the user-initiated, bounded ROM read of `SPM-ROM-18`. Internet traffic for HVSC, CommoServe and SID Radio data stays allowed.
 - Rationale: No wasted requests, no error toasts, no battery cost.
 - Files: covered by `SPM-MODE-01`, `SPM-NET-02`, `SPM-NET-03`.
 - Choke point: discovery guard plus the traffic backstop.
@@ -358,7 +376,7 @@ Status · Evidence.
 - Choke point: `assertDeviceTrafficAllowed`.
 - Acceptance: A forced request in SID Player throws, is logged once, and reaches no socket.
 - Tests: `tests/unit/lib/appMode/deviceTrafficGate.test.ts` — "blocks each channel in SID Player and logs once",
-  "allows every channel in the full app"; `tests/unit/c64api.sidPlayer.test.ts` — "a REST call in SID Player is
+  "allows every channel in Full App"; `tests/unit/c64api.sidPlayer.test.ts` — "a REST call in SID Player is
   refused before dispatch and is not a critical error".
 - Verification: unit; zero hits asserted in `SPM-NET-01`.
 - Status: Not started. Evidence: —
@@ -512,26 +530,21 @@ Status · Evidence.
 
 #### SPM-PLAY-04 Tunes that need the C64 ROMs
 
-- Requirement: When `romFallbackDecision` routes a tune to the C64 in SID Player, the controller MUST skip it
-  with the notice "This tune needs the C64's ROMs, which SID Player does not have." shown at most once per
-  session, instead of "Device not connected".
-- Files: `src/lib/playback/playbackEngineRouting.ts` (new notice `rom-needed-no-device`),
-  `usePlaybackController.ts` (one line, after `SPM-ARCH-05` headroom check).
-- Choke point: `romFallbackDecision` / `ENGINE_FALLBACK_MESSAGES`.
-- Acceptance: An RSID in SID Player without stored ROMs is skipped with that notice once.
-- Tests: `tests/unit/lib/playback/playbackEngineRouting.test.ts` — "SID Player turns a ROM-required tune into
-  a skip notice".
-- Verification: unit, handset.
+- Requirement: A tune that cannot play because ROMs are missing MUST be skipped, never routed to an absent
+  device and never left playing silence. The design is in `SPM-ROM-05` to `SPM-ROM-07`. This ID remains
+  the umbrella that Play page commits cite.
+- Tests: those of `SPM-ROM-05` to `SPM-ROM-07`.
+- Verification: unit, Playwright, handset.
 - Status: Not started. Evidence: —
 
-#### SPM-PLAY-05 Import ROM images from files
+#### SPM-PLAY-05 Supply ROM images from files
 
-- Requirement: Settings SHOULD let a SID Player user import KERNAL and BASIC images from files, validated by
-  `validateRomImage` and stored by `saveRom`. The copy MUST say the user may only use images they are
-  entitled to.
-- Rationale: Without a device the ROMs cannot be read today, so accurate playback is otherwise unavailable.
-- Files: `src/pages/settings/LocalEngineRomsRow.tsx`.
-- Status: Deferred (product decision on ROM sourcing). Evidence: —
+- Requirement: The user MUST be able to supply their own KERNAL and BASIC images from files in a few taps or
+  key presses. The design is in `SPM-ROM-01` to `SPM-ROM-04` and `SPM-ROM-08` to `SPM-ROM-15`. This ID
+  remains the umbrella.
+- Tests: those of the referenced IDs.
+- Verification: unit, Playwright with a fake picker, handset.
+- Status: Not started. Evidence: —
 
 #### SPM-PLAY-06 Engine notices fit SID Player
 
@@ -569,7 +582,7 @@ Status · Evidence.
   | `diagnostics` | keep |
   | `play-and-disk` | adapt (`SPM-SET-02`) |
   | `feature-group-stable`, `feature-group-experimental` | adapt (`SPM-SET-03`) |
-  | `sid-radio` | keep; hide the play-on choice and "Read from C64" |
+  | `sid-radio` | keep; hide the play-on choice; the ROM row opens the ROM sheet (`SPM-ROM-09`) |
   | audio processing | keep |
   | `hvsc` | keep |
   | `online-archive` | keep |
@@ -622,14 +635,14 @@ Status · Evidence.
 #### SPM-QM-01 Quick menu entries
 
 - Requirement: In SID Player the Quick menu MUST list only visible tabs, MUST hide machine pause, machine
-  reset, Game Mode, switch device and stop Live View, and MUST show "Leave SID Player". In the full app it
+  reset, Game Mode, switch device and stop Live View, and MUST show "Leave SID Player". In Full App it
   MUST show "Use SID Player" only while no device is connected (`OFFLINE_NO_DEMO` or `DEMO_ACTIVE`). The
   keypad shortcuts `machinePauseResume`, `machineReset`, `openDeviceSwitcher` in `App.tsx` MUST be
   `undefined` in SID Player.
 - Files: `src/components/input/KeypadQuickMenu.tsx`, `src/App.tsx`.
 - Choke point: `isSurfaceVisible("quick-menu:…")`.
 - Tests: `tests/unit/components/input/KeypadQuickMenu.test.tsx` — "SID Player lists visible tabs and the leave
-  entry", "the full app offers SID Player only without a connected device".
+  entry", "Full App offers SID Player only without a connected device".
 - Verification: unit, Playwright keypad, handset.
 - Status: Not started. Evidence: —
 
@@ -662,7 +675,7 @@ Status · Evidence.
 
 - Requirement: `GuideContext` MUST carry the app mode. In SID Player `buildGuideChapters` MUST omit
   `machineChapters` and the `devices`, `connection-problems` and `status-badge` help chapters, and MUST add a
-  "SID Player" chapter (how to leave, what is hidden, ROM limitation). The full app MUST include the same
+  "SID Player" chapter (how to leave, what is hidden, ROM limitation). Full App MUST include the same
   chapter.
 - Files: `src/lib/docs/guide/chapters.ts`, `types.ts`, `helpChapters.ts`.
 - Choke point: `buildGuideChapters`.
@@ -721,7 +734,7 @@ Status · Evidence.
 #### SPM-SWT-01 Entry points
 
 - Requirement: SID Player MUST be reachable from: the Settings `app-mode` section (both modes), the Quick menu
-  (`SPM-QM-01`), Home's connect card while offline in the full app, the first-run offer (`SPM-FRST-01`), and
+  (`SPM-QM-01`), Home's connect card while offline in Full App, the first-run offer (`SPM-FRST-01`), and
   Diagnostics in SID Player. Leaving MUST be reachable from the Settings `app-mode` section, the Quick menu,
   the Home card and Diagnostics. Every entry MUST be operable with the focus ring alone, scroll into view
   when focused, be at least 44x44 CSS px, and use text at or above the 14/16 px floors.
@@ -740,7 +753,7 @@ Status · Evidence.
   persists `demo` and pins Demo Mode. Cancel changes nothing. Back and the left soft key MUST cancel.
 - Files: `src/lib/appMode/appModeTransitions.ts`, `DeviceLessChoices.tsx`.
 - Choke point: `appModeTransitions`.
-- Tests: `tests/unit/lib/appMode/appModeTransitions.test.ts` — "leaving to the full app starts settings
+- Tests: `tests/unit/lib/appMode/appModeTransitions.test.ts` — "leaving to Full App starts settings
   discovery", "cancel changes nothing"; `playwright/sidPlayerMode.spec.ts` — "enter and leave SID Player
   from Settings".
 - Verification: unit, Playwright, handset.
@@ -901,7 +914,7 @@ Status · Evidence.
 
 - Requirement: `playwright/sidPlayerMode.spec.ts` MUST start the app with `c64u_startup_mode=sid-player`
   (init script) against the mock device server and assert the `SPM-MODE-03` table, zero device requests,
-  zero toasts, and keypad-only operation. The existing suites stay in the full app and are not edited
+  zero toasts, and keypad-only operation. The existing suites stay in Full App and are not edited
   beyond the additions named in `SPM-SWT-01`.
 - Status: Not started. Evidence: —
 
@@ -1025,6 +1038,459 @@ per combination.
 - Verification: handset enumeration; `npm run lint:reference-docs`.
 - Status: Not started. Evidence: —
 
+### 5.16 C64 ROMs: skipping and supplying them
+
+Product decision: both a graceful skip for tunes that need ROMs, and an easy way for users to supply their
+own ROM files. No ROM is bundled. No ROM is fetched from the network, except from the user's own connected
+device as today. This section applies to SID Player and to Full App whenever no device can supply the ROMs
+(`OFFLINE_NO_DEMO`, `DEMO_ACTIVE`).
+
+#### SPM-ROM-01 Which ROMs, and which tunes need them
+
+- Requirement: The app MUST store and use the KERNAL (8192 bytes) and BASIC (8192 bytes) images. The need
+  matrix MUST be implemented as one pure function, `romNeedFor(sidBytes)` in
+  `src/lib/playback/localSidWorkerCore.ts`, beside `detectRomRequired`:
+
+  | Tune | Needs | Without them |
+  | --- | --- | --- |
+  | RSID v2+ with the BASIC flag (`detectRomRequired`) | KERNAL and BASIC | skipped (`SPM-ROM-05`) |
+  | Every other PSID or RSID | nothing | plays on the synthesized minimal KERNAL; a real KERNAL improves fidelity for tunes that call KERNAL routines, which no header declares |
+
+  The character ROM (4096 bytes) MUST NOT be stored or used. The engine passes `null` for it today, and no
+  header declares a need for it. A supplied character ROM file is reported as not needed (`SPM-ROM-11`).
+  Support for it is `SPM-ROM-16` (Deferred).
+- Rationale: BASIC programs call KERNAL routines, so a BASIC image alone does not make a BASIC tune
+  playable. "Needs ROM" can only be detected from the header; a late ROM call is caught by `SPM-ROM-06`.
+- Files: `localSidWorkerCore.ts`.
+- Choke point: `romNeedFor`.
+- Tests: `tests/unit/playback/localSidWorkerCore.test.ts` — "a BASIC-declared RSID needs KERNAL and BASIC",
+  "a PSID and an RSID without the BASIC flag need no ROM".
+- Verification: unit.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-02 Recognize a supplied file
+
+- Requirement: `classifyRomFile(name, bytes)` in `c64SystemRoms.ts` MUST return zero or more validated
+  `C64RomImage`s, or a short reason, using these structural rules:
+  1. 8192 bytes: BASIC when the `CBMBASIC` signature is present, KERNAL when the reset vector check passes;
+     the known fingerprint, when matched, names the revision.
+  2. 8194 bytes whose first two bytes are a load address of `$A000` (BASIC) or `$E000` (KERNAL): strip the
+     header, then apply rule 1.
+  3. 16384 bytes: a combined image with BASIC in the first half and KERNAL in the second, validated half by
+     half. One valid half is accepted alone.
+  4. 4096 bytes: a character ROM, reported as not needed.
+  5. Anything else, including a size above 16386 bytes, is not recognized and is not read past 16386 bytes.
+  The file name is never used to decide the kind; it is only shown in feedback. A known-good fingerprint list
+  MUST NOT gate acceptance. Other KERNAL revisions, regional and custom KERNALs are accepted as
+  "unrecognised variant", with the note "may change how a few tunes sound". Images that fail
+  `validateRomImage` are rejected with its reason.
+- Rationale: Users hold ROM files in several common layouts. A hash allowlist would reject legitimate
+  revisions, and structural checks already reject RAM dumps and wrong files.
+- Files: `src/lib/roms/c64SystemRoms.ts`.
+- Choke point: `classifyRomFile`.
+- Tests: `tests/unit/lib/roms/classifyRomFile.test.ts` — "an 8 KiB image with the BASIC signature is BASIC",
+  "an 8 KiB image with a KERNAL reset vector is KERNAL", "a load-address header is stripped", "a 16 KiB
+  combined image yields BASIC and KERNAL", "a 4 KiB image is reported as a character ROM", "a uniform or RAM-like
+  image is rejected with its reason", "an unknown revision is accepted as an unrecognised variant", "the file
+  name does not decide the kind". Fixtures MUST be synthetic images that satisfy the structural rules; no ROM
+  bytes are committed. The known-fingerprint path is tested by injecting a fingerprint table.
+- Verification: unit.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-03 Storage, source and privacy
+
+- Requirement: `StoredRom` MUST gain `source: "file" | "device"`. An entry without it reads as `device`, so
+  the v1 key and existing stored images stay valid without migration. For a file, `capturedFrom` holds the
+  file name. Images stay in app-private storage, survive restarts and app updates, and MUST NOT be part of
+  settings export, diagnostics export or shared logs. Removing MUST be possible for one kind or for both.
+  Every save and remove MUST dispatch `c64u-system-roms-changed`.
+- Rationale: The images are copyrighted. They must not travel in a file a user shares.
+- Files: `src/lib/roms/romStore.ts`.
+- Choke point: `saveRom`, `clearStoredRoms`, new `removeStoredRom(kind)`.
+- Tests: `tests/unit/lib/roms/romStore.test.ts` — "an entry without a source reads as from the device",
+  "removing one kind keeps the other", "save and remove announce the change";
+  `tests/unit/lib/config/settingsTransfer.test.ts` — "settings export carries no ROM image";
+  `tests/unit/lib/diagnostics/diagnosticsExport.test.ts` — "a diagnostics report carries no ROM image".
+- Verification: unit.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-04 Precedence between file and device ROMs
+
+- Requirement: Each kind has one slot. An explicit user action replaces the slot: importing a file, or
+  "Read from C64" in Settings, which asks for confirmation when the slot holds a file. The automatic device
+  read (`ensureSystemRoms`) MUST fill only empty slots and MUST NEVER overwrite a `file` slot.
+  `fetchSystemRomsFromDevice` MUST take a `fillEmptyOnly` option to enforce this.
+- Rationale: The user's deliberate choice is never undone silently. A connected device still completes an
+  incomplete set without asking.
+- Files: `romFetchService.ts`, `ensureSystemRoms.ts`, `LocalEngineRomsRow.tsx`.
+- Choke point: `fetchSystemRomsFromDevice`.
+- Tests: `tests/unit/lib/roms/ensureSystemRoms.test.ts` — "the automatic read fills an empty slot and keeps a
+  file slot", "an explicit read replaces a file slot after confirmation".
+- Verification: unit; handset with a device in Full App (optional).
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-05 Skip before opening when the header declares a need
+
+- Requirement: When `romNeedFor` reports a need that the store cannot meet and no device can play the tune,
+  the controller MUST NOT route it to the C64. Instead it MUST record a skip (`SPM-ROM-07`) and advance through
+  the existing auto-advance path. "No device" means SID Player, `OFFLINE_NO_DEMO`, or the simulated device.
+  `romFallbackDecision` MUST return a `skip` route for that case. With a real connected device the existing
+  route to the C64 stays.
+- Files: `src/lib/playback/playbackEngineRouting.ts`, `usePlaybackController.ts` (one call site).
+- Choke point: `romFallbackDecision`.
+- Tests: `tests/unit/lib/playback/playbackEngineRouting.test.ts` — "a BASIC tune without ROMs and without a
+  device is skipped", "a BASIC tune without ROMs plays on a connected C64"; `tests/unit/pages/playFiles/
+  usePlaybackController.romSkip.test.tsx` — "a skipped tune advances to the next playable tune at once".
+- Verification: unit, Playwright, handset.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-06 Skip when the engine refuses at open
+
+- Requirement: A `romRequired: true` result from `LocalSidPlaybackController.play()` MUST record a skip and
+  advance immediately, in every mode. Today the result is ignored and the tune plays silence until its
+  songlength runs out. This is a defect in both modes and ships with its own regression test.
+- Files: `usePlaybackController.ts` (the `play` call site), `localSidPlaybackController.ts`.
+- Choke point: the result of `play()`.
+- Tests: `tests/unit/pages/playFiles/usePlaybackController.romSkip.test.tsx` — "a tune the engine refuses
+  for missing ROMs advances instead of playing silence". Reverting the fix must make it fail.
+- Verification: unit, handset.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-07 No stall and no error storm
+
+- Requirement: Skips MUST be held in a session store, `src/lib/roms/romSkips.ts`, keyed by playlist item id
+  and by SID MD5. `canPlayWithoutDevice` MUST treat a recorded item as unplayable, so auto-advance,
+  `firstPlayableWithoutDevice`, next-tune prefetch and warm-up pass over it without opening it again. When a
+  full pass over the playlist finds nothing playable, playback MUST stop with the notice of `SPM-ROM-08`
+  rather than loop. SID Radio MUST draw the next station tune in the same way. Skips are logged at `info`
+  with the item and the missing kinds; they are not errors. Rows of skipped items show the subtitle
+  "Needs C64 ROMs".
+- Files: new `romSkips.ts`, `playableWithoutDevice.ts`, `playlistRowSubtitle.ts`, the station queue provider.
+- Choke point: `canPlayWithoutDevice`.
+- Tests: `tests/unit/lib/roms/romSkips.test.ts` — "a recorded tune is not opened again this session";
+  `tests/unit/pages/playFiles/playableWithoutDevice.test.ts` — "auto-advance passes over a tune that needs
+  ROMs", "a playlist of only ROM-dependent tunes stops with one notice instead of looping".
+- Verification: unit, Playwright.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-08 One calm notice with an Add ROMs action
+
+- Requirement: The first skip in a session MUST show one toast: title "Skipped a tune", description "It needs
+  the C64 ROMs. You can add your own copies.", action "Add ROMs". The action opens the ROM sheet
+  (`SPM-ROM-09`). Further skips in the same session MUST NOT toast. The notice MAY appear once more after the
+  ROM set changes and a skip happens again. On the keypad, the action MUST be reachable through the existing
+  Quick menu entry for the newest notification action (`findNewestToastAction`). The toast MUST use the
+  existing toast component and notification settings.
+- Files: `src/lib/roms/romSkips.ts`, `src/lib/input/toastAction.ts` (no change expected).
+- Choke point: `romSkips.noteSkip()`.
+- Tests: `tests/unit/lib/roms/romSkips.test.ts` — "only the first skip in a session raises the notice", "the
+  notice action opens the ROM sheet"; `playwright/sidPlayerRoms.spec.ts` — "Add ROMs from the notice is
+  reachable from the keypad Quick menu".
+- Verification: unit, Playwright, handset.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-09 The ROM sheet
+
+- Requirement: One component, `src/components/roms/RomSheet.tsx` (an `AppSheet`), MUST show:
+  - the current set ("KERNAL: 901227-03 from file kernal.bin", "BASIC: missing");
+  - "Choose files" and "Choose a folder";
+  - per-file results (`SPM-ROM-11`);
+  - "Remove" for each kind.
+  The copy MUST say: "Use your own copies of the C64 KERNAL and BASIC ROMs. This app does not include them
+  and does not download them. Most tunes play without them." Every control MUST be focus-ring operable, at
+  least 44x44 CSS px, with text at or above the floors. Back and the left soft key close the sheet. The
+  developer-only `LocalEngineRomsRow` MUST become a summary row that opens this sheet. In Full App with a
+  connected device the row also offers "Read from C64".
+- Files: new `RomSheet.tsx`, `LocalEngineRomsRow.tsx`, `SidRadioSettingsSection.tsx` (no longer
+  developer-only).
+- Choke point: `RomSheet`.
+- Tests: `tests/unit/components/roms/RomSheet.test.tsx` — "shows the current set and its sources", "removing
+  one kind updates the set", "every control is reachable by the focus ring".
+- Verification: unit, Playwright, handset.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-10 Picking files
+
+- Requirement:
+  - "Choose files" MUST allow choosing several files at once. On the web this is `<input type="file"
+    multiple>`. Native gets a new `FolderPicker.pickFiles` (Android `ACTION_OPEN_DOCUMENT` with
+    `EXTRA_ALLOW_MULTIPLE`; iOS document picker with multiple selection), read through the existing
+    `readFile`.
+  - "Choose a folder" MUST use `pickDirectory` and `readFileFromTree`, reading at most 64 files of at most
+    16386 bytes each, without descending into subfolders.
+  - Picking MUST go through the existing override hook (`__c64uFolderPickerOverride`) so Playwright can
+    supply a fake picker.
+  - Cancelling a picker MUST change nothing and show nothing.
+- Files: `src/lib/native/folderPicker.ts`, `android/app/src/main/java/uk/gleissner/c64commander/FolderPickerPlugin.kt`,
+  `ios/App/App/NativePlugins.swift`, new `src/lib/roms/importRomFiles.ts`.
+- Choke point: `importRomFiles(sources)`.
+- Tests: `tests/unit/lib/roms/importRomFiles.test.ts` — "three files add KERNAL and BASIC and decline the
+  character ROM", "a folder is read one level deep with a size cap", "cancel changes nothing";
+  Android JVM `FolderPickerPluginTest` — "pickFiles returns every selected document";
+  `playwright/sidPlayerRoms.spec.ts` — "choose files through a fake picker".
+- Verification: unit, Android JVM, Playwright, handset.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-11 Per-file feedback
+
+- Requirement: Each picked file MUST produce one result line, announced through an `aria-live` region:
+  - "KERNAL added (901227-03)"
+  - "BASIC added (901226-01)"
+  - "KERNAL replaced"
+  - "KERNAL added (unrecognised variant; may change how a few tunes sound)"
+  - "BASIC and KERNAL added from one file"
+  - "Character ROM: not needed for music"
+  - "File not recognised: <short reason>"
+  A summary line follows: "Ready: KERNAL and BASIC" or "Still missing: BASIC". Results within one pick are
+  applied together. When two files supply the same kind, the last valid one wins and the line says so.
+- Files: `RomSheet.tsx`, `importRomFiles.ts`.
+- Tests: `tests/unit/lib/roms/importRomFiles.test.ts` — "each file gets one result line", "a duplicate kind
+  reports which file was kept".
+- Verification: unit, Playwright.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-12 A device with no document picker
+
+- Requirement: When `canPickDocuments()` reports no file support, the sheet MUST replace both pick buttons
+  with the path of the app's import folder (the app-specific external files directory, subfolder `roms`) and a
+  "Check the folder" button. A new native method lists and reads that folder under the same limits as
+  `SPM-ROM-10`. If this folder cannot be reached from a computer on the compact keypad phone, the handset
+  check MUST record that as a blocker.
+- Rationale: The keypad phone class this app targets may have no system document picker, and local sources
+  are already hidden there for that reason.
+- Files: `FolderPickerPlugin.kt` (or a small `RomImportPlugin`), `folderPicker.ts`, `RomSheet.tsx`.
+- Tests: `tests/unit/components/roms/RomSheet.test.tsx` — "without a document picker the sheet offers the import
+  folder"; Android JVM — "the import folder lists only top-level files under the size cap".
+- Verification: unit, Android JVM, handset (compact keypad phone).
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-13 Entry points
+
+- Requirement: The ROM sheet MUST open from:
+  - the skip notice action (`SPM-ROM-08`);
+  - the Settings ROM row (`SPM-ROM-09`), shown in SID Player and in Full App;
+  - the SID Player card on Home (`SPM-HOME-04`), as "Add C64 ROMs (optional)" until the set is complete,
+    which also covers the first launch of a SID Player start-up;
+  - the "SID Player" chapter of the in-app guide, through a button.
+  The search index MUST gain an entry "C64 ROMs" that targets the Settings row.
+- Files: `ConnectC64Card.tsx`, `LocalEngineRomsRow.tsx`, `helpChapters.ts`, `search/` sources.
+- Tests: `tests/unit/pages/home/ConnectC64Card.test.tsx` — "offers Add C64 ROMs until the set is complete";
+  `tests/unit/lib/search/sidPlayerSearch.test.ts` — "searching ROMs finds the ROM row".
+- Verification: unit, Playwright.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-14 After an import
+
+- Requirement: On `c64u-system-roms-changed`:
+  - `romSkips` MUST forget every skip whose missing kinds are now present. Their rows lose the subtitle and
+    the tunes play when reached.
+  - Nothing MUST start playing by itself, and a playback stopped by the loop guard stays stopped.
+  - Playlists are unchanged, because skipping never removes an item.
+  - SID Radio does not re-insert tunes it passed over.
+  - The rendered-tune cache key MUST carry the fingerprints of the present images instead of `/noroms`, so a
+    pre-render made with another set is never reused.
+  - `LocalSidEngine` MUST send each present image rather than only a complete pair, and the BASIC check MUST
+    require both images. The worker protocol `roms` field becomes `{ kernal?: ArrayBuffer; basic?: ArrayBuffer }`.
+- Files: `romSkips.ts`, `renderedTuneCache.ts`, `localSidEngine.ts` (15 lines of headroom),
+  `localSidWorkerProtocol.ts`, `sidRendererContract.ts`, `wasmRendererCore.ts`, `sidplayEzRendererCore.ts`.
+- Choke point: the `c64u-system-roms-changed` event.
+- Tests: `tests/unit/lib/roms/romSkips.test.ts` — "adding the missing ROMs clears their skips and starts
+  nothing"; `tests/unit/lib/playback/renderedTuneCache.test.ts` — "a different ROM set gives a different
+  key"; `tests/unit/playback/wasmRendererCore.test.ts` — "a BASIC tune with BASIC but no KERNAL is refused",
+  "a KERNAL alone is passed to the engine".
+- Verification: unit, handset (play a BASIC-declared tune after importing).
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-15 Sources of ROM bytes
+
+- Requirement: ROM bytes MUST enter the store only through `importRomFiles` (user files, archives and shared
+  items) and `fetchSystemRomsFromDevice` (the user's own device, automatic in Full App or through
+  `SPM-ROM-18`). The repository MUST contain no ROM image, and no
+  code may download one.
+- Tests: `tests/unit/lib/roms/romSources.test.ts` — "only the two import paths call saveRom" (a module-graph
+  check over `src/`).
+- Verification: unit, review.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-16 Character ROM support
+
+- Requirement: Store a 4096-byte character ROM and pass it to `setSystemROMs`.
+- Rationale for deferring: no header declares a need for it, and no measured tune has been shown to need it.
+  Revisit when a tune is shown to need it.
+- Status: Deferred. Evidence: —
+
+#### SPM-ROM-17 Full App without a device
+
+- Requirement: In Full App with no device (`OFFLINE_NO_DEMO`), and in Demo Mode, the skip, notice, sheet and
+  import MUST behave as in SID Player. With a real device connected, the behavior is unchanged: header-declared
+  tunes go to the C64 when the set is incomplete, and the automatic device read fills empty slots
+  (`SPM-ROM-04`). The ROM row is visible in every mode.
+- Tests: `tests/unit/lib/playback/playbackEngineRouting.test.ts` — "Demo Mode skips a BASIC tune without
+  ROMs"; `playwright/sidPlayerRoms.spec.ts` — "Full App offline skips and imports like SID Player".
+- Verification: unit, Playwright.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-18 Get ROMs from my Ultimate (one-shot exception to SPM-NET-01)
+
+- Requirement: The ROM sheet MUST offer "Get ROMs from my Ultimate" in every mode. In SID Player it is the
+  only path allowed to send device traffic, and only while the user's request is in progress:
+  1. The user picks a saved device, types a hostname or IP address, or presses "Look on this network". That
+     button runs one LAN scan inside the scope and lists what it found.
+  2. The app identifies the host (`GET /v1/info`, accepting any Ultimate-family product, including the
+     cartridge) and asks for its password if it answers 401/403.
+  3. The app reads the two ROM areas with `readMemory` (`ROM_SOURCE_ADDRESS`, 8192 bytes each) and stores
+     the valid images as `source: "device"` through `fetchSystemRomsFromDevice`. The explicit-action
+     precedence of `SPM-ROM-04` applies.
+  4. The app stops.
+  - The traffic is made by a transient `C64API` instance for that host. It MUST NOT change the connection
+    state, the selected device, the saved devices (unless the user is in Full App and chooses "Save this
+    device"), health probing, discovery schedules or the stored device host.
+  - `deviceTrafficGate.ts` MUST expose `withRomReadException(host, run)`. It opens a scope bound to that one
+    host and closes it in `finally`, or after 60 seconds, whichever comes first. Inside the scope
+    `assertDeviceTrafficAllowed` allows only `GET /v1/info`, the `readmem` requests for the two ROM ranges,
+    and one discovery scan. It blocks everything else, including other hosts, FTP and Telnet.
+  - Cancel aborts the in-flight request and closes the scope.
+- Rationale: Users who own a device but use SID Player get accurate ROMs with no file handling. The bounded
+  scope keeps the rule "no device traffic in SID Player" true outside an explicit request.
+- Files: `deviceTrafficGate.ts`, `romFetchService.ts` (accept a `C64API` for any host), `RomSheet.tsx`,
+  `discoveryManager.ts` (scan inside the scope only).
+- Choke point: `withRomReadException`.
+- Tests: `tests/unit/lib/appMode/deviceTrafficGate.test.ts` — "the ROM exception allows only info and the two
+  ROM reads on its host", "the ROM exception blocks another host, FTP, Telnet and any other REST path",
+  "the scope closes after success, failure, cancel and the time bound", "outside the scope SID Player blocks
+  everything"; `tests/unit/lib/roms/getRomsFromDevice.test.ts` — "reading ROMs changes no connection state,
+  saved device or schedule". `SPM-NET-01`'s zero-request session test stays unchanged; a second session
+  asserts exactly the allowed requests.
+- Verification: unit, Playwright (mock device), handset against `c64u` and `u2` (two REST reads each; no
+  other traffic in the CDP log).
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-19 Archives
+
+- Requirement: "Choose files" and the share target (`SPM-ROM-20`) MUST accept `.zip` and `.7z` archives,
+  through the existing archive support (`localArchiveIngestion.ts`). The app MUST extract only entries of at
+  most 16386 bytes, at most 256 entries, and no nested archives. It classifies each entry with
+  `classifyRomFile` and reports one summary line per archive ("From roms.zip: KERNAL and BASIC added,
+  12 other files ignored"). Extracted bytes MUST NOT be written to disk.
+- Rationale: Emulator ROM packs and personal backups are usually archives; this saves the user from
+  unpacking on a phone.
+- Legal posture: the user supplies their own archive; nothing changes compared to single files.
+- Size: small (reuses archive code).
+- Tests: `tests/unit/lib/roms/importRomFiles.test.ts` — "an archive yields its ROM entries and ignores the
+  rest", "oversized and nested entries are not extracted".
+- Verification: unit, Playwright with a fake picker.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-20 Open with and share to the app
+
+- Requirement: On Android the app SHOULD register for `ACTION_SEND` and `ACTION_SEND_MULTIPLE` (any type) and
+  for `ACTION_VIEW` of `application/zip` and `application/x-7z-compressed`. A received item MUST be offered
+  to the ROM import only after the user confirms in the ROM sheet ("Add these as C64 ROMs?"). It MUST work
+  in every mode and on a cold start. Non-ROM content gets "File not recognised" and nothing else happens.
+  `ACTION_VIEW` for `application/octet-stream` MUST NOT be registered, so the app does not appear for every
+  binary file.
+- Rationale: On a phone without a system document picker, a file manager, mail or cloud app can still hand
+  the file over. This makes it the better fallback than `SPM-ROM-12` where a file manager exists.
+- Legal posture: unchanged.
+- Size: medium (manifest, an intent handler in `MainActivity`, a small plugin event).
+- Tests: Android JVM — "a shared document reaches the app as one import request", "a view intent for an
+  archive on a cold start opens the ROM sheet"; unit — "a received item is imported only after confirmation".
+- Verification: Android JVM, handset.
+- Status: Not started (recommended for the second ROM phase). Evidence: —
+
+#### SPM-ROM-21 Emulator ROM folders
+
+- Requirement: No separate feature. A user-visible folder that holds an emulator's ROMs is picked with
+  "Choose a folder" (`SPM-ROM-10`). Content is detected by `classifyRomFile` regardless of file names, so
+  common emulator layouts work as they are.
+- Rationale for cutting a dedicated feature: other apps' private data folders cannot be read through the
+  storage-access framework, so a dedicated "find my emulator" feature could only offer what the folder picker
+  already offers.
+- Status: Not started (covered by `SPM-ROM-10`). Evidence: —
+
+#### SPM-ROM-22 User-supplied URL, FTP or network share
+
+- Decision:
+  - A free-form URL download: cut. It would turn the app into a downloader in which pasting a third-party
+    link is the easiest path, which conflicts with the rule against fetching ROMs from the internet and
+    raises store-policy risk.
+  - FTP or SMB to the user's own NAS or PC: deferred. The native FTP client exists, but no SMB client does.
+    Demand is unproven next to files, archives, share and the device read.
+  - Any Ultimate-family device reachable by hostname is covered by `SPM-ROM-18`.
+- Status: Deferred (FTP or SMB); cut (URL). Evidence: —
+
+#### SPM-ROM-23 Honest ROM-less behavior and a measured skip set
+
+- Requirement: The docs and the guide MUST state what happens without ROMs, based on the code and a
+  measurement, not on assumption:
+  - The WASM renderer passes `null` images. libsidplayfp then installs a minimal KERNAL replacement that
+    provides reset and the standard interrupt entry points, an empty BASIC area and an empty character area.
+  - Every PSID and every RSID that relies only on those entry points plays.
+  - An RSID that declares BASIC cannot play (`SPM-ROM-05`).
+  - Other tunes that call further KERNAL routines may play wrongly or go quiet. The header does not reveal
+    them, and a quiet tune is not detected as a ROM problem.
+  A measurement MUST render the HVSC RSID set and a PSID sample with and without the user's own ROMs (held
+  locally, never committed) on the WASM renderer and on the native libSidplayEZ backend. It classifies each
+  tune as identical, different or silent, and records the counts and the method in
+  `docs/plans/sid-player-mode/rom-less-measurement.md`. If the silent group can be identified by a cheap
+  check, it SHOULD feed `romNeedFor`, so the skip set is as small as is truthful.
+- Rationale: Users must not be told ROMs are needed when they are not, and the skip notice must not be the
+  only signal when a tune fails quietly.
+- Tests: the measurement is evidence; `romNeedFor` changes, if any, get unit tests with synthetic headers.
+- Verification: offline render harness (development machine), handset spot check.
+- Status: Not started. Evidence: —
+
+#### SPM-ROM-24 Freely licensed replacement ROMs (open decision)
+
+- Requirement: none until decided. Open questions:
+  1. Licence: is an open-source C64 ROM replacement project's licence compatible with this app's
+     GPL-3.0-or-later licence and with app store distribution? This needs a legal check of the actual licence
+     text; nothing is assumed here.
+  2. Compatibility: does it keep the interrupt entry points and their cycle timing, which tune timing depends
+     on? This is measured with the `SPM-ROM-23` harness against real ROMs.
+  3. Product: would a bundled replacement set be presented as "built-in", with real ROMs as an optional
+     upgrade?
+  Commodore ROMs MUST NOT be bundled under any outcome.
+- Status: Deferred (open decision; legal check needed). Evidence: —
+
+#### SPM-ROM-25 Export or back up the imported ROM set
+
+- Decision: not recommended; deferred. The user already holds the original files and can import them on
+  another device in the same way. An in-app export adds a redistribution path and no convenience. Android
+  backup is disabled in the manifest (`allowBackup="false"`), so images do not leave the device through
+  backups.
+- Status: Deferred (not recommended). Evidence: —
+
+#### SPM-ROM-26 Guide page: where to get ROMs
+
+- Requirement: The in-app guide and both manuals MUST have a section "Where do I get the C64 ROMs?" that names
+  only lawful sources in plain words: a dump from a C64 or Ultimate-family device the user owns ("Get ROMs
+  from my Ultimate"), the ROM files of an emulator installation the user has, and ROM files included in a
+  licensed product the user bought. It MUST say that most tunes play without ROMs, MUST NOT link to any site,
+  and MUST NOT name hosts that distribute copies. Manual text goes through the naming helpers (`SPM-ED-04`).
+- Files: `helpChapters.ts`, `scripts/build-manuals.mjs`.
+- Tests: `tests/unit/lib/docs/guide/chapters.test.ts` — "the ROM help names no URL";
+  `tests/unit/scripts/buildManuals.test.ts` — "the ROM section is present in every edition".
+- Verification: unit, review.
+- Status: Not started. Evidence: —
+
+#### ROM sourcing options: recommendation
+
+| Option | Legal posture | Keypad steps | Size | Recommendation | ID |
+| --- | --- | --- | --- | --- | --- |
+| Multi-file and folder picker with content detection | user's own files | Add ROMs → Choose files → select → OK | small | build now | SPM-ROM-10/11 |
+| Archive (zip, 7z) | user's own archive | as above | small | build now | SPM-ROM-19 |
+| One-shot read from the user's Ultimate | user's own hardware | Add ROMs → Get ROMs from my Ultimate → pick device → OK | small | build now | SPM-ROM-18 |
+| Import folder when no picker exists | user's own files | copy files, then Check the folder | medium | build now (fallback) | SPM-ROM-12 |
+| Open with / share to the app | user's own files | file manager → Share → this app → confirm | medium | second ROM phase | SPM-ROM-20 |
+| Emulator folder | user's own install | Choose a folder | none | covered by the folder picker | SPM-ROM-21 |
+| URL download | invites third-party links | — | small | cut | SPM-ROM-22 |
+| FTP or SMB to the user's own share | user's own files | host, path, credentials | medium to large | defer | SPM-ROM-22 |
+| Honest ROM-less statement and measured skip set | none | — | small (measurement) | build now | SPM-ROM-23 |
+| Open replacement ROM set | licence to verify | none (built in) | small to medium | open decision | SPM-ROM-24 |
+| Export or back up the set | redistribution path | — | small | defer, not recommended | SPM-ROM-25 |
+| "Where to get ROMs" guide page | names lawful sources only | Docs → SID Player | small | build now | SPM-ROM-26 |
+
 ## 6. Inventory of surfaces and their fate in SID Player
 
 | Area | Surface (file) | Fate | Mechanism |
@@ -1055,7 +1521,9 @@ per combination.
 | Play | `PlaybackSpectrumCard`, `SleepTimerControl`, `TuneDetails`, `TuneNotes` | keep | — |
 | Play | Non-SID playlist rows | keep, marked, skipped | `SPM-PLAY-03` |
 | Settings | see `SPM-SET-01` table | per table | `SPM-SET-01..03` |
-| Settings | `LocalEngineRomsRow` "Read from C64" | hide | `SPM-SET-01` |
+| Settings | `LocalEngineRomsRow` | adapt: summary row opening the ROM sheet, in every mode | `SPM-ROM-09` |
+| Play | ROM skip notice, "Needs C64 ROMs" row subtitle | new | `SPM-ROM-07/08` |
+| Sheets | ROM sheet (files, folder, archive, Get ROMs from my Ultimate) | new | `SPM-ROM-09..12`, `SPM-ROM-18..19` |
 | Settings | Demo Mode rows in `connection` | moved into `app-mode` choices in SID Player | `SPM-ARCH-06` |
 | App bar | `UnifiedHealthBadge` | adapt: "SID Player", no switcher, no probes | `SPM-ERR-02`, `SPM-NET-02` |
 | App bar | Quick menu button | keep | — |
@@ -1113,13 +1581,19 @@ per combination.
 | Effect loops from a new store feeding effect dependencies | `useSyncExternalStore` with a primitive snapshot |
 | Settings export and import | Mode excluded; no export version bump |
 | Two APKs keep separate data | Documented in the SID Player guide chapter: HVSC is downloaded per app |
-| ROM-required tunes cannot play | `SPM-PLAY-04` skip notice; `SPM-PLAY-05` deferred |
+| A tune refused for missing ROMs plays silence today | `SPM-ROM-06` fixes it in both modes, with a regression test |
+| Skips that loop or flood notices | `SPM-ROM-07` session skip store and loop guard; `SPM-ROM-08` one notice per session |
+| The compact keypad phone may have no document picker | `SPM-ROM-12` import folder, `SPM-ROM-20` share target; handset check records a blocker if neither works |
+| The ROM-read exception widens into general device traffic | `SPM-ROM-18` scope bound to one host, three request kinds and 60 s; negative tests for every other channel |
+| ROM bytes leaking through exports or the repository | `SPM-ROM-03` exclusions, `SPM-ROM-15` single-writer check, synthetic fixtures only |
+| A user-supplied ROM variant changes tune timing | Accepted as "unrecognised variant" with a plain warning; `SPM-ROM-23` measures behavior |
+| Licence of a replacement ROM set | `SPM-ROM-24` stays an open decision until a legal check |
+| Worker protocol change overlaps the concurrent ROM-compatibility work | Land `SPM-ROM-14` after that work merges; `localSidEngine.ts` has 15 lines of headroom |
 | Bundle budget (index at most 250 KB gzip) | Store and surface map are a few KB; `AppModeSettingsSection` and `DeviceLessChoices` load with their pages; measure with `npm run lint:bundle-budgets` |
 | Health badge contract in UX guidelines | `SPM-DOC-03` |
 | CTA inventory and `lint:reference-docs` | `SPM-DOC-02` in the same commits as the controls |
 | Generated variant files drift | Run `node scripts/generate-variant.mjs`; `npm run variant:check` |
 | Manual workflow lists variants literally | `SPM-VAR-04` |
-| Concurrent ROM-compatibility work in the playback renderer | Coordinate `SPM-PLAY-04` with it; touch only `playbackEngineRouting.ts` |
 
 ## 9. Phased plan
 
@@ -1129,7 +1603,10 @@ per combination.
 | 1 | Store, surface map, variant field, flag `requires_device`, discovery guard, traffic gate, health label | SPM-ARCH-01..03, SPM-VAR-01..02, SPM-SET-03, SPM-MODE-01..02, SPM-NET-02..03, SPM-ERR-02, SPM-FRST-02..03 | appModeStore, surfaces, connectionManager.sidPlayer, deviceTrafficGate, featureFlags.sidPlayer, generateVariant | unit | 450 / 700 |
 | 2 | Navigation, Home, Settings, Quick menu, search, tour, guide gating | SPM-NAV-01..04, SPM-HOME-01..04, SPM-SET-01..02, SPM-QM-01, SPM-SRCH-01, SPM-TOUR-01, SPM-DOC-01, SPM-ERR-03..04 | tabRoutes, swipeNavigationModel, CollapsibleSection, HomePage.sidPlayer, KeypadQuickMenu, sidPlayerSearch, steps, chapters | unit, Playwright | 350 / 600 |
 | 3 | Switch UX and first run | SPM-ARCH-06, SPM-SWT-01..03, SPM-FRST-01, SPM-MODE-04 | DeviceLessChoices, appModeTransitions, DemoModeInterstitial, keypadOnlyNavigation addition | unit, Playwright, handset | 300 / 400 |
-| 4 | Playback and notice policy | SPM-PLAY-01..04, SPM-PLAY-06..07, SPM-ERR-01 | playbackEngineRouting, PlayFilesPage.sidPlayer, uiErrors.sidPlayer, playlistRowSubtitle | unit, Playwright, handset | 120 / 250 |
+| 4 | Playback and notice policy | SPM-PLAY-01..03, SPM-PLAY-06..07, SPM-ERR-01 | playbackEngineRouting, PlayFilesPage.sidPlayer, uiErrors.sidPlayer, playlistRowSubtitle | unit, Playwright, handset | 120 / 250 |
+| 4a | ROM skip (both modes), measurement | SPM-PLAY-04, SPM-ROM-01, SPM-ROM-05..08, SPM-ROM-17, SPM-ROM-23 | localSidWorkerCore, playbackEngineRouting, usePlaybackController.romSkip, romSkips, playableWithoutDevice | unit, Playwright, handset | 180 / 300 |
+| 4b | ROM supply: files, folder, archives, device read, sheet, entry points, guide | SPM-PLAY-05, SPM-ROM-02..04, SPM-ROM-09..15, SPM-ROM-18..19, SPM-ROM-26 | classifyRomFile, importRomFiles, romStore, RomSheet, deviceTrafficGate ROM exception, FolderPickerPluginTest, sidPlayerRoms.spec | unit, Android JVM, Playwright (fake picker), handset | 650 / 700 |
+| 4c | Share target | SPM-ROM-20 | Android JVM intent tests | Android JVM, handset | 150 / 120 |
 | 5 | SID Player variant, start-up override, CI, manuals per edition | SPM-VAR-03..05, SPM-ED-02, SPM-ED-04 | generateVariant, buildManuals | unit, CI | 180 + assets / 160 |
 | 6 | Docs, inventory, screenshots, per-edition Playwright | SPM-DOC-02..04, SPM-MODE-03, SPM-ED-01, SPM-ED-03, SPM-ED-05..06 | sidPlayerMode.spec, keypadOnlyNavigation, smallScreenErgonomics | Playwright, handset | docs + 150 test |
 | 7 | Convergence | SPM-NET-01, SPM-TST-01..05 | full suites, coverage gate | Playwright, handset | — |
@@ -1166,8 +1643,8 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-PLAY-01 | Device sources and controls are hidden | Not started | PlayFilesPage.sidPlayer.test.tsx | — |
 | SPM-PLAY-02 | Add items accepts only what the phone can play | Not started | sidPlayerAddFilter.test.ts | — |
 | SPM-PLAY-03 | Existing non-SID rows stay, marked and skipped | Not started | playlistRowSubtitle.test.ts | — |
-| SPM-PLAY-04 | Tunes that need the C64 ROMs | Not started | playbackEngineRouting.test.ts | — |
-| SPM-PLAY-05 | Import ROM images from files | Deferred | — | — |
+| SPM-PLAY-04 | Tunes that need the C64 ROMs (umbrella) | Not started | see SPM-ROM-05..07 | — |
+| SPM-PLAY-05 | Supply ROM images from files (umbrella) | Not started | see SPM-ROM-01..04, 08..15 | — |
 | SPM-PLAY-06 | Engine notices fit SID Player | Not started | playbackEngineRouting.test.ts | — |
 | SPM-PLAY-07 | SID Radio works in SID Player | Not started | sidPlayerMode.spec.ts | — |
 | SPM-SET-01 | Section visibility | Not started | SettingsPage.sidPlayer.test.tsx | — |
@@ -1207,3 +1684,29 @@ real panel, audio on the phone in SID Player, and absence of device traffic on a
 | SPM-ED-04 | Manual text per edition | Not started | buildManuals.test.ts | — |
 | SPM-ED-05 | Tests per edition and profile | Not started | sidPlayerMode.spec.ts | — |
 | SPM-ED-06 | CTA inventory per edition | Not started | lint:reference-docs, handset enumeration | — |
+| SPM-ROM-01 | Which ROMs, and which tunes need them | Not started | localSidWorkerCore.test.ts | — |
+| SPM-ROM-02 | Recognize a supplied file | Not started | classifyRomFile.test.ts | — |
+| SPM-ROM-03 | Storage, source and privacy | Not started | romStore.test.ts, settingsTransfer.test.ts, diagnosticsExport.test.ts | — |
+| SPM-ROM-04 | Precedence between file and device ROMs | Not started | ensureSystemRoms.test.ts | — |
+| SPM-ROM-05 | Skip before opening when the header declares a need | Not started | playbackEngineRouting.test.ts, usePlaybackController.romSkip.test.tsx | — |
+| SPM-ROM-06 | Skip when the engine refuses at open | Not started | usePlaybackController.romSkip.test.tsx | — |
+| SPM-ROM-07 | No stall and no error storm | Not started | romSkips.test.ts, playableWithoutDevice.test.ts | — |
+| SPM-ROM-08 | One calm notice with an Add ROMs action | Not started | romSkips.test.ts, sidPlayerRoms.spec.ts | — |
+| SPM-ROM-09 | The ROM sheet | Not started | RomSheet.test.tsx | — |
+| SPM-ROM-10 | Picking files | Not started | importRomFiles.test.ts, FolderPickerPluginTest, sidPlayerRoms.spec.ts | — |
+| SPM-ROM-11 | Per-file feedback | Not started | importRomFiles.test.ts | — |
+| SPM-ROM-12 | A device with no document picker | Not started | RomSheet.test.tsx, Android JVM | — |
+| SPM-ROM-13 | Entry points | Not started | ConnectC64Card.test.tsx, sidPlayerSearch.test.ts | — |
+| SPM-ROM-14 | After an import | Not started | romSkips.test.ts, renderedTuneCache.test.ts, wasmRendererCore.test.ts | — |
+| SPM-ROM-15 | Sources of ROM bytes | Not started | romSources.test.ts | — |
+| SPM-ROM-16 | Character ROM support | Deferred | — | — |
+| SPM-ROM-17 | Full App without a device | Not started | playbackEngineRouting.test.ts, sidPlayerRoms.spec.ts | — |
+| SPM-ROM-18 | Get ROMs from my Ultimate (one-shot exception) | Not started | deviceTrafficGate.test.ts, getRomsFromDevice.test.ts | — |
+| SPM-ROM-19 | Archives | Not started | importRomFiles.test.ts | — |
+| SPM-ROM-20 | Open with and share to the app | Not started | Android JVM intent tests | — |
+| SPM-ROM-21 | Emulator ROM folders | Not started | covered by SPM-ROM-10 | — |
+| SPM-ROM-22 | User-supplied URL, FTP or network share | Deferred | — | — |
+| SPM-ROM-23 | Honest ROM-less behavior and a measured skip set | Not started | rom-less-measurement.md | — |
+| SPM-ROM-24 | Freely licensed replacement ROMs (open decision) | Deferred | — | — |
+| SPM-ROM-25 | Export or back up the imported ROM set | Deferred | — | — |
+| SPM-ROM-26 | Guide page: where to get ROMs | Not started | chapters.test.ts, buildManuals.test.ts | — |
