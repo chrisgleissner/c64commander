@@ -33,7 +33,7 @@ edition. SID Player works, and can be switched at runtime, in both existing edit
 the compact keypad edition. A new variant builds a further APK named "SID Player" that starts in SID Player.
 The variant value is only the initial value: an explicit choice made by the user persists and wins.
 
-Measured fact (product owner): about 3% of the SID songs in HVSC require either the KERNAL or the BASIC ROM. The other tunes, about 97%, play without any ROM. Guide, manual and in-app help text state this as an approximate figure.
+Measured fact (product owner): only a small percentage of the SID songs in HVSC require the KERNAL or the BASIC ROM; most tunes play without any ROM. Guide, manual and in-app help text say "a small percentage" and give no figure.
 
 ## 2. Glossary
 
