@@ -9,22 +9,13 @@
 import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
-import { isTransientConnectivityFailure } from "@/lib/uiErrors";
+import { isConnectionFailure } from "@/lib/sourceNavigation/connectionFailure";
 import type { SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
 
 type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekCachedEntries">;
 
 /** While the device is marked unreachable, every this-many-th lookup tries it again. */
 export const CONFIG_LOOKUP_PROBE_EVERY = 25;
-
-/** What a failed device listing says when the device or the network is gone. */
-const LOST_CONNECTION_PATTERN =
-  /timed out|timeout|unable to resolve host|connection reset|connection abort|software caused|no route to host|network is unreachable|enetunreach|broken pipe/i;
-
-const isConnectionFailure = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  return LOST_CONNECTION_PATTERN.test(message) || isTransientConnectivityFailure(message);
-};
 
 export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up while the device could not be reached.";
 

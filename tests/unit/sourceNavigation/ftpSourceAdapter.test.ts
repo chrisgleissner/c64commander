@@ -377,6 +377,32 @@ describe("ftpSourceAdapter", () => {
     ]);
   });
 
+  it("ends the TypeScript walk at the first lost connection instead of waiting on every folder", async () => {
+    const listed: string[] = [];
+    listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+      listed.push(path);
+      if (path === "/") {
+        return {
+          entries: ["one", "two", "three", "four", "five"].map((name) => ({
+            type: "dir",
+            name,
+            path: `/${name}`,
+            size: 0,
+            modifiedAt: "now",
+          })),
+        };
+      }
+      throw new Error("FTP listDirectory timed out after connect 1500ms");
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(listed.length).toBeLessThanOrEqual(4);
+    expect(results.partialFailures?.map((failure) => failure.message)).toContain(
+      "Listing incomplete: the device stopped answering",
+    );
+  });
+
   it("says the device refused connections when the native walk ended after repeated refusals", async () => {
     isNativePlatformMock.mockReturnValue(true);
     listFtpDirectoryRecursiveMock.mockResolvedValue({

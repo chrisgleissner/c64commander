@@ -14,6 +14,7 @@ import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
+import { isConnectionFailure } from "./connectionFailure";
 import { createDeepScanSearch } from "./deepScanSearch";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -287,6 +288,13 @@ const listFilesRecursive = async (
         path: current.path,
         message: err.message,
       });
+      if (isConnectionFailure(err)) {
+        // Every later folder would fail the same way, each after its own timeout.
+        if (!capped) {
+          partialFailures.push({ path: current.path, message: "Listing incomplete: the device stopped answering" });
+        }
+        capped = true;
+      }
       addLog("warn", "FTP recursive directory listing skipped folder", {
         path: current.path,
         error: {
