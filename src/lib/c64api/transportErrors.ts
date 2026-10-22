@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
+
 export type TransportErrorClass = "dns" | "no-route" | "refused" | "reset" | "timeout" | "cors" | "unknown";
 
 export type TransportFailure = {
@@ -45,11 +47,7 @@ export const normalizeTransportError = (error: unknown, context: { host?: string
   // "host unreachable (dns)" is the form c64api leaves behind once it has
   // flattened a network failure. Neither is a Node-shaped message, and missing
   // both made the dns class unreachable on the Android app path.
-  if (
-    /(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve|unable to resolve host|host unreachable \(dns\))/i.test(
-      lower,
-    )
-  ) {
+  if (isDnsFailureMessage(lower)) {
     return {
       class: "dns",
       userMessage: `Couldn't resolve ${hostLabel}. Check the device's hostname, or use its IP address.`,

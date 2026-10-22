@@ -225,12 +225,19 @@ describe("uiErrors", () => {
     "DNS_PROBE_FINISHED_NXDOMAIN",
     "DNS server failure",
     "DNS query failed",
-    "dns: no such host",
+    "getaddrinfo EAI_AGAIN c64u",
+    "Temporary failure in name resolution",
+  ])("classifies the temporary name resolution failure %s as a transient connectivity failure", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(true);
+  });
+
+  it.each([
     "Name or service not known",
     "java.net.UnknownHostException: c64u",
-    "getaddrinfo EAI_AGAIN c64u",
-  ])("classifies the name resolution failure %s as a transient connectivity failure", (message) => {
-    expect(isTransientConnectivityFailure(message)).toBe(true);
+    "getaddrinfo ENOTFOUND c64u",
+    "dns: no such host",
+  ])("does not retry the unknown host %s, because asking again cannot help", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(false);
   });
 
   it.each([
