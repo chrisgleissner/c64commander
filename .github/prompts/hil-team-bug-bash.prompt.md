@@ -95,6 +95,10 @@ session ends.
   system logs often name the host platform. Run the withheld-name scan on the title and body before every
   `gh issue create`, `gh issue comment` and `gh pr` call, and on the commit range before every push.
   Worktrees do not run the machine-local pre-push hook, so the scan is the only protection there.
+- **All issues count.** Between lenses the implementors run `gh issue list --state open` and take any issue that
+  is unassigned or newly filed, including issues filed by the repository owner or by others, not only the ones
+  this run created. They also re-check recently closed issues against the current build and reopen any that
+  regressed, with evidence.
 - Reference the tracker in the pull request description, and keep the list of open issues in
   `artifacts/handover.md`.
 
