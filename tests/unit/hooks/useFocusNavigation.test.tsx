@@ -1374,6 +1374,77 @@ describe("the keypad highlight follows focus that a menu moves itself", () => {
   });
 });
 
+describe("the ring's element stays on screen when a toast takes space from the page", () => {
+  afterEach(() => resetInputModality());
+
+  const renderWithSelectedB = () => {
+    let top = 200;
+    const measure = (page: HTMLDivElement | null) => {
+      if (!page) return;
+      Object.defineProperty(page, "scrollHeight", { configurable: true, value: 1450 });
+      Object.defineProperty(page, "clientHeight", { configurable: true, value: 300 });
+      page.getBoundingClientRect = () => ({ top: 49, bottom: 349 }) as DOMRect;
+      placeAt(page.querySelectorAll("button")[1], () => top);
+    };
+    render(
+      <FocusNavigationProvider>
+        <div ref={measure} style={{ overflowY: "auto" }}>
+          <Toolbar onA={vi.fn()} onB={vi.fn()} />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    setInputModality("key-navigation");
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    const selected = button("B");
+    const scrollIntoView = vi.fn();
+    selected.scrollIntoView = scrollIntoView;
+    return {
+      scrollIntoView,
+      moveTo: (nextTop: number) => {
+        top = nextTop;
+      },
+    };
+  };
+
+  it("scrolls the selected control back into view when the reserved height changes", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("leaves a selected control that is still on screen alone", async () => {
+    const { scrollIntoView } = renderWithSelectedB();
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("does not scroll for a pointer user", async () => {
+    const { scrollIntoView, moveTo } = renderWithSelectedB();
+    setInputModality("pointer");
+    moveTo(380);
+
+    act(() => {
+      window.dispatchEvent(new Event("c64u:keypad-guidance-reserve"));
+    });
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
 describe("a dialog focusing its own surface as it opens", () => {
   afterEach(() => resetInputModality());
 

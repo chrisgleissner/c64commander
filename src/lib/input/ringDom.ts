@@ -13,6 +13,8 @@ import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/inp
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
+import { getInputModality } from "@/lib/input/inputModality";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /**
  * The subset of `OPEN_OVERLAY_ANCESTOR_SELECTOR` that has no native Up/Down of its own.
@@ -227,6 +229,22 @@ export const revealRingElementAfterLayout = (element: HTMLElement | null): (() =
   window.addEventListener("keydown", cancel, true);
   window.addEventListener("pointerdown", cancel, true);
   return cancel;
+};
+
+/**
+ * Keeps the ring's element on screen when the space the page may use changes while the keypad is in use,
+ * as it does when a toast arrives and takes its strip from the page area.
+ */
+export const revealRingElementOnReserveChange = (): (() => void) => {
+  const onReserveChange = () =>
+    window.requestAnimationFrame(() => {
+      const current = keypadScrollAnchorEl;
+      if (getInputModality() === "key-navigation" && current?.isConnected && needsReveal(current)) {
+        focusRingElement(current);
+      }
+    });
+  window.addEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
+  return () => window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
 };
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";
