@@ -217,6 +217,21 @@ describe("uiErrors", () => {
     },
   );
 
+  it.each(["Host unreachable (DNS)", "DNS lookup failed", "DNS resolution error for c64u"])(
+    "classifies the name resolution failure %s as a transient connectivity failure",
+    (message) => {
+      expect(isTransientConnectivityFailure(message)).toBe(true);
+    },
+  );
+
+  it.each([
+    "We couldn’t reach “c64.ddns.net”. Make sure it’s powered on and on the same Wi‑Fi.",
+    "We couldn’t reach “home.duckdns.org”. Make sure it’s powered on and on the same Wi‑Fi.",
+    "We couldn’t reach “dns.example”. Make sure it’s powered on and on the same Wi‑Fi.",
+  ])("does not mistake a host name inside the message for a connectivity failure: %s", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(false);
+  });
+
   describe("ERROR_POLICY §3 — background operations are S0 (log only, never toast)", () => {
     it("suppresses toast when background is true and logs with suppressedReason", () => {
       reportUserError({

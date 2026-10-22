@@ -21,6 +21,7 @@ import {
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
 import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
+import { dismissConnectionSaveToasts } from "@/pages/settings/connectionSaveRefusal";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
@@ -709,6 +710,7 @@ vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
 
 afterEach(() => {
   leaveKeyNavigationModality();
+  dismissConnectionSaveToasts();
   vi.clearAllMocks();
 });
 
@@ -937,16 +939,15 @@ describe("SettingsPage", () => {
     await waitFor(() => expectRefusalReported("Wrong password for this device."));
   }, 15000);
 
-  it("reports the invalid port when Save & Connect is refused", async () => {
-    renderSettingsPage();
-    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "70000" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+  const expectInvalidDraftNotice = (description: string) =>
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Connection not saved", description, alwaysVisible: true }),
+    );
 
-    await waitFor(() => expectRefusalReported("FTP port must be 1 to 65535."));
-    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
-  }, 15000);
+  const changeField = (id: string, value: string) =>
+    fireEvent.change(document.getElementById(id) as HTMLInputElement, { target: { value } });
 
-  it("reports the name error before the port error when both refuse the save", async () => {
+  const addSecondSavedDevice = () => {
     savedDevicesRef.current = {
       ...savedDevicesRef.current,
       devices: [
@@ -954,21 +955,101 @@ describe("SettingsPage", () => {
         { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Other", host: "other" },
       ],
     };
+  };
+
+  it("shows the invalid port as a notice that goes away by itself, not as a logged error", async () => {
     renderSettingsPage();
-    fireEvent.change(document.getElementById("settings-device-name") as HTMLInputElement, {
-      target: { value: "Other" },
-    });
-    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "70000" } });
+    changeField("settings-device-ftp", "70000");
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
-    await waitFor(() => expectRefusalReported("Device name must be unique."));
-    expect(reportUserError).not.toHaveBeenCalledWith(
-      expect.objectContaining({ description: "FTP port must be 1 to 65535." }),
+    await waitFor(() => expectInvalidDraftNotice("FTP port must be 1 to 65535."));
+    expect(reportUserError).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("reports the name error before the host error and the host error before the port error", async () => {
+    addSecondSavedDevice();
+    renderSettingsPage();
+    changeField("settings-device-name", "Other");
+    changeField("settings-device-host", "bad host!");
+    changeField("settings-device-ftp", "70000");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expectInvalidDraftNotice("Device name must be unique."));
+
+    changeField("settings-device-name", "Fresh");
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expectInvalidDraftNotice("Enter a valid hostname or IP address (optionally with :port)"));
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ description: "FTP port must be 1 to 65535." }));
+  }, 15000);
+
+  it("disables the saved device rows while a save is waiting for the device, so its result cannot land on another device", async () => {
+    addSecondSavedDevice();
+    let answer!: (value: { status: "unreachable"; suggestedAddress: null; suggestedHostname: null }) => void;
+    mockEvaluateNewDeviceReachability.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
     );
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeDisabled());
+    answer({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
+    await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeEnabled());
+  }, 15000);
+
+  it("raises no refusal when the page is gone before the device answers", async () => {
+    let answer!: (value: { status: "unreachable"; suggestedAddress: null; suggestedHostname: null }) => void;
+    mockEvaluateNewDeviceReachability.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const view = renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
+
+    view.unmount();
+    await act(async () => {
+      answer({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
+    });
+
+    expect(reportUserError).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("replaces an earlier refusal when the next save fails after the device answered", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+    renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expectRefusalReported(/couldn’t reach/i));
+    vi.mocked(clearToastForSuccessfulOperation).mockClear();
+
+    mockSwitchSavedDevice.mockRejectedValueOnce(new Error("switch failed"));
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() =>
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "CONNECTION_SAVE", description: "switch failed" }),
+      ),
+    );
+    expect(clearToastForSuccessfulOperation).toHaveBeenCalledWith("CONNECTION_SAVE_REFUSED", "c64u");
   }, 15000);
 
   it("dismisses the refusal toast when a later save succeeds", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
     renderSettingsPage();
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    await waitFor(() => expectRefusalReported(/couldn’t reach/i));
+    vi.mocked(clearToastForSuccessfulOperation).mockClear();
+
     fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => {

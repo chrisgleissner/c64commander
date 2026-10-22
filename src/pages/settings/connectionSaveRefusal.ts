@@ -6,20 +6,47 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { toast } from "@/hooks/use-toast";
 import { clearToastForSuccessfulOperation, reportUserError } from "@/lib/uiErrors";
 
-export const CONNECTION_SAVE_REFUSED_OPERATION = "CONNECTION_SAVE_REFUSED";
+const REFUSED_OPERATION = "CONNECTION_SAVE_REFUSED";
+const FAILED_OPERATION = "CONNECTION_SAVE";
+const REFUSED_TITLE = "Connection not saved";
 
-export const clearConnectionSaveRefusal = (deviceHost: string): void =>
-  clearToastForSuccessfulOperation(CONNECTION_SAVE_REFUSED_OPERATION, deviceHost);
+const reportedHosts = new Set<string>();
+let invalidDraftToast: { dismiss: () => void } | null = null;
 
-/** Replaces the toast of an earlier refusal, so the screen never shows two reasons for one device. */
+/** Every outcome of a save replaces the toasts of the earlier ones, so the screen shows one reason at a time. */
+export const dismissConnectionSaveToasts = (): void => {
+  invalidDraftToast?.dismiss();
+  invalidDraftToast = null;
+  reportedHosts.forEach((host) => {
+    clearToastForSuccessfulOperation(REFUSED_OPERATION, host);
+    clearToastForSuccessfulOperation(FAILED_OPERATION, host);
+  });
+  reportedHosts.clear();
+};
+
+/** A typing mistake: the field shows it inline, so the toast is a notice that goes away by itself. */
+export const reportInvalidConnectionDraft = (description: string): void => {
+  dismissConnectionSaveToasts();
+  invalidDraftToast = toast({ title: REFUSED_TITLE, description, alwaysVisible: true });
+};
+
 export const reportConnectionSaveRefused = (description: string, deviceHost: string): void => {
-  clearConnectionSaveRefusal(deviceHost);
+  dismissConnectionSaveToasts();
+  reportedHosts.add(deviceHost);
+  reportUserError({ operation: REFUSED_OPERATION, title: REFUSED_TITLE, description, deviceHost });
+};
+
+export const reportConnectionSaveFailed = (description: string, error: unknown, deviceHost: string): void => {
+  dismissConnectionSaveToasts();
+  reportedHosts.add(deviceHost);
   reportUserError({
-    operation: CONNECTION_SAVE_REFUSED_OPERATION,
-    title: "Connection not saved",
+    operation: FAILED_OPERATION,
+    title: "Unable to save connection",
     description,
+    error,
     deviceHost,
   });
 };

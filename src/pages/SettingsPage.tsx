@@ -75,7 +75,13 @@ import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { clearConnectionSaveRefusal, reportConnectionSaveRefused } from "@/pages/settings/connectionSaveRefusal";
+import {
+  dismissConnectionSaveToasts,
+  reportConnectionSaveFailed,
+  reportConnectionSaveRefused,
+  reportInvalidConnectionDraft,
+} from "@/pages/settings/connectionSaveRefusal";
+import { useIsMounted } from "@/hooks/useIsMounted";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -408,6 +414,7 @@ export default function SettingsPage() {
     savedDevices.devices[0] ??
     null;
   const [isSaving, setIsSaving] = useState(false);
+  const isMounted = useIsMounted();
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
   // CTAs so the touch-off device can save/connect, refresh, and scan with no taps. Inert
@@ -804,7 +811,7 @@ export default function SettingsPage() {
     setConnectionFieldError(portError);
     const validationError = nextDeviceNameError ?? hostError ?? portError;
     if (validationError) {
-      reportConnectionSaveRefused(validationError, selectedSavedDevice.host);
+      reportInvalidConnectionDraft(validationError);
       return;
     }
     const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
@@ -850,6 +857,7 @@ export default function SettingsPage() {
             deviceHost: nextDeviceHost,
             password: hasPassword ? effectivePassword : null,
           });
+      if (!isMounted.current) return;
       if (reachability?.status === "unreachable") {
         if (reachability.suggestedAddress) {
           setReachabilitySuggestion({ address: reachability.suggestedAddress });
@@ -911,16 +919,10 @@ export default function SettingsPage() {
       setPasswordInput("");
       passwordInputRef.current = "";
       setPasswordEditing(!hasPassword);
-      clearConnectionSaveRefusal(selectedSavedDevice.host);
+      dismissConnectionSaveToasts();
       toast({ title: "Connection settings saved" });
     } catch (error) {
-      reportUserError({
-        operation: "CONNECTION_SAVE",
-        title: "Unable to save connection",
-        description: (error as Error).message,
-        error,
-        deviceHost: nextHost,
-      });
+      reportConnectionSaveFailed((error as Error).message, error, nextHost);
     } finally {
       setIsSaving(false);
     }
@@ -1672,6 +1674,7 @@ export default function SettingsPage() {
                             "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
                             isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
                           )}
+                          disabled={isSaving}
                           onClick={() => {
                             void handleSelectSavedDevice(device.id);
                           }}
