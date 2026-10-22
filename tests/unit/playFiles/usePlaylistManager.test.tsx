@@ -116,6 +116,16 @@ describe("usePlaylistManager", () => {
     expect(result.current.shuffleAnchorId).toBe("a");
   });
 
+  it("anchors the first item when the current index points past the end of the queue", () => {
+    const { result } = renderHook(() => usePlaylistManager());
+    act(() => result.current.setShuffleEnabled(true));
+    act(() => {
+      result.current.setCurrentIndex(9);
+      result.current.setPlaylist([createPlaylistItem("a"), createPlaylistItem("b")]);
+    });
+    expect(result.current.shuffleAnchorId).toBe("a");
+  });
+
   it("creates a fresh upcoming shuffle order on off/on without changing the current item or curated queue", () => {
     vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0.7);
     const items = [createPlaylistItem("a"), createPlaylistItem("b"), createPlaylistItem("c")];

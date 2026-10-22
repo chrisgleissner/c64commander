@@ -49,6 +49,23 @@ describe("StationQueueEditedDialog", () => {
     expect(keep).toHaveBeenCalledOnce();
   });
 
+  it("describes the playlist from before radio without a count when shuffling and the size is unknown", () => {
+    render(
+      <StationQueueEditedDialog
+        open
+        shuffleRequested
+        stationTuneCount={200}
+        playlistTuneCount={null}
+        onKeepStationTunes={vi.fn()}
+        onDismiss={vi.fn()}
+        onReturnToPlaylist={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("station-queue-edited-dialog")).toHaveTextContent(
+      "replaces the playlist you had before radio",
+    );
+  });
+
   it("names what is kept and what comes back, with their sizes", () => {
     renderDialog(12, 40);
     const dialog = screen.getByTestId("station-queue-edited-dialog");
