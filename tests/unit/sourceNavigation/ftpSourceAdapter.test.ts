@@ -419,6 +419,39 @@ describe("ftpSourceAdapter", () => {
     );
   });
 
+  describe("TypeScript walk: consecutive lost folders", () => {
+    const dir = (name: string) => ({ type: "dir", name, path: `/${name}`, size: 0, modifiedAt: "now" });
+    const walkWith = async (outcomes: Record<string, "lost" | "reply" | "empty">) => {
+      listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+        if (path === "/") return { entries: Object.keys(outcomes).map(dir) };
+        const name = path.slice(1);
+        const outcome = outcomes[name];
+        await new Promise((resolve) => setTimeout(resolve, 15 * (Object.keys(outcomes).indexOf(name) + 1)));
+        if (outcome === "lost") throw new Error("FTP list failed: Timeout (data socket)");
+        if (outcome === "reply") throw new Error("FTP list failed: 550 No such directory");
+        return { entries: [] };
+      });
+      return createUltimateSourceLocation().listFilesRecursive("/");
+    };
+    const stopped = (results: { partialFailures?: { message: string }[] }) =>
+      results.partialFailures?.some((failure) => failure.message.includes("stopped answering")) ?? false;
+
+    it("counts again from zero after a folder the device answered with a refusal", async () => {
+      const results = await walkWith({ a: "lost", b: "reply", c: "lost" });
+      expect(stopped(results)).toBe(false);
+    });
+
+    it("counts again from zero after a folder that listed", async () => {
+      const results = await walkWith({ a: "lost", b: "empty", c: "lost" });
+      expect(stopped(results)).toBe(false);
+    });
+
+    it("ends after two lost folders that finish one after the other (count follows completion order)", async () => {
+      const results = await walkWith({ a: "lost", b: "lost", c: "empty" });
+      expect(stopped(results)).toBe(true);
+    });
+  });
+
   it("says the device refused connections when the native walk ended after repeated refusals", async () => {
     isNativePlatformMock.mockReturnValue(true);
     listFtpDirectoryRecursiveMock.mockResolvedValue({

@@ -9,7 +9,7 @@
 import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
-import { isConnectionFailure } from "@/lib/sourceNavigation/connectionFailure";
+import { classifyListingFailure, isTemporaryNameFailure } from "@/lib/sourceNavigation/connectionFailure";
 import type { SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
 
 type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekCachedEntries">;
@@ -25,40 +25,63 @@ export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up w
  * Looking for a settings file is optional, so once the phone knows it is offline, or one listing from the device
  * has failed to connect, the remaining folders are answered from the source's cache (or as empty) instead of
  * each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the device again, so a
- * device that was only briefly refusing is used again. Until one lookup has succeeded the lookups run one at a
- * time, so a first failure is seen before the next folder is asked; after that they run together, as many as the
- * FTP client allows. What was skipped is counted so the add can say so.
+ * device that was only briefly refusing is used again, unless its name could not be resolved at all. Until one
+ * lookup has succeeded the lookups run one at a time, so a first failure is seen before the next folder is asked;
+ * after that they run together, as many as the FTP client allows. Only a lookup that started after the latest
+ * failure can mark the device reachable again, and only a success or a reply from the device does. What was skipped
+ * is counted so the add can say so. A cancel ends lookups at once; the request already sent finishes unobserved.
  */
 export const createConfigListing = (source: ListingSource, signal?: AbortSignal) => {
   let deviceUnreachable = false;
+  let nameNotFound = false;
   let deviceAnswered = false;
+  let failures = 0;
   let skipped = 0;
   let sinceLastProbe = 0;
   let noticeLogged = false;
   let chain: Promise<unknown> = Promise.resolve();
 
+  const abortError = () => new DOMException("Aborted", "AbortError");
+  const aborted = signal
+    ? new Promise<never>((_, reject) => {
+        if (signal.aborted) reject(abortError());
+        else signal.addEventListener("abort", () => reject(abortError()), { once: true });
+      })
+    : null;
+  aborted?.catch(() => undefined);
+
   const lookUp = async (path: string): Promise<SourceEntry[]> => {
-    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    if (signal?.aborted) throw abortError();
     const fromDevice = source.type === "ultimate" && !isSimulatedDeviceTarget();
-    const probing = deviceUnreachable && (sinceLastProbe += 1) >= CONFIG_LOOKUP_PROBE_EVERY;
+    const probing = deviceUnreachable && !nameNotFound && (sinceLastProbe += 1) >= CONFIG_LOOKUP_PROBE_EVERY;
     if (fromDevice && ((deviceUnreachable && !probing) || isNetworkKnownOffline())) {
       skipped += 1;
       return source.peekCachedEntries?.(path) ?? [];
     }
     if (probing) sinceLastProbe = 0;
-    try {
-      const entries = await source.listEntries(path);
+    const startedAfterLastFailure = failures;
+    const answered = () => {
+      if (failures !== startedAfterLastFailure) return;
       deviceUnreachable = false;
+      nameNotFound = false;
       deviceAnswered = true;
+    };
+    try {
+      const pending = source.listEntries(path);
+      const entries = await (aborted ? Promise.race([pending, aborted]) : pending);
+      answered();
       return entries;
     } catch (error) {
-      if (fromDevice && isConnectionFailure(error)) {
+      if (!fromDevice || (error as Error)?.name === "AbortError") throw error;
+      const failure = classifyListingFailure(error);
+      if (failure === "deviceReply") {
+        answered();
+      } else {
+        failures += 1;
         deviceUnreachable = true;
         deviceAnswered = false;
+        nameNotFound = failure === "nameFailure" && !isTemporaryNameFailure(error);
         skipped += 1;
-      } else if (fromDevice && (error as Error)?.name !== "AbortError") {
-        deviceUnreachable = false;
-        deviceAnswered = true;
       }
       throw error;
     }

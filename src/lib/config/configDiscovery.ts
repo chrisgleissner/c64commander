@@ -69,6 +69,7 @@ const resolveEntriesForPath = async (
   const prefetched = prefetchedEntriesByPath?.get(normalizedPath);
   if (prefetched) return prefetched;
   const entries = await listEntries(normalizedPath).catch((error: unknown) => {
+    if ((error as { name?: string } | null)?.name === "AbortError") throw error;
     addLog("warn", "Config discovery: could not list a folder; looking for no settings file there", {
       path: normalizedPath,
       error: error instanceof Error ? error.message : String(error),

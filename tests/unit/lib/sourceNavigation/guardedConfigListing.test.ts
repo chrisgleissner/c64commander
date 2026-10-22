@@ -267,4 +267,95 @@ describe("createConfigListing", () => {
 
     expect(listFtpDirectory).not.toHaveBeenCalled();
   });
+
+  it("does not run lookups together after a 421 reply, however the client words it", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("FTP list failed: 421 Too many FTP connections"));
+    const listing = createConfigListing(source);
+    await expect(listing.listEntries("/USB2/One")).rejects.toThrow("421");
+
+    await expect(Promise.all([listing.listEntries("/USB2/A"), listing.listEntries("/USB2/B")])).resolves.toEqual([
+      [],
+      [],
+    ]);
+
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+    expect(listing.skippedLookups()).toBe(3);
+  });
+
+  it("counts an unrecognized failure as a skipped lookup and does not take it for an answer from the device", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("Something unexpected happened"));
+    const listing = createConfigListing(source);
+
+    await expect(listing.listEntries("/USB2/One")).rejects.toThrow("unexpected");
+    await expect(listing.listEntries("/USB2/Two")).resolves.toEqual([]);
+
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+    expect(listing.skippedLookups()).toBe(2);
+  });
+
+  it("keeps the device marked unreachable when a lookup that started before the failure succeeds afterwards", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [] } as never);
+    const listing = createConfigListing(source);
+    await listing.listEntries("/USB2/First");
+    let finishStale: () => void = () => undefined;
+    vi.mocked(listFtpDirectory).mockImplementationOnce(
+      () => new Promise((resolve) => (finishStale = () => resolve({ entries: [entry] } as never))),
+    );
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("timed out"));
+    const stale = listing.listEntries("/USB2/Stale");
+    await expect(listing.listEntries("/USB2/Down")).rejects.toThrow("timed out");
+
+    finishStale();
+    await stale;
+
+    await expect(listing.listEntries("/USB2/After")).resolves.toEqual([]);
+    expect(listFtpDirectory).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not ask again for a name that does not resolve, but does for a temporary resolver failure", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("FTP list failed: getaddrinfo ENOTFOUND u64"));
+    const listing = createConfigListing(source);
+    await expect(listing.listEntries("/USB2/0")).rejects.toThrow();
+    for (let lookup = 1; lookup <= CONFIG_LOOKUP_PROBE_EVERY * 2; lookup += 1) {
+      await expect(listing.listEntries(`/USB2/${lookup}`)).resolves.toEqual([]);
+    }
+    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
+
+    vi.mocked(listFtpDirectory).mockClear();
+    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("getaddrinfo EAI_AGAIN u64"));
+    const retrying = createConfigListing(source);
+    await expect(retrying.listEntries("/USB2/0")).rejects.toThrow();
+    vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
+    for (let lookup = 1; lookup < CONFIG_LOOKUP_PROBE_EVERY; lookup += 1) await retrying.listEntries(`/USB2/${lookup}`);
+    await expect(retrying.listEntries("/USB2/probe")).resolves.toHaveLength(1);
+  });
+
+  it("stops waiting for a lookup that was already sent when the add is canceled", async () => {
+    const controller = new AbortController();
+    vi.mocked(listFtpDirectory).mockImplementation(() => new Promise(() => undefined));
+    const listing = createConfigListing(createUltimateSourceLocation(), controller.signal);
+    const lookup = listing.listEntries("/USB2/Slow");
+    await Promise.resolve();
+
+    controller.abort();
+
+    await expect(lookup).rejects.toMatchObject({ name: "AbortError" });
+    expect(listing.skippedLookups()).toBe(0);
+  });
+
+  it("answers a path with repeated slashes from the entries cached for the folder", async () => {
+    const source = createUltimateSourceLocation();
+    vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
+    await source.listEntries("/USB2/Games");
+    vi.mocked(listFtpDirectory).mockClear();
+    networkOffline.mockReturnValue(true);
+
+    await expect(source.listEntries("/USB2//Games//")).resolves.toHaveLength(1);
+    expect(source.peekCachedEntries?.("/USB2//Games//")).toHaveLength(1);
+    expect(listFtpDirectory).not.toHaveBeenCalled();
+  });
 });

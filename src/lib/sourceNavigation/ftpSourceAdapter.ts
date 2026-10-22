@@ -14,7 +14,7 @@ import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
-import { isConnectionFailure } from "./connectionFailure";
+import { classifyListingFailure, isTemporaryNameFailure, UnreadableFolderError } from "./connectionFailure";
 import { createDeepScanSearch } from "./deepScanSearch";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -139,10 +139,13 @@ const isUnreadableFolderEcho = async (
   }
 };
 
+/** The key a folder is cached under: duplicate slashes collapsed and no trailing slash, except for the root. */
+const listingFolderPath = (path: string) => normalizeSourcePath(path).replace(/(.)\/$/, "$1");
+
 const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
-  const normalizedPath = (path && path !== "" ? path : "/").replace(/(.)\/$/, "$1");
+  const normalizedPath = listingFolderPath(path);
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   if (!options?.skipCache) {
     const cached = getCachedEntries(cacheKey);
@@ -152,7 +155,7 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
   const request = { host, port: getStoredFtpPort(), password };
   const result = await listFtpDirectory({ ...request, path: normalizedPath });
   if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
-    throw new Error(`The C64 could not read ${path || "/"}. Check that its storage is inserted and readable.`);
+    throw new UnreadableFolderError(path || "/");
   }
   const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
@@ -292,7 +295,11 @@ const listFilesRecursive = async (
         path: current.path,
         message: err.message,
       });
-      consecutiveLostFolders = isConnectionFailure(err) ? consecutiveLostFolders + 1 : 0;
+      const failure = classifyListingFailure(err);
+      if (failure === "deviceReply") consecutiveLostFolders = 0;
+      else if (failure === "nameFailure" && !isTemporaryNameFailure(err))
+        consecutiveLostFolders = FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP;
+      else consecutiveLostFolders += 1;
       if (consecutiveLostFolders >= FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP) {
         // Every later folder would fail the same way, each after its own timeout.
         if (!capped) {
@@ -375,8 +382,7 @@ const listFilesRecursive = async (
 
 const peekCachedEntries = (path: string): SourceEntry[] | null => {
   const host = normalizeFtpHost(getC64APIConfigSnapshot().deviceHost);
-  const folder = normalizeSourcePath(path).replace(/(.)\/$/, "$1");
-  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), folder));
+  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), listingFolderPath(path)));
 };
 
 export const createUltimateSourceLocation = (options?: { name?: string }): SourceLocation => ({

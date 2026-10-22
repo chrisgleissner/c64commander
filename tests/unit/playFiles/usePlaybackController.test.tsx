@@ -5768,4 +5768,35 @@ describe("usePlaybackController hand-over to the phone (#555)", () => {
 
     expect(soundingTuneNow()?.id).toBe("tune-a");
   });
+
+  it("#555: a tune that ends on the phone is no longer on record", async () => {
+    const playlist = [ultimateSid("tune-a")];
+    const engine = phoneEngine();
+    const startedAt = Date.now() - 47_317;
+    const trackStartedAtRef = { current: startedAt };
+    const autoAdvanceGuardRef = { current: null as unknown };
+    const { result } = renderPlaybackController(playlist, {
+      currentIndex: 0,
+      isPlaying: true,
+      localSidPlaybackController: engine,
+      trackStartedAtRef,
+      autoAdvanceGuardRef,
+    });
+    await act(async () => {
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+    });
+    trackStartedAtRef.current = startedAt;
+    await goOffline();
+    await waitFor(() => expect(engine.play).toHaveBeenCalledTimes(1));
+    expect(soundingTuneNow()?.id).toBe("tune-a");
+
+    autoAdvanceGuardRef.current = { trackInstanceId: 1, dueAtMs: 0, autoFired: false, userCancelled: false };
+
+    await act(async () => {
+      await result.current.handleNext("auto");
+    });
+
+    expect(soundingTuneNow()).toBeNull();
+    expect(engine.stop).toHaveBeenCalled();
+  });
 });

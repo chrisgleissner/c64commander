@@ -628,7 +628,10 @@ export function usePlaybackController({
       // combined button keeps offering Stop; prg/crt/disk flip it, since a reset would end them. HARD11-003.
       // A tune on the phone is rendered only up to its songlength, so it ends here rather than playing on.
       const endedOnPhone = currentPlaybackIsLocalRef.current;
-      if (endedOnPhone) getLocalSidPlayback().stop();
+      if (endedOnPhone) {
+        getLocalSidPlayback().stop();
+        setSoundingTune(null);
+      }
       const deviceStillPlaying = !endedOnPhone && Boolean(currentItem && isSongCategory(currentItem.category));
       if (!deviceStillPlaying) {
         setIsPlaying(false);
@@ -653,6 +656,7 @@ export function usePlaybackController({
       setIsPaused,
       setIsPlaying,
       setPlayedMs,
+      setSoundingTune,
     ],
   );
 
@@ -912,7 +916,6 @@ export function usePlaybackController({
         if (routeToLocal && c64PlaysCurrentTune && !isDeviceOutOfReach()) {
           // Out of reach, the tune left on the C64 is stopped when it returns (see remoteTuneHandover).
           await stopRemoteTuneBeforeLocalPlayback(async () => {
-            setSoundingTune(null);
             if (isPausedRef.current) await resumeMachineWithRetry(api);
             await stopMachineWithGracePeriod(api, false);
             // As Stop does: a paused tune muted the C64, and nothing on this path would unmute it.
