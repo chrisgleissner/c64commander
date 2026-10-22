@@ -71,6 +71,33 @@ Until then:
 - If an agent hits a usage limit, schedule a resume (about 30 minutes later) and continue it with
   SendMessage once it is back.
 
+## 2b. GitHub issues are the work tracker
+
+Every defect or improvement that is not fixed immediately becomes a GitHub issue. Implementors file
+what they discover and pick up issues from the queue between lenses, so work is never lost when a
+session ends.
+
+- **Filing.** Use the labels `bug` or `enhancement`, one `area: ...` label, one `priority: ...` label,
+  `status: ready` and `source: hil bug bash`. Add `kind: ...` or `scope: keypad phone` where they apply.
+  The body has: summary, steps to reproduce, expected result, actual result, evidence (build identity,
+  timestamps, a short excerpt, file paths of stored artifacts), suspected cause with `file:line`, and a
+  proposed regression test. One root cause per issue. Search open issues first to avoid duplicates.
+- **Picking up.** Replace `status: ready` with `status: in progress`, comment with the branch name, and
+  reference the issue in the fix commit (`Fixes #N`) once the fix is on the integration branch.
+- **Triage.** The PM reviews new issues at each milestone, corrects labels, closes duplicates, and
+  closes fixed issues with the evidence from section 8 (commit SHAs, tests, revert check, device
+  evidence, CI link).
+- **Withheld names never leave the machine.** Issue titles, bodies, comments, labels, attached files
+  and screenshots are public. They must not contain the names of unannounced hardware, operating
+  systems, vendors or product editions. Describe the device as "a compact keypad phone" and the
+  edition as "the compact keypad edition", and describe capabilities rather than origins. Never paste
+  raw logs, process lists or window dumps; excerpt only what is needed and read it first, because
+  system logs often name the host platform. Run the withheld-name scan on the title and body before every
+  `gh issue create`, `gh issue comment` and `gh pr` call, and on the commit range before every push.
+  Worktrees do not run the machine-local pre-push hook, so the scan is the only protection there.
+- Reference the tracker in the pull request description, and keep the list of open issues in
+  `artifacts/handover.md`.
+
 ## 3. Setup by the PM
 
 1. Create the integration worktree and branch `hil/<DATE>-team-bug-bash` from up-to-date `origin/main`.
