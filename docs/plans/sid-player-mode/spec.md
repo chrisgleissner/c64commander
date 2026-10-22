@@ -38,7 +38,7 @@ The variant value is only the initial value: an explicit choice made by the user
 | Term | Meaning |
 | --- | --- |
 | Device | A C64 Ultimate-family machine the app controls over the network (integrated computer or cartridge). |
-| Full app | The app with every surface the build and feature flags allow. The counterpart of SID Player. |
+| Full App | The app with every surface the build and feature flags allow. The counterpart of SID Player. |
 | Demo Mode | Existing feature. The app runs against a simulated device served on loopback (`DEMO_ACTIVE`). |
 | SID Player | The mode specified here. The app runs with no device and hides device surfaces. |
 | App mode | Runtime value `full` or `sid-player`. Drives surface visibility. |
@@ -54,12 +54,12 @@ The variant value is only the initial value: an explicit choice made by the user
 | Item | Text |
 | --- | --- |
 | Mode name (product feature name, capitalized like Live View) | SID Player |
-| Counterpart | Full app |
+| Counterpart | Full App |
 | Sibling | Demo Mode (existing name, unchanged) |
 | Enter | Use SID Player |
 | Leave | Leave SID Player |
 | Settings section title / id | App mode / `app-mode` |
-| Settings choices | Full app · Demo Mode · SID Player |
+| Settings choices | Full App · Demo Mode · SID Player |
 | Health badge label in SID Player | SID Player |
 | Second APK display name | SID Player |
 
@@ -70,7 +70,7 @@ Confirmation copy (sentence case, American English):
   Your playlists, settings and saved devices are kept. You can leave SID Player at any time from Settings or
   the menu." Buttons: "Use SID Player" (primary), "Cancel".
 - Leave, title "Leave SID Player?", body: "The full app looks for your C64 Ultimate and shows its controls
-  again. Nothing you saved is changed." Buttons: "Full app" (primary), "Demo Mode", "Cancel".
+  again. Nothing you saved is changed." Buttons: "Full App" (primary), "Demo Mode", "Cancel".
 - Compact profile body (two lines maximum, see `DemoModeInterstitial` sizing note): Enter "Only music on this
   phone. Machine controls are hidden. You can switch back." Leave "Show the C64 Ultimate controls again?"
 
@@ -222,7 +222,7 @@ Status · Evidence.
 #### SPM-ARCH-06 Shared device-less choices component
 
 - Requirement: One component, `src/components/appMode/DeviceLessChoices.tsx`, MUST render the sibling
-  choices (Full app, Demo Mode, SID Player, with the current one marked) and run the transitions in
+  choices (Full App, Demo Mode, SID Player, with the current one marked) and run the transitions in
   `SPM-SWT-02`. It MUST be used by the Settings `app-mode` section, the Leave confirmation, the Home
   `ConnectC64Card` in SID Player, `DiagnosticsConnectionActions` in SID Player and the first-run offer.
 - Rationale: The same three choices appear in five places; one component prevents five copies drifting apart.
@@ -282,7 +282,7 @@ Status · Evidence.
   | Device switcher, saved-device health probes | shown | hidden, stopped |
   | Simulated HVSC release (480 tunes) | installed, removed on leaving | never installed |
   | "Play on" C64 / this device choice | shown | hidden (phone only) |
-  | App mode section and Leave SID Player entries | Full app / Demo Mode / SID Player choices | same choices |
+  | App mode section and Leave SID Player entries | Full App / Demo Mode / SID Player choices | same choices |
   | Home listen tiles, Play page, HVSC, SID Radio | shown | shown |
 
 - Rationale: The coordinator's sibling requirement; makes the difference reviewable.
@@ -736,7 +736,7 @@ Status · Evidence.
 
 - Requirement: Entering SID Player MUST show the Enter confirmation, then persist `sid-player`, settle the
   connection (`SPM-MODE-01`) and navigate to Home if the current route becomes hidden. Leaving MUST show the
-  Leave confirmation; "Full app" persists `default` and runs `discoverConnection("settings")`; "Demo Mode"
+  Leave confirmation; "Full App" persists `default` and runs `discoverConnection("settings")`; "Demo Mode"
   persists `demo` and pins Demo Mode. Cancel changes nothing. Back and the left soft key MUST cancel.
 - Files: `src/lib/appMode/appModeTransitions.ts`, `DeviceLessChoices.tsx`.
 - Choke point: `appModeTransitions`.
