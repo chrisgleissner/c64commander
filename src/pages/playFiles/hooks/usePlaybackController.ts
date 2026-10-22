@@ -39,6 +39,7 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
+import { isHandledUiError, markHandledUiError } from "@/pages/playFiles/handledUiError";
 import {
   isLaunchOvertaken,
   isSongCategory,
@@ -117,17 +118,6 @@ import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
-
-type HandledUiError = Error & { c64uHandled?: boolean };
-
-const markHandledUiError = (error: unknown) => {
-  if (error instanceof Error) {
-    (error as HandledUiError).c64uHandled = true;
-  }
-};
-
-const isHandledUiError = (error: unknown): error is HandledUiError =>
-  error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
 
 type AutoAdvanceGuard = {
   trackInstanceId: number;

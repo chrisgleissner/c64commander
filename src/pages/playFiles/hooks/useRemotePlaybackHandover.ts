@@ -75,7 +75,15 @@ type RemotePlaybackHandoverOptions = {
 export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const { lastLaunchedItemIdRef, playlistRef } = options;
   const { isPlaying, isPaused, currentIndex, localEngineActive, durationMs } = options;
+
+  // A session restored on this page has a start time but no launch of its own: its tune is the one playing.
+  useEffect(() => {
+    if (isPlaying && lastLaunchedItemIdRef.current === null && options.trackStartedAtRef.current !== null) {
+      lastLaunchedItemIdRef.current = playlistRef.current[currentIndex]?.id ?? null;
+    }
+  }, [isPlaying, currentIndex, lastLaunchedItemIdRef, options.trackStartedAtRef, playlistRef]);
   // Read while rendering: a replayed track keeps its index and duration, and only its start time changes.
   const trackStartedAt = options.trackStartedAtRef.current;
   const remotePlaying = isRemotePlaybackActive();

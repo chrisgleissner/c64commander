@@ -283,14 +283,20 @@ describe("useRemotePlaybackHandover", () => {
     expect(seekBy).not.toHaveBeenCalled();
   });
 
-  it("still carries the tune on when the page was remounted and has not launched a tune itself", async () => {
+  it("takes the restored tune as the one launched, so a Next press right after a remount is not carried on", async () => {
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    const { playItem, options } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
     options.lastLaunchedItemIdRef.current = null;
+    const restored = renderHook(() => useRemotePlaybackHandover({ ...options }));
+    expect(options.lastLaunchedItemIdRef.current).toBe("one");
 
+    options.currentIndexRef.current = 1;
+    restored.rerender();
     setConnection("OFFLINE_NO_DEMO");
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    expect(options.lastLaunchedItemIdRef.current).toBe("one");
+    expect(playItem).not.toHaveBeenCalled();
   });
 
   it("does not seek when the hand-over was dropped because a newer tune launched on the phone", async () => {
