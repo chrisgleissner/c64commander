@@ -909,7 +909,7 @@ class FtpClientPlugin : Plugin() {
                       "FtpClientPlugin",
                       error,
               )
-              null
+              throw error
             } ?: emptyArray()
     if (names.isEmpty()) {
       return emptyArray()
