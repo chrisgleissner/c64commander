@@ -490,4 +490,14 @@ describe("createConfigListing", () => {
     expect(settingsOnly.skippedNotice()).toBe(CONFIG_LOOKUP_SKIPPED_NOTICE);
     expect(withSonglengths.skippedNotice()).toBe(SONGLENGTHS_LOOKUP_SKIPPED_NOTICE);
   });
+
+  it("lists the songlengths folders it did not ask the device about, and not the settings folders", async () => {
+    vi.mocked(listFtpDirectory).mockRejectedValue(new Error("timed out"));
+    const listing = createConfigListing(createUltimateSourceLocation(), undefined, { songlengths: true });
+    await expect(listing.listSonglengthsFolder("/USB2/One")).rejects.toThrow();
+    await expect(listing.listSonglengthsFolder("/USB2/Two")).resolves.toEqual([]);
+    await expect(listing.listEntries("/USB2/Settings")).resolves.toEqual([]);
+
+    expect(listing.skippedSonglengthsFolders()).toEqual(["/USB2/One", "/USB2/Two"]);
+  });
 });

@@ -51,6 +51,7 @@ export const createConfigListing = (
   let lastSuccessStart = 0;
   let skipped = 0;
   let noticeLogged = false;
+  const skippedSonglengthsFolders = new Set<string>();
   let chain: Promise<unknown> = Promise.resolve();
 
   const abortError = () => {
@@ -67,7 +68,7 @@ export const createConfigListing = (
     : null;
   aborted?.catch(() => undefined);
 
-  const makeListEntries = (probeEvery: number) => {
+  const makeListEntries = (probeEvery: number, rememberSkipped = false) => {
     let sinceLastProbe = 0;
     const lookUp = async (path: string): Promise<SourceEntry[]> => {
       if (signal?.aborted) throw abortError();
@@ -75,6 +76,7 @@ export const createConfigListing = (
       const probing = deviceUnreachable && (sinceLastProbe += 1) >= probeEvery;
       if (fromDevice && ((deviceUnreachable && !probing) || isNetworkKnownOffline())) {
         skipped += 1;
+        if (rememberSkipped) skippedSonglengthsFolders.add(path);
         return source.peekCachedEntries?.(path) ?? [];
       }
       if (probing) sinceLastProbe = 0;
@@ -96,6 +98,7 @@ export const createConfigListing = (
           answered();
         } else {
           skipped += 1;
+          if (rememberSkipped) skippedSonglengthsFolders.add(path);
           if (started > lastSuccessStart) {
             lastFailureStart = Math.max(lastFailureStart, started);
             deviceUnreachable = true;
@@ -116,7 +119,8 @@ export const createConfigListing = (
 
   return {
     listEntries: makeListEntries(CONFIG_LOOKUP_PROBE_EVERY),
-    listSonglengthsFolder: makeListEntries(SONGLENGTHS_LOOKUP_PROBE_EVERY),
+    listSonglengthsFolder: makeListEntries(SONGLENGTHS_LOOKUP_PROBE_EVERY, true),
+    skippedSonglengthsFolders: () => [...skippedSonglengthsFolders],
     /** The scan of the add listed folders from the device, so lookups need not be run one at a time. */
     noteDeviceAnswered: () => {
       lookupsStarted += 1;

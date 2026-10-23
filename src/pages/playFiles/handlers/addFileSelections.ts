@@ -35,6 +35,7 @@ import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { buildUltimateSonglengthsFile } from "@/pages/playFiles/handlers/ultimateSonglengthsFile";
+import { recordSkippedSonglengthsFolders } from "@/pages/playFiles/songlengthsRetryStore";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
@@ -971,6 +972,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               }
             }
           }
+        }
+
+        if (source.type === "ultimate") {
+          recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
         }
 
         if (discovered.length) {

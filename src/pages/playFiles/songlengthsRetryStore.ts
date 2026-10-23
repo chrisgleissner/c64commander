@@ -1,0 +1,34 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+/**
+ * Folders whose songlengths file was not looked for because the device did not answer during an add, by
+ * saved device. The Play page asks for them again once the device answers.
+ */
+const foldersByDevice = new Map<string, Set<string>>();
+
+export const recordSkippedSonglengthsFolders = (deviceId: string, folders: readonly string[]) => {
+  if (!folders.length) return;
+  const stored = foldersByDevice.get(deviceId) ?? new Set<string>();
+  folders.forEach((folder) => stored.add(folder));
+  foldersByDevice.set(deviceId, stored);
+};
+
+export const getSkippedSonglengthsFolders = (deviceId: string): string[] => [...(foldersByDevice.get(deviceId) ?? [])];
+
+export const resolveSkippedSonglengthsFolders = (deviceId: string, folders: readonly string[]) => {
+  const stored = foldersByDevice.get(deviceId);
+  if (!stored) return;
+  folders.forEach((folder) => stored.delete(folder));
+  if (!stored.size) foldersByDevice.delete(deviceId);
+};
+
+export const clearSkippedSonglengthsFolders = (deviceId?: string) => {
+  if (deviceId === undefined) foldersByDevice.clear();
+  else foldersByDevice.delete(deviceId);
+};

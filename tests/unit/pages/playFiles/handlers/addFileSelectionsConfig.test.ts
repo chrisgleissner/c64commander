@@ -435,4 +435,26 @@ describe("addFileSelections config discovery", () => {
     );
     addLogSpy.mockRestore();
   });
+
+  it("stores the folders it could not look in for a songlengths file because the device did not answer", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { clearSkippedSonglengthsFolders, getSkippedSonglengthsFolders } =
+      await import("@/pages/playFiles/songlengthsRetryStore");
+    clearSkippedSonglengthsFolders();
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates = vi.fn(() => ["/Music/A/songlengths.md5", "/Music/B/songlengths.md5"]);
+    const listEntries = vi.fn(async () => {
+      if (listEntries.mock.calls.length > 1) throw new Error("FTP list failed: Timeout (control socket)");
+      return [];
+    });
+
+    await createAddFileSelectionsHandler(deps as never)(createSource("ultimate", listEntries), [
+      { type: "file", name: "tune.sid", path: "/Music/A/tune.sid", sizeBytes: 4096 },
+    ]);
+
+    const stored = getSkippedSonglengthsFolders(getSavedDevicesSnapshot().selectedDeviceId);
+    expect(stored.length).toBeGreaterThan(0);
+    expect(stored.every((folder) => folder.startsWith("/Music/"))).toBe(true);
+    clearSkippedSonglengthsFolders();
+  });
 });
