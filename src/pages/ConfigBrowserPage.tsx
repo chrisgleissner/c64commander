@@ -962,7 +962,10 @@ const soleRestCategory = (page: MenuNode): string | null => {
 
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
-  const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
+  const categoriesQuery = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
+  const { data: categoriesData, isError, error, refetch } = categoriesQuery;
+  const categoriesAreFromPreviousRouting = Boolean(categoriesQuery.isPlaceholderData);
+  const isLoading = categoriesQuery.isLoading || categoriesAreFromPreviousRouting;
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   // One callback per section for the life of the page, so a section is not re-rendered for a new function.
@@ -1031,7 +1034,7 @@ export default function ConfigBrowserPage() {
     [menuPages],
   );
 
-  const liveCategories = categoriesData?.categories ?? [];
+  const liveCategories = categoriesAreFromPreviousRouting ? [] : (categoriesData?.categories ?? []);
   // Categories whose unclaimed items smart-routing cannot place on any menu page (an
   // unknown/future category with no owner, keyword, or default). The residual Advanced
   // section renders ONLY these; when there are none it is omitted entirely (no junk drawer).

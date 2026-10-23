@@ -72,6 +72,33 @@ describe("useSidData", () => {
   });
 });
 
+describe("useSidData after a device switch", () => {
+  it("reads no SID categories while the category list on hand still belongs to the previous device", () => {
+    vi.mocked(useC64Categories).mockReturnValue({
+      data: { categories: ["Audio Mixer", "SID Sockets Configuration"], errors: [] },
+      isPlaceholderData: true,
+    } as never);
+    vi.mocked(useC64ConfigItems).mockClear();
+
+    renderHook(() => useSidData(true, {}));
+
+    expect(vi.mocked(useC64ConfigItems).mock.calls.length).toBeGreaterThan(0);
+    expect(vi.mocked(useC64ConfigItems).mock.calls.every(([, , enabled]) => enabled === false)).toBe(true);
+  });
+
+  it("reads the SID categories once the list belongs to the connected device and names an Audio Mixer", () => {
+    vi.mocked(useC64Categories).mockReturnValue({
+      data: { categories: ["Audio Mixer", "SID Sockets Configuration"], errors: [] },
+      isPlaceholderData: false,
+    } as never);
+    vi.mocked(useC64ConfigItems).mockClear();
+
+    renderHook(() => useSidData(true, {}));
+
+    expect(vi.mocked(useC64ConfigItems).mock.calls.every(([, , enabled]) => enabled === true)).toBe(true);
+  });
+});
+
 describe("Audio read status", () => {
   const answered = { data: {}, isError: false };
 

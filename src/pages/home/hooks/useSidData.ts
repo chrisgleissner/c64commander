@@ -34,7 +34,7 @@ export function useSidData(isConnected: boolean, configOverrides: Record<string,
   const { data: categoryList, isPlaceholderData } = useC64Categories();
   const sidAudioMissing =
     isConnected && !isPlaceholderData && Boolean(categoryList) && !categoryList?.categories?.includes("Audio Mixer");
-  const readSidAudio = isConnected && !sidAudioMissing;
+  const readSidAudio = isConnected && !sidAudioMissing && !isPlaceholderData;
   const sidSocketsQuery = useC64ConfigItems(
     "SID Sockets Configuration",
     [...HOME_SID_SOCKET_ITEMS],

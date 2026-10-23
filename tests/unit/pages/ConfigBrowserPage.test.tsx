@@ -294,6 +294,22 @@ describe("ConfigBrowserPage", () => {
     expect(screen.getByRole("button", { name: /clock settings/i })).toBeInTheDocument();
   });
 
+  it("shows no category cards while the list on hand still belongs to the previous device", () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ["Audio Mixer", "Speaker Mixer", "Clock Settings"] },
+      isLoading: false,
+      isPlaceholderData: true,
+    });
+
+    renderConfigBrowserPage();
+
+    expect(screen.queryByRole("button", { name: /audio mixer/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /clock settings/i })).not.toBeInTheDocument();
+    expect(mockUseC64Category).not.toHaveBeenCalledWith("Speaker Mixer", expect.anything());
+    expect(mockUseC64Category).not.toHaveBeenCalledWith("Audio Mixer", expect.anything());
+  });
+
   it("filters categories by search query", () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
