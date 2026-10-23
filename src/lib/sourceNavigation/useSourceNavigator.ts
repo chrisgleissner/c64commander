@@ -85,10 +85,11 @@ const setStoredPath = (navKey: string, path: string) => {
   localStorage.setItem(navKey, path);
 };
 
-const FTP_FILE_UNAVAILABLE = 550;
+/** The replies of an FTP server that could not open a folder: 550, and 451 on the Ultimate's own server. */
+const FTP_FOLDER_UNREADABLE_REPLIES = [451, 550];
 
-/** Only the device saying the folder is unavailable counts as gone; a refused data connection or a login problem does not. */
-const isMissingFolderFailure = (error: Error) => ftpReplyCodeOf(error) === FTP_FILE_UNAVAILABLE;
+/** Only the device saying it could not open the folder counts as gone; a refused data connection, a login problem or a transport failure does not. */
+const isMissingFolderFailure = (error: Error) => FTP_FOLDER_UNREADABLE_REPLIES.includes(ftpReplyCodeOf(error) ?? 0);
 
 /** How long to let typing settle before an indexed whole-source search runs. */
 const SEARCH_DEBOUNCE_MS = 180;
@@ -152,7 +153,9 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
           setTotalCount(page.totalCount);
           setNextOffset(page.nextOffset);
         } else {
-          const result = await source.listEntries(safePath);
+          const result = options?.remembered
+            ? await source.listEntries(safePath, { refusalExpected: true })
+            : await source.listEntries(safePath);
           if (loadingTokenRef.current !== token) return;
           setEntries(sortEntriesByName(result));
           setTotalCount(result.length);

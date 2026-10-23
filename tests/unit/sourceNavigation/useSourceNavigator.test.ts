@@ -635,6 +635,36 @@ describe("useSourceNavigator whole-source search", () => {
     expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/");
   });
 
+  it.each([
+    ["Android", "FTP LIST /USB2/removed refused (451): 451 Requested action aborted: local error in processing."],
+    ["iOS", "FTP command failed (451)"],
+    ["web bridge", "FTP list failed: 451 Requested action aborted: local error in processing."],
+    ["550", "FTP LIST /USB2/removed refused (550): No such directory"],
+  ])("forgets a remembered folder the device could not open (%s)", async (_client, message) => {
+    localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/removed");
+    const listEntries = vi.fn().mockImplementation(async (path: string) => {
+      if (path === "/USB2/removed") throw new Error(message);
+      return [{ type: "dir", name: "USB2", path: "/USB2" }];
+    });
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.path).toBe("/");
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/");
+    expect(listEntries).toHaveBeenCalledWith("/USB2/removed", { refusalExpected: true });
+    expect(addErrorLog).not.toHaveBeenCalled();
+  });
+
   it("keeps a remembered folder when the listing fails without a device reply", async () => {
     localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/kept");
     const listEntries = vi.fn().mockRejectedValue(new Error("Network request failed"));
@@ -658,8 +688,8 @@ describe("useSourceNavigator whole-source search", () => {
   it.each([
     "FTP LIST /USB2/kept refused (425): Can't open data connection",
     "FTP LIST /USB2/kept refused (426): Connection closed",
+    "FTP LIST /USB2/kept refused (421): Service not available",
     "FTP LIST /USB2/kept refused (450): Requested file action not taken",
-    "FTP LIST /USB2/kept refused (451): Requested action aborted: local error in processing",
     "FTP LIST /USB2/kept refused (530): Not logged in",
     "Host not found",
     "404 Not Found",
