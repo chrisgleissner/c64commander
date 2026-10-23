@@ -131,18 +131,26 @@ export function TabBar() {
     if (!nav) return;
     const labels = Array.from(nav.querySelectorAll<HTMLElement>(".tab-item-label"));
     const measure = () => {
+      // The decision is taken on the bar as it looks with every label shown, whatever it shows now. Measured in
+      // the current mode, the icons-only padding gives back width, the labels then fit, and the mode flips on
+      // every measurement at a width on the border.
+      const showedIconsOnly = nav.classList.contains("tab-bar-icons");
+      if (showedIconsOnly) nav.classList.remove("tab-bar-icons");
       const bar = getComputedStyle(nav);
       const tab = nav.querySelector<HTMLElement>(".tab-item");
-      if (!tab) return;
-      const tabStyle = getComputedStyle(tab);
-      setIconsOnly(
-        tabLabelsOverflow({
+      if (tab) {
+        const tabStyle = getComputedStyle(tab);
+        const overflows = tabLabelsOverflow({
           labelWidths: labels.map((label) => label.offsetWidth),
           minTabWidth: Number.parseFloat(tabStyle.minWidth) || 0,
           tabPadding: Number.parseFloat(tabStyle.paddingLeft) + Number.parseFloat(tabStyle.paddingRight) || 0,
           availableWidth: nav.clientWidth - Number.parseFloat(bar.paddingLeft) - Number.parseFloat(bar.paddingRight),
-        }),
-      );
+        });
+        if (showedIconsOnly) nav.classList.add("tab-bar-icons");
+        setIconsOnly(overflows);
+        return;
+      }
+      if (showedIconsOnly) nav.classList.add("tab-bar-icons");
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
