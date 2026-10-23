@@ -43,7 +43,12 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
   let noticeLogged = false;
   let chain: Promise<unknown> = Promise.resolve();
 
-  const abortError = () => new DOMException("Aborted", "AbortError");
+  const abortError = () => {
+    if (typeof DOMException !== "undefined") return new DOMException("Aborted", "AbortError");
+    const error = new Error("Aborted");
+    error.name = "AbortError";
+    return error;
+  };
   const aborted = signal
     ? new Promise<never>((_, reject) => {
         if (signal.aborted) reject(abortError());

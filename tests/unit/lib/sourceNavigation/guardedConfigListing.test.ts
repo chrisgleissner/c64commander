@@ -372,6 +372,24 @@ describe("createConfigListing", () => {
     expect(listing.skippedLookups()).toBe(0);
   });
 
+  it("rejects with an AbortError when the runtime has no DOMException", async () => {
+    const previousDomException = globalThis.DOMException;
+    vi.stubGlobal("DOMException", undefined);
+    try {
+      const controller = new AbortController();
+      vi.mocked(listFtpDirectory).mockImplementation(() => new Promise(() => undefined));
+      const listing = createConfigListing(createUltimateSourceLocation(), controller.signal);
+      const lookup = listing.listEntries("/USB2/Slow");
+      await Promise.resolve();
+
+      controller.abort();
+
+      await expect(lookup).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      vi.stubGlobal("DOMException", previousDomException);
+    }
+  });
+
   it("answers a path with repeated slashes from the entries cached for the folder", async () => {
     const source = createUltimateSourceLocation();
     vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
