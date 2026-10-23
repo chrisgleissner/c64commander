@@ -46,6 +46,7 @@ import {
   sectionsOpenedDuring,
 } from "./reachability_sections.mjs";
 import { HANDSET_PACKAGE } from "./gate_target.mjs";
+import { stopIsInView, usableViewHeight } from "./reachability_view.mjs";
 
 const PORT = process.env.CDP_PORT || "9333";
 
@@ -181,13 +182,22 @@ const STATE_EXPR = String.raw`(() => {
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
-  // What the app itself leaves for content: the viewport less the scroll margins the keypad anchor
-  // class reserves for the app bar above and the guidance and tab bars below.
-  const usableHeight = (el) => {
+  const usableViewHeight = ${usableViewHeight.toString()};
+  const stopIsInView = ${stopIsInView.toString()};
+  // The scroll box that holds the element when the page scrolls inside sticky chrome, clipped to the window; null when the window scrolls.
+  const scrollBoxOf = (el) => {
+    for (let box = el.parentElement; box && box !== document.body; box = box.parentElement) {
+      const overflowY = getComputedStyle(box).overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && box.scrollHeight > box.clientHeight + 1) {
+        const r = box.getBoundingClientRect();
+        return { top: Math.max(r.top, 0), bottom: Math.min(r.bottom, innerHeight) };
+      }
+    }
+    return null;
+  };
+  const usableHeight = (el, box) => {
     const cs = getComputedStyle(el);
-    const top = parseFloat(cs.scrollMarginTop) || 0;
-    const bottom = parseFloat(cs.scrollMarginBottom) || 0;
-    return innerHeight - top - bottom;
+    return usableViewHeight(innerHeight, box === null ? null : box.bottom - box.top, parseFloat(cs.scrollMarginTop) || 0, parseFloat(cs.scrollMarginBottom) || 0);
   };
   const sel = document.querySelector('[data-key-selected="true"]');
   let current = null;
@@ -208,11 +218,7 @@ const STATE_EXPR = String.raw`(() => {
       // card as a fault. The area is the app's own: the selected element carries the keypad scroll
       // anchor class, whose resolved scroll margins are exactly the chrome it reserves. Comparing
       // against the raw viewport instead reported five cards on Home that cannot fit at all.
-      inView:
-        r.top >= -1 &&
-        r.left >= -1 &&
-        r.right <= innerWidth + 1 &&
-        (r.bottom <= innerHeight + 1 || r.height > usableHeight(sel) - 1),
+      inView: stopIsInView(r, innerWidth, innerHeight, usableHeight(sel, scrollBoxOf(sel)), scrollBoxOf(sel)),
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter(usable).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
