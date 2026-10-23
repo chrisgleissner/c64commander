@@ -34,8 +34,12 @@ type CategoryItem = {
 };
 
 export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: PlaybackConfigOverrideEditorProps) => {
-  const { data: categoriesData } = useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
-  const categories = categoriesData?.categories ?? [];
+  const { data: categoriesData, isPlaceholderData: categoriesAreFromPreviousRouting } =
+    useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
+  const categories = useMemo(
+    () => (categoriesAreFromPreviousRouting ? [] : (categoriesData?.categories ?? [])),
+    [categoriesAreFromPreviousRouting, categoriesData],
+  );
   const groupedOverrides = useMemo(() => groupConfigOverrides(item.configOverrides ?? null), [item.configOverrides]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedItemName, setSelectedItemName] = useState<string>("");
