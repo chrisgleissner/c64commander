@@ -63,17 +63,46 @@ export type DiskLibrary = {
 // HARD9-048.
 type DiskLibraryState = { uniqueId: string | null; disks: DiskEntry[] };
 
-/** An Ultimate disk of a saved device that has since been removed, for the same file as a disk being added now. */
+const originMachineId = (disk: DiskEntry) => disk.origin?.originDeviceLastKnownUniqueId?.trim().toLowerCase() || null;
+
+/**
+ * An Ultimate disk of a saved device that has since been removed, for the same file of the same machine as a disk
+ * being added now. Content of the simulated device is never matched, so ending Demo Mode cannot remove a real disk.
+ */
 const isOrphanOf = (disk: DiskEntry, added: DiskEntry) => {
   const originDeviceId = disk.origin?.originDeviceId;
+  const machineId = originMachineId(disk);
   return (
     disk.location === "ultimate" &&
     added.location === "ultimate" &&
     disk.path === added.path &&
     Boolean(originDeviceId) &&
-    !getSavedDeviceById(originDeviceId as string)
+    !getSavedDeviceById(originDeviceId as string) &&
+    machineId !== null &&
+    machineId === originMachineId(added) &&
+    !isSimulatedDeviceOrigin(disk.origin) &&
+    !isSimulatedDeviceOrigin(added.origin)
   );
 };
+
+/** What the user set on a disk: it moves to the entry that replaces it. */
+const userFieldsOf = ({
+  name,
+  group,
+  importOrder,
+  configRef,
+  configOrigin,
+  configOverrides,
+  configCandidates,
+}: DiskEntry) => ({
+  name,
+  group,
+  importOrder,
+  configRef,
+  configOrigin,
+  configOverrides,
+  configCandidates,
+});
 
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [libraryState, setLibraryState] = useState<DiskLibraryState>({ uniqueId: null, disks: [] });
@@ -134,7 +163,7 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
             return;
           }
           const orphan = next[orphanIndex];
-          next[orphanIndex] = { ...entry, name: orphan.name, group: orphan.group };
+          next[orphanIndex] = { ...entry, ...userFieldsOf(orphan) };
         });
         return next;
       });

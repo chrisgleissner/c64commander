@@ -973,10 +973,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             }
           }
         }
-
-        if (source.type === "ultimate") {
-          recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
-        }
+        recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
 
         if (discovered.length) {
           discoveredSonglengths = discovered;

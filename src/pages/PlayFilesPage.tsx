@@ -34,7 +34,6 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
-import { useSonglengthsRetry } from "@/pages/playFiles/hooks/useSonglengthsRetry";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { PLAY_PAGE_TRACE_COMPONENT } from "@/lib/tracing/traceContext";
 import { toast } from "@/hooks/use-toast";
@@ -749,7 +748,6 @@ export default function PlayFilesPage() {
   }, [isPlaying, isPaused]);
 
   const selectedSavedDeviceId = useSavedDevices().selectedDeviceId;
-  useSonglengthsRetry({ deviceId: selectedSavedDeviceId, playlistLength: playlist.length, mergeSonglengthsFiles });
   const playbackDeviceIdRef = useRef<string | null>(null);
   useEffect(() => {
     const previousDeviceId = playbackDeviceIdRef.current;

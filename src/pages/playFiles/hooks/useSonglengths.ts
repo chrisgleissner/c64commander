@@ -27,6 +27,12 @@ import {
 } from "@/pages/playFiles/songlengthsResolution";
 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
+import { useSonglengthsRetry } from "@/pages/playFiles/hooks/useSonglengthsRetry";
+
+/** A failed songlengths load is read again after this long, doubling with each failure up to the maximum. */
+const SONGLENGTHS_RETRY_BASE_MS = 15_000;
+const SONGLENGTHS_RETRY_MAX_MS = 300_000;
 
 export type SonglengthsFileEntry = {
   path: string;
@@ -106,9 +112,11 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       {
         signature: string;
         promise: Promise<SonglengthsResolverBundle | null>;
+        retryAfter?: number;
       }
     >(),
   );
+  const songlengthsFailuresRef = useRef(new Map<string, number>());
   const songlengthsFileCacheRef = useRef(
     new Map<
       string,
@@ -286,11 +294,16 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         .sort()
         .join("|");
       const cached = songlengthsCacheRef.current.get(cacheKey);
-      if (cached && cached.signature === signature) {
+      if (
+        cached &&
+        cached.signature === signature &&
+        !(cached.retryAfter !== undefined && Date.now() >= cached.retryAfter)
+      ) {
         return cached.promise;
       }
 
       let loadAborted = false;
+      let loadFailed = false;
       const loader = (async () => {
         const ordered = [...Array.from(files.values()).reverse(), ...globalFiles];
         const sourceFiles: Array<{ path: string; content: string }> = [];
@@ -310,6 +323,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
             songlengthsFileCacheRef.current.set(filePath, { mtime, content });
             sourceFiles.push({ path: filePath, content });
           } catch (error) {
+            loadFailed = true;
             if ((error as { name?: string } | null)?.name === "AbortError") loadAborted = true;
             const filePath = getLocalFilePath(file);
             const mtime = typeof file.lastModified === "number" ? file.lastModified : 0;
@@ -359,12 +373,23 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       })();
 
       songlengthsCacheRef.current.set(cacheKey, { signature, promise: loader });
-      const evictAbortedLoad = () => {
-        if (loadAborted && songlengthsCacheRef.current.get(cacheKey)?.promise === loader) {
+      const settleLoad = () => {
+        const entry = songlengthsCacheRef.current.get(cacheKey);
+        if (entry?.promise !== loader) return;
+        if (loadAborted) {
           songlengthsCacheRef.current.delete(cacheKey);
+          return;
         }
+        if (!loadFailed) {
+          songlengthsFailuresRef.current.delete(cacheKey);
+          return;
+        }
+        const failures = (songlengthsFailuresRef.current.get(cacheKey) ?? 0) + 1;
+        songlengthsFailuresRef.current.set(cacheKey, failures);
+        entry.retryAfter =
+          Date.now() + Math.min(SONGLENGTHS_RETRY_MAX_MS, SONGLENGTHS_RETRY_BASE_MS * 2 ** (failures - 1));
       };
-      void loader.then(evictAbortedLoad, evictAbortedLoad);
+      void loader.then(settleLoad, settleLoad);
       return loader;
     },
     [readLocalText, songlengthsFilesByDir],
@@ -513,6 +538,12 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   const collectSonglengthsCandidates = useCallback((paths: string[]) => {
     return collectSonglengthsSearchPaths(paths);
   }, []);
+
+  useSonglengthsRetry({
+    deviceId: useSavedDevices().selectedDeviceId,
+    playlistLength: playlist.length,
+    mergeSonglengthsFiles,
+  });
 
   return {
     songlengthsFiles,

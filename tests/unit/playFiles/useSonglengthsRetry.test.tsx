@@ -6,12 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { connectionState, listEntries } = vi.hoisted(() => ({
+const { connectionState, listEntries, apiHost } = vi.hoisted(() => ({
   connectionState: { current: "REAL_CONNECTED" },
   listEntries: vi.fn(),
+  apiHost: { current: "u64" },
 }));
 
 vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connectionState.current }) }));
@@ -22,7 +23,18 @@ vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
   createUltimateSourceLocation: () => ({ id: "ultimate", type: "ultimate", listEntries }),
   normalizeFtpHost: (host: string) => host,
 }));
-vi.mock("@/lib/c64api", () => ({ getC64APIConfigSnapshot: () => ({ deviceHost: "u64", password: "" }) }));
+vi.mock("@/lib/c64api", () => ({
+  getC64APIConfigSnapshot: () => ({ deviceHost: apiHost.current, password: "" }),
+}));
+vi.mock("@/lib/savedDevices/store", () => ({
+  getSavedDevicesSnapshot: () => ({
+    selectedDeviceId: "device-1",
+    devices: [
+      { id: "device-1", host: "u64" },
+      { id: "device-2", host: "c64u" },
+    ],
+  }),
+}));
 vi.mock("@/lib/ftp/ftpClient", () => ({ readFtpFile: vi.fn() }));
 vi.mock("@/lib/ftp/ftpConfig", () => ({ getStoredFtpPort: () => 21 }));
 
@@ -40,6 +52,7 @@ describe("useSonglengthsRetry", () => {
     vi.clearAllMocks();
     clearSkippedSonglengthsFolders();
     connectionState.current = "REAL_CONNECTED";
+    apiHost.current = "u64";
     listEntries.mockReset();
   });
 
@@ -77,13 +90,83 @@ describe("useSonglengthsRetry", () => {
     expect(listEntries).not.toHaveBeenCalled();
   });
 
-  it("forgets the folders when the playlist is cleared", () => {
+  it("forgets the folders when the playlist the user had is emptied, but not when the page opens with no items yet", () => {
     connectionState.current = "OFFLINE_NO_DEMO";
     recordSkippedSonglengthsFolders("device-1", ["/DOCUMENTS/"]);
 
-    renderHook(() => useSonglengthsRetry({ deviceId: "device-1", playlistLength: 0, mergeSonglengthsFiles: vi.fn() }));
+    const { rerender } = renderHook(
+      ({ length }) =>
+        useSonglengthsRetry({ deviceId: "device-1", playlistLength: length, mergeSonglengthsFiles: vi.fn() }),
+      { initialProps: { length: 0 } },
+    );
+    expect(getSkippedSonglengthsFolders("device-1")).toEqual(["/DOCUMENTS/"]);
 
+    rerender({ length: 4 });
+    expect(getSkippedSonglengthsFolders("device-1")).toEqual(["/DOCUMENTS/"]);
+    rerender({ length: 0 });
     expect(getSkippedSonglengthsFolders("device-1")).toEqual([]);
+  });
+
+  it("starts for a folder that is stored after the page was already connected", async () => {
+    listEntries.mockResolvedValue([songlengths]);
+    const merge = vi.fn();
+    renderHook(() => useSonglengthsRetry({ deviceId: "device-1", playlistLength: 3, mergeSonglengthsFiles: merge }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(listEntries).not.toHaveBeenCalled();
+
+    recordSkippedSonglengthsFolders("device-1", ["/DOCUMENTS/"]);
+
+    await waitFor(() => expect(merge).toHaveBeenCalledTimes(1));
+  });
+
+  it("drops a folder the device refuses to list and goes on with the others", async () => {
+    recordSkippedSonglengthsFolders("device-1", ["/Gone/", "/DOCUMENTS/"]);
+    listEntries.mockImplementation(async (folder: string) => {
+      if (folder === "/Gone/") throw new Error("FTP list failed: 550 No such directory");
+      return [songlengths];
+    });
+    const merge = vi.fn();
+
+    renderHook(() => useSonglengthsRetry({ deviceId: "device-1", playlistLength: 3, mergeSonglengthsFiles: merge }));
+
+    await waitFor(() => expect(getSkippedSonglengthsFolders("device-1")).toEqual([]));
+    expect(merge).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries again after a wait when the device did not answer while the connection stayed up", async () => {
+    vi.useFakeTimers();
+    try {
+      recordSkippedSonglengthsFolders("device-1", ["/DOCUMENTS/"]);
+      listEntries.mockRejectedValueOnce(new Error("FTP list failed: Timeout (control socket)"));
+      listEntries.mockResolvedValue([songlengths]);
+      const merge = vi.fn();
+
+      renderHook(() => useSonglengthsRetry({ deviceId: "device-1", playlistLength: 3, mergeSonglengthsFiles: merge }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(listEntries).toHaveBeenCalledTimes(1);
+      expect(merge).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+
+      expect(merge).toHaveBeenCalledTimes(1);
+      expect(getSkippedSonglengthsFolders("device-1")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not ask while the API is aimed at another host than the selected device", async () => {
+    apiHost.current = "c64u";
+    recordSkippedSonglengthsFolders("device-1", ["/DOCUMENTS/"]);
+
+    renderHook(() => useSonglengthsRetry({ deviceId: "device-1", playlistLength: 3, mergeSonglengthsFiles: vi.fn() }));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(listEntries).not.toHaveBeenCalled();
   });
 
   it("only asks for the folders of the selected device", async () => {

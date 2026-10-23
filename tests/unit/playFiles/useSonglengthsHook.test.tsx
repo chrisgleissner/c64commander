@@ -264,6 +264,36 @@ describe("useSonglengths", () => {
     ).toHaveLength(1);
   });
 
+  it("reads a songlengths file again once the wait after a failed read has passed", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        if (reads === 1) throw new Error("FTP read aborted");
+        return new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer;
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    await flushPromises();
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(reads).toBe(1);
+
+    clock.mockReturnValue(now + 16_000);
+    const retried = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    clock.mockRestore();
+
+    expect(reads).toBe(2);
+    expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+  });
+
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
     const reads = { count: 0 };
     const songlengthsFile = {

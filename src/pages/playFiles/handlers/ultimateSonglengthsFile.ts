@@ -62,6 +62,11 @@ export const buildUltimateSonglengthsFile = (
         });
         const bytes = base64ToUint8(data);
         return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      } catch (error) {
+        if (!signal?.aborted) throw error;
+        const canceled = new Error("Songlengths read canceled", { cause: error });
+        canceled.name = "AbortError";
+        throw canceled;
       } finally {
         setAddItemsProgress((prev) =>
           typeof prev.message === "string" && prev.message.startsWith("Reading song-length database")
