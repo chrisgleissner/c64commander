@@ -433,19 +433,40 @@ test.describe("Keypad / T9 input", () => {
     expect((await readKeyInputLogs(page)).length).toBe(0);
   });
 
+  test("Diagnostics: the first ArrowDown once the page has settled is logged without a retry", async ({ page }) => {
+    await enableKeypad(page);
+    await enableDebugLogging(page);
+    await page.goto("/");
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+    await page.evaluate(
+      () => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+    );
+    await page.keyboard.press("ArrowDown");
+    await expect
+      .poll(async () =>
+        ((await readKeyInputLogs(page)) as Array<{ details?: Record<string, unknown> }>).map(
+          (entry) => entry.details?.normalizedAction,
+        ),
+      )
+      .toContain("dpadDown");
+  });
+
   test("Diagnostics: debug ON → recognized and unmapped keys are logged", async ({ page }) => {
     await enableKeypad(page);
     await enableDebugLogging(page);
     await page.goto("/");
     await expect(page.getByTestId("tab-home")).toBeVisible();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("KeyQ");
-    // Both presses have to be logged before reading; polling for the first entry alone raced the second.
+    // The key listener attaches after the first render, so a press that lands earlier is lost: press again until it is logged.
     const loggedActions = async () =>
       ((await readKeyInputLogs(page)) as Array<{ details?: Record<string, unknown> }>).map(
         (entry) => entry.details?.normalizedAction,
       );
-    await expect.poll(loggedActions).toContain("dpadDown");
-    await expect.poll(loggedActions).toContain(null);
+    await expect
+      .poll(async () => {
+        await page.keyboard.press("ArrowDown");
+        await page.keyboard.press("KeyQ");
+        return loggedActions();
+      })
+      .toEqual(expect.arrayContaining(["dpadDown", null]));
   });
 });

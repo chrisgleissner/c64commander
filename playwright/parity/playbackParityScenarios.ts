@@ -50,8 +50,8 @@ export type ParityDriver = {
   report?: (line: string) => void;
   /** Record both clocks while `during` runs; absent where the C64's clock cannot be read. */
   recordClocks?: (during: () => Promise<void>) => Promise<ClockRecording>;
-  /** Second changes per window that may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
-  clockOutliersAllowed?: number;
+  /** Of every six seconds in a steady window, how many may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
+  clockLateSecondsPerSix?: number;
   wait(ms: number): Promise<void>;
 };
 
@@ -176,6 +176,56 @@ export const clockPhaseErrors = (
       const nearest = offsets.reduce((best, offset) => (Math.abs(offset) < Math.abs(best) ? offset : best), Infinity);
       return Math.abs(nearest) <= 1500 ? nearest : Number.NaN;
     });
+
+/**
+ * The worst phase error of each second that changed inside the windows: the larger of what each clock saw of
+ * the other, NaN when either clock did not show that second. One entry per second, so a late second counts once.
+ */
+export const clockPhaseBySecond = (
+  device: ClockTransition[],
+  page: ClockTransition[],
+  windows: Array<[number, number]>,
+): number[] => {
+  const worst = new Map<number, number>();
+  const note = (seconds: number[], errors: number[]) =>
+    errors.forEach((error, index) => {
+      const previous = worst.get(seconds[index]);
+      const magnitude = Math.abs(error);
+      worst.set(
+        seconds[index],
+        previous === undefined || Number.isNaN(magnitude) ? magnitude : Math.max(previous, magnitude),
+      );
+    });
+  const inWindows = (ticks: ClockTransition[]) =>
+    ticks.filter(({ atMs }) => windows.some(([start, end]) => atMs >= start && atMs <= end));
+  note(
+    inWindows(device).map((t) => t.seconds),
+    clockPhaseErrors(device, page, windows),
+  );
+  note(
+    inWindows(page).map((t) => t.seconds),
+    clockPhaseErrors(page, device, windows),
+  );
+  return [...worst.values()];
+};
+
+/** Seconds a steady window must show for its phase to be judged; a 6 s window shows six. */
+export const MIN_CLOCK_SECONDS = 5;
+
+/**
+ * Why a steady window fails, or null. Judged per second: at most `latePerSix` of every six seconds may miss
+ * the limit (a loaded runner can pause either clock once); a steady offset, a drift, a coarse poll or a stuck
+ * clock shows in many seconds, or as a missing one, and fails.
+ */
+export const judgeClockPhase = (perSecond: number[], limit: number, latePerSix: number): string | null => {
+  if (perSecond.length < MIN_CLOCK_SECONDS) return `only ${perSecond.length} seconds were seen`;
+  if (perSecond.some(Number.isNaN)) return "a second showed on one clock and not on the other";
+  const late = perSecond.filter((error) => error > limit).length;
+  const allowed = Math.floor((perSecond.length * latePerSix) / 6);
+  return late > allowed
+    ? `${late} of ${perSecond.length} seconds were more than ${limit} ms apart (${allowed} allowed): ${perSecond.map(Math.round).join(", ")}`
+    : null;
+};
 
 /** The page turns each second within this long of the C64's clock turning it. */
 export const CLOCK_PHASE_LIMIT_MS = 150;
@@ -311,21 +361,14 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       const names = ["playing", "after fast forward", "after a jump", "after a rewind"];
       windows.forEach((window, index) => {
         const pageLag = clockPhaseErrors(recording.device, recording.page, [window]);
-        const errors = [...pageLag, ...clockPhaseErrors(recording.page, recording.device, [window])];
+        const perSecond = clockPhaseBySecond(recording.device, recording.page, [window]);
         const what = names[index];
-        check(errors.length >= 8, `${what}: only ${errors.length} second changes were seen`);
-        check(!errors.some(Number.isNaN), `${what}: a second showed on one clock and not on the other`);
-        const sorted = errors.map(Math.abs).sort((x, y) => x - y);
-        const worst = sorted[sorted.length - 1];
-        const judged = sorted[sorted.length - 1 - (driver.clockOutliersAllowed ?? 0)];
         const lags = pageLag.map(Math.round).sort((x, y) => x - y);
         driver.report?.(
-          `${what}: the page turned each second ${lags.join(", ")} ms after the C64; at most ${worst} ms apart`,
+          `${what}: the page turned each second ${lags.join(", ")} ms after the C64; at most ${Math.max(...perSecond)} ms apart`,
         );
-        check(
-          judged <= CLOCK_PHASE_LIMIT_MS,
-          `${what}: the page and the C64 turned a second ${judged} ms apart (all: ${sorted.map(Math.round).join(", ")})`,
-        );
+        const failure = judgeClockPhase(perSecond, CLOCK_PHASE_LIMIT_MS, driver.clockLateSecondsPerSix ?? 0);
+        check(failure === null, `${what}: ${failure}`);
       });
     },
   },
