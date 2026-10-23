@@ -8,52 +8,66 @@
 
 import { describe, expect, it } from "vitest";
 
-import { stopIsInView, usableViewHeight } from "../../../tools/hil/reachability_view.mjs";
+import { intersectScrollBoxes, stopIsInView, usableViewHeight } from "../../../tools/hil/reachability_view.mjs";
 
 describe("keypad reachability view criterion", () => {
-  const window = { width: 320, height: 427 };
+  const view = { width: 320, height: 427 };
   const box = { top: 58, bottom: 382 };
+  const guidance = 31;
+  const usable = usableViewHeight(view.height, 324, 8, guidance + 8);
+  const card = (top: number, bottom: number) => ({ top, bottom, left: 8, right: 312 });
+  const inView = (rect: ReturnType<typeof card>) => stopIsInView(rect, view.width, view.height, usable, box, guidance);
 
-  it("takes the scroll box of a page with sticky chrome, not the window, as the usable height", () => {
-    expect(usableViewHeight(427, 324, 8, 27)).toBe(324);
+  it("takes the scroll box of a page with sticky chrome, not the window, as the usable height, less the scroll margins", () => {
+    expect(usableViewHeight(427, 324, 8, 39)).toBe(277);
     expect(usableViewHeight(427, null, 8, 27)).toBe(392);
   });
 
   it("accepts a card taller than the scroll box whose start is on screen", () => {
-    const card = { top: 58, bottom: 441, left: 8, right: 312 };
-    const usable = usableViewHeight(window.height, 324, 8, 27);
-    expect(stopIsInView(card, window.width, window.height, usable, box)).toBe(true);
-    expect(stopIsInView(card, window.width, window.height, usableViewHeight(window.height, null, 8, 27), null)).toBe(
-      false,
-    );
+    expect(inView(card(58, 441))).toBe(true);
+    expect(
+      stopIsInView(card(58, 441), view.width, view.height, usableViewHeight(view.height, null, 8, 27), null, 0),
+    ).toBe(false);
   });
 
-  it("still reports a card that would fit its scroll box but sits below the window", () => {
-    const card = { top: 380, bottom: 470, left: 8, right: 312 };
-    const usable = usableViewHeight(window.height, 324, 8, 27);
-    expect(stopIsInView(card, window.width, window.height, usable, box)).toBe(false);
+  it("accepts a card only a few pixels shorter than the scroll box", () => {
+    expect(inView(card(58, 374))).toBe(true);
+    expect(inView(card(58, 381))).toBe(true);
   });
 
-  it("reports a tall card whose start is behind the bars below the scroll box", () => {
-    const usable = usableViewHeight(window.height, 324, 8, 27);
-    expect(stopIsInView({ top: 381, bottom: 760, left: 8, right: 312 }, window.width, window.height, usable, box)).toBe(
-      true,
-    );
-    expect(stopIsInView({ top: 400, bottom: 760, left: 8, right: 312 }, window.width, window.height, usable, box)).toBe(
-      false,
-    );
-    expect(stopIsInView({ top: 426, bottom: 800, left: 8, right: 312 }, window.width, window.height, usable, box)).toBe(
-      false,
-    );
+  it("requires a meaningful part of a tall card to show above the guidance bar", () => {
+    expect(inView(card(320, 760))).toBe(true);
+    expect(inView(card(340, 760))).toBe(false);
+    expect(inView(card(381, 760))).toBe(false);
+    expect(inView(card(426, 800))).toBe(false);
   });
 
-  it("reports a card whose start is above the window or off to one side", () => {
-    const usable = usableViewHeight(window.height, 324, 8, 27);
-    expect(stopIsInView({ top: -40, bottom: 400, left: 8, right: 312 }, window.width, window.height, usable, box)).toBe(
-      false,
-    );
-    expect(stopIsInView({ top: 60, bottom: 400, left: 8, right: 340 }, window.width, window.height, usable, box)).toBe(
-      false,
-    );
+  it("reports a card whose start is above the box or off to one side", () => {
+    expect(inView(card(-40, 400))).toBe(false);
+    expect(inView(card(40, 400))).toBe(false);
+    expect(inView({ top: 60, bottom: 400, left: 8, right: 340 })).toBe(false);
+  });
+
+  it("measures a list that scrolls inside the page by the part of the page's box it shares", () => {
+    expect(intersectScrollBoxes([], 427)).toBeNull();
+    expect(intersectScrollBoxes([{ top: 58, bottom: 382 }], 427)).toEqual({ top: 58, bottom: 382 });
+    expect(
+      intersectScrollBoxes(
+        [
+          { top: 200, bottom: 500 },
+          { top: 58, bottom: 382 },
+        ],
+        427,
+      ),
+    ).toEqual({ top: 200, bottom: 382 });
+    const nested = intersectScrollBoxes(
+      [
+        { top: 200, bottom: 500 },
+        { top: 58, bottom: 382 },
+      ],
+      427,
+    )!;
+    expect(stopIsInView(card(300, 800), view.width, view.height, 100, nested, guidance)).toBe(true);
+    expect(stopIsInView(card(360, 800), view.width, view.height, 100, nested, guidance)).toBe(false);
   });
 });
