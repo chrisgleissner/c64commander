@@ -136,19 +136,24 @@ class MockC64UServerTest {
               put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
             }
     val state = MockC64UState.fromPayload(config)
+    var fakeNanos = 0L
+    state.nanoClock = {
+      fakeNanos += 100_000_000L
+      fakeNanos
+    }
     val server = MockC64UServer(state)
     server.start()
     waitForServer(server)
 
     val writeConnection =
-            URL("${server.baseUrl}/v1/machine:writemem?address=00C6&data=01").openConnection() as
+            URL("${server.baseUrl}/v1/machine:writemem?address=0334&data=01").openConnection() as
                     HttpURLConnection
     writeConnection.requestMethod = "PUT"
     assertEquals(200, writeConnection.responseCode)
     writeConnection.disconnect()
 
     val readConnection =
-            URL("${server.baseUrl}/v1/machine:readmem?address=00C6&length=1").openConnection() as
+            URL("${server.baseUrl}/v1/machine:readmem?address=0334&length=1").openConnection() as
                     HttpURLConnection
     readConnection.requestMethod = "GET"
     val body = readBody(readConnection)
@@ -257,6 +262,7 @@ class MockC64UServerTest {
               put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
             }
     val state = MockC64UState.fromPayload(config)
+    state.nanoClock = { 0L }
     val server = MockC64UServer(state)
     server.start()
     waitForServer(server)
