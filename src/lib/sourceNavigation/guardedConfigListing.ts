@@ -17,12 +17,13 @@ type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekC
 /** While the device is marked unreachable, every this-many-th lookup tries it again. */
 export const CONFIG_LOOKUP_PROBE_EVERY = 25;
 
-export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up while the device could not be reached.";
+export const CONFIG_LOOKUP_SKIPPED_NOTICE =
+  "Settings and song length files were not looked up while the device could not be reached.";
 
 /**
- * The folder listing used to look for settings files beside the files of one add.
+ * The folder listing used to look for settings files and songlengths files beside the files of one add.
  *
- * Looking for a settings file is optional, so once the phone knows it is offline, or a listing from the device has
+ * Looking for them is optional, so once the phone knows it is offline, or a listing from the device has
  * failed without an answer from the device, the remaining folders are answered from the source's cache (or as
  * empty) instead of each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the
  * device again. Until one lookup has been answered the lookups run one at a time, so a first failure is seen before
@@ -109,10 +110,14 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
       if (skipped === 0) return "";
       if (!noticeLogged) {
         noticeLogged = true;
-        addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
-          sourceId: source.id,
-          folders: skipped,
-        });
+        addLog(
+          "warn",
+          "Settings and song length files were not looked up in some folders: the device could not be reached",
+          {
+            sourceId: source.id,
+            folders: skipped,
+          },
+        );
       }
       return CONFIG_LOOKUP_SKIPPED_NOTICE;
     },

@@ -915,7 +915,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
         expect.objectContaining({
           title: "Items added",
           description:
-            "3 disk(s) added to library. Settings files were not looked up while the device could not be reached.",
+            "3 disk(s) added to library. Settings and song length files were not looked up while the device could not be reached.",
         }),
       );
     });

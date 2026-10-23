@@ -743,12 +743,12 @@ describe("addFileSelections batching", () => {
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
           description:
-            "2 file(s) added to playlist. Settings files were not looked up while the device could not be reached.",
+            "2 file(s) added to playlist. Settings and song length files were not looked up while the device could not be reached.",
         }),
       );
       expect(addLog).toHaveBeenCalledWith(
         "warn",
-        "Settings files were not looked up in some folders: the device could not be reached",
+        "Settings and song length files were not looked up in some folders: the device could not be reached",
         expect.objectContaining({ folders: 2 }),
       );
     } finally {
@@ -783,6 +783,61 @@ describe("addFileSelections batching", () => {
       "/USB2/MUSICIANS/T",
       "/USB2/MUSICIANS/T/Tone_Test",
     ]);
+  });
+
+  it("stops asking folders for a songlengths file once the device has not answered, and says so", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockImplementation(collectSonglengthsSearchPaths);
+    const listEntries = vi.fn(async () => {
+      throw new Error("FTP list failed: Timeout (control socket)");
+    });
+    vi.mocked(toast).mockClear();
+
+    const result = await createAddFileSelectionsHandler(deps as any)(createUltimateSource(listEntries), [
+      { type: "file", name: "Tone-Low.sid", path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
+    ]);
+
+    expect(result).toBe(true);
+    expect(listEntries).toHaveBeenCalledTimes(2);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining("Settings and song length files were not looked up"),
+      }),
+    );
+  });
+
+  it("keeps looking for a songlengths file after a folder that the device refused to list", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockImplementation(collectSonglengthsSearchPaths);
+    const listEntries = vi.fn(async () => {
+      throw new Error("FTP list failed: 550 No such directory");
+    });
+
+    await createAddFileSelectionsHandler(deps as any)(createUltimateSource(listEntries), [
+      { type: "file", name: "Tone-Low.sid", path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
+    ]);
+
+    expect(listEntries.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("ends the songlengths search with the cancel instead of logging each folder it did not list", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockImplementation(collectSonglengthsSearchPaths);
+    const listEntries = vi.fn(async () => {
+      if (listEntries.mock.calls.length > 1) deps.addItemsAbortControllerRef.current?.abort();
+      return [];
+    });
+    vi.mocked(addLog).mockClear();
+
+    const result = await createAddFileSelectionsHandler(deps as any)(createUltimateSource(listEntries), [
+      { type: "file", name: "Tone-Low.sid", path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
+    ]);
+
+    expect(result).toBe(false);
+    expect(listEntries).toHaveBeenCalledTimes(2);
+    expect(
+      vi.mocked(addLog).mock.calls.filter(([, message]) => /scanning for songlengths file/.test(String(message))),
+    ).toEqual([]);
   });
 
   it("flushes 5k hvsc files in a single bulk batch", async () => {
@@ -874,6 +929,39 @@ describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
     expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 0, totalBytes: 1024 }));
     // The finally block restores the generic scanning message.
     expect(progressState.message).toBe("Scanning…");
+  });
+
+  it("reads a songlengths file of a canceled add without that add's signal", async () => {
+    const { readFtpFile } = await import("@/lib/ftp/ftpClient");
+    vi.mocked(readFtpFile).mockReset();
+    vi.mocked(readFtpFile).mockResolvedValue({ data: "QUJDRA==", sizeBytes: 4 });
+    const deps = createDeps();
+    let current: AbortController | null = null;
+    let addController: AbortController | undefined;
+    deps.addItemsAbortControllerRef = {
+      get current() {
+        return current;
+      },
+      set current(value: AbortController | null) {
+        current = value;
+        if (value) addController = value;
+      },
+    } as never;
+    const source = createUltimateSource(async () => [
+      { type: "file" as const, name: "Songlengths.md5", path: "/DOCUMENTS/Songlengths.md5", sizeBytes: 1024 },
+      { type: "file" as const, name: "Commando.sid", path: "/DOCUMENTS/Commando.sid", sizeBytes: 100 },
+    ]);
+    await createAddFileSelectionsHandler(deps as any)(source, [{ type: "dir", name: "DOCUMENTS", path: "/DOCUMENTS" }]);
+    const discovered = deps.mergeSonglengthsFiles.mock.calls[0][0] as Array<{ path: string; file: any }>;
+    const songFile = discovered.find((entry) => entry.path.endsWith("Songlengths.md5"))!.file;
+
+    await songFile.arrayBuffer();
+    expect(vi.mocked(readFtpFile).mock.calls[0][0].signal).toBe(addController!.signal);
+
+    addController!.abort();
+    await songFile.arrayBuffer();
+
+    expect(vi.mocked(readFtpFile).mock.calls[1][0].signal).toBeUndefined();
   });
 
   it("skips auto-reading an oversized ultimate songlengths file", async () => {

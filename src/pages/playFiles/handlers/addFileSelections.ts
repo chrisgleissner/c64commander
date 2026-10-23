@@ -178,7 +178,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             // data channel.
             timeoutMs: 0,
             totalBytes,
-            signal,
+            signal: signal?.aborted ? undefined : signal,
             onProgress: ({ bytesRead, totalBytes: total }) => {
               const readMib = formatSonglengthsMib(bytesRead);
               const message =
@@ -1000,7 +1000,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               if (!mayHoldSonglengthsFile(folder, listed)) continue;
               try {
                 throwIfAborted();
-                const entries = await source.listEntries(folder);
+                const entries = await configListing.listEntries(folder);
                 listed.set(normalizeSourcePath(folder).replace(/(.)\/+$/, "$1"), entries);
                 throwIfAborted();
                 const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
@@ -1011,6 +1011,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                   resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
                 );
               } catch (error) {
+                if (isAbortError(error)) throw error;
                 addLog("debug", "Failed to list entries while scanning for songlengths file", {
                   folder,
                   sourceId: source.id,

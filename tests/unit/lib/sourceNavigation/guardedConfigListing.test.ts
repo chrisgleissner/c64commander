@@ -154,7 +154,9 @@ describe("createConfigListing", () => {
     await expect(listing.listEntries("/USB2/One")).rejects.toThrow();
 
     expect(listing.skippedLookups()).toBe(1);
-    expect(listing.skippedNotice()).toBe("Settings files were not looked up while the device could not be reached.");
+    expect(listing.skippedNotice()).toBe(
+      "Settings and song length files were not looked up while the device could not be reached.",
+    );
   });
 
   it("keeps asking after a failure that is not about the connection", async () => {
