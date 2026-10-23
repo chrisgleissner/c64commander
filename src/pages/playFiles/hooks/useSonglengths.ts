@@ -290,7 +290,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         return cached.promise;
       }
 
-      let loadFailed = false;
+      let loadAborted = false;
       const loader = (async () => {
         const ordered = [...Array.from(files.values()).reverse(), ...globalFiles];
         const sourceFiles: Array<{ path: string; content: string }> = [];
@@ -310,7 +310,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
             songlengthsFileCacheRef.current.set(filePath, { mtime, content });
             sourceFiles.push({ path: filePath, content });
           } catch (error) {
-            loadFailed = true;
+            if ((error as { name?: string } | null)?.name === "AbortError") loadAborted = true;
             const filePath = getLocalFilePath(file);
             const mtime = typeof file.lastModified === "number" ? file.lastModified : 0;
             songlengthsFileCacheRef.current.set(filePath, {
@@ -359,12 +359,12 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       })();
 
       songlengthsCacheRef.current.set(cacheKey, { signature, promise: loader });
-      const evictFailedLoad = () => {
-        if (loadFailed && songlengthsCacheRef.current.get(cacheKey)?.promise === loader) {
+      const evictAbortedLoad = () => {
+        if (loadAborted && songlengthsCacheRef.current.get(cacheKey)?.promise === loader) {
           songlengthsCacheRef.current.delete(cacheKey);
         }
       };
-      void loader.then(evictFailedLoad, evictFailedLoad);
+      void loader.then(evictAbortedLoad, evictAbortedLoad);
       return loader;
     },
     [readLocalText, songlengthsFilesByDir],

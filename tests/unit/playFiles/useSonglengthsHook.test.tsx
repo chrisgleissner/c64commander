@@ -213,7 +213,7 @@ describe("useSonglengths", () => {
     expect(candidates.some((path) => path.toLowerCase().includes("songlengths"))).toBe(true);
   });
 
-  it("reads a songlengths file again after a read that failed, instead of keeping the empty result for the session", async () => {
+  it("reads a songlengths file again after a read that was canceled, instead of keeping the empty result for the session", async () => {
     let reads = 0;
     const songlengthsFile = {
       name: "Songlengths.md5",
@@ -236,6 +236,27 @@ describe("useSonglengths", () => {
 
     expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
     expect(reads).toBe(2);
+  });
+
+  it("does not read a songlengths file again for the next batch after a read that failed because the device was unreachable", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        throw new Error("FTP list failed: Timeout (control socket)");
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    await flushPromises();
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+
+    expect(reads).toBe(1);
   });
 
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
