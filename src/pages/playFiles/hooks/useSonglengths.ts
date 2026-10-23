@@ -88,7 +88,7 @@ export type UseSonglengthsResult = {
     songNr?: number | null,
     songlengthsOverrides?: SonglengthsFileEntry[],
   ) => Promise<number | null>;
-  mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
+  mergeSonglengthsFiles: (entries: SonglengthsFileEntry[], options?: { replaceFailed?: boolean }) => void;
   collectSonglengthsCandidates: (paths: string[]) => string[];
 };
 
@@ -456,18 +456,34 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     }
   }, []);
 
-  const mergeSonglengthsFiles = useCallback((entries: SonglengthsFileEntry[]) => {
-    setSonglengthsFiles((prev) => {
-      const seen = new Set(prev.map((entry) => entry.path));
-      const next = [...prev];
-      entries.forEach((entry) => {
-        if (seen.has(entry.path)) return;
-        seen.add(entry.path);
-        next.push(entry);
+  const mergeSonglengthsFiles = useCallback(
+    (entries: SonglengthsFileEntry[], options?: { replaceFailed?: boolean }) => {
+      const failedPaths = new Set<string>();
+      if (options?.replaceFailed) {
+        entries.forEach((entry) => {
+          if (songlengthsFileCacheRef.current.get(entry.path)?.content === null) failedPaths.add(entry.path);
+        });
+      }
+      if (failedPaths.size) {
+        failedPaths.forEach((path) => songlengthsFileCacheRef.current.delete(path));
+        songlengthsCacheRef.current.clear();
+        songlengthsFailuresRef.current.clear();
+      }
+      setSonglengthsFiles((prev) => {
+        const seen = new Set(prev.map((entry) => entry.path));
+        const next = prev.map(
+          (entry) => entries.find((added) => failedPaths.has(entry.path) && added.path === entry.path) ?? entry,
+        );
+        entries.forEach((entry) => {
+          if (seen.has(entry.path)) return;
+          seen.add(entry.path);
+          next.push(entry);
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
   const applySonglengthsToItems = useCallback(
     async (
@@ -539,8 +555,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     return collectSonglengthsSearchPaths(paths);
   }, []);
 
+  const savedDevices = useSavedDevices();
   useSonglengthsRetry({
-    deviceId: useSavedDevices().selectedDeviceId,
+    deviceId: savedDevices.selectedDeviceId,
+    savedDeviceIds: savedDevices.devices.map((device) => device.id),
     playlistLength: playlist.length,
     mergeSonglengthsFiles,
   });

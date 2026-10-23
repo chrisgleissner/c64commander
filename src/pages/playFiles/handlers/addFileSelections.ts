@@ -36,6 +36,7 @@ import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFile
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { buildUltimateSonglengthsFile } from "@/pages/playFiles/handlers/ultimateSonglengthsFile";
 import { recordSkippedSonglengthsFolders } from "@/pages/playFiles/songlengthsRetryStore";
+import { searchSonglengthsFolders } from "@/pages/playFiles/handlers/songlengthsFolderSearch";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
@@ -501,6 +502,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
+      let deviceListedRecursively = false;
       const configListing = createConfigListing(source, abortSignal, { songlengths: true });
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
@@ -720,6 +722,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             } else {
               const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
               throwIfAborted();
+              if (source.type === "ultimate" && !nested.partialFailures?.length) deviceListedRecursively = true;
               if (nested.partialFailures?.length) {
                 skippedFolders.push(...nested.partialFailures);
                 addLog("warn", "Playlist scan skipped folders", {
@@ -780,10 +783,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         files: selectedFiles.length,
         ms: Date.now() - scanT0,
       });
-      if (source.type === "ultimate" && selectedFiles.length > 0 && skippedFolders.length === 0) {
-        configListing.noteDeviceAnswered();
-      }
-
+      if (deviceListedRecursively && selectedFiles.length && !skippedFolders.length) configListing.noteDeviceAnswered();
       if (source.type === "local" || source.type === "ultimate") {
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
@@ -940,41 +940,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               addSonglengthsEntry(resolved.path, file);
             });
           } else {
-            const foldersToScan = new Set(
-              candidatePaths.map((path) => {
-                const trimmed = path.replace(/\/[^/]+$/, "/");
-                return normalizeSourcePath(trimmed || "/");
-              }),
-            );
-            // Shallowest first, so a folder whose parent was listed without it is skipped rather than asked for.
-            const listed = new Map<string, SourceEntry[]>();
-            for (const folder of [...foldersToScan].sort((a, b) => a.length - b.length)) {
-              if (!mayHoldSonglengthsFile(folder, listed)) continue;
-              try {
-                throwIfAborted();
-                const entries = await configListing.listSonglengthsFolder(folder);
-                listed.set(normalizeSourcePath(folder).replace(/(.)\/+$/, "$1"), entries);
-                throwIfAborted();
-                const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
-                if (!songEntry) continue;
-                const songPath = normalizeSourcePath(songEntry.path);
+            const notReached = await searchSonglengthsFolders({
+              candidatePaths,
+              listing: configListing,
+              sourceId: source.id,
+              throwIfAborted,
+              isAbortError,
+              onSonglengthsEntry: (entry) =>
                 addSonglengthsEntry(
-                  songPath,
-                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
-                );
-              } catch (error) {
-                if (isAbortError(error)) throw error;
-                addLog("debug", "Failed to list entries while scanning for songlengths file", {
-                  folder,
-                  sourceId: source.id,
-                  error: (error as Error).message,
-                });
-              }
-            }
+                  normalizeSourcePath(entry.path),
+                  resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes),
+                ),
+            });
+            recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, notReached);
           }
         }
-        recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
-
         if (discovered.length) {
           discoveredSonglengths = discovered;
           mergeSonglengthsFiles(discovered);
@@ -1069,6 +1049,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
+      recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
       const notices = [skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "", configListing.skippedNotice()].filter(
         Boolean,
       );

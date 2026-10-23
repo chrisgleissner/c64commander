@@ -799,7 +799,7 @@ describe("addFileSelections batching", () => {
     ]);
 
     expect(result).toBe(true);
-    expect(listEntries).toHaveBeenCalledTimes(3);
+    expect(listEntries).toHaveBeenCalledTimes(2);
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
         description: expect.stringContaining("Settings and song length files were not looked up"),
@@ -957,7 +957,10 @@ describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
     deps.addItemsAbortControllerRef.current = laterAdd;
     await songFile.arrayBuffer();
 
-    expect(vi.mocked(readFtpFile).mock.calls[1][0]).toMatchObject({ signal: laterAdd.signal, timeoutMs: 0 });
+    expect(vi.mocked(readFtpFile).mock.calls[1][0]).toMatchObject({
+      signal: laterAdd.signal,
+      timeoutMs: SONGLENGTHS_IDLE_TIMEOUT_MS,
+    });
   });
 
   it("skips auto-reading an oversized ultimate songlengths file", async () => {

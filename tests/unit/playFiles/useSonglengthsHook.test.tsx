@@ -294,6 +294,68 @@ describe("useSonglengths", () => {
     expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
   });
 
+  it("doubles the wait before a songlengths file is read again while it keeps failing", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        throw new Error("FTP read aborted");
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    const load = async () => {
+      await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+      await flushPromises();
+    };
+
+    await load();
+    clock.mockReturnValue(now + 16_000);
+    await load();
+    expect(reads).toBe(2);
+    clock.mockReturnValue(now + 16_000 + 16_000);
+    await load();
+    expect(reads).toBe(2);
+    clock.mockReturnValue(now + 16_000 + 31_000);
+    await load();
+    clock.mockRestore();
+
+    expect(reads).toBe(3);
+  });
+
+  it("lets a retry replace a songlengths file whose read failed, and read it again at once", async () => {
+    const failing = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        throw new Error("FTP read aborted");
+      },
+    };
+    const working = {
+      ...failing,
+      arrayBuffer: async () => new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer,
+    };
+    const { result } = renderUseSonglengths([]);
+    act(() => result.current?.mergeSonglengthsFiles([{ path: "/DOCUMENTS/Songlengths.md5", file: failing }]));
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid");
+    await flushPromises();
+
+    act(() =>
+      result.current?.mergeSonglengthsFiles([{ path: "/DOCUMENTS/Songlengths.md5", file: working }], {
+        replaceFailed: true,
+      }),
+    );
+    const data = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid");
+
+    expect(data?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+  });
+
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
     const reads = { count: 0 };
     const songlengthsFile = {

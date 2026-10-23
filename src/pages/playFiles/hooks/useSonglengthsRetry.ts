@@ -12,7 +12,7 @@ import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 import { splitSavedDeviceHostAndHttpPort } from "@/lib/savedDevices/host";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
-import { isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
+import { isSonglengthsFileName, mayHoldSonglengthsFile } from "@/lib/sid/songlengthsDiscovery";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { isDeviceAnswer } from "@/lib/sourceNavigation/connectionFailure";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
@@ -21,19 +21,23 @@ import { buildUltimateSonglengthsFile } from "@/pages/playFiles/handlers/ultimat
 import {
   clearSkippedSonglengthsFolders,
   getSkippedSonglengthsFolders,
+  pruneSkippedSonglengthsFolders,
   resolveSkippedSonglengthsFolders,
   subscribeSkippedSonglengthsFolders,
 } from "@/pages/playFiles/songlengthsRetryStore";
 import type { SonglengthsFileEntry } from "@/pages/playFiles/hooks/useSonglengths";
+import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 type SonglengthsRetryOptions = {
   deviceId: string;
+  savedDeviceIds: readonly string[];
   playlistLength: number;
-  mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
+  mergeSonglengthsFiles: (entries: SonglengthsFileEntry[], options?: { replaceFailed?: boolean }) => void;
 };
 
 const RETRY_BASE_MS = 15_000;
 const RETRY_MAX_MS = 300_000;
+const RETRY_MAX_UNANSWERED_RUNS = 6;
 
 const ignoreProgress = () => undefined;
 
@@ -52,7 +56,12 @@ const isAimedAtDevice = (deviceId: string) => {
  * connection state or a folder stored later starts it. A run that ends with the device not answering is tried
  * again after a wait that doubles, and a new run replaces one that is still going.
  */
-export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengthsFiles }: SonglengthsRetryOptions) => {
+export const useSonglengthsRetry = ({
+  deviceId,
+  savedDeviceIds,
+  playlistLength,
+  mergeSonglengthsFiles,
+}: SonglengthsRetryOptions) => {
   const { state } = useConnectionState();
   const mergeRef = useRef(mergeSonglengthsFiles);
   mergeRef.current = mergeSonglengthsFiles;
@@ -60,6 +69,7 @@ export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengths
   const [timerVersion, setTimerVersion] = useState(0);
   const waitMsRef = useRef(RETRY_BASE_MS);
   const hadItemsRef = useRef(false);
+  const unansweredRunsRef = useRef(0);
 
   useEffect(() => subscribeSkippedSonglengthsFolders(() => setStoreVersion((version) => version + 1)), []);
 
@@ -67,9 +77,18 @@ export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengths
     if (playlistLength > 0) hadItemsRef.current = true;
     else if (hadItemsRef.current) {
       hadItemsRef.current = false;
-      clearSkippedSonglengthsFolders(deviceId);
+      clearSkippedSonglengthsFolders();
     }
-  }, [deviceId, playlistLength]);
+  }, [playlistLength]);
+
+  const savedDeviceKey = savedDeviceIds.join("|");
+  useEffect(() => {
+    pruneSkippedSonglengthsFolders(new Set(savedDeviceKey.split("|")));
+  }, [savedDeviceKey]);
+
+  useEffect(() => {
+    unansweredRunsRef.current = 0;
+  }, [deviceId, state, storeVersion]);
 
   useEffect(() => {
     if (state !== "REAL_CONNECTED") return;
@@ -77,13 +96,18 @@ export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengths
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const runOnce = async () => {
-      const folders = getSkippedSonglengthsFolders(deviceId);
+      const folders = getSkippedSonglengthsFolders(deviceId).sort((a, b) => a.length - b.length);
       if (!folders.length) return;
+      const listed = new Map<string, SourceEntry[]>();
       const listing = createConfigListing(createUltimateSourceLocation(), controller.signal, { songlengths: true });
       const resolved: string[] = [];
       const found: string[] = [];
       for (const folder of folders) {
         if (controller.signal.aborted || !isAimedAtDevice(deviceId)) break;
+        if (!mayHoldSonglengthsFile(folder, listed)) {
+          resolved.push(folder);
+          continue;
+        }
         let entries: Awaited<ReturnType<typeof listing.listSonglengthsFolder>> = [];
         try {
           entries = await listing.listSonglengthsFolder(folder);
@@ -100,10 +124,13 @@ export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengths
           }
         }
         resolved.push(folder);
+        listed.set(folder.replace(/(.)\/+$/, "$1"), entries);
         const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
         if (!songEntry) continue;
         const path = normalizeSourcePath(songEntry.path);
-        mergeRef.current([{ path, file: buildUltimateSonglengthsFile(songEntry, () => undefined, ignoreProgress) }]);
+        mergeRef.current([{ path, file: buildUltimateSonglengthsFile(songEntry, () => undefined, ignoreProgress) }], {
+          replaceFailed: true,
+        });
         found.push(path);
       }
       resolveSkippedSonglengthsFolders(deviceId, resolved);
@@ -111,6 +138,8 @@ export const useSonglengthsRetry = ({ deviceId, playlistLength, mergeSonglengths
       addLog("info", "Songlengths retry finished", { tried: resolved.length, found, remaining });
       if (controller.signal.aborted || remaining === 0) return;
       if (resolved.length > 0) waitMsRef.current = RETRY_BASE_MS;
+      else unansweredRunsRef.current += 1;
+      if (unansweredRunsRef.current >= RETRY_MAX_UNANSWERED_RUNS) return;
       timer = setTimeout(() => setTimerVersion((version) => version + 1), waitMsRef.current);
       waitMsRef.current = Math.min(waitMsRef.current * 2, RETRY_MAX_MS);
     };

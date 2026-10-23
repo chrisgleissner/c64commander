@@ -41,3 +41,9 @@ export const clearSkippedSonglengthsFolders = (deviceId?: string) => {
   if (deviceId === undefined) foldersByDevice.clear();
   else foldersByDevice.delete(deviceId);
 };
+
+export const pruneSkippedSonglengthsFolders = (keepDeviceIds: ReadonlySet<string>) => {
+  [...foldersByDevice.keys()].forEach((deviceId) => {
+    if (!keepDeviceIds.has(deviceId)) foldersByDevice.delete(deviceId);
+  });
+};
