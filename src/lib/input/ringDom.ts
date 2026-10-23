@@ -10,7 +10,7 @@
 
 import { keepPlatformInputMethodAway } from "@/lib/input/hardwareKeypadInputMethod";
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { getInputModality } from "@/lib/input/inputModality";
@@ -242,6 +242,7 @@ const isEditedOutside = (ring: HTMLElement): boolean =>
 
 /** An overlay that is closing keeps its markup for the exit animation, and no longer counts. */
 const hasOpenOverlay = (): boolean =>
+  isAnyOverlayOpen() &&
   Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some((overlay) => {
     const state =
       overlay.getAttribute("data-state") ?? overlay.querySelector(":scope > [data-state]")?.getAttribute("data-state");
