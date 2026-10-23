@@ -533,3 +533,7 @@ export const createPlaylistTraversal = (
   previous: (index: number) =>
     resolvePreviousPlaylistIndex(playlist, index, ordering.repeatEnabled, ordering.shuffleEnabled, seed, anchorId),
 });
+
+/** A request made at play generation `expected` is stale once a later launch, Stop or skip has moved the generation on. */
+export const isLaunchOvertaken = (current: number, expected: number | undefined) =>
+  expected !== undefined && current !== expected;

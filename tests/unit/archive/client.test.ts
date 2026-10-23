@@ -146,6 +146,29 @@ describe("archive client", () => {
     );
   });
 
+  it("marks a request that never got an answer as a connection failure", async () => {
+    const client = createArchiveClient(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: "connection",
+    });
+  });
+
+  it("marks a request that was answered with an error status as a server failure", async () => {
+    const client = createArchiveClient(
+      buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }),
+      async () => new Response("nope", { status: 500, statusText: "Server Error" }),
+    );
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: "server",
+    });
+  });
+
   it("rejects timed out requests", async () => {
     vi.useFakeTimers();
     const client = createArchiveClient(buildDefaultArchiveClientConfig(), () => new Promise<Response>(() => undefined));
@@ -326,6 +349,34 @@ describe("archive client", () => {
         }),
       }),
     );
+  });
+
+  it("marks a native answer that cannot be turned into a response as a server failure, not a connection failure", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 0, data: "{}", headers: {} } as never);
+    const client = createArchiveClient(buildDefaultArchiveClientConfig());
+
+    await expect(client.search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: "server",
+    });
+  });
+
+  it("leaves a request that could not be built without a failure kind", async () => {
+    class TestClient extends BaseArchiveClient {
+      constructor() {
+        super(buildDefaultArchiveClientConfig({ hostOverride: "archive.local" }), vi.fn());
+      }
+
+      protected override transformRequest(): RequestInit & { url: string } {
+        throw new Error("bad request");
+      }
+    }
+
+    await expect(new TestClient().search({ name: "joyride", category: "apps" })).rejects.toMatchObject({
+      name: "ArchiveRequestError",
+      failure: undefined,
+    });
   });
 
   it("parses string JSON payloads returned by CapacitorHttp", async () => {

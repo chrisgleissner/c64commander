@@ -22,6 +22,19 @@ describe("normalizeTransportError", () => {
     expect(result.userMessage).toMatch(/IP address/);
   });
 
+  it.each([
+    "Temporary failure in name resolution",
+    "A server with the specified hostname could not be found.",
+    "nodename nor servname provided, or not known",
+    "Name or service not known",
+  ])("classifies the resolver wording %s as a DNS failure", (message) => {
+    expect(normalizeTransportError(new Error(message), { host: "u64" }).class).toBe("dns");
+  });
+
+  it("does not classify a host name that contains the letters dns as a DNS failure", () => {
+    expect(normalizeTransportError(new Error("Failed to fetch http://dns-server.local/v1/info")).class).not.toBe("dns");
+  });
+
   it("classifies the DNS failure Android actually reports", () => {
     // Captured from CapacitorHttp on the Pixel 4 against an unresolvable host.
     // Android says "Unable to resolve host", which none of the Node-shaped

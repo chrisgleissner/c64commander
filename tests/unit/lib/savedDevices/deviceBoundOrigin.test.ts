@@ -169,6 +169,21 @@ describe("deviceBoundOrigin", () => {
     } satisfies Partial<OriginContentUnavailableError>);
   });
 
+  it.each(["DNS lookup failed", "getaddrinfo EAI_AGAIN c64u", "Name or service not known"])(
+    "classifies the name resolution failure %s as origin-device-unreachable",
+    async (message) => {
+      mockReadFtpFile.mockRejectedValue(new Error(message));
+
+      await expect(fetchUltimateOriginBlob(origin)).rejects.toMatchObject({ reason: "origin-device-unreachable" });
+    },
+  );
+
+  it("does not read the letters dns in an FTP error as a connectivity failure", async () => {
+    mockReadFtpFile.mockRejectedValue(new Error("550 /MUSIC/ddns/tune.sid: not found"));
+
+    await expect(fetchUltimateOriginBlob(origin)).rejects.not.toMatchObject({ reason: "origin-device-unreachable" });
+  });
+
   it("classifies missing origin files after a parent directory probe", async () => {
     mockReadFtpFile.mockRejectedValue(new Error("FTP file read failed"));
     mockListFtpDirectory.mockResolvedValue({

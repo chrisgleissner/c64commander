@@ -108,13 +108,15 @@ import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAd
 import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
-import { getLocalSourceListingMode, requireLocalSourceEntries } from "@/lib/sourceNavigation/localSourcesStore";
+import { readLocalSourceEntries } from "@/components/disks/readLocalSourceEntries";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure } from "@/lib/sourceNavigation/types";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { describeDisksAdded } from "@/components/disks/disksAddedMessage";
+import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import {
@@ -297,12 +299,8 @@ export const HomeDiskManager = () => {
   const [newDiskOpen, setNewDiskOpen] = useState(false);
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
-  // Timestamp each per-drive operation error so the drive poll can clear a stale
-  // error once a later successful /v1/drives poll supersedes it (mirrors the
-  // mountedByDrive / drivePowerOverride reconciliation below). Without this a
-  // transient mount/eject failure (e.g. a slow mount aborted as "Host
-  // unreachable") sticks on the drive status until the page is re-mounted, even
-  // though subsequent polls succeed and the sibling drive shows OK.
+  // Timestamped so a later successful /v1/drives poll can clear a stale per-drive error, as a transient
+  // mount/eject failure otherwise sticks until the page is re-mounted.
   const driveErrorsSetAtRef = useRef<Record<string, number>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
   const mountedByDriveSetAtRef = useRef<Record<string, number>>({});
@@ -501,6 +499,7 @@ export const HomeDiskManager = () => {
           configCandidates: resolved.configCandidates,
         };
       } catch (error) {
+        if ((error as { name?: string } | null)?.name === "AbortError") throw error;
         addErrorLog("Disk playback config discovery failed", {
           sourceType: source.type,
           sourceId: source.type === "local" ? source.id : null,
@@ -665,13 +664,16 @@ export const HomeDiskManager = () => {
     addItemsOverlayActiveRef.current = true;
   }, []);
 
-  const showNoDiskWarning = useCallback(() => {
-    reportUserError({
-      operation: "DISK_IMPORT",
-      title: "No disks found",
-      description: "Found no disk file.",
-    });
-  }, [reportUserError]);
+  const showNoDiskWarning = useCallback(
+    (incompleteScan = false) => {
+      reportUserError({
+        operation: "DISK_IMPORT",
+        title: incompleteScan ? "Scan incomplete" : "No disks found",
+        description: incompleteScan ? "Found no disk file. Some folders could not be scanned." : "Found no disk file.",
+      });
+    },
+    [reportUserError],
+  );
 
   const toggleSelectAll = () => {
     setSelectedDiskIds(allSelected ? new Set() : new Set(allDiskIds));
@@ -1199,13 +1201,8 @@ export const HomeDiskManager = () => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
-        // HARD18-017: a bare unmountDrive + deleting the override leaves
-        // resolveMountedDiskId falling through to the (not-yet-settled)
-        // polled drive state, ghost-mounting the card until the next poll
-        // lands. Reuse handleEject's body per mounted drive - settle
-        // polling through the mutation, then force the override to empty
-        // with a fresh timestamp - so the card reflects "unmounted"
-        // immediately, before the disk is removed from the library.
+        // HARD18-017: reuse handleEject's body per mounted drive, so the card reads "unmounted" at once
+        // instead of ghost-mounting from the not-yet-settled polled drive state.
         await Promise.all(
           mountedDrives.map((drive) => runDriveMutationWithSettledPolling(() => api.unmountDrive(drive))),
         );
@@ -1476,6 +1473,7 @@ export const HomeDiskManager = () => {
                 sourceId: source.id,
                 sourceType: source.type,
                 selectionPath: selection.path,
+                skippedCount: nested.partialFailures.length,
                 skippedFolders: nested.partialFailures,
               });
             }
@@ -1518,28 +1516,20 @@ export const HomeDiskManager = () => {
           const selectionPath = normalizeSourcePath(selections[0].path);
           const rootPath = normalizeSourcePath(source.rootPath);
           if (selectionPath === rootPath) {
-            const localSource = localSourcesById.get(source.id);
-            if (localSource && getLocalSourceListingMode(localSource) === "entries") {
-              try {
-                const entries = requireLocalSourceEntries(localSource, "HomeDiskManager.localFallback");
-                files = entries.map((entry) => ({
-                  path: normalizeSourcePath(entry.relativePath),
-                  name: entry.name,
-                  sizeBytes: entry.sizeBytes ?? null,
-                  modifiedAt: entry.modifiedAt ?? null,
-                  sourceId: source.id,
-                }));
-                diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
-              } catch (error) {
-                addErrorLog("Local source fallback failed", {
-                  sourceId: localSource.id,
-                  error: {
-                    name: (error as Error).name,
-                    message: (error as Error).message,
-                    stack: (error as Error).stack,
-                  },
-                });
-              }
+            const entries = readLocalSourceEntries(
+              localSourcesById.get(source.id),
+              "HomeDiskManager.localFallback",
+              "Local source fallback failed",
+            );
+            if (entries) {
+              files = entries.map((entry) => ({
+                path: normalizeSourcePath(entry.relativePath),
+                name: entry.name,
+                sizeBytes: entry.sizeBytes ?? null,
+                modifiedAt: entry.modifiedAt ?? null,
+                sourceId: source.id,
+              }));
+              diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
             }
           }
         }
@@ -1555,7 +1545,7 @@ export const HomeDiskManager = () => {
             status: "error",
             message: partialScanFailures.length ? "No disk files found in scanned folders." : "No disk files found.",
           }));
-          showNoDiskWarning();
+          showNoDiskWarning(partialScanFailures.length > 0);
           return false;
         }
 
@@ -1567,6 +1557,8 @@ export const HomeDiskManager = () => {
         );
 
         const runtimeFiles: Record<string, File> = {};
+        const configListing = createConfigListing(source, abortSignal);
+        const configSource = { ...source, listEntries: configListing.listEntries };
         const disks = await Promise.all(
           diskCandidates.map(async (entry, index) => {
             const normalized = normalizeDiskPath(entry.path);
@@ -1574,24 +1566,14 @@ export const HomeDiskManager = () => {
             const fallbackGroup = getLeafFolderName(normalized);
             const groupName = autoGroup ?? fallbackGroup ?? null;
             const localSource = source.type === "local" ? localSourcesById.get(source.id) : null;
-            let localEntry: { uri?: string | null } | null = null;
-            if (localSource && getLocalSourceListingMode(localSource) === "entries") {
-              try {
-                const entries = requireLocalSourceEntries(localSource, "HomeDiskManager.localEntry");
-                localEntry = entries.find((item) => normalizeSourcePath(item.relativePath) === normalized) ?? null;
-              } catch (error) {
-                addErrorLog("Local source entries unavailable", {
-                  sourceId: localSource.id,
-                  error: {
-                    name: (error as Error).name,
-                    message: (error as Error).message,
-                    stack: (error as Error).stack,
-                  },
-                });
-              }
-            }
+            const localEntry =
+              readLocalSourceEntries(
+                localSource,
+                "HomeDiskManager.localEntry",
+                "Local source entries unavailable",
+              )?.find((item) => normalizeSourcePath(item.relativePath) === normalized) ?? null;
             throwIfAborted();
-            const playbackConfig = await discoverDiskPlaybackConfig(source, {
+            const playbackConfig = await discoverDiskPlaybackConfig(configSource, {
               path: normalized,
               name: entry.name,
             });
@@ -1642,9 +1624,7 @@ export const HomeDiskManager = () => {
         }));
         toast({
           title: "Items added",
-          description: partialScanFailures.length
-            ? `${disks.length} disk(s) added. ${partialScanFailures.length} folder(s) could not be scanned.`
-            : `${disks.length} disk(s) added to library.`,
+          description: describeDisksAdded(disks.length, partialScanFailures.length > 0, configListing.skippedNotice()),
         });
         return true;
       } catch (error) {

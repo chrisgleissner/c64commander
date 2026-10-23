@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { useArrangementPin } from "@/hooks/useArrangementPin";
 import { resetInputModality } from "@/lib/input";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 const SELECTED = "data-key-selected";
 
@@ -90,6 +91,25 @@ describe("keypad key handling document-wide queries", () => {
 
     expect(document.querySelectorAll(`[${SELECTED}="true"]`)).toHaveLength(1);
     expect(perPress).toBe(0);
+  });
+
+  it("does not search the whole document when the space the page may use changes while no overlay is open", async () => {
+    render(
+      <FocusNavigationProvider>
+        <Page />
+      </FocusNavigationProvider>,
+    );
+    await pressAndSettle("ArrowDown");
+    await pressAndSettle("ArrowDown");
+
+    const queries = countDocumentWideQueries();
+    await act(async () => {
+      window.dispatchEvent(new Event(KEYPAD_GUIDANCE_RESERVE_EVENT));
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(queries.count).toBe(0);
   });
 
   it("still sees a dialog that opened and closed between two key presses", async () => {

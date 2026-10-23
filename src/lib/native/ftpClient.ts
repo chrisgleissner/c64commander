@@ -114,7 +114,7 @@ export type FtpClientPlugin = {
   listDirectory: (options: FtpListOptions) => Promise<{ entries: FtpEntry[] }>;
   listDirectoryRecursive: (
     options: FtpRecursiveListOptions,
-  ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[]; timedOut?: boolean }>;
+  ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[]; timedOut?: boolean; refused?: boolean }>;
   readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
   writeFile: (options: FtpWriteOptions) => Promise<{ sizeBytes: number }>;
   /**

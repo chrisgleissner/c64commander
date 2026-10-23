@@ -14,6 +14,7 @@ import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 const repository = {
   upsertTracks: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +88,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
+  const sounding = useSoundingTune();
   const trackInstanceIdRef = useRef(0);
   const autoAdvanceGuardRef = useRef<any>(null);
 
@@ -128,6 +130,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     buildPlaylistItem,
     playedClockRef: playedClockRef as any,
     trackStartedAtRef,
+    ...sounding,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),
@@ -146,6 +149,8 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     shuffleAnchorId,
     repeatEnabled,
     setCurrentIndex,
+    setIsPlaying,
+    soundingTuneRef: sounding.soundingTuneRef,
     setShuffleAnchorId,
     setActivePlaylistQuery,
   };
@@ -195,6 +200,30 @@ describe("usePlaybackPersistence repository session persistence", () => {
         activeQuery: "",
       }),
     );
+  });
+
+  it("writes no repository session while a skip has cleared the sounding tune", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const { result } = renderHook(() => useHarness(playlistStorageKey));
+    await waitFor(() => expect(repository.replacePlaylistItems).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      result.current.setIsPlaying(true);
+    });
+    expect(result.current.soundingTuneRef.current).toBeNull();
+    repository.saveSession.mockClear();
+
+    await act(async () => {
+      result.current.setCurrentIndex(1);
+    });
+
+    expect(repository.saveSession).not.toHaveBeenCalled();
+
+    result.current.soundingTuneRef.current = result.current.playlist[1];
+    await act(async () => {
+      result.current.setCurrentIndex(0);
+    });
+
+    await waitFor(() => expect(repository.saveSession).toHaveBeenCalled());
   });
 
   it("persists the shuffle cycle anchor without losing it on a later session write", async () => {

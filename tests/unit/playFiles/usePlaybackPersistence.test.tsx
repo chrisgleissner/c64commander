@@ -24,6 +24,7 @@ import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackS
 import { getLogs } from "@/lib/logging";
 import { resolveShownItemDurationMs } from "@/pages/playFiles/shownTrackDuration";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 const phone = vi.hoisted(() => ({ playing: false }));
 vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
@@ -86,6 +87,7 @@ const usePlaybackPersistenceHarness = ({
     hydrate: vi.fn(),
   });
   const trackStartedAtRef = useRef<number | null>(null);
+  const sounding = useSoundingTune();
   const trackInstanceIdRef = useRef(0);
   const autoAdvanceGuardRef = useRef<any>(null);
 
@@ -143,6 +145,7 @@ const usePlaybackPersistenceHarness = ({
     }),
     playedClockRef: playedClockRef as any,
     trackStartedAtRef,
+    ...sounding,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),
@@ -158,6 +161,7 @@ const usePlaybackPersistenceHarness = ({
     durationMs,
     durationMsItemId,
     trackStartedAtRef,
+    soundingTuneRef: sounding.soundingTuneRef,
     autoAdvanceGuardRef,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
@@ -1658,6 +1662,67 @@ describe("usePlaybackPersistence", () => {
   });
 
   // Play page left for the Home tab for 15 s while a tune played on: coming back, the clock read 15 s behind the tune.
+  const restoreSession = async (session: { isPlaying: boolean; isPaused: boolean; playbackDeviceId?: string }) => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/away.sid",
+            name: "away.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/away.sid",
+        currentIndex: 0,
+        elapsedMs: 15000,
+        playedMs: 15000,
+        durationMs: 120000,
+        updatedAt: new Date().toISOString(),
+        ...session,
+      }),
+    );
+    const view = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+    await waitFor(() => expect(view.result.current.playlist).toHaveLength(1));
+    await waitFor(() => expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true));
+    return view.result;
+  };
+
+  it("records the restored tune as sounding after an active restore", async () => {
+    const result = await restoreSession({ isPlaying: true, isPaused: false });
+
+    expect(result.current.soundingTuneRef.current?.id).toBe("hvsc:hvsc-library:/MUSICIANS/Test/away.sid");
+  });
+
+  it("records the restored tune as sounding after a paused restore", async () => {
+    const result = await restoreSession({ isPlaying: true, isPaused: true });
+
+    expect(result.current.soundingTuneRef.current?.id).toBe("hvsc:hvsc-library:/MUSICIANS/Test/away.sid");
+  });
+
+  it("records no sounding tune when the restored session was stopped", async () => {
+    const result = await restoreSession({ isPlaying: false, isPaused: false });
+
+    expect(result.current.soundingTuneRef.current).toBeNull();
+  });
+
   it("carries the clock of a playing session on by the time since it was written", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(

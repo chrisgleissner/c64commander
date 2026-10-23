@@ -27,7 +27,7 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
-import type { SelectedItem, SourceEntry, SourceLocation } from "@/lib/sourceNavigation/types";
+import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure } from "@/lib/sourceNavigation/types";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsProgressOverlay";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
@@ -39,6 +39,7 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
@@ -87,6 +88,8 @@ export type AddFileSelectionsDeps = {
   buildHvscLocalPlayFile: (path: string, name: string) => LocalPlayFile | undefined;
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
 };
+
+const INCOMPLETE_SCAN_NOTICE = "Some folders could not be scanned.";
 
 export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
   const {
@@ -555,6 +558,8 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }
 
       const selectedFiles: SourceEntry[] = [];
+      const skippedFolders: SourceRecursiveFailure[] = [];
+      const configListing = createConfigListing(source, abortSignal);
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
@@ -685,25 +690,25 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified)
                 : undefined)
             : undefined;
-        const playbackConfig =
-          source.type === "local" || source.type === "ultimate"
-            ? resolvePlaybackConfig({
-                candidates: await discoverConfigCandidates({
-                  sourceType: source.type,
-                  sourceId: source.type === "local" ? source.id : null,
-                  sourceRootPath: source.rootPath,
-                  targetFile: file,
-                  listEntries: source.listEntries,
-                  prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
-                  localEntriesBySourceId,
-                }),
-              })
-            : {
-                configRef: null as ConfigFileReference | null,
-                configOrigin: "none" as const,
-                configCandidates: [],
-                configOverrides: null,
-              };
+        const configSourceType = source.type === "local" || source.type === "ultimate" ? source.type : null;
+        const playbackConfig = configSourceType
+          ? resolvePlaybackConfig({
+              candidates: await discoverConfigCandidates({
+                sourceType: configSourceType,
+                sourceId: source.type === "local" ? source.id : null,
+                sourceRootPath: source.rootPath,
+                targetFile: file,
+                listEntries: configListing.listEntries,
+                prefetchedEntriesByPath: getPrefetchedConfigEntriesByPath(),
+                localEntriesBySourceId,
+              }),
+            })
+          : {
+              configRef: null as ConfigFileReference | null,
+              configOrigin: "none" as const,
+              configCandidates: [],
+              configOverrides: null,
+            };
         throwIfAborted();
         const playable: PlayableEntry = {
           source: source.type === "ultimate" ? "ultimate" : source.type === "hvsc" ? "hvsc" : "local",
@@ -771,6 +776,16 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             } else {
               const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
               throwIfAborted();
+              if (nested.partialFailures?.length) {
+                skippedFolders.push(...nested.partialFailures);
+                addLog("warn", "Playlist scan skipped folders", {
+                  sourceId: source.id,
+                  sourceType: source.type,
+                  selectionPath: selection.path,
+                  skippedCount: nested.partialFailures.length,
+                  skippedFolders: nested.partialFailures,
+                });
+              }
               if (source.type === "hvsc") {
                 while (nested.length > 0) {
                   throwIfAborted();
@@ -1067,8 +1082,10 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         dispatchFeedback(() => {
           reportUserError({
             operation: "PLAYLIST_ADD",
-            title: "No supported files",
-            description: "Found no supported files.",
+            title: skippedFolders.length ? "Scan incomplete" : "No supported files",
+            description: skippedFolders.length
+              ? `Found no supported files. ${INCOMPLETE_SCAN_NOTICE}`
+              : "Found no supported files.",
             context: {
               sourceId: source.id,
               sourceType: source.type,
@@ -1079,7 +1096,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "error",
-          message: "No supported files found.",
+          message: skippedFolders.length ? "No supported files found in scanned folders." : "No supported files found.",
         }));
         return false;
       }
@@ -1098,10 +1115,13 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
+      const notices = [skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "", configListing.skippedNotice()].filter(
+        Boolean,
+      );
       dispatchFeedback(() => {
         toast({
           title: "Items added",
-          description: `${appendedPlaylistItems} file(s) added to playlist.`,
+          description: [`${appendedPlaylistItems} file(s) added to playlist.`, ...notices].join(" "),
         });
       });
       void recordSmokeBenchmarkSnapshot({

@@ -7,7 +7,8 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetDeviceBackStateForTests } from "@/lib/input/deviceBackButton";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
@@ -18,6 +19,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
  * Escape.
  */
 describe("left soft key inside an open dialog", () => {
+  beforeEach(() => __resetDeviceBackStateForTests());
+
   const renderDialog = (onOpenChange: (open: boolean) => void) =>
     render(
       <FocusNavigationProvider profileId="keypad">

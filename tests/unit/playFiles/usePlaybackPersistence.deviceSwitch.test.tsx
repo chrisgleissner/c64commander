@@ -15,6 +15,7 @@ import { buildPlaylistStorageKey, isStoredSessionFromAnotherDevice } from "@/pag
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 const rig = vi.hoisted(() => ({ selectedDeviceId: "device-b", phonePlaying: false }));
 vi.mock("@/lib/savedDevices/store", async (importOriginal) => {
@@ -58,6 +59,7 @@ const useHarness = (playlistStorageKey: string) => {
   const [settled, setSettled] = useState(false);
   const playedClockRef = useRef({ hydrate: vi.fn() });
   const trackStartedAtRef = useRef<number | null>(null);
+  const sounding = useSoundingTune();
   const trackInstanceIdRef = useRef(0);
   const autoAdvanceGuardRef = useRef<{ dueAtMs: number } | null>(null);
   const setAutoAdvanceDueAtMs = useRef(vi.fn()).current;
@@ -92,6 +94,7 @@ const useHarness = (playlistStorageKey: string) => {
     buildPlaylistItem,
     playedClockRef: playedClockRef as never,
     trackStartedAtRef,
+    ...sounding,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),

@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
@@ -28,6 +29,8 @@ export type UiErrorReport = {
   deviceHost?: string;
   /** If true, log to diagnostics only; never toast (ERROR_POLICY §3 background rule) */
   background?: boolean;
+  /** The user pressed the control that failed, so the reason is shown even while the device is known to be absent. */
+  userInitiated?: boolean;
 };
 
 // ─── Dedup state (ERROR_POLICY §5) ─────────────────────────────────────────
@@ -151,8 +154,11 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|did not answer within|service unavailable|http 503|failed to fetch|failed to connect|net::err|request timed out|networkerror|dns|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)|device not connected/.test(
-    normalized,
+  return (
+    isDnsFailureMessage(normalized) ||
+    /host unreachable|did not answer within|service unavailable|http 503|failed to fetch|failed to connect|net::err|request timed out|networkerror|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)|device not connected/.test(
+      normalized,
+    )
   );
 };
 
@@ -172,6 +178,7 @@ export const reportUserError = ({
   severity = "S3",
   deviceHost,
   background,
+  userInitiated,
 }: UiErrorReport) => {
   if (isHandledUiError(error)) {
     return;
@@ -195,7 +202,11 @@ export const reportUserError = ({
   // The badge already says the device is offline, so a failure caused by that is logged, not raised.
   // One neutral notice per offline spell still explains why an action had no effect.
   const statedOffline = /^offline$/i.test(title);
-  if ((statedOffline || isRecoverableConnectivityError(description, error)) && isDeviceKnownAbsent()) {
+  if (
+    !userInitiated &&
+    (statedOffline || isRecoverableConnectivityError(description, error)) &&
+    isDeviceKnownAbsent()
+  ) {
     addLog("info", `${operation}: ${title}`, { ...logPayload, suppressedReason: "device-offline" });
     if (!background && !offlineNoticeShown) {
       offlineNoticeShown = true;

@@ -23,7 +23,8 @@ import { DEFAULT_ARCHIVE_SOURCE_CONFIG, resolveArchiveClientConfig } from "@/lib
 import type { ArchivePreset, ArchivePresetType, ArchiveSearchParams, ArchiveSearchResult } from "@/lib/archive/types";
 import { useOnlineArchive } from "@/hooks/useOnlineArchive";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
-import { reportUserError } from "@/lib/uiErrors";
+import type { ArchiveRequestFailure } from "@/lib/archive/client";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
 
 const EMPTY_SEARCH: ArchiveSearchParams = {
@@ -73,6 +74,15 @@ const getPresetMap = (presets: ArchivePreset[]) => new Map(presets.map((preset) 
 
 const resultKey = (result: ArchiveSearchResult) => `${result.id}:${result.category}`;
 
+const describeSearchFailure = (failure: ArchiveRequestFailure | undefined) => {
+  if (failure === "connection") {
+    return isNetworkKnownOffline()
+      ? "The search failed: no internet connection."
+      : "The search failed: the archive could not be reached.";
+  }
+  return failure === "server" ? "The search failed: the archive answered with an error." : "The search failed.";
+};
+
 export const ArchiveSelectionView = ({
   config,
   selection,
@@ -88,14 +98,15 @@ export const ArchiveSelectionView = ({
   const [aboutOpen, setAboutOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  const [searchFailure, setSearchFailure] = useState<string | null>(null);
+
   useEffect(() => {
     if (state.phase === "error") {
-      reportUserError({
-        operation: "ONLINE_ARCHIVE",
-        title: "Online archive failed",
-        description: state.message,
-      });
+      addLog("warn", "Online archive search failed", { failure: state.failure ?? null, message: state.message });
+      setSearchFailure(describeSearchFailure(state.failure));
       clearError();
+    } else if (state.phase === "searching") {
+      setSearchFailure(null);
     }
   }, [clearError, state]);
 
@@ -265,7 +276,12 @@ export const ArchiveSelectionView = ({
             {LEGAL_NOTICE}
           </p>
         ) : null}
-        {state.phase !== "searching" && resultRows.length === 0 ? (
+        {searchFailure && state.phase !== "searching" ? (
+          <p role="alert" className="text-sm text-destructive" data-testid="archive-search-failed">
+            {resultRows.length > 0 ? `${searchFailure} The list below is from your previous search.` : searchFailure}
+          </p>
+        ) : null}
+        {state.phase !== "searching" && resultRows.length === 0 && !searchFailure ? (
           <p className="text-xs text-muted-foreground">
             {state.phase === "idle" ? "Search results appear here." : "No results found."}
           </p>

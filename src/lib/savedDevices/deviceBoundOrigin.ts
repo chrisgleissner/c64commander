@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
 import { listFtpDirectory, readFtpFile } from "@/lib/ftp/ftpClient";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getPasswordForDevice } from "@/lib/secureStorage";
@@ -45,7 +46,10 @@ const normalizeOriginPath = (value: string) => {
 };
 
 const ORIGIN_CONNECTIVITY_FAILURE_PATTERN =
-  /host unreachable|service unavailable|http 503|failed to fetch|request timed out|networkerror|dns|timed out|connection reset|econnreset|econnrefused|connection refused/i;
+  /host unreachable|service unavailable|http 503|failed to fetch|request timed out|networkerror|timed out|connection reset|econnreset|econnrefused|connection refused/i;
+
+export const isOriginConnectivityFailure = (message: string) =>
+  isDnsFailureMessage(message) || ORIGIN_CONNECTIVITY_FAILURE_PATTERN.test(message);
 
 const ORIGIN_FILE_MISSING_PATTERN = /550|not found|no such file/i;
 
@@ -156,7 +160,7 @@ export const fetchUltimateOriginBlob = async (origin: DeviceBoundContentOrigin):
     return new Blob([bytes], { type: "application/octet-stream" });
   } catch (error) {
     const message = (error as Error).message || "Original device content is unavailable.";
-    if (ORIGIN_CONNECTIVITY_FAILURE_PATTERN.test(message)) {
+    if (isOriginConnectivityFailure(message)) {
       throw new OriginContentUnavailableError(
         "origin-device-unreachable",
         "Original device is unreachable. Reconnect or switch back to that device.",
@@ -195,7 +199,7 @@ export const fetchUltimateOriginBlob = async (origin: DeviceBoundContentOrigin):
         throw listingError;
       }
       const listingMessage = (listingError as Error).message || "";
-      if (ORIGIN_CONNECTIVITY_FAILURE_PATTERN.test(listingMessage)) {
+      if (isOriginConnectivityFailure(listingMessage)) {
         throw new OriginContentUnavailableError(
           "origin-device-unreachable",
           "Original device is unreachable. Reconnect or switch back to that device.",

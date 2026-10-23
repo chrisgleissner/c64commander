@@ -1261,8 +1261,9 @@ button:focus-visible,
   }
 
   /* At large device font scale + app Text size, .tab-item-label's rem sizing can
-     outgrow the pixel budget this bar was tuned for, pushing tabs off-screen with no
-     way back (HARD25-002). overflow-x keeps every tab reachable by scroll instead. */
+     outgrow the pixel budget this bar was tuned for (HARD25-002). TabBar then shows icons alone
+     on the inactive tabs (.tab-bar-icons below); overflow-x remains as the fallback that keeps
+     every tab reachable if even that is not enough. */
   .tab-bar {
     @apply flex items-center justify-around
            bg-card border-t border-border
@@ -1332,6 +1333,32 @@ button:focus-visible,
 
   .tab-item.active {
     @apply text-primary;
+  }
+
+  /* TabBar measures the labels and sets this class when they do not fit the bar: every tab but the
+     active one then shows its icon alone. The hidden labels stay in the layout (absolute, not
+     display:none) so their natural width can still be measured, and keep their accessible name
+     through the button's aria-label. */
+  .tab-bar-icons .tab-item:not(.active) .tab-item-label {
+    @apply pointer-events-none invisible absolute left-0 top-0;
+  }
+
+  .tab-bar-icons .tab-item {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  /* A hidden label wider than its tab must not widen the scrolling bar. The tab's own focus outline is
+     drawn outside its box and is not clipped by its own overflow. */
+  .tab-bar-icons .tab-item:not(.active) {
+    overflow: hidden;
+  }
+
+  /* Icons-only tabs have little room to spare at the largest sizes; the padding stays wide enough for the
+     focus outline (2px offset, 2px wide). */
+  .tab-bar.tab-bar-icons {
+    padding-left: 4px;
+    padding-right: 4px;
   }
 
   /* Scrollable area with fade */

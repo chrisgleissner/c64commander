@@ -72,6 +72,7 @@ import {
   ENTER_IGNORING_CONTROL_SELECTOR,
   focusRingElement,
   revealRingElementAfterLayout,
+  revealRingElementOnReserveChange,
   isActivation,
   toggleFieldFrameEditing,
   isNativelyActivatable,
@@ -366,6 +367,7 @@ export const FocusNavigationProvider = ({
   // handler below already knows how to read. Installed whether or not keypad navigation is on,
   // because the listener replaces Android's own Back handling for the whole app.
   useEffect(() => installDeviceBackButton(() => onNavigateBackRef.current?.()), []);
+  useEffect(() => revealRingElementOnReserveChange(), []);
 
   useEffect(() => {
     if (!enabled) {

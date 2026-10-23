@@ -33,13 +33,7 @@ import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { isSupersededSavedDeviceSwitch } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
-import { C64_DEFAULTS } from "@/lib/c64api";
-import {
-  buildDeviceHostWithHttpPort,
-  getDeviceHostFromBaseUrl,
-  getDeviceHostHttpPort,
-  stripPortFromDeviceHost,
-} from "@/lib/c64api/hostConfig";
+import { getDeviceHostFromBaseUrl, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
@@ -75,6 +69,13 @@ import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { useConnectionSaveReporter } from "@/pages/settings/connectionSaveRefusal";
+import {
+  describeSwitchFailure,
+  isOfflineSwitchResult,
+  saveConnection,
+  useConnectionSaveInFlight,
+} from "@/pages/settings/saveConnection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -210,7 +211,7 @@ import {
 } from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
-import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -220,7 +221,6 @@ import {
   isDemoModePinnedByUser,
   pinDemoModeByUserChoice,
 } from "@/lib/connection/connectionManager";
-import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { DemoProbeNote } from "@/pages/settings/DemoProbeNote";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -232,10 +232,9 @@ import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDispl
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
-import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import {
   buildSavedDeviceEditorDraft,
-  isLocalOnlySavedDeviceEdit,
   type SavedDeviceEditorDraft,
   validateSavedDevicePorts,
 } from "@/lib/savedDevices/deviceEditor";
@@ -245,14 +244,13 @@ import {
   getSavedDevicesSnapshot,
   removeSavedDevice,
   resolveCanonicalProductFamilyCode,
-  updateSavedDevice,
   validateSavedDeviceName,
 } from "@/lib/savedDevices/store";
 import {
   getSavedDeviceDependencySummary,
   type SavedDeviceDependencySummary,
 } from "@/lib/savedDevices/deviceDependencies";
-import { clearPasswordForDevice, getPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
+import { clearPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
@@ -315,19 +313,6 @@ const toPresetLabel = (value: string | null | undefined) => {
   if (!value) return "Balanced";
   return value.charAt(0) + value.slice(1).toLowerCase();
 };
-
-const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null; authRequired?: boolean } =>
-  typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
-
-// The device answered but rejected the password (HTTP 401/403) — this is not the same
-// failure as an unreachable device, and must not be reported as one (HARD9-028).
-const describeSwitchFailure = (
-  verification: { error?: string | null; authRequired?: boolean },
-  fallbackMessage: string,
-): string =>
-  verification.authRequired
-    ? "The device rejected the password. Check the password and try again."
-    : (verification.error ?? fallbackMessage);
 
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
@@ -406,7 +391,9 @@ export default function SettingsPage() {
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
     null;
-  const [isSaving, setIsSaving] = useState(false);
+  const isSaving = useConnectionSaveInFlight();
+  const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
+  const saveReport = useConnectionSaveReporter();
   const [connectionRefreshInFlight, setConnectionRefreshInFlight] = useState(false);
   // Keypad focus ring (C64U Remote): register the Connection card's primary
   // CTAs so the touch-off device can save/connect, refresh, and scan with no taps. Inert
@@ -418,7 +405,7 @@ export default function SettingsPage() {
     id: "settings-save-connection",
     order: 300,
     group: "settings-connection",
-    disabled: isSaving,
+    disabled: isSaving || deleteDependencyBusy,
   });
   const refreshConnectionFocusRef = useFocusItem<HTMLButtonElement>({
     id: "settings-refresh-connection",
@@ -438,7 +425,6 @@ export default function SettingsPage() {
   const deleteTargetLabel = deleteTargetDevice ? describeSavedDeviceForConfirmation(deleteTargetDevice) : "this device";
   const deleteReferenceCount = deleteDependencySummary?.totalCount ?? 0;
   const [addDeviceOpen, setAddDeviceOpen] = useState(false);
-  const [deleteDependencyBusy, setDeleteDependencyBusy] = useState(false);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
@@ -790,129 +776,29 @@ export default function SettingsPage() {
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
     if (!selectedSavedDevice) return;
-    const hostError = validateDeviceHost(deviceDraft.host);
-    setHostnameError(hostError);
-    const nextDeviceNameError = validateSavedDeviceName(
-      savedDevices.devices,
-      selectedSavedDevice.id,
-      deviceDraft.name,
-      deviceDraft.host,
-    );
-    setDeviceNameError(nextDeviceNameError);
-    const portError = validateSavedDevicePorts(deviceDraft);
-    setConnectionFieldError(portError);
-    if (hostError || portError || nextDeviceNameError) return;
-    const nextHost = stripPortFromDeviceHost(deviceDraft.host.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
-    const nextDeviceHost = buildDeviceHostWithHttpPort(nextHost, Number(deviceDraft.httpPort));
-    // The field never displays the real saved secret (HARD9-004): while `passwordEditing`
-    // is false the user hasn't touched it, so reuse the stored password unchanged instead
-    // of the empty value that's actually sitting in the (never-shown) input.
-    const isChangingPassword = passwordEditing;
-    const typedPassword = passwordInputRef.current.trim();
-    const effectivePassword = isChangingPassword
-      ? typedPassword
-      : selectedSavedDevice.hasPassword
-        ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
-        : "";
-    const hasPassword = effectivePassword.length > 0;
-    // HARD27-037: a rename or an FTP/Telnet port correction cannot make the device
-    // unreachable, so it must not be gated on a probe that fails while the machine
-    // is switched off.
-    const savedDraft = buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host);
-    // `passwordEditing` is true whenever the field is editable, which it is for every
-    // device that has no stored password. Only a password that is actually being set
-    // or cleared needs the device to answer.
-    const isChangingStoredPassword = isChangingPassword && (hasPassword || selectedSavedDevice.hasPassword);
-    const isLocalOnlyEdit = isLocalOnlySavedDeviceEdit(
-      { host: selectedSavedDevice.host, httpPort: selectedSavedDevice.httpPort },
-      { host: nextHost, httpPort: Number(deviceDraft.httpPort) },
-      isChangingStoredPassword,
-      deviceDraft.name !== savedDraft.name ||
-        deviceDraft.type !== savedDraft.type ||
-        deviceDraft.ftpPort !== savedDraft.ftpPort ||
-        deviceDraft.telnetPort !== savedDraft.telnetPort,
-    );
-    setPasswordError(null);
-    setIsSaving(true);
-    try {
-      // Pre-commit reachability gate: never persist an unreachable device. When an
-      // entered hostname can't be reached but the device is found on the LAN, calmly
-      // steer the user to its IP address instead of failing silently.
-      const reachability = isLocalOnlyEdit
-        ? null
-        : await evaluateNewDeviceReachability({
-            host: nextHost,
-            deviceHost: nextDeviceHost,
-            password: hasPassword ? effectivePassword : null,
-          });
-      if (reachability?.status === "unreachable") {
-        if (reachability.suggestedAddress) {
-          setReachabilitySuggestion({ address: reachability.suggestedAddress });
+    await saveConnection({
+      device: selectedSavedDevice,
+      draft: deviceDraft,
+      passwordEditing,
+      typedPassword: passwordInputRef.current.trim(),
+      isConnected: status.isConnected,
+      editor: {
+        setHostnameError,
+        setDeviceNameError,
+        setConnectionFieldError,
+        setPasswordError,
+        setReachabilitySuggestion,
+        finishSave: (hasPassword) => {
           setHostnameError(null);
-        } else {
-          setReachabilitySuggestion(null);
-          setHostnameError(
-            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`,
-          );
-        }
-        return;
-      }
-      if (reachability?.status === "needs-password" && isChangingPassword && hasPassword) {
-        // The just-typed password was itself rejected by the device. A wrong password
-        // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
-        setPasswordError("Wrong password for this device.");
-        return;
-      }
-      setReachabilitySuggestion(null);
-      setStoredFtpPort(Number(deviceDraft.ftpPort));
-      setStoredTelnetPort(Number(deviceDraft.telnetPort));
-      if (isChangingPassword) {
-        if (hasPassword) {
-          await setPasswordForDevice(selectedSavedDevice.id, effectivePassword);
-        } else {
-          await clearPasswordForDevice(selectedSavedDevice.id);
-        }
-      }
-      updateSavedDevice(selectedSavedDevice.id, {
-        name: deviceDraft.name,
-        nameSource: deviceDraft.nameSource,
-        host: nextHost,
-        httpPort: Number(deviceDraft.httpPort),
-        ftpPort: Number(deviceDraft.ftpPort),
-        telnetPort: Number(deviceDraft.telnetPort),
-        hasPassword,
-      });
-      updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
-      // A local-only edit still re-applies to a live connection, but a device that is
-      // not connected is not made to answer: that wait and its failure are exactly what
-      // HARD27-037 removed.
-      if (!isLocalOnlyEdit || status.isConnected) {
-        const verification = await switchSavedDevice(selectedSavedDevice.id);
-        if (isOfflineSwitchResult(verification) && !isLocalOnlyEdit) {
-          throw new Error(
-            describeSwitchFailure(
-              verification,
-              `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
-            ),
-          );
-        }
-      }
-      setHostnameError(null);
-      setPasswordInput("");
-      passwordInputRef.current = "";
-      setPasswordEditing(!hasPassword);
-      toast({ title: "Connection settings saved" });
-    } catch (error) {
-      reportUserError({
-        operation: "CONNECTION_SAVE",
-        title: "Unable to save connection",
-        description: (error as Error).message,
-        error,
-        deviceHost: nextHost,
-      });
-    } finally {
-      setIsSaving(false);
-    }
+          setPasswordInput("");
+          passwordInputRef.current = "";
+          setPasswordEditing(!hasPassword);
+        },
+      },
+      report: saveReport,
+      updateConfig,
+      switchSavedDevice,
+    });
   });
 
   const performDeleteDevice = trace(async function performDeleteDevice(deviceId: string) {
@@ -1635,7 +1521,7 @@ export default function SettingsPage() {
                         size="icon"
                         className="h-8 w-8"
                         onClick={handleDeleteSelectedDevice}
-                        disabled={!selectedSavedDevice || deleteDependencyBusy}
+                        disabled={!selectedSavedDevice || deleteDependencyBusy || isSaving}
                         aria-label="Delete device"
                         title="Delete device"
                         data-testid="settings-delete-device"
@@ -1661,6 +1547,7 @@ export default function SettingsPage() {
                             "flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40",
                             isSelected ? "border-primary/50 bg-primary/5" : "bg-background",
                           )}
+                          disabled={isSaving}
                           onClick={() => {
                             void handleSelectSavedDevice(device.id);
                           }}
@@ -1864,7 +1751,7 @@ export default function SettingsPage() {
                 <Button
                   ref={saveConnectionFocusRef}
                   onClick={handleSaveConnection}
-                  disabled={isSaving}
+                  disabled={isSaving || deleteDependencyBusy}
                   className="flex-1"
                 >
                   {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -2074,6 +1961,7 @@ export default function SettingsPage() {
                       <AlertDialogAction
                         className={buttonVariants({ variant: "destructive" })}
                         data-testid="settings-delete-device-confirm"
+                        disabled={isSaving}
                         onClick={() => {
                           void confirmDeleteDevice();
                         }}
@@ -2874,7 +2762,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="startup-discovery-window" className="flex min-h-11 items-center font-medium">
-                  Startup Discovery Window (seconds)
+                  Startup discovery window (seconds)
                 </Label>
                 <Input
                   id="startup-discovery-window"
@@ -2894,7 +2782,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="background-rediscovery-interval" className="flex min-h-11 items-center font-medium">
-                  Background Rediscovery Interval (seconds)
+                  Background rediscovery interval (seconds)
                 </Label>
                 <Input
                   id="background-rediscovery-interval"
@@ -2914,7 +2802,7 @@ export default function SettingsPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="probe-timeout" className="flex min-h-11 items-center font-medium">
-                  Discovery Probe Timeout (seconds)
+                  Discovery probe timeout (seconds)
                 </Label>
                 <Input
                   id="probe-timeout"

@@ -8,6 +8,7 @@
 
 import type { PluginListenerHandle } from "@capacitor/core";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { ftpReplyCodeOf } from "@/lib/ftp/ftpReply";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import {
   FtpClient,
@@ -39,13 +40,14 @@ export type FtpRecursiveListResult = FtpListResult & {
   // channel timed out mid-walk - entries/partialFailures reflect only what
   // was gathered before the bail, not the full tree. See HARD9-078.
   timedOut: boolean;
+  // True when the walk ended because the device kept refusing connections, as opposed to dropping them.
+  refused: boolean;
 };
 
 export const FTP_CONNECT_TIMEOUT_MS = 1_500;
 
 /** 450, 451 and 550 are the FTP replies for a folder the server could not open. */
-export const isRefusedFtpListing = (error: unknown) =>
-  /\b(450|451|550)\b/.test(error instanceof Error ? error.message : String(error));
+export const isRefusedFtpListing = (error: unknown) => [450, 451, 550].includes(ftpReplyCodeOf(error) ?? 0);
 
 export type FtpReadProgress = { bytesRead: number; totalBytes: number };
 
@@ -203,6 +205,7 @@ const executeFtpRecursiveList = async (
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
       timedOut: response.timedOut ?? false,
+      refused: response.refused ?? false,
     };
     recordFtpOperation(action, {
       operation: "list",
@@ -226,6 +229,7 @@ const executeFtpRecursiveList = async (
       entries: response.entries,
       partialFailures: response.partialFailures ?? [],
       timedOut: response.timedOut ?? false,
+      refused: response.refused ?? false,
     };
   } catch (error) {
     const err = error as Error;

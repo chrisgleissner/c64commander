@@ -34,6 +34,7 @@ import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
@@ -308,7 +309,12 @@ class FtpClientPluginTest {
     ShadowLog.clear()
     plugin.listDirectory(call)
 
-    verify(call).reject(eq("FTP LIST /SD/SD refused (451): 451 Requested action aborted"), any(Exception::class.java))
+    verify(call)
+            .reject(
+                    eq("FTP LIST /SD/SD refused (451): 451 Requested action aborted"),
+                    eq("FTP_REPLY_451"),
+                    any(Exception::class.java)
+            )
     return ShadowLog.getLogsForTag("FtpClientPlugin")
   }
 
@@ -499,6 +505,210 @@ class FtpClientPluginTest {
     val failures = resolved?.getJSONArray("partialFailures")
     assertNotNull(failures)
     assertEquals(1, failures?.length())
+  }
+
+  @Test
+  fun listDirectoryRecursiveReportsFolderAsFailedWhenListMlsdAndNlstAllFail() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val folder =
+            FTPFile().apply {
+              name = "folder"
+              type = FTPFile.DIRECTORY_TYPE
+            }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(folder))
+    `when`(ftpClient.listFiles("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+    `when`(ftpClient.mlistDir("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+    `when`(ftpClient.listNames("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.listDirectoryRecursive(call)
+
+    val failures = resolved?.getJSONArray("partialFailures")
+    assertNotNull(failures)
+    assertEquals(1, failures?.length())
+    assertEquals("/folder", failures?.getJSONObject(0)?.getString("path"))
+  }
+
+  @Test
+  fun listDirectoryRecursiveStopsAtTheFirstLostConnection() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val folders =
+            listOf("one", "two", "three").map { folderName ->
+              FTPFile().apply {
+                name = folderName
+                type = FTPFile.DIRECTORY_TYPE
+              }
+            }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles("/")).thenReturn(folders.toTypedArray())
+    `when`(ftpClient.listFiles(any(String::class.java))).thenAnswer { invocation ->
+      if (invocation.getArgument<String>(0) == "/") folders.toTypedArray()
+      else throw java.net.SocketException("Network is unreachable")
+    }
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.listDirectoryRecursive(call)
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    assertEquals(1, resolved?.getJSONArray("partialFailures")?.length())
+    verify(ftpClient, never()).listFiles("/two")
+    verify(ftpClient, never()).listFiles("/three")
+  }
+
+  private fun recursiveListingWhere(
+          folderNames: List<String>,
+          failures: Map<String, Exception>,
+  ): Pair<JSObject?, FTPClient> {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    val folders =
+            folderNames.map { folderName ->
+              FTPFile().apply {
+                name = folderName
+                type = FTPFile.DIRECTORY_TYPE
+              }
+            }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.listFiles(any(String::class.java))).thenAnswer { invocation ->
+      val path = invocation.getArgument<String>(0)
+      if (path == "/") folders.toTypedArray()
+      else failures[path.removePrefix("/")]?.let { throw it } ?: emptyArray<FTPFile>()
+    }
+    `when`(ftpClient.mlistDir(any(String::class.java))).thenReturn(emptyArray())
+    `when`(ftpClient.listNames(any(String::class.java))).thenReturn(null)
+    `when`(ftpClient.isConnected).thenReturn(true)
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+    `when`(call.getInt("maxDepth")).thenReturn(8)
+    `when`(call.getInt("maxEntries")).thenReturn(5000)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+    plugin.listDirectoryRecursive(call)
+    return Pair(resolved, ftpClient)
+  }
+
+  private fun refused() = java.net.ConnectException("Connection refused")
+
+  @Test
+  fun listDirectoryRecursiveKeepsWalkingAfterOneRefusedConnection() {
+    val (resolved, ftpClient) = recursiveListingWhere(listOf("one", "two"), mapOf("one" to refused()))
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    verify(ftpClient).listFiles("/two")
+    verify(ftpClient, never()).mlistDir("/one")
+  }
+
+  @Test
+  fun listDirectoryRecursiveStopsAfterTwoRefusedFoldersInARow() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(
+                    listOf("one", "two", "three"),
+                    mapOf("one" to refused(), "two" to refused()),
+            )
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    assertEquals(true, resolved?.getBoolean("refused"))
+    verify(ftpClient, never()).listFiles("/three")
+  }
+
+  @Test
+  fun listDirectoryRecursiveDoesNotTakeAFolderNamedTimeoutForATimeout() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(
+                    listOf("Timeout", "two"),
+                    mapOf("Timeout" to FtpListRefusedException("/Timeout", 550, "no such folder")),
+            )
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    verify(ftpClient).listFiles("/two")
+  }
+
+  @Test
+  fun listDirectoryRecursiveCountsOnlyRefusalsThatFollowEachOther() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(
+                    listOf("one", "two", "three"),
+                    mapOf("one" to refused(), "three" to refused()),
+            )
+
+    assertEquals(false, resolved?.getBoolean("timedOut"))
+    verify(ftpClient).listFiles("/three")
+  }
+
+  @Test
+  fun listDirectoryRecursiveStopsWhenTheControlConnectionIsClosed() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(
+                    listOf("one", "two"),
+                    mapOf("one" to org.apache.commons.net.ftp.FTPConnectionClosedException("Connection closed")),
+            )
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    verify(ftpClient, never()).listFiles("/two")
+    verify(ftpClient, never()).mlistDir("/one")
+  }
+
+  @Test
+  fun listDirectoryRecursiveStopsOnAnIoErrorThatOnlySaysTimedOut() {
+    val (resolved, ftpClient) =
+            recursiveListingWhere(listOf("one", "two"), mapOf("one" to java.io.IOException("Read timed out")))
+
+    assertEquals(true, resolved?.getBoolean("timedOut"))
+    verify(ftpClient, never()).listFiles("/two")
   }
 
   @Test
@@ -1597,6 +1807,50 @@ class FtpClientPluginTest {
     assertEquals("demo.sid", result[1].name)
     assertTrue(result[1].isFile)
     verify(ftpClient).listNames("/")
+  }
+
+  private fun resolveListingFailure(ftpClient: FTPClient, path: String): Throwable? {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+    return try {
+      method.invoke(plugin, ftpClient, path)
+      null
+    } catch (error: java.lang.reflect.InvocationTargetException) {
+      error.targetException
+    }
+  }
+
+  @Test
+  fun resolveListingRethrowsTheListErrorWhenMlsdAndNlstFindNothing() {
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+    `when`(ftpClient.mlistDir("/folder")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/folder")).thenReturn(null)
+
+    val failure = resolveListingFailure(ftpClient, "/folder")
+
+    assertTrue(failure is java.io.IOException)
+    assertEquals("Network is unreachable", failure?.message)
+  }
+
+  @Test
+  fun resolveListingDoesNotRepeatMlsdWhenNlstFailsAfterAnEmptyMlsd() {
+    val ftpClient = mock(FTPClient::class.java)
+    `when`(ftpClient.listFiles("/folder")).thenReturn(null)
+    `when`(ftpClient.mlistDir("/folder")).thenReturn(emptyArray())
+    `when`(ftpClient.listNames("/folder")).thenThrow(java.io.IOException("Network is unreachable"))
+
+    val failure = resolveListingFailure(ftpClient, "/folder")
+
+    assertTrue(failure is java.io.IOException)
+    verify(ftpClient, times(1)).mlistDir("/folder")
+    verify(ftpClient, times(1)).listNames("/folder")
   }
 
   @Test

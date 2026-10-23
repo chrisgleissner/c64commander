@@ -95,21 +95,23 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
   const setCurrentPlaybackIsLocal = vi.fn((isLocal: boolean) => {
     currentPlaybackIsLocalRef.current = isLocal;
   });
-  const playItem = vi.fn(async () => {
+  const playItem = vi.fn(async (_item: unknown, options?: { onLaunchStarted?: () => void }) => {
+    options?.onLaunchStarted?.();
     currentPlaybackIsLocalRef.current = true;
   });
   const seekBy = vi.fn(async () => undefined);
   const options = {
     playlistRef: { current: playlist },
-    currentIndexRef: { current: 0 },
+    soundingTuneRef: { current: playlist[0] ?? null },
+    soundingTune: playlist[0] ?? null,
     isPlayingRef: { current: true },
     isPausedRef: { current: false },
     currentPlaybackIsLocalRef,
+    playGenerationRef: { current: 7 },
     trackStartedAtRef: { current: startedAt },
     durationMsRef: { current: 180_000 as number | undefined },
     isPlaying: true,
     isPaused: false,
-    currentIndex: 0,
     localEngineActive: false,
     durationMs: 180_000,
     getLocalSidPlayback: () => engine as never,
@@ -214,15 +216,16 @@ describe("useRemotePlaybackHandover", () => {
       ({ startedAt }: { startedAt: number | null }) =>
         useRemotePlaybackHandover({
           playlistRef: { current: playlist },
-          currentIndexRef: { current: 0 },
           isPlayingRef: { current: true },
           isPausedRef: { current: false },
           currentPlaybackIsLocalRef: { current: false },
+          playGenerationRef: { current: 0 },
+          soundingTuneRef: { current: playlist[0] ?? null },
+          soundingTune: playlist[0] ?? null,
           trackStartedAtRef: { current: hookOptions(startedAt) },
           durationMsRef: { current: 180_000 },
           isPlaying: true,
           isPaused: false,
-          currentIndex: 0,
           localEngineActive: false,
           durationMs: 180_000,
           getLocalSidPlayback: () => engine as never,
@@ -249,7 +252,12 @@ describe("useRemotePlaybackHandover", () => {
     setConnection("OFFLINE_NO_DEMO");
 
     await waitFor(() => expect(seekBy).toHaveBeenCalledTimes(1));
-    expect(playItem).toHaveBeenCalledWith(expect.objectContaining({ id: "one" }), { playlistIndex: 0, origin: "auto" });
+    expect(playItem).toHaveBeenCalledWith(expect.objectContaining({ id: "one" }), {
+      playlistIndex: 0,
+      origin: "auto",
+      expectedPlayGeneration: 7,
+      onLaunchStarted: expect.any(Function),
+    });
     const [delta] = seekBy.mock.calls[0] as unknown as [number];
     expect(delta).toBeGreaterThan(41);
     expect(delta).toBeLessThan(43);
@@ -259,6 +267,118 @@ describe("useRemotePlaybackHandover", () => {
     expect(engine.releaseSilence.mock.invocationCallOrder[0]).toBeGreaterThan(seekBy.mock.invocationCallOrder[0]);
     // Recorded, so the C64 is reset when it is back.
     expect(wasTuneHandedOver(startedAt)).toBe(true);
+  });
+
+  it("does not carry on while a skip has cleared the sounding tune although the playlist already names the next tune", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { playItem, seekBy, options } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
+    options.soundingTuneRef.current = null;
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("another tune is starting")),
+    );
+    expect(playItem).not.toHaveBeenCalled();
+    expect(seekBy).not.toHaveBeenCalled();
+  });
+
+  it("reads ahead from the sounding tune's own row, not from the start of the playlist", async () => {
+    const playlist = ["one", "two", "three", "four", "five", "six"].map(ultimateSid);
+    const { options } = renderHandover(playlist, Date.now());
+    vi.mocked(tryFetchUltimateSidBlob).mockClear();
+    renderHook(() => useRemotePlaybackHandover({ ...options, soundingTune: playlist[2] }));
+
+    await waitFor(() =>
+      expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/USB2/MUSICIANS/six.sid", undefined),
+    );
+  });
+
+  it("says why it does not carry on when no tune sounds and none has a start time", async () => {
+    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    options.soundingTuneRef.current = null;
+    options.trackStartedAtRef.current = null as never;
+    vi.mocked(addLog).mockClear();
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("no start time")));
+    expect(addLog).not.toHaveBeenCalledWith("info", expect.stringContaining("another tune is starting"));
+    expect(playItem).not.toHaveBeenCalled();
+  });
+
+  it("says why it does not carry on when the tune playing is no longer in the playlist", async () => {
+    const { playItem, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    options.soundingTuneRef.current = ultimateSid("gone");
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "info",
+        expect.stringContaining("no longer in the playlist"),
+        expect.anything(),
+      ),
+    );
+    expect(playItem).not.toHaveBeenCalled();
+  });
+
+  it("carries on the sounding tune at its own index, not the row at the start of the playlist", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const playlist = [ultimateSid("one"), ultimateSid("two")];
+    const { playItem, options } = renderHandover(playlist, Date.now() - 42_000);
+    options.soundingTuneRef.current = playlist[1];
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    expect(playItem).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "two" }),
+      expect.objectContaining({ playlistIndex: 1 }),
+    );
+  });
+
+  it("carries on the subsong that was launched, not the one the playlist row still names", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const playlist = [ultimateSid("one")];
+    const { playItem, options } = renderHandover(playlist, Date.now() - 42_000);
+    options.soundingTuneRef.current = {
+      ...playlist[0],
+      request: { ...playlist[0].request, songNr: 3 },
+    } as PlaylistItem;
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    expect(playItem).toHaveBeenCalledWith(
+      expect.objectContaining({ request: expect.objectContaining({ songNr: 3 }) }),
+      expect.anything(),
+    );
+  });
+
+  it("forgets the remembered C64 tune as soon as the sounding tune is cleared", async () => {
+    const playlist = [ultimateSid("one")];
+    const { options } = renderHandover(playlist, Date.now());
+    await waitFor(() => expect(rememberRemoteTune).toHaveBeenCalledWith(expect.objectContaining({ itemId: "one" })));
+    vi.mocked(rememberRemoteTune).mockClear();
+
+    renderHook(() => useRemotePlaybackHandover({ ...options, soundingTune: null }));
+
+    expect(rememberRemoteTune).toHaveBeenCalledWith(null);
+  });
+
+  it("does not seek when the hand-over was dropped because a newer tune launched on the phone", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { engine, playItem, seekBy, options } = renderHandover([ultimateSid("one")], Date.now() - 42_000);
+    playItem.mockImplementationOnce(async () => {
+      options.currentPlaybackIsLocalRef.current = true;
+    });
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(engine.releaseSilence).toHaveBeenCalledTimes(1));
+    expect(seekBy).not.toHaveBeenCalled();
   });
 
   it("warns and gives the listener their level back when the phone cannot start the tune", async () => {
@@ -366,6 +486,15 @@ describe("useRemotePlaybackHandover", () => {
       ),
     );
     expect(playItem).not.toHaveBeenCalled();
+  });
+
+  it("makes a tune the phone took over while the page was closed its own only when it is the sounding tune", async () => {
+    handedOverWithoutPage.itemId = "two";
+    connection.state = "OFFLINE_NO_DEMO";
+
+    const { setCurrentPlaybackIsLocal } = renderHandover([ultimateSid("one")], Date.now() - 20_000, true);
+
+    expect(setCurrentPlaybackIsLocal).not.toHaveBeenCalled();
   });
 
   it("makes a tune the phone took over while the page was closed its own", async () => {

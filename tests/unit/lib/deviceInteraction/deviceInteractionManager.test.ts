@@ -719,6 +719,32 @@ describe("deviceInteractionManager", () => {
     );
   });
 
+  it("retries an Android name resolution failure once, because a lost network gives the same wording as a mistyped name", async () => {
+    vi.useFakeTimers();
+    const { withFtpInteraction, resetInteractionState, FTP_TRANSIENT_RETRY_DELAY_MS } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("ftp-android-name-failure"),
+      operation: "list" as const,
+      path: "/USB2",
+      intent: "system" as const,
+      host: "u64",
+    };
+    const handler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Unable to resolve host "u64": No address associated with hostname'))
+      .mockResolvedValueOnce("ok");
+
+    const result = withFtpInteraction(meta, handler);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(FTP_TRANSIENT_RETRY_DELAY_MS);
+
+    await expect(result).resolves.toBe("ok");
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it("does not retry non-retryable FTP login failures", async () => {
     const { withFtpInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");

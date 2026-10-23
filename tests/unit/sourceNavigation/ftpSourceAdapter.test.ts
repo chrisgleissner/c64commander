@@ -372,7 +372,113 @@ describe("ftpSourceAdapter", () => {
     const source = createUltimateSourceLocation();
     const results = await source.listFilesRecursive("/");
 
-    expect(results.partialFailures).toEqual([{ path: "/", message: "Listing incomplete: device FTP timed out" }]);
+    expect(results.partialFailures).toEqual([
+      { path: "/", message: "Listing incomplete: the device stopped answering" },
+    ]);
+  });
+
+  it("ends the TypeScript walk at the first lost connection instead of waiting on every folder", async () => {
+    const listed: string[] = [];
+    listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+      listed.push(path);
+      if (path === "/") {
+        return {
+          entries: ["one", "two", "three", "four", "five"].map((name) => ({
+            type: "dir",
+            name,
+            path: `/${name}`,
+            size: 0,
+            modifiedAt: "now",
+          })),
+        };
+      }
+      throw new Error("FTP listDirectory timed out after connect 1500ms");
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(listed.length).toBeLessThanOrEqual(4);
+    expect(results.partialFailures?.map((failure) => failure.message)).toContain(
+      "Listing incomplete: the device stopped answering",
+    );
+  });
+
+  it("goes on with the TypeScript walk after a single folder timed out", async () => {
+    const dir = (name: string) => ({ type: "dir", name, path: `/${name}`, size: 0, modifiedAt: "now" });
+    listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+      if (path === "/") return { entries: [dir("stalled"), dir("good")] };
+      if (path === "/stalled") throw new Error("FTP list failed: Timeout (data socket)");
+      return { entries: [{ type: "file", name: "a.sid", path: "/good/a.sid", size: 1, modifiedAt: "now" }] };
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(results.map((entry) => entry.name)).toEqual(["a.sid"]);
+    expect(results.partialFailures?.map((failure) => failure.message)).not.toContain(
+      "Listing incomplete: the device stopped answering",
+    );
+  });
+
+  describe("TypeScript walk: consecutive lost folders", () => {
+    const dir = (name: string) => ({ type: "dir", name, path: `/${name}`, size: 0, modifiedAt: "now" });
+    const walkWith = async (outcomes: Record<string, "lost" | "reply" | "empty" | "unknown" | "noname">) => {
+      listFtpDirectoryMock.mockImplementation(async ({ path }: { path: string }) => {
+        if (path === "/") return { entries: Object.keys(outcomes).map(dir) };
+        const name = path.slice(1);
+        const outcome = outcomes[name];
+        await new Promise((resolve) => setTimeout(resolve, 15 * (Object.keys(outcomes).indexOf(name) + 1)));
+        if (outcome === "lost") throw new Error("FTP list failed: Timeout (data socket)");
+        if (outcome === "reply") throw new Error("FTP list failed: 550 No such directory");
+        if (outcome === "unknown") throw new Error("Something unexpected happened");
+        if (outcome === "noname") throw new Error("FTP list failed: getaddrinfo ENOTFOUND u64");
+        return { entries: [] };
+      });
+      return createUltimateSourceLocation().listFilesRecursive("/");
+    };
+    const stopped = (results: { partialFailures?: { message: string }[] }) =>
+      results.partialFailures?.some((failure) => failure.message.includes("stopped answering")) ?? false;
+
+    it("counts again from zero after a folder the device answered with a refusal", async () => {
+      const results = await walkWith({ a: "lost", b: "reply", c: "lost" });
+      expect(stopped(results)).toBe(false);
+    });
+
+    it("counts again from zero after a folder that listed", async () => {
+      const results = await walkWith({ a: "lost", b: "empty", c: "lost" });
+      expect(stopped(results)).toBe(false);
+    });
+
+    it("does not count a folder that failed in an unrecognized way as an answer from the device", async () => {
+      const results = await walkWith({ a: "lost", b: "unknown", c: "lost" });
+      expect(stopped(results)).toBe(true);
+    });
+
+    it("counts a name failure like a lost folder", async () => {
+      expect(stopped(await walkWith({ a: "noname", b: "noname", c: "empty" }))).toBe(true);
+      expect(stopped(await walkWith({ a: "noname", b: "reply", c: "noname" }))).toBe(false);
+    });
+
+    it("ends after two lost folders that finish one after the other (count follows completion order)", async () => {
+      const results = await walkWith({ a: "lost", b: "lost", c: "empty" });
+      expect(stopped(results)).toBe(true);
+    });
+  });
+
+  it("says the device refused connections when the native walk ended after repeated refusals", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockResolvedValue({
+      path: "/",
+      entries: [],
+      partialFailures: [],
+      timedOut: false,
+      refused: true,
+    });
+
+    const results = await createUltimateSourceLocation().listFilesRecursive("/");
+
+    expect(results.partialFailures).toEqual([
+      { path: "/", message: "Listing incomplete: the device refused connections" },
+    ]);
   });
 
   it("reports incremental onProgress as files are discovered during the recursive walk", async () => {
@@ -616,6 +722,23 @@ describe("ftpSourceAdapter", () => {
     await source.listEntries("/");
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
   });
+
+  it.each(["/USB0//Games", "/USB0/Games/", "/USB0//Games//"])(
+    "clearCacheForPath %s clears the entries cached for /USB0/Games and those below it",
+    async (refreshed) => {
+      listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+      const source = createUltimateSourceLocation();
+      await source.listEntries("/USB0/Games");
+      await source.listEntries("/USB0/Games/Arcade");
+      listFtpDirectoryMock.mockClear();
+
+      source.clearCacheForPath(refreshed);
+      await source.listEntries("/USB0/Games");
+      await source.listEntries("/USB0/Games/Arcade");
+
+      expect(listFtpDirectoryMock).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("evicts oldest cache entries when exceeding limit", async () => {
     // Fill cache beyond MAX_CACHE_ENTRIES (200)

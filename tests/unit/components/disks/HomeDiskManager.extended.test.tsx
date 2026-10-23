@@ -11,6 +11,7 @@ import { render, screen, fireEvent, within, waitFor } from "@testing-library/rea
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import { addErrorLog } from "@/lib/logging";
 
 // Mock child components
 vi.mock("@/components/lists/SelectableActionList", () => ({
@@ -35,6 +36,11 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
     </div>
   ),
 }));
+
+const slowListEntries = vi.hoisted(() => {
+  let calls = 0;
+  return vi.fn(() => (++calls <= 2 ? Promise.resolve([]) : new Promise(() => undefined)));
+});
 
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: any) => {
@@ -218,6 +224,23 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
         <button
           onClick={() => {
             const mockSource = {
+              id: "mock-source-slow-lookups",
+              rootPath: "/",
+              type: "ultimate",
+              listEntries: slowListEntries,
+            };
+            onConfirm(mockSource, [
+              { type: "file", name: "a.d64", path: "/USB0/a.d64" },
+              { type: "file", name: "b.d64", path: "/USB0/b.d64" },
+            ]);
+          }}
+        >
+          Import With Slow Lookups
+        </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
               id: "mock-source-closed",
               rootPath: "/mock",
               type: "local",
@@ -344,6 +367,11 @@ vi.mock("@/hooks/useListPreviewLimit", () => ({
 
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
+}));
+
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addErrorLog: vi.fn(),
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -928,6 +956,19 @@ describe("HomeDiskManager Extended", () => {
         expect.anything(),
       );
     });
+  });
+
+  it("logs no error for the settings-file lookups that a canceled add leaves in flight", async () => {
+    vi.mocked(addErrorLog).mockClear();
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import With Slow Lookups"));
+    await waitFor(() => expect(slowListEntries.mock.calls.length).toBeGreaterThan(2));
+    fireEvent.click(screen.getByText("Cancel Scan"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(addErrorLog).not.toHaveBeenCalledWith("Disk playback config discovery failed", expect.anything());
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
   });
 
   it("cancels an in-flight directory scan when another tab replaces Disks, as leaving the page used to", async () => {

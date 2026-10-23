@@ -4,6 +4,9 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 import { addLog } from "@/lib/logging";
+import { toast } from "@/hooks/use-toast";
+import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { reportUserError } from "@/lib/uiErrors";
 import { collectSonglengthsSearchPaths } from "@/lib/sid/songlengthsDiscovery";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
@@ -86,6 +89,10 @@ vi.mock("@/lib/sid/songlengthsDiscovery", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/sid/songlengthsDiscovery")>()),
   isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name) || /songlengths\.md5$/i.test(name)),
 }));
+
+const { networkKnownOffline } = vi.hoisted(() => ({ networkKnownOffline: vi.fn(() => false) }));
+
+vi.mock("@/lib/connection/networkStatusWatch", () => ({ isNetworkKnownOffline: networkKnownOffline }));
 
 vi.mock("@/lib/config/configDiscovery", () => ({
   discoverConfigCandidates: vi.fn(async () => []),
@@ -650,6 +657,105 @@ describe("addFileSelections batching", () => {
         path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
       }),
     ]);
+  });
+
+  it("says some folders could not be scanned when a recursive ultimate listing is partial", async () => {
+    const deps = { ...createDeps(), recurseFolders: true };
+    const listing = Object.assign(
+      [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/Games/10_Orbyte.sid" }],
+      { partialFailures: [{ path: "/USB2/Games/Arcade", message: "FTP listing failed" }] },
+    );
+    const source = createUltimateSource(
+      async () => [],
+      async () => listing,
+    );
+    const handler = createAddFileSelectionsHandler(deps as any);
+    vi.mocked(toast).mockClear();
+
+    const result = await handler(source, [{ type: "dir", name: "Games", path: "/USB2/Games" }]);
+
+    expect(result).toBe(true);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Items added",
+        description: "1 file(s) added to playlist. Some folders could not be scanned.",
+      }),
+    );
+  });
+
+  it("keeps the skipped-folder notice when no supported file was found in the scanned part", async () => {
+    const deps = { ...createDeps(), recurseFolders: true };
+    const listing = Object.assign([], {
+      partialFailures: [{ path: "/USB2/Games", message: "FTP listing failed" }],
+    });
+    const source = createUltimateSource(
+      async () => [],
+      async () => listing,
+    );
+    const handler = createAddFileSelectionsHandler(deps as any);
+    vi.mocked(reportUserError).mockClear();
+
+    const result = await handler(source, [{ type: "dir", name: "Games", path: "/USB2/Games" }]);
+
+    expect(result).toBe(false);
+    expect(reportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Scan incomplete",
+        description: "Found no supported files. Some folders could not be scanned.",
+      }),
+    );
+    const progress = deps.setAddItemsProgress.mock.calls.map(([update]) =>
+      typeof update === "function" ? update({} as never) : update,
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({ status: "error", message: "No supported files found in scanned folders." }),
+    );
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Playlist scan skipped folders",
+      expect.objectContaining({ skippedCount: 1 }),
+    );
+  });
+
+  it("does not list folders over the network for settings files while the network is down, and says so", async () => {
+    const deps = { ...createDeps(), recurseFolders: true };
+    const listing = [
+      { type: "file" as const, name: "a.sid", path: "/USB2/Games/a.sid" },
+      { type: "file" as const, name: "b.sid", path: "/USB2/Games/Arcade/b.sid" },
+    ];
+    const listEntries = vi.fn(async () => []);
+    const source = createUltimateSource(listEntries, async () => listing);
+    vi.mocked(discoverConfigCandidates).mockClear();
+    vi.mocked(discoverConfigCandidates).mockImplementation(async (options) => {
+      await options.listEntries("/USB2/Games");
+      return [];
+    });
+    vi.mocked(toast).mockClear();
+    vi.mocked(addLog).mockClear();
+    networkKnownOffline.mockReturnValue(true);
+    try {
+      const result = await createAddFileSelectionsHandler(deps as any)(source, [
+        { type: "dir", name: "Games", path: "/USB2/Games" },
+      ]);
+
+      expect(result).toBe(true);
+      expect(listEntries).not.toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description:
+            "2 file(s) added to playlist. Settings files were not looked up while the device could not be reached.",
+        }),
+      );
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Settings files were not looked up in some folders: the device could not be reached",
+        expect.objectContaining({ folders: 2 }),
+      );
+    } finally {
+      networkKnownOffline.mockReturnValue(false);
+      vi.mocked(discoverConfigCandidates).mockReset();
+      vi.mocked(discoverConfigCandidates).mockResolvedValue([]);
+    }
   });
 
   it("lists only folders that exist while looking for a songlengths file", async () => {

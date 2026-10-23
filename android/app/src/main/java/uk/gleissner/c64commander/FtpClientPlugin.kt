@@ -163,14 +163,8 @@ class FtpClientPlugin : Plugin() {
           error: Exception,
           connectTimeoutMs: Int,
           transferTimeoutMs: Int
-  ): String {
-    val message = error.message ?: "FTP $operation failed"
-    return if (error is SocketTimeoutException || timeoutMessagePattern.containsMatchIn(message)) {
-      "FTP $operation timed out after connect ${connectTimeoutMs}ms / transfer ${transferTimeoutMs}ms"
-    } else {
-      message
-    }
-  }
+  ): String =
+          ftpFailureMessage(operation, error, connectTimeoutMs, transferTimeoutMs, timeoutMessagePattern)
 
   private fun ftpFileToEntry(path: String, file: FTPFile): JSObject? {
     val name = file.name ?: return null
@@ -257,7 +251,11 @@ class FtpClientPlugin : Plugin() {
                           traceFields(call),
                   )
                 }
-                call.reject(message, error)
+                if (error is FtpListRefusedException) {
+                  call.reject(message, "FTP_REPLY_${error.code}", error)
+                } else {
+                  call.reject(message, error)
+                }
               } finally {
                 try {
                   if (client.isConnected) client.disconnect()
@@ -314,13 +312,15 @@ class FtpClientPlugin : Plugin() {
                 var examinedEntries = 0
                 var capped = false
                 var timedOut = false
+                var refused = false
+                val walkFailures = WalkFailureTracker(timeoutMessagePattern)
 
-                while (queue.isNotEmpty() && !capped && !timedOut) {
+                while (queue.isNotEmpty() && !capped && !timedOut && !refused) {
                   val (currentPath, depth) = queue.removeFirst()
                   if (!visited.add(currentPath)) continue
                   val files =
                           try {
-                            resolveListing(client, currentPath)
+                            resolveListing(client, currentPath).also { walkFailures.listed() }
                           } catch (error: Exception) {
                           failures.put(recursiveFailure(currentPath, error.message ?: "FTP listing failed"))
                           AppLogger.warn(
@@ -330,13 +330,18 @@ class FtpClientPlugin : Plugin() {
                                   "FtpClientPlugin",
                                   error,
                           )
-                          // A data-channel timeout means the firmware's single-threaded
-                          // FTP is already wedging on PASV cycles; continuing would pile
-                          // on more data channels against known-flaky firmware. Bail the
-                          // whole walk (surfacing this one failure) instead of churning.
-                          if (error is java.net.SocketTimeoutException) {
-                            timedOut = true
-                            break
+                          // A lost connection or a firmware that keeps refusing data channels (the
+                          // single-threaded FTP wedging on PASV cycles) ends the walk instead of churning.
+                          when (walkFailures.failed(error)) {
+                            WalkStop.LOST -> {
+                              timedOut = true
+                              break
+                            }
+                            WalkStop.REFUSED -> {
+                              refused = true
+                              break
+                            }
+                            WalkStop.NONE -> Unit
                           }
                           continue
                         }
@@ -381,6 +386,7 @@ class FtpClientPlugin : Plugin() {
                 // by either spelling and the "walk aborted early" signal was
                 // silently dropped. See HARD9-078.
                 result.put("timedOut", timedOut)
+                result.put("refused", refused)
                 call.resolve(result)
               } catch (error: Exception) {
                 val message = buildFailureMessage("listDirectoryRecursive", error, connectTimeoutMs, timeoutMs)
@@ -841,6 +847,14 @@ class FtpClientPlugin : Plugin() {
 
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
+      resolveListingWithFallbacks(client, path)
+    } catch (error: NameListingFailedException) {
+      throw (error.cause as? Exception ?: error)
+    }
+  }
+
+  private fun resolveListingWithFallbacks(client: FTPClient, path: String): Array<FTPFile> {
+    return try {
       val listed = client.listFiles(path)
       // commons-net answers a refused LIST with an empty listing; the reply code is the only trace.
       if (client.replyCode in refusedListReplyCodes) {
@@ -857,6 +871,7 @@ class FtpClientPlugin : Plugin() {
         }
       }
     } catch (error: Exception) {
+      if (error is NameListingFailedException) throw error
       // A timeout means the FTP data channel stopped responding — typically the
       // single-threaded c64u firmware FTP buckling under connection churn. Cascading
       // to MLSD then NLST opens two MORE PASV data connections that will also time
@@ -865,8 +880,8 @@ class FtpClientPlugin : Plugin() {
       // Fail fast on a timeout so the firmware gets breathing room; only cascade for
       // genuine LIST-unsupported / capability errors (which surface as other errors).
       if (error is FtpListRefusedException ||
-              error is SocketTimeoutException ||
-              timeoutMessagePattern.containsMatchIn(error.message ?: "")) {
+              isFtpConnectionLost(error, timeoutMessagePattern) ||
+              isFtpConnectionRefused(error)) {
         throw error
       }
       AppLogger.warn(
@@ -892,7 +907,8 @@ class FtpClientPlugin : Plugin() {
       if (mlisted != null && mlisted.isNotEmpty()) {
         mlisted
       } else {
-        resolveListingFromNames(client, path)
+        // LIST threw and neither fallback found anything: the folder is not known to be empty.
+        resolveListingFromNames(client, path).also { if (it.isEmpty()) throw error }
       }
     }
   }
@@ -909,7 +925,7 @@ class FtpClientPlugin : Plugin() {
                       "FtpClientPlugin",
                       error,
               )
-              null
+              throw NameListingFailedException(error)
             } ?: emptyArray()
     if (names.isEmpty()) {
       return emptyArray()
@@ -977,6 +993,3 @@ class FtpClientPlugin : Plugin() {
 
 /** 450, 451 and 550 mean the server could not open the folder, not that it lacks LIST. */
 private val refusedListReplyCodes = setOf(450, 451, 550)
-
-class FtpListRefusedException(path: String, code: Int, reply: String) :
-        java.io.IOException("FTP LIST $path refused ($code): $reply")

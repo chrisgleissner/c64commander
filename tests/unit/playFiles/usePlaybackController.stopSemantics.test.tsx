@@ -20,6 +20,7 @@ import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession"
 import { reportUserError } from "@/lib/uiErrors";
 import { isMachineTransitionActive } from "@/lib/deviceInteraction/deviceActivityGate";
 import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 
 vi.mock("@/lib/archive/client", () => ({ createArchiveClient: vi.fn() }));
 vi.mock("@/lib/archive/execution", () => ({ buildArchivePlayPlan: vi.fn() }));
@@ -121,6 +122,7 @@ const renderHarness = (initialPlaylist: PlaylistItem[], initiallyPlaying = false
       ensureUnmuted: vi.fn().mockResolvedValue(undefined),
       playedClockRef,
       trackStartedAtRef: useRef<number | null>(null),
+      ...useSoundingTune(),
       trackInstanceIdRef: useRef(0),
       autoAdvanceGuardRef: useRef(null),
       playStartInFlightRef: useRef(false),

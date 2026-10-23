@@ -39,7 +39,9 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
+import { isPlaybackErrorReported, markPlaybackErrorReported } from "@/pages/playFiles/playbackErrorReported";
 import {
+  isLaunchOvertaken,
   isSongCategory,
   resolveLaunchedItemIndex,
   resolvePlayTargetIndex,
@@ -116,17 +118,6 @@ import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
-
-type HandledUiError = Error & { c64uHandled?: boolean };
-
-const markHandledUiError = (error: unknown) => {
-  if (error instanceof Error) {
-    (error as HandledUiError).c64uHandled = true;
-  }
-};
-
-const isHandledUiError = (error: unknown): error is HandledUiError =>
-  error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
 
 type AutoAdvanceGuard = {
   trackInstanceId: number;
@@ -248,10 +239,7 @@ interface UsePlaybackControllerProps {
   isManualMuteHeld: () => boolean;
 
   // Refs
-  // HARD12-007: the second parameter is `reset` (whether to zero the cumulative
-  // base), not `playing`. The earlier `playing: boolean` typing invited the
-  // regression where every track start passed `true`, resetting the cumulative
-  // "Remaining" clock each track.
+  // HARD12-007: the second parameter is `reset` (zero the cumulative base), not `playing`.
   playedClockRef: MutableRefObject<{
     start: (now: number, reset?: boolean) => void;
     stop: (now: number, reset?: boolean) => void;
@@ -263,6 +251,9 @@ interface UsePlaybackControllerProps {
     current: (now: number) => number;
   }>;
   trackStartedAtRef: MutableRefObject<number | null>;
+  soundingTuneRef: MutableRefObject<PlaylistItem | null>;
+  soundingTune: PlaylistItem | null;
+  setSoundingTune: (tune: PlaylistItem | null) => void;
   trackInstanceIdRef: MutableRefObject<number>;
   autoAdvanceGuardRef: MutableRefObject<AutoAdvanceGuard | null>;
   playStartInFlightRef: MutableRefObject<boolean>;
@@ -330,6 +321,9 @@ export function usePlaybackController({
   isManualMuteHeld,
   playedClockRef,
   trackStartedAtRef,
+  soundingTuneRef,
+  soundingTune,
+  setSoundingTune,
   trackInstanceIdRef,
   autoAdvanceGuardRef,
   playStartInFlightRef,
@@ -360,8 +354,7 @@ export function usePlaybackController({
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
-  // Track B (LE2): the on-device engine, created lazily so the worker/WASM cost
-  // is only paid once the user actually plays a SID on the device.
+  // Track B (LE2): the on-device engine, created lazily on the first SID played on the device.
   const localSidPlaybackRef = useRef<LocalSidPlaybackController | null>(localSidPlaybackController ?? null);
   // True while the current track is playing on the device (no C64 to stop).
   const currentPlaybackIsLocalRef = useRef(false);
@@ -421,9 +414,7 @@ export function usePlaybackController({
     pending.resolvers.forEach(({ resolve }) => resolve());
   }, []);
   const STOP_MACHINE_TIMEOUT_MS = 6000;
-  // HARD18-009 (M5): Stop and playItem each take a fresh generation on entry, and the transition
-  // holding the current one when its work resolves wins, so a Play right after a Stop is never
-  // mistaken for the transition the Stop superseded.
+  // HARD18-009 (M5): Stop and playItem each take a fresh generation; the holder of the current one wins.
   const playGenerationRef = useRef(0);
   const stopCountRef = useRef(0);
 
@@ -446,9 +437,7 @@ export function usePlaybackController({
       playInitiatedMachineTransitionRef.current = true;
       try {
         if (next === "paused") {
-          // HARD21-004: tag Play's own pause with source "play" so opening then
-          // closing the Home Ultimate menu never resumes a pause the user set
-          // from Play (the menu-close resume only re-runs a pausedBy === "menu").
+          // HARD21-004: closing the Home Ultimate menu must not resume a pause set from Play.
           setMachineExecutionPaused({ ...options, pausedBy: "play" });
         } else {
           setMachineExecutionRunning();
@@ -639,7 +628,10 @@ export function usePlaybackController({
       // combined button keeps offering Stop; prg/crt/disk flip it, since a reset would end them. HARD11-003.
       // A tune on the phone is rendered only up to its songlength, so it ends here rather than playing on.
       const endedOnPhone = currentPlaybackIsLocalRef.current;
-      if (endedOnPhone) getLocalSidPlayback().stop();
+      if (endedOnPhone) {
+        getLocalSidPlayback().stop();
+        setSoundingTune(null);
+      }
       const deviceStillPlaying = !endedOnPhone && Boolean(currentItem && isSongCategory(currentItem.category));
       if (!deviceStillPlaying) {
         setIsPlaying(false);
@@ -664,6 +656,7 @@ export function usePlaybackController({
       setIsPaused,
       setIsPlaying,
       setPlayedMs,
+      setSoundingTune,
     ],
   );
 
@@ -688,6 +681,10 @@ export function usePlaybackController({
         outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
+        /** The play generation when the request was made; a request that a later launch or Stop overtook is dropped. */
+        expectedPlayGeneration?: number;
+        /** Called when the request got past the checks above and the launch begins. */
+        onLaunchStarted?: () => void;
       },
     ) => {
       const stopsAtRequest = options?.stopsAtRequest ?? stopCountRef.current;
@@ -697,6 +694,11 @@ export function usePlaybackController({
           addLog("info", "Playback request dropped: Stop arrived while it waited", { itemId: item.id });
           return;
         }
+        if (isLaunchOvertaken(playGenerationRef.current, options?.expectedPlayGeneration)) {
+          addLog("info", "Playback request dropped: a newer tune launched while it waited", { itemId: item.id });
+          return;
+        }
+        options?.onLaunchStarted?.();
         nextTunePrefetch.cancel();
         if (isRemoteSidSeekBusy()) await cancelRemoteSidSeek("another tune");
         // HARD18-009 (M5): Stop or a later Play bumping past this generation mid-flight skips the
@@ -732,7 +734,7 @@ export function usePlaybackController({
                 archivePath: item.archiveRef?.entryPath ?? item.path,
               },
             });
-            markHandledUiError(error);
+            markPlaybackErrorReported(error);
             throw error;
           }
         }
@@ -755,7 +757,7 @@ export function usePlaybackController({
                 path: item.path,
               },
             });
-            markHandledUiError(error);
+            markPlaybackErrorReported(error);
             throw error;
           }
         }
@@ -849,15 +851,9 @@ export function usePlaybackController({
             simulatedDevice,
             noDeviceConnected,
           });
-          // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
-          // commoserve, HVSC and local sources and for no other. The on-device engine needs the
-          // bytes, so without this the local branch was skipped for every Ultimate-hosted SID and
-          // "Listen on: this device" quietly played it on the C64 instead. The fetch already existed;
-          // it was only ever used to look a duration up.
+          // An Ultimate-hosted tune has no local blob, and the on-device engine needs the bytes.
           if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
-            // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
-            // could only ever catch something it does not throw — and the log inside it read as though
-            // it were the place a failed fetch is reported, which it was not.
+            // No try/catch: the fetch reports its own failures and answers with null.
             const remembered =
               noDeviceConnected || deviceOutOfReach
                 ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
@@ -912,6 +908,7 @@ export function usePlaybackController({
         // Silence any prior on-device tune before the C64 takes over (a local→C64
         // switch); consecutive local plays are handled inside the engine.
         if (!routeToLocal && localSidPlaybackRef.current) {
+          if (localSidPlaybackRef.current.isActive()) setSoundingTune(null);
           localSidPlaybackRef.current.stop();
         }
         const api = getC64API();
@@ -939,6 +936,7 @@ export function usePlaybackController({
                 item: item.label,
               },
             });
+            markPlaybackErrorReported(error);
             throw error;
           }
           await ensureUnmuted({ refreshItems: true });
@@ -958,10 +956,13 @@ export function usePlaybackController({
                   item: item.label,
                 },
               });
+              markPlaybackErrorReported(error);
               throw error;
             }
           }
         }
+        // Cleared by the first step that silences a tune; a launch failing before that leaves it sounding and on record.
+        setSoundingTune(null);
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const request: PlayRequest =
           typeof resolvedDurationBase === "number"
@@ -1037,7 +1038,7 @@ export function usePlaybackController({
                       });
                       return;
                     }
-                    markHandledUiError(error);
+                    markPlaybackErrorReported(error);
                     throw error;
                   }
                   reportUserError({
@@ -1052,7 +1053,7 @@ export function usePlaybackController({
                       overrideCount: configOverrides?.length ?? 0,
                     },
                   });
-                  markHandledUiError(error);
+                  markPlaybackErrorReported(error);
                   throw error;
                 }
               }
@@ -1208,6 +1209,10 @@ export function usePlaybackController({
         }
 
         lastLaunchedItemIdRef.current = item.id;
+        // Skipped past while it launched: the listener's choice stays visible and later skips count from it.
+        const skippedPastDuringLaunch =
+          pendingUserSkipRef.current !== null || latestQueuedUserSkipRef.current !== userSkipsQueuedAtLaunch;
+        if (!skippedPastDuringLaunch) setSoundingTune({ ...item, request: effectiveRequest, path: effectivePath });
         const now = Date.now();
         const nextTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = nextTrackInstanceId;
@@ -1220,9 +1225,6 @@ export function usePlaybackController({
         } else {
           setCurrentSubsongCount(null);
         }
-        // Skipped past while it launched: the listener's choice stays visible and later skips count from it.
-        const skippedPastDuringLaunch =
-          pendingUserSkipRef.current !== null || latestQueuedUserSkipRef.current !== userSkipsQueuedAtLaunch;
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0 && !skippedPastDuringLaunch) {
           setVisibleCurrentIndex(resolveLaunchedItemIndex(playlistRef.current, item.id, options.playlistIndex));
         }
@@ -1328,6 +1330,7 @@ export function usePlaybackController({
   // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
   const reportPlaybackStartFailure = useCallback(
     (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
+      if (isPlaybackErrorReported(report.error)) return;
       if (isAbortLikeError(report.error)) {
         reportUserError({
           operation: report.operation,
@@ -1353,6 +1356,7 @@ export function usePlaybackController({
   usePlaybackEngineSwitch({
     selectedEngineRef,
     stopCountRef,
+    playGenerationRef,
     currentPlaybackIsLocalRef,
     currentIndexRef,
     playlistRef,
@@ -1374,11 +1378,17 @@ export function usePlaybackController({
       }
     },
     onRestartFailed: (error, item) => {
-      if (isHandledUiError(error)) return;
-      addErrorLog("Restarting the tune on the new playback engine failed", {
-        error: (error as Error).message,
-        item: item.label,
+      reportPlaybackStartFailure({
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
+        error,
+        context: { item: item.label },
       });
+      setIsPlaying(false);
+      setIsPaused(false);
+      trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
+      setAutoAdvanceDueAtMs(null);
     },
   });
 
@@ -1409,16 +1419,14 @@ export function usePlaybackController({
             stopsAtRequest: stopsAtStart,
           });
         } catch (error) {
-          if (!isHandledUiError(error)) {
-            reportPlaybackStartFailure({
-              operation: "PLAYBACK_START",
-              title: "Playback failed",
-              error,
-              context: {
-                item: resolvedItems[startIndex]?.label,
-              },
-            });
-          }
+          reportPlaybackStartFailure({
+            operation: "PLAYBACK_START",
+            title: "Playback failed",
+            error,
+            context: {
+              item: resolvedItems[startIndex]?.label,
+            },
+          });
           setIsPlaying(false);
           setIsPaused(false);
           trackStartedAtRef.current = null;
@@ -1464,16 +1472,14 @@ export function usePlaybackController({
         cancelAutoAdvance();
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex, playlistSize: playlist.length });
       } catch (error) {
-        if (!isHandledUiError(error)) {
-          reportPlaybackStartFailure({
-            operation: "PLAYBACK_START",
-            title: "Playback failed",
-            error,
-            context: {
-              item: playlist[targetIndex]?.label,
-            },
-          });
-        }
+        reportPlaybackStartFailure({
+          operation: "PLAYBACK_START",
+          title: "Playback failed",
+          error,
+          context: {
+            item: playlist[targetIndex]?.label,
+          },
+        });
       } finally {
         releaseSingleFlight(playStartInFlightRef);
         setIsPlaylistLoading(false);
@@ -1505,6 +1511,7 @@ export function usePlaybackController({
       stopCountRef.current += 1;
       nextTunePrefetch.clear();
       cancelPendingUserSkip();
+      setSoundingTune(null);
       const currentItem = playlist[currentIndex];
       const shouldReboot = stopRequiresReboot(currentItem?.category);
       // Silence an on-device tune through the shared controller; a local track involves no C64 to stop.
@@ -1592,6 +1599,7 @@ export function usePlaybackController({
     return subscribeMachineTakeover((event) => {
       if (!isPlayingRef.current && !isPausedRef.current) return;
       cancelPendingUserSkip();
+      setSoundingTune(null);
       const now = Date.now();
       playedClockRef.current.stop(now, true);
       setPlayedMs(0);
@@ -1691,9 +1699,7 @@ export function usePlaybackController({
         } catch (error) {
           // A tune kept on the Ultimate cannot start while it is out of reach; a later Resume starts it then.
           noteRestartedPhoneTune(restartedItemId);
-          if (!isHandledUiError(error)) {
-            reportPlaybackStartFailure({ operation: "PLAYBACK_RESUME", title: "Resume failed", error });
-          }
+          reportPlaybackStartFailure({ operation: "PLAYBACK_RESUME", title: "Resume failed", error });
           return;
         }
         if (currentPlaybackIsLocalRef.current && resumeAtSeconds >= 1) {
@@ -1916,17 +1922,15 @@ export function usePlaybackController({
       });
       settle();
     } catch (error) {
-      if (!isHandledUiError(error)) {
-        reportPlaybackStartFailure({
-          operation: pending.operation,
-          title: pending.title,
-          error,
-          context: {
-            originIndex: pending.originIndex,
-            targetIndex: pending.targetIndex,
-          },
-        });
-      }
+      reportPlaybackStartFailure({
+        operation: pending.operation,
+        title: pending.title,
+        error,
+        context: {
+          originIndex: pending.originIndex,
+          targetIndex: pending.targetIndex,
+        },
+      });
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;
@@ -1960,6 +1964,7 @@ export function usePlaybackController({
       title: PendingUserSkip["title"],
     ) =>
       new Promise<void>((resolve) => {
+        setSoundingTune(null);
         const pending = pendingUserSkipRef.current;
         if (pending?.timer !== null && pending?.timer !== undefined) {
           window.clearTimeout(pending.timer);
@@ -2106,7 +2111,7 @@ export function usePlaybackController({
             // Away from the device, with nothing left that plays without it: stop here, without an error.
             addLog("info", "Playback stopped: the tracks that follow need the C64", { currentIndex: activeIndex });
             const unreachable = new Error(DEVICE_NOT_CONNECTED_MESSAGE);
-            markHandledUiError(unreachable);
+            markPlaybackErrorReported(unreachable);
             throw unreachable;
           }
           await playItem(nextItem, {
@@ -2117,7 +2122,7 @@ export function usePlaybackController({
           });
           setIsPaused(false);
         } catch (error) {
-          if (!isHandledUiError(error)) {
+          if (!isPlaybackErrorReported(error)) {
             reportUserError({
               operation: "PLAYBACK_NEXT",
               title: "Playback next failed",
@@ -2400,7 +2405,8 @@ export function usePlaybackController({
 
   useRemotePlaybackHandover({
     playlistRef,
-    currentIndexRef,
+    soundingTuneRef,
+    soundingTune,
     isPlayingRef,
     isPausedRef,
     currentPlaybackIsLocalRef,
@@ -2408,7 +2414,6 @@ export function usePlaybackController({
     durationMsRef,
     isPlaying,
     isPaused,
-    currentIndex,
     localEngineActive,
     durationMs,
     getLocalSidPlayback,
@@ -2417,6 +2422,7 @@ export function usePlaybackController({
     resolveNextIndex: (from) => resolveReachableNextIndex(playlistRef.current, from).reachableIndex,
     playItem,
     seekBy: handleSeekBy,
+    playGenerationRef,
   });
 
   return {

@@ -446,6 +446,53 @@ test.describe("Small screen layout integrity", () => {
   });
 
   /**
+   * A phone's own font size setting widens the labels the same way the text scale variable does. At 320px
+   * the six labels no longer fit the bar from 1.3 on; the inactive tabs then show their icon alone. The bar
+   * must not need to scroll, every tab must keep a 44px target and its accessible name, and the active tab
+   * must keep its label.
+   */
+  for (const fontScale of [1, 1.3, 1.5]) {
+    test(`all six tabs fit at 320px with the device font scale at ${fontScale} @layout`, async ({ page }) => {
+      await seedUiMocks(page, server.baseUrl);
+      await page.addInitScript(() => {
+        localStorage.setItem("c64u_display_profile_override", "compact");
+      });
+      await page.setViewportSize(compactViewport);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await page.evaluate(
+        (scale) => document.documentElement.style.setProperty("--text-scale", String(scale)),
+        fontScale,
+      );
+
+      const nav = page.locator("nav.tab-bar");
+      if (fontScale > 1) await expect(nav).toHaveClass(/tab-bar-icons/);
+      else await expect(nav).not.toHaveClass(/tab-bar-icons/);
+
+      for (const route of TAB_ROUTES) {
+        const tab = page.getByTestId(`tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`);
+        await tab.click();
+        await expect(tab).toHaveClass(/active/);
+        const { scrollWidth, clientWidth } = await nav.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(scrollWidth, `${route.label} active: the tab bar must not need to scroll`).toBeLessThanOrEqual(
+          clientWidth,
+        );
+        await expect(page.locator("nav.tab-bar .tab-item.active .tab-item-label")).toBeVisible();
+        for (const other of TAB_ROUTES) {
+          const otherTab = page.getByTestId(`tab-${other.label.toLowerCase().replace(/\s+/g, "-")}`);
+          const box = await otherTab.boundingBox();
+          expect(box?.width ?? 0, `${other.label} tab width`).toBeGreaterThanOrEqual(43.5);
+          expect(box?.height ?? 0, `${other.label} tab height`).toBeGreaterThanOrEqual(43.5);
+          await expect(otherTab).toHaveAttribute("aria-label", other.label);
+        }
+      }
+    });
+  }
+
+  /**
    * Dialogs, sheets and interstitials, which the page sweeps above cannot reach.
    *
    * Radix marks everything behind an open dialog `aria-hidden`, and the audit skips

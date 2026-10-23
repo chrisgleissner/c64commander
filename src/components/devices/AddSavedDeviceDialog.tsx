@@ -102,7 +102,7 @@ export function AddSavedDeviceDialog({ open, onOpenChange, devices, keypadInput,
       ? "Enter a host or IP address."
       : (validateDeviceHost(host) ??
         (sameAddress ? `Already saved as ${buildSavedDevicePrimaryLabel(sameAddress)}.` : null));
-    const nextNameError = validateSavedDeviceName(devices, deviceId, draft.name, host);
+    const nextNameError = host ? validateSavedDeviceName(devices, deviceId, draft.name, host) : null;
     const nextPortError = validateSavedDevicePorts(draft);
     setHostError(nextHostError);
     setNameError(nextNameError);

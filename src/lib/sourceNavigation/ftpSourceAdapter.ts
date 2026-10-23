@@ -14,7 +14,9 @@ import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
+import { isDeviceAnswer, UnreadableFolderError } from "./connectionFailure";
 import { createDeepScanSearch } from "./deepScanSearch";
+import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
 
 type FtpCacheRecord = {
@@ -137,10 +139,13 @@ const isUnreadableFolderEcho = async (
   }
 };
 
+/** The key a folder is cached under: duplicate slashes collapsed and no trailing slash, except for the root. */
+const listingFolderPath = (path: string) => normalizeSourcePath(path).replace(/(.)\/$/, "$1");
+
 const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
-  const normalizedPath = path && path !== "" ? path : "/";
+  const normalizedPath = listingFolderPath(path);
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   if (!options?.skipCache) {
     const cached = getCachedEntries(cacheKey);
@@ -150,7 +155,7 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
   const request = { host, port: getStoredFtpPort(), password };
   const result = await listFtpDirectory({ ...request, path: normalizedPath });
   if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
-    throw new Error(`The C64 could not read ${normalizedPath}. Check that its storage is inserted and readable.`);
+    throw new UnreadableFolderError(path || "/");
   }
   const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
@@ -172,6 +177,9 @@ const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursive
   });
   return entries;
 };
+
+/** One folder that times out can be a single stalled data channel; two in a row mean the device is gone. */
+const FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP = 2;
 
 const FTP_LIST_RECURSIVE_METHOD = "FtpClient.listDirectoryRecursive";
 
@@ -236,14 +244,16 @@ const listFilesRecursive = async (
       onProgress?.(entries.length);
     }
     const failures = result.partialFailures ?? [];
-    // The native walk bails on the first FTP data-channel timeout instead of
-    // cascading into more PASV connections against known-flaky firmware -
-    // that early exit must be visible, not silently presented as a complete
+    // The native walk bails on the first lost connection (a data-channel timeout, a closed or
+    // broken socket) instead of cascading into more PASV connections against known-flaky
+    // firmware - that early exit must be visible, not silently presented as a complete
     // listing. Reuses the existing partialFailures surface. See HARD9-078.
-    if (result.timedOut) {
+    if (result.timedOut || result.refused) {
       failures.push({
         path: normalizedPath,
-        message: "Listing incomplete: device FTP timed out",
+        message: result.refused
+          ? "Listing incomplete: the device refused connections"
+          : "Listing incomplete: the device stopped answering",
       });
     }
     return attachPartialFailures(entries, failures);
@@ -262,6 +272,7 @@ const listFilesRecursive = async (
   // messages exactly. See HARD9-081.
   let examinedEntries = 0;
   let capped = false;
+  let consecutiveLostFolders = 0;
 
   const processPath = async (current: { path: string; depth: number }) => {
     assertNotAborted();
@@ -284,6 +295,14 @@ const listFilesRecursive = async (
         path: current.path,
         message: err.message,
       });
+      consecutiveLostFolders = isDeviceAnswer(err) ? 0 : consecutiveLostFolders + 1;
+      if (consecutiveLostFolders >= FTP_RECURSIVE_LOST_FOLDERS_BEFORE_STOP) {
+        // Every later folder would fail the same way, each after its own timeout.
+        if (!capped) {
+          partialFailures.push({ path: current.path, message: "Listing incomplete: the device stopped answering" });
+        }
+        capped = true;
+      }
       addLog("warn", "FTP recursive directory listing skipped folder", {
         path: current.path,
         error: {
@@ -295,6 +314,7 @@ const listFilesRecursive = async (
       return;
     }
     assertNotAborted();
+    consecutiveLostFolders = 0;
     let filesFound = 0;
     for (const entry of entries) {
       if (capped) break;
@@ -356,6 +376,11 @@ const listFilesRecursive = async (
   }
 };
 
+const peekCachedEntries = (path: string): SourceEntry[] | null => {
+  const host = normalizeFtpHost(getC64APIConfigSnapshot().deviceHost);
+  return getCachedEntries(buildCacheKey(host, getStoredFtpPort(), listingFolderPath(path)));
+};
+
 export const createUltimateSourceLocation = (options?: { name?: string }): SourceLocation => ({
   id: "ultimate",
   type: "ultimate",
@@ -365,6 +390,7 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   // One source for whichever Ultimate is connected: a folder on one device is usually absent on another.
   navigationScope: () => normalizeFtpHost(getC64APIConfigSnapshot().deviceHost),
   listEntries,
+  peekCachedEntries,
   listFilesRecursive,
   // A walk over FTP, so it runs only when asked for — never per keystroke.
   searchEntries: createDeepScanSearch(listFilesRecursive),
@@ -372,6 +398,6 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   clearCacheForPath: (path) => {
     const { deviceHost: rawHost } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
-    clearCachedEntriesUnderPrefix(host, getStoredFtpPort(), path || "/");
+    clearCachedEntriesUnderPrefix(host, getStoredFtpPort(), listingFolderPath(path || "/"));
   },
 });

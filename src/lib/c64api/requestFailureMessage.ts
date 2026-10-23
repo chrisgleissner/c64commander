@@ -6,15 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-// Includes Android's "Unable to resolve host", which CapacitorHttp reports for
-// an unresolvable device hostname and which the other patterns do not match.
-export const isDnsFailure = (message: string) =>
-  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
+import { isDnsFailureMessage } from "@/lib/c64api/dnsFailure";
+
+export const isDnsFailure = isDnsFailureMessage;
 
 export const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
-    message,
-  );
+  /failed to fetch|networkerror|network request failed/i.test(message) || isDnsFailureMessage(message);
 
 export const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";

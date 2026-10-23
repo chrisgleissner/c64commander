@@ -10,9 +10,11 @@
 
 import { keepPlatformInputMethodAway } from "@/lib/input/hardwareKeypadInputMethod";
 import { INTERACTIVE_SELECTOR, isFocusDisabled, isFocusVisible } from "@/lib/input/discovery";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import type { FocusController } from "@/lib/input/focusController";
 import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
+import { getInputModality } from "@/lib/input/inputModality";
+import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
 
 /**
  * The subset of `OPEN_OVERLAY_ANCESTOR_SELECTOR` that has no native Up/Down of its own.
@@ -154,6 +156,11 @@ export const focusRingElement = (element: HTMLElement | null): void => {
     // element the ring left rather than the one it is on.
     document.activeElement.blur();
   }
+  scrollRingElementIntoView(element);
+};
+
+/** Scrolls the element into the part of its scroll container the app chrome leaves free; it moves no focus. */
+const scrollRingElementIntoView = (element: HTMLElement): void => {
   const rect = element.getBoundingClientRect();
   const style = getComputedStyle(element);
   const scrollport = visibleBoundsOf(scrollContainerOf(element));
@@ -227,6 +234,41 @@ export const revealRingElementAfterLayout = (element: HTMLElement | null): (() =
   window.addEventListener("keydown", cancel, true);
   window.addEventListener("pointerdown", cancel, true);
   return cancel;
+};
+
+/** A text field has focus and is not part of the ring's element, so a scroll would pull the page from under it. */
+const isEditedOutside = (ring: HTMLElement): boolean =>
+  isEditableTarget(document.activeElement) && !ring.contains(document.activeElement);
+
+/** An overlay that is closing keeps its markup for the exit animation, and no longer counts. */
+const hasOpenOverlay = (): boolean =>
+  isAnyOverlayOpen() &&
+  Array.from(document.querySelectorAll(OPEN_OVERLAY_ANCESTOR_SELECTOR)).some((overlay) => {
+    const state =
+      overlay.getAttribute("data-state") ?? overlay.querySelector(":scope > [data-state]")?.getAttribute("data-state");
+    return state !== "closed";
+  });
+
+/**
+ * Keeps the ring's element on screen when the space the page may use changes while the keypad is in use,
+ * as it does when a toast arrives and takes its strip from the page area.
+ */
+export const revealRingElementOnReserveChange = (): (() => void) => {
+  let frame = 0;
+  const onReserveChange = () => {
+    window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(() => {
+      const current = keypadScrollAnchorEl;
+      if (getInputModality() !== "key-navigation" || !current?.isConnected) return;
+      if (isEditedOutside(current) || hasOpenOverlay()) return;
+      if (needsReveal(current)) scrollRingElementIntoView(current);
+    });
+  };
+  window.addEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
+  return () => {
+    window.cancelAnimationFrame(frame);
+    window.removeEventListener(KEYPAD_GUIDANCE_RESERVE_EVENT, onReserveChange);
+  };
 };
 
 const GUIDANCE_RESERVE = "--keypad-guidance-reserved-height";

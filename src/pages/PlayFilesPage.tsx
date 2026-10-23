@@ -163,6 +163,7 @@ import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOver
 import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { useOnPageLeft } from "@/hooks/useOnPageLeft";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 import {
   BACKGROUND_ADVANCE_LOG_MESSAGES,
   resolveBackgroundAdvanceOutcome,
@@ -437,6 +438,7 @@ export default function PlayFilesPage() {
   const localConfigInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
+  const { soundingTuneRef, soundingTune, setSoundingTune } = useSoundingTune();
   // The playing track's length. Declared here rather than beside the value it mirrors because the
   // timeline tick and the pending-seek poll both read it, and both outlive any one render.
   const currentDurationMsRef = useRef<number | undefined>(undefined);
@@ -642,6 +644,9 @@ export default function PlayFilesPage() {
     pausingFromPauseRef,
     playedClockRef,
     trackStartedAtRef,
+    soundingTuneRef,
+    soundingTune,
+    setSoundingTune,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     playStartInFlightRef,
@@ -797,6 +802,7 @@ export default function PlayFilesPage() {
     const now = Date.now();
     playedClockRef.current.stop(now, true);
     trackStartedAtRef.current = null;
+    setSoundingTune(null);
     autoAdvanceGuardRef.current = null;
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
@@ -2311,6 +2317,8 @@ export default function PlayFilesPage() {
     buildPlaylistItem,
     playedClockRef,
     trackStartedAtRef,
+    soundingTuneRef,
+    setSoundingTune,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId,

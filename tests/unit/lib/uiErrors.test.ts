@@ -217,6 +217,41 @@ describe("uiErrors", () => {
     },
   );
 
+  it.each([
+    "Host unreachable (DNS)",
+    "DNS lookup failed",
+    "DNS resolution error for c64u",
+    "net::ERR_NAME_NOT_RESOLVED",
+    "DNS_PROBE_FINISHED_NXDOMAIN",
+    "DNS server failure",
+    "DNS query failed",
+    "getaddrinfo EAI_AGAIN c64u",
+    "Temporary failure in name resolution",
+  ])("classifies the name resolution failure %s as a transient connectivity failure", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(true);
+  });
+
+  it.each([
+    "Name or service not known",
+    "java.net.UnknownHostException: c64u",
+    'Unable to resolve host "c64u": No address associated with hostname',
+    "getaddrinfo ENOTFOUND c64u",
+    "dial tcp: lookup c64u: no such host",
+  ])(
+    "treats the name failure %s as a connectivity failure, as a phone that lost its network gets the same wording",
+    (message) => {
+      expect(isTransientConnectivityFailure(message)).toBe(true);
+    },
+  );
+
+  it.each([
+    "We couldn’t reach “c64.ddns.net”. Make sure it’s powered on and on the same Wi‑Fi.",
+    "We couldn’t reach “home.duckdns.org”. Make sure it’s powered on and on the same Wi‑Fi.",
+    "We couldn’t reach “dns.example”. Make sure it’s powered on and on the same Wi‑Fi.",
+  ])("does not mistake a host name inside the message for a connectivity failure: %s", (message) => {
+    expect(isTransientConnectivityFailure(message)).toBe(false);
+  });
+
   describe("ERROR_POLICY §3 — background operations are S0 (log only, never toast)", () => {
     it("suppresses toast when background is true and logs with suppressedReason", () => {
       reportUserError({
@@ -528,6 +563,20 @@ describe("uiErrors", () => {
         expect.objectContaining({ suppressedReason: "device-offline" }),
       );
       expect(destructiveToasts()).toHaveLength(0);
+    });
+
+    it("shows the reason of a failure the user caused, even while the device is shown offline", () => {
+      updateDeviceConnectionState("OFFLINE_NO_DEMO");
+
+      reportUserError({
+        operation: "CONNECTION_SAVE",
+        title: "Unable to save connection",
+        description: "Host unreachable",
+        userInitiated: true,
+      });
+
+      expect(destructiveToasts()).toHaveLength(1);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: "Host unreachable" }));
     });
 
     it("treats a report titled Offline the same way when the connection is shown offline", () => {

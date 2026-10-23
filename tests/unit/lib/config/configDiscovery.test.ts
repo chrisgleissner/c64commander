@@ -193,4 +193,25 @@ describe("discoverConfigCandidates", () => {
       { path: "/Games/", error: "SAF grant revoked" },
     );
   });
+
+  it("ends the discovery with the abort and does not warn when a listing is canceled", async () => {
+    vi.mocked(addLog).mockClear();
+    const listEntries = vi.fn(() => Promise.reject(new DOMException("Aborted", "AbortError")));
+
+    await expect(
+      discoverConfigCandidates({
+        sourceType: "local",
+        sourceId: "phone",
+        sourceRootPath: "/Games",
+        targetFile: { name: "Game.prg", path: "/Games/Game.prg" },
+        listEntries,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(addLog).not.toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not list a folder"),
+      expect.anything(),
+    );
+  });
 });
