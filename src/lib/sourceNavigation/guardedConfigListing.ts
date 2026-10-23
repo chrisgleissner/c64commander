@@ -17,9 +17,6 @@ type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekC
 /** While the device is marked unreachable, every this-many-th lookup tries it again. */
 export const CONFIG_LOOKUP_PROBE_EVERY = 25;
 
-/** The songlengths search asks only a few folders, so it asks the device again sooner. */
-export const SONGLENGTHS_LOOKUP_PROBE_EVERY = 3;
-
 export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up while the device could not be reached.";
 export const SONGLENGTHS_LOOKUP_SKIPPED_NOTICE =
   "Settings and song length files were not looked up while the device could not be reached.";
@@ -119,7 +116,7 @@ export const createConfigListing = (
 
   return {
     listEntries: makeListEntries(CONFIG_LOOKUP_PROBE_EVERY),
-    listSonglengthsFolder: makeListEntries(SONGLENGTHS_LOOKUP_PROBE_EVERY, true),
+    listSonglengthsFolder: makeListEntries(CONFIG_LOOKUP_PROBE_EVERY, true),
     skippedSonglengthsFolders: () => [...skippedSonglengthsFolders],
     /** The scan of the add listed folders from the device, so lookups need not be run one at a time. */
     noteDeviceAnswered: () => {

@@ -10,6 +10,9 @@
  * Folders whose songlengths file was not looked for because the device did not answer during an add, by
  * saved device. The Play page asks for them again once the device answers.
  */
+/** More folders than this are not stored per device: a very large add stops asking for them. */
+export const MAX_SKIPPED_SONGLENGTHS_FOLDERS = 200;
+
 const foldersByDevice = new Map<string, Set<string>>();
 const listeners = new Set<() => void>();
 
@@ -23,7 +26,9 @@ export const subscribeSkippedSonglengthsFolders = (listener: () => void) => {
 export const recordSkippedSonglengthsFolders = (deviceId: string, folders: readonly string[]) => {
   if (!folders.length) return;
   const stored = foldersByDevice.get(deviceId) ?? new Set<string>();
-  folders.forEach((folder) => stored.add(folder));
+  folders.forEach((folder) => {
+    if (stored.size < MAX_SKIPPED_SONGLENGTHS_FOLDERS) stored.add(folder);
+  });
   foldersByDevice.set(deviceId, stored);
   listeners.forEach((listener) => listener());
 };

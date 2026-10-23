@@ -110,6 +110,17 @@ vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
 }));
 
 const noteCalls = vi.hoisted(() => ({ count: 0 }));
+const environment = vi.hoisted(() => ({ simulated: false, offline: false }));
+
+vi.mock("@/lib/connection/connectionManager", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/connection/connectionManager")>()),
+  isSimulatedDeviceTarget: () => environment.simulated,
+}));
+
+vi.mock("@/lib/connection/networkStatusWatch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/connection/networkStatusWatch")>()),
+  isNetworkKnownOffline: () => environment.offline,
+}));
 
 vi.mock("@/lib/sourceNavigation/guardedConfigListing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/sourceNavigation/guardedConfigListing")>();
@@ -201,6 +212,8 @@ const createDeps = () => {
 
 describe("addFileSelections songlengths retry folders", () => {
   beforeEach(() => {
+    environment.simulated = false;
+    environment.offline = false;
     discoverConfigCandidates.mockClear();
     resolvePlaybackConfig.mockClear();
   });
@@ -248,5 +261,73 @@ describe("addFileSelections songlengths retry folders", () => {
     );
 
     expect(noteCalls.count).toBe(0);
+  });
+
+  const addTuneWithSonglengthsSearch = async (listEntries: SourceLocation["listEntries"]) => {
+    const { collectSonglengthsSearchPaths } = await import("@/lib/sid/songlengthsDiscovery");
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates = vi.fn(collectSonglengthsSearchPaths);
+    await createAddFileSelectionsHandler(deps as never)(createSource("ultimate", listEntries), [
+      { type: "file", name: "Tone.sid", path: "/USB0/C64Music/MUSICIANS/T/Tone.sid", sizeBytes: 4096 },
+    ]);
+    return deps;
+  };
+
+  it("stores the folders once, after the playlist was built", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { clearSkippedSonglengthsFolders, subscribeSkippedSonglengthsFolders } =
+      await import("@/pages/playFiles/songlengthsRetryStore");
+    clearSkippedSonglengthsFolders();
+    const deps = createDeps();
+    const { collectSonglengthsSearchPaths } = await import("@/lib/sid/songlengthsDiscovery");
+    deps.collectSonglengthsCandidates = vi.fn(collectSonglengthsSearchPaths);
+    const playlistCallsAtNotify: number[] = [];
+    const unsubscribe = subscribeSkippedSonglengthsFolders(() =>
+      playlistCallsAtNotify.push(deps.setPlaylist.mock.calls.length),
+    );
+    const listEntries = vi.fn(async () => {
+      throw new Error("FTP list failed: Timeout (control socket)");
+    });
+
+    await createAddFileSelectionsHandler(deps as never)(createSource("ultimate", listEntries), [
+      { type: "file", name: "Tone.sid", path: "/USB0/C64Music/MUSICIANS/T/Tone.sid", sizeBytes: 4096 },
+    ]);
+    unsubscribe();
+
+    expect(playlistCallsAtNotify).toHaveLength(1);
+    expect(playlistCallsAtNotify[0]).toBeGreaterThan(0);
+    expect(getSavedDevicesSnapshot().selectedDeviceId).toBeTruthy();
+    clearSkippedSonglengthsFolders();
+  });
+
+  it("stores the folders when the phone knows it is offline, instead of treating them as empty", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { clearSkippedSonglengthsFolders, getSkippedSonglengthsFolders } =
+      await import("@/pages/playFiles/songlengthsRetryStore");
+    clearSkippedSonglengthsFolders();
+    environment.offline = true;
+
+    await addTuneWithSonglengthsSearch(vi.fn(async () => []));
+
+    const stored = getSkippedSonglengthsFolders(getSavedDevicesSnapshot().selectedDeviceId);
+    expect(stored).toContain("/USB0/C64Music/DOCUMENTS/");
+    clearSkippedSonglengthsFolders();
+  });
+
+  it("stores no folders for the simulated device", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { clearSkippedSonglengthsFolders, getSkippedSonglengthsFolders } =
+      await import("@/pages/playFiles/songlengthsRetryStore");
+    clearSkippedSonglengthsFolders();
+    environment.simulated = true;
+
+    await addTuneWithSonglengthsSearch(
+      vi.fn(async (path: string) => {
+        if (path.includes("MUSICIANS/T")) return [];
+        throw new Error("FTP list failed: Timeout (control socket)");
+      }),
+    );
+
+    expect(getSkippedSonglengthsFolders(getSavedDevicesSnapshot().selectedDeviceId)).toEqual([]);
   });
 });

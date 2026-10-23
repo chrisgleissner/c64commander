@@ -35,6 +35,7 @@ import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { buildUltimateSonglengthsFile } from "@/pages/playFiles/handlers/ultimateSonglengthsFile";
+import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { recordSkippedSonglengthsFolders } from "@/pages/playFiles/songlengthsRetryStore";
 import { searchSonglengthsFolders } from "@/pages/playFiles/handlers/songlengthsFolderSearch";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
@@ -503,6 +504,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
       let deviceListedRecursively = false;
+      let songlengthsFoldersNotReached: string[] = [];
       const configListing = createConfigListing(source, abortSignal, { songlengths: true });
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
@@ -940,7 +942,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               addSonglengthsEntry(resolved.path, file);
             });
           } else {
-            const notReached = await searchSonglengthsFolders({
+            songlengthsFoldersNotReached = await searchSonglengthsFolders({
               candidatePaths,
               listing: configListing,
               sourceId: source.id,
@@ -952,7 +954,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                   resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes),
                 ),
             });
-            recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, notReached);
           }
         }
         if (discovered.length) {
@@ -1049,7 +1050,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           elapsedMs: Date.now() - startedAt,
         });
       }
-      recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, configListing.skippedSonglengthsFolders());
+      if (!isSimulatedDeviceTarget()) {
+        recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, [
+          ...songlengthsFoldersNotReached,
+          ...configListing.skippedSonglengthsFolders(),
+        ]);
+      }
       const notices = [skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "", configListing.skippedNotice()].filter(
         Boolean,
       );

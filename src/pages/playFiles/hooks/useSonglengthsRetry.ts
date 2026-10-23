@@ -39,7 +39,20 @@ const RETRY_BASE_MS = 15_000;
 const RETRY_MAX_MS = 300_000;
 const RETRY_MAX_UNANSWERED_RUNS = 6;
 
+export const RETRY_LISTING_PACE_MS = 250;
+
 const ignoreProgress = () => undefined;
+
+const waitUnlessAborted = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    }
+    signal.addEventListener("abort", done, { once: true });
+  });
 
 const hostOf = (host: string) => splitSavedDeviceHostAndHttpPort(host).host.toLowerCase();
 
@@ -102,13 +115,16 @@ export const useSonglengthsRetry = ({
       const listing = createConfigListing(createUltimateSourceLocation(), controller.signal, { songlengths: true });
       const resolved: string[] = [];
       const found: string[] = [];
+      let listedAny = false;
       for (const folder of folders) {
+        if (listedAny) await waitUnlessAborted(RETRY_LISTING_PACE_MS, controller.signal);
         if (controller.signal.aborted || !isAimedAtDevice(deviceId)) break;
         if (!mayHoldSonglengthsFile(folder, listed)) {
           resolved.push(folder);
           continue;
         }
         let entries: Awaited<ReturnType<typeof listing.listSonglengthsFolder>> = [];
+        listedAny = true;
         try {
           entries = await listing.listSonglengthsFolder(folder);
           if (listing.skippedLookups() > 0) break;
@@ -123,6 +139,7 @@ export const useSonglengthsRetry = ({
             break;
           }
         }
+        if (controller.signal.aborted || !isAimedAtDevice(deviceId)) break;
         resolved.push(folder);
         listed.set(folder.replace(/(.)\/+$/, "$1"), entries);
         const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
@@ -137,8 +154,10 @@ export const useSonglengthsRetry = ({
       const remaining = getSkippedSonglengthsFolders(deviceId).length;
       addLog("info", "Songlengths retry finished", { tried: resolved.length, found, remaining });
       if (controller.signal.aborted || remaining === 0) return;
-      if (resolved.length > 0) waitMsRef.current = RETRY_BASE_MS;
-      else unansweredRunsRef.current += 1;
+      if (resolved.length > 0) {
+        waitMsRef.current = RETRY_BASE_MS;
+        unansweredRunsRef.current = 0;
+      } else unansweredRunsRef.current += 1;
       if (unansweredRunsRef.current >= RETRY_MAX_UNANSWERED_RUNS) return;
       timer = setTimeout(() => setTimerVersion((version) => version + 1), waitMsRef.current);
       waitMsRef.current = Math.min(waitMsRef.current * 2, RETRY_MAX_MS);

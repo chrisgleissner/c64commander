@@ -11,6 +11,7 @@ import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { AddItemsProgressState } from "@/components/itemSelection/AddItemsProgressOverlay";
@@ -33,7 +34,9 @@ export const buildUltimateSonglengthsFile = (
   setAddItemsProgress: Dispatch<SetStateAction<AddItemsProgressState>>,
 ): LocalPlayFile => {
   const normalizedPath = normalizeSourcePath(entry.path);
-  const { deviceHost, password = "" } = getC64APIConfigSnapshot();
+  const { deviceHost, password: passwordAtFind = "" } = getC64APIConfigSnapshot();
+  const ftpPort = getStoredFtpPort();
+  const deviceId = getSavedDevicesSnapshot().selectedDeviceId;
   const totalBytes = typeof entry.sizeBytes === "number" && entry.sizeBytes > 0 ? entry.sizeBytes : 0;
   return {
     name: entry.name,
@@ -41,10 +44,14 @@ export const buildUltimateSonglengthsFile = (
     lastModified: parseModifiedAt(entry.modifiedAt) ?? Date.now(),
     arrayBuffer: async () => {
       const signal = runningAddSignal();
+      const password =
+        getSavedDevicesSnapshot().selectedDeviceId === deviceId
+          ? (getC64APIConfigSnapshot().password ?? "")
+          : passwordAtFind;
       try {
         const { data } = await readFtpFile({
           host: normalizeFtpHost(deviceHost),
-          port: getStoredFtpPort(),
+          port: ftpPort,
           password,
           path: normalizedPath,
           timeoutMs: SONGLENGTHS_IDLE_TIMEOUT_MS,

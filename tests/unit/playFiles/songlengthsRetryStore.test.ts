@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearSkippedSonglengthsFolders,
+  MAX_SKIPPED_SONGLENGTHS_FOLDERS,
   getSkippedSonglengthsFolders,
   recordSkippedSonglengthsFolders,
   resolveSkippedSonglengthsFolders,
@@ -43,5 +44,15 @@ describe("songlengthsRetryStore", () => {
     expect(getSkippedSonglengthsFolders("b")).toEqual(["/Flash/"]);
     clearSkippedSonglengthsFolders();
     expect(getSkippedSonglengthsFolders("b")).toEqual([]);
+  });
+
+  it("stores at most the cap per device and keeps what it stored first", () => {
+    const many = Array.from({ length: MAX_SKIPPED_SONGLENGTHS_FOLDERS + 50 }, (_, index) => `/USB2/${index}/`);
+
+    recordSkippedSonglengthsFolders("a", many);
+
+    const stored = getSkippedSonglengthsFolders("a");
+    expect(stored).toHaveLength(MAX_SKIPPED_SONGLENGTHS_FOLDERS);
+    expect(stored[0]).toBe("/USB2/0/");
   });
 });

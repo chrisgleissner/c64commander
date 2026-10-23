@@ -33,7 +33,6 @@ import {
   CONFIG_LOOKUP_PROBE_EVERY,
   CONFIG_LOOKUP_SKIPPED_NOTICE,
   createConfigListing,
-  SONGLENGTHS_LOOKUP_PROBE_EVERY,
   SONGLENGTHS_LOOKUP_SKIPPED_NOTICE,
 } from "@/lib/sourceNavigation/guardedConfigListing";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
@@ -463,21 +462,6 @@ describe("createConfigListing", () => {
     expect(listFtpDirectory).toHaveBeenCalledTimes(2);
     releases.forEach((release) => release());
     await Promise.all(lookups);
-  });
-
-  it("asks again for a songlengths folder on its own, shorter schedule while settings lookups keep the long one", async () => {
-    const source = createUltimateSourceLocation();
-    vi.mocked(listFtpDirectory).mockRejectedValueOnce(new Error("timed out"));
-    const listing = createConfigListing(source);
-    await expect(listing.listSonglengthsFolder("/USB2/0")).rejects.toThrow();
-    vi.mocked(listFtpDirectory).mockResolvedValue({ entries: [entry] } as never);
-
-    for (let lookup = 1; lookup < SONGLENGTHS_LOOKUP_PROBE_EVERY; lookup += 1) {
-      await expect(listing.listSonglengthsFolder(`/USB2/${lookup}`)).resolves.toEqual([]);
-    }
-    expect(listFtpDirectory).toHaveBeenCalledTimes(1);
-    await expect(listing.listSonglengthsFolder("/USB2/probe")).resolves.toHaveLength(1);
-    await expect(listing.listEntries("/USB2/after")).resolves.toHaveLength(1);
   });
 
   it("names what was not looked up for the kind of add", async () => {

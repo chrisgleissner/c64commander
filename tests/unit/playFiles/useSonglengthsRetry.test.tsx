@@ -9,10 +9,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { connectionState, listEntries, apiHost } = vi.hoisted(() => ({
+const { connectionState, listEntries, apiHost, selected } = vi.hoisted(() => ({
   connectionState: { current: "REAL_CONNECTED" },
   listEntries: vi.fn(),
   apiHost: { current: "u64" },
+  selected: { current: "device-1" },
 }));
 
 vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connectionState.current }) }));
@@ -28,7 +29,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 vi.mock("@/lib/savedDevices/store", () => ({
   getSavedDevicesSnapshot: () => ({
-    selectedDeviceId: "device-1",
+    selectedDeviceId: selected.current,
     devices: [
       { id: "device-1", host: "u64" },
       { id: "device-2", host: "c64u" },
@@ -38,7 +39,7 @@ vi.mock("@/lib/savedDevices/store", () => ({
 vi.mock("@/lib/ftp/ftpClient", () => ({ readFtpFile: vi.fn() }));
 vi.mock("@/lib/ftp/ftpConfig", () => ({ getStoredFtpPort: () => 21 }));
 
-import { useSonglengthsRetry } from "@/pages/playFiles/hooks/useSonglengthsRetry";
+import { RETRY_LISTING_PACE_MS, useSonglengthsRetry } from "@/pages/playFiles/hooks/useSonglengthsRetry";
 import {
   clearSkippedSonglengthsFolders,
   getSkippedSonglengthsFolders,
@@ -54,6 +55,7 @@ describe("useSonglengthsRetry", () => {
     clearSkippedSonglengthsFolders();
     connectionState.current = "REAL_CONNECTED";
     apiHost.current = "u64";
+    selected.current = "device-1";
     listEntries.mockReset();
   });
 
@@ -397,5 +399,86 @@ describe("useSonglengthsRetry", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("stops after six tries in a row without an answer, counting from the last try that got one", async () => {
+    vi.useFakeTimers();
+    try {
+      recordSkippedSonglengthsFolders("device-1", ["/A/", "/B/"]);
+      let calls = 0;
+      listEntries.mockImplementation(async () => {
+        calls += 1;
+        if (calls === 4) return [];
+        throw new Error("FTP list failed: Timeout (control socket)");
+      });
+      renderHook(() =>
+        useSonglengthsRetry({
+          deviceId: "device-1",
+          savedDeviceIds: SAVED,
+          playlistLength: 3,
+          mergeSonglengthsFiles: vi.fn(),
+        }),
+      );
+      for (let minutes = 0; minutes < 120; minutes += 5) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(300_000);
+        });
+      }
+
+      expect(listEntries).toHaveBeenCalledTimes(11);
+      expect(getSkippedSonglengthsFolders("device-1")).toEqual(["/B/"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a short pause between two listings of one run", async () => {
+    vi.useFakeTimers();
+    try {
+      recordSkippedSonglengthsFolders("device-1", ["/A/", "/B/"]);
+      listEntries.mockResolvedValue([]);
+      renderHook(() =>
+        useSonglengthsRetry({
+          deviceId: "device-1",
+          savedDeviceIds: SAVED,
+          playlistLength: 3,
+          mergeSonglengthsFiles: vi.fn(),
+        }),
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RETRY_LISTING_PACE_MS - 50);
+      });
+      expect(listEntries).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(listEntries).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not register a songlengths file that was listed while another device became the selected one", async () => {
+    recordSkippedSonglengthsFolders("device-1", ["/DOCUMENTS/"]);
+    listEntries.mockImplementation(async () => {
+      selected.current = "device-2";
+      return [songlengths];
+    });
+    const merge = vi.fn();
+
+    renderHook(() =>
+      useSonglengthsRetry({
+        deviceId: "device-1",
+        savedDeviceIds: SAVED,
+        playlistLength: 3,
+        mergeSonglengthsFiles: merge,
+      }),
+    );
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(merge).not.toHaveBeenCalled();
+    expect(getSkippedSonglengthsFolders("device-1")).toEqual(["/DOCUMENTS/"]);
   });
 });

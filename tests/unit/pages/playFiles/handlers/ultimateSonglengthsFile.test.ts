@@ -8,11 +8,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { readFtpFile, api } = vi.hoisted(() => ({ readFtpFile: vi.fn(), api: { host: "u64" } }));
+const { readFtpFile, api } = vi.hoisted(() => ({
+  readFtpFile: vi.fn(),
+  api: { host: "u64", password: "", port: 21, selected: "device-1" },
+}));
 
 vi.mock("@/lib/ftp/ftpClient", () => ({ readFtpFile }));
-vi.mock("@/lib/ftp/ftpConfig", () => ({ getStoredFtpPort: () => 21 }));
-vi.mock("@/lib/c64api", () => ({ getC64APIConfigSnapshot: () => ({ deviceHost: api.host, password: "" }) }));
+vi.mock("@/lib/ftp/ftpConfig", () => ({ getStoredFtpPort: () => api.port }));
+vi.mock("@/lib/c64api", () => ({ getC64APIConfigSnapshot: () => ({ deviceHost: api.host, password: api.password }) }));
+vi.mock("@/lib/savedDevices/store", () => ({ getSavedDevicesSnapshot: () => ({ selectedDeviceId: api.selected }) }));
 vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({ normalizeFtpHost: (host: string) => host }));
 
 import {
@@ -26,6 +30,9 @@ describe("buildUltimateSonglengthsFile", () => {
   beforeEach(() => {
     readFtpFile.mockReset();
     api.host = "u64";
+    api.password = "";
+    api.port = 21;
+    api.selected = "device-1";
   });
 
   it("reports a read that the running add canceled as a cancel, whatever the native plugin calls it", async () => {
@@ -68,5 +75,40 @@ describe("buildUltimateSonglengthsFile", () => {
     expect(readFtpFile).toHaveBeenCalledWith(
       expect.objectContaining({ signal: add.signal, timeoutMs: SONGLENGTHS_IDLE_TIMEOUT_MS }),
     );
+  });
+
+  it("reads on the FTP port of the Ultimate it was found on, not the port of the device selected when the read happens", async () => {
+    readFtpFile.mockResolvedValue({ data: "QUJDRA==", sizeBytes: 4 });
+    api.port = 2121;
+    const file = buildUltimateSonglengthsFile(entry, () => undefined, vi.fn());
+    api.port = 21;
+    api.selected = "device-2";
+
+    await file.arrayBuffer();
+
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ port: 2121 }));
+  });
+
+  it("uses the password the device has now when the same device is still selected", async () => {
+    readFtpFile.mockResolvedValue({ data: "QUJDRA==", sizeBytes: 4 });
+    api.password = "old";
+    const file = buildUltimateSonglengthsFile(entry, () => undefined, vi.fn());
+    api.password = "new";
+
+    await file.arrayBuffer();
+
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ password: "new" }));
+  });
+
+  it("keeps the password it was found with when another device is selected at the read", async () => {
+    readFtpFile.mockResolvedValue({ data: "QUJDRA==", sizeBytes: 4 });
+    api.password = "old";
+    const file = buildUltimateSonglengthsFile(entry, () => undefined, vi.fn());
+    api.password = "other-device";
+    api.selected = "device-2";
+
+    await file.arrayBuffer();
+
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ password: "old" }));
   });
 });
