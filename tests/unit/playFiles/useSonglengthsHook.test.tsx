@@ -238,7 +238,7 @@ describe("useSonglengths", () => {
     expect(reads).toBe(2);
   });
 
-  it("does not read a songlengths file again for the next batch after a read that failed because the device was unreachable", async () => {
+  it("reads a songlengths file once, and logs one failure, for every batch of an add while the device is unreachable", async () => {
     let reads = 0;
     const songlengthsFile = {
       name: "Songlengths.md5",
@@ -252,11 +252,16 @@ describe("useSonglengths", () => {
     const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
     const { result } = renderUseSonglengths([]);
 
-    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
-    await flushPromises();
-    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    const batches = 12;
+    for (let batch = 0; batch < batches; batch += 1) {
+      await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+      await flushPromises();
+    }
 
     expect(reads).toBe(1);
+    expect(
+      addErrorLogMock.mock.calls.filter(([message]) => /Failed to read or parse songlengths/.test(message)),
+    ).toHaveLength(1);
   });
 
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
