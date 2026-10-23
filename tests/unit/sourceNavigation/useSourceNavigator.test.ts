@@ -575,4 +575,38 @@ describe("useSourceNavigator whole-source search", () => {
     expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64", expect.anything());
     expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64");
   });
+  it("does not copy the folder of the previous device into the folder memory of the device switched to", async () => {
+    let host = "u2";
+    const listEntries = vi.fn().mockResolvedValue([]);
+    const buildSource = (): SourceLocation => ({
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      navigationScope: () => host,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    });
+    const { result, rerender } = renderHook(({ source }) => useSourceNavigator(source), {
+      initialProps: { source: buildSource() },
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalled());
+    await act(async () => {
+      result.current.navigateTo("/USB0/test-data/d64");
+    });
+    await waitFor(() => expect(result.current.path).toBe("/USB0/test-data/d64"));
+
+    host = "c64u";
+    listEntries.mockClear();
+    listEntries.mockImplementation(() => new Promise(() => undefined));
+    rerender({ source: buildSource() });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+    rerender({ source: buildSource() });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(2));
+
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate:c64u")).not.toBe("/USB0/test-data/d64");
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64");
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64", expect.anything());
+  });
 });

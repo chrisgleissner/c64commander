@@ -79,9 +79,9 @@ const getStoredPath = (source: SourceLocation) => {
   return raw || null;
 };
 
-const setStoredPath = (source: SourceLocation, path: string) => {
+const setStoredPath = (navKey: string, path: string) => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(buildNavKey(source), path);
+  localStorage.setItem(navKey, path);
 };
 
 /** How long to let typing settle before an indexed whole-source search runs. */
@@ -112,6 +112,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const loadEntries = useCallback(
     async (nextPath: string, options?: { query?: string; offset?: number; append?: boolean }) => {
       if (!source) return;
+      const navKey = buildNavKey(source);
       const token = loadingTokenRef.current + 1;
       loadingTokenRef.current = token;
       setIsLoading(true);
@@ -152,6 +153,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
           setNextOffset(null);
         }
         setPath(safePath);
+        setStoredPath(navKey, safePath);
         // A folder listing has arrived, so whatever search results were on screen are gone. Leaving
         // the flag set would keep the results header over an ordinary listing.
         setIsSearching(false);
@@ -287,11 +289,6 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     },
     [],
   );
-
-  useEffect(() => {
-    if (!source) return;
-    setStoredPath(source, path);
-  }, [path, source]);
 
   /**
    * Go to a folder, leaving any whole-source search behind.
