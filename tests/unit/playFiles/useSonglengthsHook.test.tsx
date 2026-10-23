@@ -213,6 +213,31 @@ describe("useSonglengths", () => {
     expect(candidates.some((path) => path.toLowerCase().includes("songlengths"))).toBe(true);
   });
 
+  it("reads a songlengths file again after a read that failed, instead of keeping the empty result for the session", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        if (reads === 1) throw new DOMException("Aborted", "AbortError");
+        return new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer;
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+
+    const failed = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(failed?.pathToSeconds?.get("/MUSICIANS/demo.sid")).toBeUndefined();
+    await flushPromises();
+
+    const retried = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+
+    expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+    expect(reads).toBe(2);
+  });
+
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
     const reads = { count: 0 };
     const songlengthsFile = {

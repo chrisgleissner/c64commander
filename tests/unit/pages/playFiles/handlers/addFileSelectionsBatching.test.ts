@@ -1,5 +1,6 @@
 import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SONGLENGTHS_IDLE_TIMEOUT_MS } from "@/pages/playFiles/handlers/ultimateSonglengthsFile";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
@@ -798,7 +799,7 @@ describe("addFileSelections batching", () => {
     ]);
 
     expect(result).toBe(true);
-    expect(listEntries).toHaveBeenCalledTimes(2);
+    expect(listEntries).toHaveBeenCalledTimes(3);
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
         description: expect.stringContaining("Settings and song length files were not looked up"),
@@ -817,7 +818,7 @@ describe("addFileSelections batching", () => {
       { type: "file", name: "Tone-Low.sid", path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
     ]);
 
-    expect(listEntries.mock.calls.length).toBeGreaterThan(1);
+    expect(listEntries).toHaveBeenCalledTimes(21);
   });
 
   it("ends the songlengths search with the cancel instead of logging each folder it did not list", async () => {
@@ -926,27 +927,18 @@ describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
     const buffer = await songFile.arrayBuffer();
     expect(Array.from(new Uint8Array(buffer))).toEqual([0x41, 0x42, 0x43, 0x44]); // "ABCD"
     // No idle timeout (timeoutMs:0) + the known size is forwarded for progress.
-    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ timeoutMs: 0, totalBytes: 1024 }));
+    expect(readFtpFile).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: SONGLENGTHS_IDLE_TIMEOUT_MS, totalBytes: 1024 }),
+    );
     // The finally block restores the generic scanning message.
     expect(progressState.message).toBe("Scanning…");
   });
 
-  it("reads a songlengths file of a canceled add without that add's signal", async () => {
+  it("reads a songlengths file with the cancel of the add running at that moment", async () => {
     const { readFtpFile } = await import("@/lib/ftp/ftpClient");
     vi.mocked(readFtpFile).mockReset();
     vi.mocked(readFtpFile).mockResolvedValue({ data: "QUJDRA==", sizeBytes: 4 });
     const deps = createDeps();
-    let current: AbortController | null = null;
-    let addController: AbortController | undefined;
-    deps.addItemsAbortControllerRef = {
-      get current() {
-        return current;
-      },
-      set current(value: AbortController | null) {
-        current = value;
-        if (value) addController = value;
-      },
-    } as never;
     const source = createUltimateSource(async () => [
       { type: "file" as const, name: "Songlengths.md5", path: "/DOCUMENTS/Songlengths.md5", sizeBytes: 1024 },
       { type: "file" as const, name: "Commando.sid", path: "/DOCUMENTS/Commando.sid", sizeBytes: 100 },
@@ -956,12 +948,16 @@ describe("addFileSelections — c64u (ultimate) songlengths auto-read", () => {
     const songFile = discovered.find((entry) => entry.path.endsWith("Songlengths.md5"))!.file;
 
     await songFile.arrayBuffer();
-    expect(vi.mocked(readFtpFile).mock.calls[0][0].signal).toBe(addController!.signal);
+    expect(vi.mocked(readFtpFile).mock.calls[0][0]).toMatchObject({
+      signal: undefined,
+      timeoutMs: SONGLENGTHS_IDLE_TIMEOUT_MS,
+    });
 
-    addController!.abort();
+    const laterAdd = new AbortController();
+    deps.addItemsAbortControllerRef.current = laterAdd;
     await songFile.arrayBuffer();
 
-    expect(vi.mocked(readFtpFile).mock.calls[1][0].signal).toBeUndefined();
+    expect(vi.mocked(readFtpFile).mock.calls[1][0]).toMatchObject({ signal: laterAdd.signal, timeoutMs: 0 });
   });
 
   it("skips auto-reading an oversized ultimate songlengths file", async () => {
