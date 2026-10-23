@@ -49,7 +49,14 @@ const readEndpointLines = (page: Page) =>
         }
       }
       if (current) lines.push(current);
-      return { id: element.getAttribute("data-testid") ?? "", text, lines };
+      const id = element.getAttribute("data-testid") ?? "";
+      const key = id.replace("home-stream-endpoint-display-", "");
+      const start = document.querySelector<HTMLElement>(
+        `[data-slot-active="true"] [data-testid="home-stream-start-${key}"]`,
+      );
+      if (!start) throw new Error(`${id}: the row has no Start button to place`);
+      const buttonsBelow = start.getBoundingClientRect().top >= element.getBoundingClientRect().bottom - 1;
+      return { id, text, lines, buttonsBelow };
     }),
   );
 
@@ -105,4 +112,31 @@ test.describe("Home stream endpoints", () => {
       });
     }
   }
+
+  test("the placement check sees one row that moves its buttons below while the others stay inline @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
+    await page.goto("/");
+    const toggle = page.locator('[data-slot-active="true"]').getByTestId("home-section-toggle-streams");
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+    await expect(
+      page.locator('[data-slot-active="true"] [data-testid="home-stream-endpoint-display-vic"]'),
+    ).toBeVisible();
+    const before = await readEndpointLines(page);
+    expect(new Set(before.map((endpoint) => endpoint.buttonsBelow)).size).toBe(1);
+
+    const alreadyBelow = before[0].buttonsBelow;
+    await page.evaluate((forceInline) => {
+      const edit = document.querySelector<HTMLElement>(
+        '[data-slot-active="true"] [data-testid="home-stream-edit-toggle-vic"]',
+      );
+      if (!edit) return;
+      if (forceInline) Object.assign(edit.style, { flex: "0 0 40px", minWidth: "0", overflow: "hidden" });
+      else edit.style.flexBasis = "100%";
+    }, alreadyBelow);
+    const after = await readEndpointLines(page);
+    expect(new Set(after.map((endpoint) => endpoint.buttonsBelow)).size).toBe(2);
+  });
 });
