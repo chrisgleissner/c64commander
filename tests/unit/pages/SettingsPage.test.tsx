@@ -9,7 +9,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { installIndexedLabels } from "../../helpers/indexedLabels";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 import { markHvscUpdateCheckAt } from "@/lib/hvsc/hvscReleaseService";
 import SettingsPage from "@/pages/SettingsPage";
@@ -408,6 +409,27 @@ const sectionBody = (id: string): HTMLElement => {
   return body;
 };
 
+const findElementOrThrow = (description: string, find: () => Element | null | undefined): HTMLElement => {
+  const element = find();
+  if (!element) {
+    throw new Error(`Unable to find ${description}`);
+  }
+  return element as HTMLElement;
+};
+
+const saveConnectButton = () =>
+  findElementOrThrow("the Save & Connect button", () =>
+    Array.from(document.querySelectorAll("button")).find((button) => /save & connect/i.test(button.textContent ?? "")),
+  );
+
+const editorNameInput = () =>
+  findElementOrThrow("the device name input", () => document.getElementById("settings-device-name"));
+
+const refreshConnectionButton = () =>
+  findElementOrThrow("the Refresh connection button", () =>
+    document.querySelector('button[aria-label="Refresh connection"]'),
+  );
+
 const withSectionsOpen = <T,>(result: T): T => {
   expandAllSections();
   return result;
@@ -721,6 +743,12 @@ vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
     ) : null,
 }));
 
+let restoreLabels: () => void;
+beforeAll(() => {
+  restoreLabels = installIndexedLabels();
+});
+afterAll(() => restoreLabels());
+
 afterEach(() => {
   leaveKeyNavigationModality();
   dismissConnectionSaveToasts();
@@ -859,7 +887,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
@@ -877,7 +905,7 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByTestId("settings-device-reachability-suggestion")).toBeInTheDocument();
@@ -900,7 +928,7 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
@@ -926,7 +954,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
     fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.0.2.248" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expectRefusalReported(/couldn’t reach “192\.0\.2\.248”/i));
   }, 15000);
@@ -939,7 +967,7 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expectRefusalReported(/found a device at 192\.0\.2\.167/));
   }, 15000);
@@ -949,7 +977,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
     fireEvent.change(screen.getByLabelText("Network Password"), { target: { value: "wrong" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expectRefusalReported("Wrong password for this device."));
   }, 15000);
@@ -975,7 +1003,7 @@ describe("SettingsPage", () => {
   it("shows the invalid port as a notice that goes away by itself, not as a logged error", async () => {
     renderSettingsPage();
     changeField("settings-device-ftp", "70000");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expectInvalidDraftNotice("FTP port must be 1 to 65535."));
     expect(reportUserError).not.toHaveBeenCalled();
@@ -988,11 +1016,11 @@ describe("SettingsPage", () => {
     changeField("settings-device-name", "Other");
     changeField("settings-device-host", "bad host!");
     changeField("settings-device-ftp", "70000");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expectInvalidDraftNotice("Device name must be unique."));
 
     changeField("settings-device-name", "Fresh");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expectInvalidDraftNotice("Enter a valid hostname or IP address (optionally with :port)"));
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ description: "FTP port must be 1 to 65535." }));
   }, 15000);
@@ -1006,7 +1034,7 @@ describe("SettingsPage", () => {
       }),
     );
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeDisabled());
     answer({ status: "unreachable", suggestedAddress: null, suggestedHostname: null });
@@ -1016,8 +1044,7 @@ describe("SettingsPage", () => {
   /** Lets every promise continuation that is already resolvable run, without waiting for a time. */
   const drainPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-  const saveFinished = () =>
-    waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i })).toBeEnabled());
+  const saveFinished = () => waitFor(() => expect(saveConnectButton()).toBeEnabled());
 
   const pendingProbe = () => {
     let answer!: (value: Record<string, unknown>) => void;
@@ -1032,7 +1059,7 @@ describe("SettingsPage", () => {
   it("raises no refusal when the page is gone before the device answers", async () => {
     const answer = pendingProbe();
     const view = renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     view.unmount();
@@ -1059,7 +1086,7 @@ describe("SettingsPage", () => {
     const answer = pendingProbe();
     const view = renderSettingsPage();
     changeField("settings-device-host", "192.0.2.50");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     view.unmount();
@@ -1075,7 +1102,7 @@ describe("SettingsPage", () => {
     addSecondSavedDevice();
     const answer = pendingProbe();
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
@@ -1105,7 +1132,7 @@ describe("SettingsPage", () => {
     };
     const answer = pendingProbe();
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
@@ -1124,7 +1151,7 @@ describe("SettingsPage", () => {
     const answer = pendingProbe();
     renderSettingsPage();
     changeField("settings-device-host", "192.0.2.77");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     savedDevicesRef.current = { ...savedDevicesRef.current, selectedDeviceId: "saved-device-2" };
@@ -1141,7 +1168,7 @@ describe("SettingsPage", () => {
     const answer = pendingProbe();
     const view = renderSettingsPage();
     changeField("settings-device-host", "192.0.2.50");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     view.unmount();
@@ -1161,7 +1188,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
     expect(screen.getByTestId("settings-delete-device")).toBeEnabled();
     changeField("settings-device-host", "192.0.2.50");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expect(screen.getByTestId("settings-delete-device")).toBeDisabled());
   }, 15000);
@@ -1172,7 +1199,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
     fireEvent.change(document.getElementById("password") as HTMLInputElement, { target: { value: "new-password" } });
     changeField("settings-device-host", "192.0.2.50");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expect(mockEvaluateNewDeviceReachability).toHaveBeenCalled());
 
     savedDevicesRef.current = {
@@ -1199,10 +1226,10 @@ describe("SettingsPage", () => {
     });
     renderSettingsPage();
     changeField("settings-device-host", "192.0.2.50");
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expectRefusalReported(/couldn’t reach/i));
     vi.mocked(clearToastForSuccessfulOperation).mockClear();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalled());
     await act(async () => {
@@ -1227,7 +1254,7 @@ describe("SettingsPage", () => {
       }),
     );
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expect(screen.getByTestId("settings-device-row-saved-device-2")).toBeDisabled());
     expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
@@ -1243,12 +1270,12 @@ describe("SettingsPage", () => {
       suggestedHostname: null,
     });
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expectRefusalReported(/couldn’t reach/i));
     vi.mocked(clearToastForSuccessfulOperation).mockClear();
 
     mockSwitchSavedDevice.mockRejectedValueOnce(new Error("switch failed"));
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() =>
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1265,11 +1292,11 @@ describe("SettingsPage", () => {
       suggestedHostname: null,
     });
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
     await waitFor(() => expectRefusalReported(/couldn’t reach/i));
     vi.mocked(clearToastForSuccessfulOperation).mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
@@ -1287,7 +1314,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
     fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.0.2.248" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByText(/couldn’t reach “192\.0\.2\.248”/i)).toBeInTheDocument();
@@ -1304,7 +1331,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
@@ -1313,7 +1340,7 @@ describe("SettingsPage", () => {
 
     vi.mocked(discoverConnection).mockResolvedValueOnce(undefined);
 
-    fireEvent.click(screen.getByLabelText("Refresh connection"));
+    fireEvent.click(refreshConnectionButton());
 
     await waitFor(() => {
       expect(discoverConnection).toHaveBeenCalledWith("manual");
@@ -1332,13 +1359,13 @@ describe("SettingsPage", () => {
     mockGetConnectionSnapshot.mockReturnValue({ state: "OFFLINE_NO_DEMO" });
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText("Refresh connection"));
+    fireEvent.click(refreshConnectionButton());
 
     await waitFor(() => {
       expect(discoverConnection).toHaveBeenCalledWith("manual");
@@ -1357,7 +1384,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const refreshButton = screen.getByLabelText("Refresh connection");
+    const refreshButton = refreshConnectionButton();
     fireEvent.click(refreshButton);
     fireEvent.click(refreshButton);
 
@@ -1378,7 +1405,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const refreshButton = screen.getByLabelText("Refresh connection");
+    const refreshButton = refreshConnectionButton();
     fireEvent.click(refreshButton);
 
     await waitFor(() => {
@@ -1396,7 +1423,7 @@ describe("SettingsPage", () => {
   it("starts device discovery from Settings without blocking manual host entry", async () => {
     renderSettingsPage();
 
-    const hostInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+    const hostInput = screen.getByTestId("settings-device-host");
     const discoverButton = screen.getByRole("button", { name: /discover devices/i });
 
     expect(hostInput).not.toBeDisabled();
@@ -1425,7 +1452,7 @@ describe("SettingsPage", () => {
       "You can leave this page; the scan keeps running.",
     );
     expect(screen.getByRole("button", { name: /discover devices/i })).toBeDisabled();
-    expect(screen.getByLabelText(/c64u hostname \/ ip/i)).not.toBeDisabled();
+    expect(screen.getByTestId("settings-device-host")).not.toBeDisabled();
   });
 
   it("selects a discovered device through the saved-device switching path", async () => {
@@ -1697,10 +1724,10 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/http port/i), { target: { value: "8081" } });
-    fireEvent.change(screen.getByLabelText(/ftp port/i), { target: { value: "2121" } });
-    fireEvent.change(screen.getByLabelText(/telnet port/i), { target: { value: "2323" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.change(screen.getByTestId("settings-device-http"), { target: { value: "8081" } });
+    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "2121" } });
+    fireEvent.change(screen.getByTestId("settings-device-telnet"), { target: { value: "2323" } });
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u:8081", undefined);
@@ -1731,8 +1758,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "edited-host.local" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "edited-host.local" } });
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("edited-host.local", undefined);
@@ -1769,8 +1796,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "Den U64" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.change(editorNameInput(), { target: { value: "Den U64" } });
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
@@ -1796,7 +1823,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "2121" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
@@ -1812,7 +1839,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "2121" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
@@ -1825,7 +1852,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     fireEvent.change(document.getElementById("password") as HTMLInputElement, { target: { value: "new-password" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(vi.mocked(setPasswordForDevice)).toHaveBeenCalledWith("saved-device-1", "new-password");
@@ -1867,7 +1894,7 @@ describe("SettingsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^change$/i }));
     fireEvent.change(screen.getByLabelText(/network password/i), { target: { value: "wrong-password" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(screen.getByText(/wrong password for this device/i)).toBeInTheDocument();
@@ -1886,7 +1913,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", "existing-secret");
@@ -1905,7 +1932,7 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1925,9 +1952,9 @@ describe("SettingsPage", () => {
 
     expect(screen.queryByLabelText(/badge label/i)).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "   " } });
-    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "ultimate.local" } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.change(editorNameInput(), { target: { value: "   " } });
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "ultimate.local" } });
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("ultimate.local", undefined);
@@ -1940,8 +1967,8 @@ describe("SettingsPage", () => {
   it("keeps a legacy custom device name editable when the host changes", () => {
     renderSettingsPage();
 
-    const deviceNameInput = screen.getByLabelText(/device name/i);
-    const hostInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+    const deviceNameInput = editorNameInput();
+    const hostInput = screen.getByTestId("settings-device-host");
 
     expect(deviceNameInput).toHaveValue("Office U64");
 
@@ -1982,7 +2009,7 @@ describe("SettingsPage", () => {
 
     fireEvent.click(screen.getByTestId("settings-delete-device"));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i })).toBeDisabled());
+    await waitFor(() => expect(saveConnectButton()).toBeDisabled());
     await act(async () => {
       loaded({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
     });
@@ -1996,9 +2023,9 @@ describe("SettingsPage", () => {
     changeField("settings-device-host", "192.0.2.50");
     fireEvent.click(screen.getByTestId("settings-delete-device"));
     await screen.findByRole("alertdialog", { name: /delete device/i });
-    await waitFor(() => expect(screen.getByRole("button", { name: /save & connect/i, hidden: true })).toBeEnabled());
+    await waitFor(() => expect(saveConnectButton()).toBeEnabled());
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i, hidden: true }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => expect(screen.getByTestId("settings-delete-device-confirm")).toBeDisabled());
   }, 15000);
@@ -2450,7 +2477,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -2471,8 +2498,8 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.change(screen.getByLabelText(/c64u hostname \/ ip/i), { target: { value: "  nosuchhost-c64u:8080  " } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "  nosuchhost-c64u:8080  " } });
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("nosuchhost-c64u", undefined);
@@ -2823,7 +2850,7 @@ describe("SettingsPage", () => {
       mockGetConnectionSnapshot.mockReturnValue({ state: "REAL_CONNECTED" });
       renderSettingsPage();
 
-      fireEvent.click(screen.getByLabelText("Refresh connection"));
+      fireEvent.click(refreshConnectionButton());
 
       await waitFor(() => {
         expect(discoverConnection).toHaveBeenCalledWith("manual");
@@ -2838,7 +2865,7 @@ describe("SettingsPage", () => {
       mockGetConnectionSnapshot.mockReturnValue({ state: "OFFLINE_NO_DEMO" });
       renderSettingsPage();
 
-      fireEvent.click(screen.getByLabelText("Refresh connection"));
+      fireEvent.click(refreshConnectionButton());
 
       await waitFor(() => {
         expect(discoverConnection).toHaveBeenCalledWith("manual");
@@ -3194,7 +3221,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     expect(screen.getByText("Connecting...")).toBeInTheDocument();
-    expect(screen.getByLabelText("Refresh connection").querySelector("svg")).toHaveClass("animate-spin");
+    expect(refreshConnectionButton().querySelector("svg")).toHaveClass("animate-spin");
   });
 
   it("uses the default device host when saving an empty hostname", async () => {
@@ -3202,9 +3229,9 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const hostnameInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+    const hostnameInput = screen.getByTestId("settings-device-host");
     fireEvent.change(hostnameInput, { target: { value: "   " } });
-    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+    fireEvent.click(saveConnectButton());
 
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
@@ -3846,7 +3873,7 @@ describe("SettingsPage", () => {
     it("shows an error message on blur when hostname is invalid", async () => {
       renderSettingsPage();
 
-      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      const input = screen.getByTestId("settings-device-host");
       fireEvent.change(input, { target: { value: "-bad-hostname" } });
       fireEvent.blur(input);
 
@@ -3859,7 +3886,7 @@ describe("SettingsPage", () => {
     it("clears the error when the user corrects the hostname", async () => {
       renderSettingsPage();
 
-      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      const input = screen.getByTestId("settings-device-host");
       fireEvent.change(input, { target: { value: "-bad" } });
       fireEvent.blur(input);
 
@@ -3873,9 +3900,9 @@ describe("SettingsPage", () => {
     it("shows an error and does not call updateConfig when Save is clicked with an invalid hostname", async () => {
       renderSettingsPage();
 
-      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      const input = screen.getByTestId("settings-device-host");
       fireEvent.change(input, { target: { value: "not valid!" } });
-      fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+      fireEvent.click(saveConnectButton());
 
       await waitFor(() => {
         expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -3886,7 +3913,7 @@ describe("SettingsPage", () => {
     it("does not show an error for an empty hostname (uses application default)", async () => {
       renderSettingsPage();
 
-      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      const input = screen.getByTestId("settings-device-host");
       fireEvent.change(input, { target: { value: "" } });
       fireEvent.blur(input);
 
@@ -3896,7 +3923,7 @@ describe("SettingsPage", () => {
     it("does not show an error for a valid IPv4 address", async () => {
       renderSettingsPage();
 
-      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      const input = screen.getByTestId("settings-device-host");
       fireEvent.change(input, { target: { value: "192.0.2.42" } });
       fireEvent.blur(input);
 
@@ -4051,8 +4078,8 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     const httpRow = screen.getByTestId("settings-device-http-field");
     const ftpRow = screen.getByTestId("settings-device-ftp-field");
     const telnetRow = screen.getByTestId("settings-device-telnet-field");
-    const saveButton = screen.getByRole("button", { name: /save & connect/i });
-    const refreshButton = screen.getByLabelText("Refresh connection");
+    const saveButton = saveConnectButton();
+    const refreshButton = refreshConnectionButton();
 
     // Field rows are intentionally descriptor-only wrappers so d-pad navigation
     // can leave the row before the inner editable input receives text keys. The
@@ -4074,7 +4101,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     renderSettingsPageInFocusRing();
 
-    focusByDpadDown(screen.getByRole("button", { name: /save & connect/i }));
+    focusByDpadDown(saveConnectButton());
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
     await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined));
@@ -4088,7 +4115,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
 
     // Focus Refresh through real d-pad traversal, then center triggers the manual
     // discovery path (a refresh uses the "manual" intent; save/mount never do).
-    focusByDpadDown(screen.getByLabelText("Refresh connection"));
+    focusByDpadDown(refreshConnectionButton());
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
@@ -4106,9 +4133,9 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     const focusContext = { current: null as FocusNavigationContextValue | null };
     renderSettingsPageInFocusRing(focusContext);
 
-    const saveButton = screen.getByRole("button", { name: /save & connect/i });
-    const refreshButton = screen.getByLabelText("Refresh connection");
-    expect(screen.getByLabelText("Refresh connection")).toBeDisabled();
+    const saveButton = saveConnectButton();
+    const refreshButton = refreshConnectionButton();
+    expect(refreshConnectionButton()).toBeDisabled();
 
     const visited = visitByDpadDown(80);
     expect(visited.has(saveButton)).toBe(true);
@@ -4119,12 +4146,12 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
   it("leaves the connection CTAs inert without a focus provider (default variant)", () => {
     renderSettingsPage();
 
-    const saveButton = screen.getByRole("button", { name: /save & connect/i });
+    const saveButton = saveConnectButton();
 
     // No provider means no global key listener, so d-pad keys never move focus —
     // pointer behaviour in the default C64 Commander variant is untouched.
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).not.toBe(saveButton);
-    expect(document.activeElement).not.toBe(screen.getByLabelText("Refresh connection"));
+    expect(document.activeElement).not.toBe(refreshConnectionButton());
   });
 });
