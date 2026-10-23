@@ -138,7 +138,7 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
       if (typed.length) changed.push(`seek keys pressed outside the SID player: ${typed.join(",")}`);
       return changed;
     },
-    clockLateSecondsPerSix: 1,
+    clockLateSecondsPerFive: 1,
     async recordClocks(during) {
       await page.evaluate(() => {
         const log: Array<{ atMs: number; text: string }> = [];

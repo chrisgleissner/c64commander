@@ -50,8 +50,8 @@ export type ParityDriver = {
   report?: (line: string) => void;
   /** Record both clocks while `during` runs; absent where the C64's clock cannot be read. */
   recordClocks?: (during: () => Promise<void>) => Promise<ClockRecording>;
-  /** Of every six seconds in a steady window, how many may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
-  clockLateSecondsPerSix?: number;
+  /** Of every five seconds in a steady window, how many may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
+  clockLateSecondsPerFive?: number;
   wait(ms: number): Promise<void>;
 };
 
@@ -209,19 +209,35 @@ export const clockPhaseBySecond = (
   return [...worst.values()];
 };
 
-/** Seconds a steady window must show for its phase to be judged; a 6 s window shows six. */
-export const MIN_CLOCK_SECONDS = 5;
+/** Seconds a steady window must show to be judged; a 10 s window shows ten, so shorter ones are not judged at all. */
+export const MIN_CLOCK_SECONDS = 8;
+
+/** A second this late is a fault however loaded the runner was. */
+export const CLOCK_HARD_LIMIT_MS = 500;
+
+/** Whether a clock showed a second that did not follow the one before it, as when it steps backwards. */
+export const clockWentBackwards = (ticks: ClockTransition[], windows: Array<[number, number]>): boolean => {
+  const inWindows = ticks
+    .filter(({ atMs }) => windows.some(([start, end]) => atMs >= start && atMs <= end))
+    .sort((x, y) => x.atMs - y.atMs);
+  return inWindows.some((tick, index) => index > 0 && tick.seconds !== inWindows[index - 1].seconds + 1);
+};
 
 /**
- * Why a steady window fails, or null. Judged per second: at most `latePerSix` of every six seconds may miss
- * the limit (a loaded runner can pause either clock once); a steady offset, a drift, a coarse poll or a stuck
- * clock shows in many seconds, or as a missing one, and fails.
+ * Why a steady window fails, or null. Judged per second: at most `latePerFive` of every five seconds may miss
+ * the limit (a loaded runner can pause either clock for a moment), none may be later than the hard limit, and a
+ * second missing on one clock fails. A steady offset, a drift, a page clock fed by a coarse poll and a stuck
+ * clock show in many seconds. A rate that is not a finite number allows none.
  */
-export const judgeClockPhase = (perSecond: number[], limit: number, latePerSix: number): string | null => {
+export const judgeClockPhase = (perSecond: number[], limit: number, latePerFive: number): string | null => {
   if (perSecond.length < MIN_CLOCK_SECONDS) return `only ${perSecond.length} seconds were seen`;
   if (perSecond.some(Number.isNaN)) return "a second showed on one clock and not on the other";
+  const hard = perSecond.filter((error) => error > CLOCK_HARD_LIMIT_MS);
+  if (hard.length > 0)
+    return `${hard.length} seconds were more than ${CLOCK_HARD_LIMIT_MS} ms apart: ${perSecond.map(Math.round).join(", ")}`;
+  const rate = Number.isFinite(latePerFive) && latePerFive > 0 ? latePerFive : 0;
+  const allowed = Math.floor((perSecond.length * rate) / 5);
   const late = perSecond.filter((error) => error > limit).length;
-  const allowed = Math.floor((perSecond.length * latePerSix) / 6);
   return late > allowed
     ? `${late} of ${perSecond.length} seconds were more than ${limit} ms apart (${allowed} allowed): ${perSecond.map(Math.round).join(", ")}`
     : null;
@@ -231,7 +247,7 @@ export const judgeClockPhase = (perSecond: number[], limit: number, latePerSix: 
 export const CLOCK_PHASE_LIMIT_MS = 150;
 /** After a landing the page re-reads the C64's clock and its phase; compared only once that is done. */
 const CLOCK_SETTLE_MS = 3000;
-const CLOCK_STEADY_MS = 6000;
+const CLOCK_STEADY_MS = 10_000;
 
 const jumpTo = async (driver: ParityDriver, route: ParityRoute, fraction: number, what: string) => {
   const target = fraction * (await driver.durationSeconds());
@@ -367,7 +383,11 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         driver.report?.(
           `${what}: the page turned each second ${lags.join(", ")} ms after the C64; at most ${Math.max(...perSecond)} ms apart`,
         );
-        const failure = judgeClockPhase(perSecond, CLOCK_PHASE_LIMIT_MS, driver.clockLateSecondsPerSix ?? 0);
+        check(
+          !clockWentBackwards(recording.device, [window]) && !clockWentBackwards(recording.page, [window]),
+          `${what}: a clock showed a second that did not follow the one before it`,
+        );
+        const failure = judgeClockPhase(perSecond, CLOCK_PHASE_LIMIT_MS, driver.clockLateSecondsPerFive ?? 0);
         check(failure === null, `${what}: ${failure}`);
       });
     },
