@@ -271,12 +271,9 @@ describe("HomeConfigUtils", () => {
   });
 
   describe("formatPrinterOptionLabel", () => {
-    it("formats PNG B&W", () => {
-      expect(formatPrinterOptionLabel("PNG B&W")).toBe("PNG B/W");
-    });
-
-    it("formats PNG COLOR", () => {
-      expect(formatPrinterOptionLabel("PNG COLOR")).toBe("PNG Color");
+    it("shows the PNG output types as the device reports them", () => {
+      expect(formatPrinterOptionLabel("PNG B&W")).toBe("PNG B&W");
+      expect(formatPrinterOptionLabel("PNG COLOR")).toBe("PNG COLOR");
     });
 
     it("formats IBM Graphics Printer", () => {
