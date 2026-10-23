@@ -8,7 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureWithinRoot, getParentPathWithinRoot } from "./paths";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { ftpReplyCodeOf } from "@/lib/ftp/ftpReply";
 import type { SourceEntry, SourceLocation } from "./types";
 
 const PAGE_SIZE = 200;
@@ -84,6 +85,11 @@ const setStoredPath = (navKey: string, path: string) => {
   localStorage.setItem(navKey, path);
 };
 
+const FTP_FILE_UNAVAILABLE = 550;
+
+/** Only the device saying the folder is unavailable counts as gone; a refused data connection or a login problem does not. */
+const isMissingFolderFailure = (error: Error) => ftpReplyCodeOf(error) === FTP_FILE_UNAVAILABLE;
+
 /** How long to let typing settle before an indexed whole-source search runs. */
 const SEARCH_DEBOUNCE_MS = 180;
 
@@ -110,7 +116,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const searchIsInstant = Boolean(source?.searchIsInstant);
 
   const loadEntries = useCallback(
-    async (nextPath: string, options?: { query?: string; offset?: number; append?: boolean }) => {
+    async (nextPath: string, options?: { query?: string; offset?: number; append?: boolean; remembered?: boolean }) => {
       if (!source) return;
       const navKey = buildNavKey(source);
       const token = loadingTokenRef.current + 1;
@@ -160,6 +166,15 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
       } catch (err) {
         if (loadingTokenRef.current !== token) return;
         const error = err as Error;
+        if (options?.remembered && nextPath !== source.rootPath && isMissingFolderFailure(error)) {
+          localStorage.removeItem(navKey);
+          addLog("warn", "Remembered folder is gone; browsing the root instead", {
+            sourceId: source.id,
+            path: nextPath,
+            error: error.message,
+          });
+          return "missing" as const;
+        }
         setError(error.message);
         addErrorLog("Source browse failed", {
           sourceId: source.id,
@@ -277,7 +292,9 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     setIsSearching(false);
     const stored = getStoredPath(source);
     const initialPath = stored ? ensureWithinRoot(stored, source.rootPath) : source.rootPath;
-    void loadEntries(initialPath, { query: "" });
+    void loadEntries(initialPath, { query: "", remembered: Boolean(stored) }).then((outcome) => {
+      if (outcome === "missing") void loadEntries(source.rootPath, { query: "" });
+    });
   }, [loadEntries, source]);
 
   // A pending keystroke must not fire into an unmounted sheet, or into the next source.
