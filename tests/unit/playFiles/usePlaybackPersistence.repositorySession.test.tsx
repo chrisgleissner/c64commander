@@ -218,7 +218,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
 
     expect(repository.saveSession).not.toHaveBeenCalled();
 
-    result.current.soundingTuneRef.current = result.current.playlist[1];
+    result.current.soundingTuneRef.current = result.current.playlist[0];
     await act(async () => {
       result.current.setCurrentIndex(0);
     });

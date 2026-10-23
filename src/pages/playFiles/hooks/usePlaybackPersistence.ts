@@ -662,6 +662,13 @@ export function usePlaybackPersistence({
     ({ elapsedMs, playedMs }: PlaybackTime) => {
       if (completedInitialRestoreKeyRef.current !== playlistStorageKey) return;
       if ((isPlaying || isPaused) && !playlistEnded && soundingTuneRef.current === null) return;
+      // The record is set before the render that carries the new item; the render's own effect writes the session.
+      if (
+        currentPlaylistItemId !== null &&
+        soundingTuneRef.current &&
+        soundingTuneRef.current.id !== currentPlaylistItemId
+      )
+        return;
       const session: PlaylistSessionRecord = {
         playlistId: playlistStorageKey,
         currentPlaylistItemId,
@@ -715,6 +722,13 @@ export function usePlaybackPersistence({
         return;
       }
       if ((isPlaying || isPaused) && !playlistEnded && soundingTuneRef.current === null) return;
+      // The record is set before the render that carries the new item; the render's own effect writes the session.
+      if (
+        currentPlaylistItemId !== null &&
+        soundingTuneRef.current &&
+        soundingTuneRef.current.id !== currentPlaylistItemId
+      )
+        return;
       const currentItemLabel = currentIndex >= 0 ? (playlist[currentIndex]?.label ?? null) : null;
       const payload: StoredPlaybackSession = {
         playlistKey: playlistStorageKey,
