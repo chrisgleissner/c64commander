@@ -15,7 +15,7 @@ import {
   subscribeSimulatedDeviceContentRemoved,
 } from "@/lib/connection/simulatedDeviceContent";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
-import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { getSavedDeviceById, getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 export type AddDisksOptions = {
   expectedSelectedDeviceId?: string | null;
@@ -62,6 +62,18 @@ export type DiskLibrary = {
 // save effect detect and skip exactly that transitional render. See
 // HARD9-048.
 type DiskLibraryState = { uniqueId: string | null; disks: DiskEntry[] };
+
+/** An Ultimate disk of a saved device that has since been removed, for the same file as a disk being added now. */
+const isOrphanOf = (disk: DiskEntry, added: DiskEntry) => {
+  const originDeviceId = disk.origin?.originDeviceId;
+  return (
+    disk.location === "ultimate" &&
+    added.location === "ultimate" &&
+    disk.path === added.path &&
+    Boolean(originDeviceId) &&
+    !getSavedDeviceById(originDeviceId as string)
+  );
+};
 
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [libraryState, setLibraryState] = useState<DiskLibraryState>({ uniqueId: null, disks: [] });
@@ -116,7 +128,13 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
         const existing = new Set(prev.map((disk) => disk.id));
         entries.forEach((entry) => {
           if (existing.has(entry.id)) return;
-          next.push(entry);
+          const orphanIndex = next.findIndex((disk) => isOrphanOf(disk, entry));
+          if (orphanIndex < 0) {
+            next.push(entry);
+            return;
+          }
+          const orphan = next[orphanIndex];
+          next[orphanIndex] = { ...entry, name: orphan.name, group: orphan.group };
         });
         return next;
       });
