@@ -8,66 +8,78 @@
 import { SlidersHorizontal } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { AmbianceBar, SoundBody, activeSoundName } from "@/components/sound/SoundPanel";
+import { SoundBody, collapsedSoundName, soundAccentId } from "@/components/sound/SoundPanel";
 import { Switch } from "@/components/ui/switch";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 import { useAvMirror } from "@/hooks/useAvMirror";
+import { accentVars, soundAccent } from "@/lib/audio/tone/soundPalette";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { saveAudioEnabled, useAudioProcessingRecord } from "@/lib/config/audioProcessingSettings";
+import { cn } from "@/lib/utils";
 
-export const SOUND_ON_C64_MESSAGE = "Your C64 is playing this sound, so these settings do not apply to it.";
+export { SOUND_ON_C64_MESSAGE } from "@/components/sound/SoundPanel";
 
 export interface SoundCardProps {
   /** The C64 or a connected Ultimate is producing the sound, and this phone is not. */
   c64Plays: boolean;
+  /** This phone is playing sound, so the live spectrum can be drawn behind the curve. */
+  soundOnPhone?: boolean;
 }
 
 /**
  * Tone curve, ambiance presets and sound options for the sound this phone plays. It exists only where the
  * native plugin can process sound, like the Spectrum card, and is disabled while the C64 plays the sound.
+ * Closed, it is one row: the accent dot, "Sound", the active sound and the switch.
  */
-export const SoundCard = ({ c64Plays }: SoundCardProps) => {
+export const SoundCard = ({ c64Plays, soundOnPhone = false }: SoundCardProps) => {
   const available = useAudioFxAvailable();
   const record = useAudioProcessingRecord();
   if (!available) return null;
+  const accentId = soundAccentId(record);
   return (
-    <CollapsibleSection
-      scope="play"
-      id="sound"
-      title="Sound"
-      summary="Tone curve and ambiance for the sound from this phone"
-      icon={SlidersHorizontal}
-      testId="play-section-sound"
-      badge={
-        <span className="text-sm text-primary" data-testid="sound-active-name">
-          {activeSoundName(record)}
-        </span>
-      }
-      actions={
-        <label className="flex min-h-11 items-center gap-2 text-sm">
-          <span data-testid="sound-switch-label">{record.enabled ? "On" : "Off"}</span>
+    <div className="snd-scope" style={accentVars(soundAccent(accentId))} data-sound-accent={accentId}>
+      <CollapsibleSection
+        scope="play"
+        id="sound"
+        title="Sound"
+        summary="Tone curve and ambiance for the sound from this phone"
+        icon={SlidersHorizontal}
+        leading={
+          <span
+            aria-hidden="true"
+            className="ml-0.5 size-2.5 shrink-0 rounded-full bg-[var(--snd-accent)] shadow-[0_0_0_3px_hsl(var(--card)),0_0_0_4px_var(--snd-accent)]"
+            data-testid="sound-accent-dot"
+          />
+        }
+        badgeTruncates
+        className="snd-card"
+        testId="play-section-sound"
+        badge={
+          <span
+            className={cn(
+              "block truncate font-medium",
+              record.enabled ? "text-[var(--snd-accent)]" : "text-muted-foreground",
+            )}
+            data-testid="sound-active-name"
+          >
+            {collapsedSoundName(record)}
+          </span>
+        }
+        actions={
           <Switch
             checked={record.enabled}
             disabled={c64Plays}
             onCheckedChange={saveAudioEnabled}
             aria-label="Sound processing"
+            className="data-[state=checked]:bg-[var(--snd-accent)]"
+            thumbClassName="data-[state=checked]:bg-[var(--snd-on-accent)]"
             data-testid="sound-switch"
           />
-        </label>
-      }
-      peek={
-        <div className="space-y-1">
-          {c64Plays ? (
-            <p className="text-sm text-muted-foreground" role="status" data-testid="sound-unavailable">
-              {SOUND_ON_C64_MESSAGE}
-            </p>
-          ) : null}
-          <AmbianceBar record={record} disabled={c64Plays} />
-        </div>
-      }
-    >
-      <SoundBody record={record} disabled={c64Plays} />
-    </CollapsibleSection>
+        }
+      >
+        <SoundBody record={record} disabled={c64Plays} soundOnPhone={soundOnPhone} />
+      </CollapsibleSection>
+    </div>
   );
 };
 
@@ -75,5 +87,10 @@ export const SoundCard = ({ c64Plays }: SoundCardProps) => {
 export const PlaybackSoundCard = () => {
   const playback = useActivePlayback();
   const mirror = useAvMirror();
-  return <SoundCard c64Plays={playback.remote && !playback.local && !mirror.audioLive} />;
+  return (
+    <SoundCard
+      c64Plays={playback.remote && !playback.local && !mirror.audioLive}
+      soundOnPhone={playback.local || mirror.audioLive}
+    />
+  );
 };

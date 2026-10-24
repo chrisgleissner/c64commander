@@ -14,8 +14,8 @@ import { wrapValueChange } from "@/lib/tracing/userTrace";
 
 const Switch = React.forwardRef<
   React.ElementRef<typeof SwitchPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
->(({ className, onCheckedChange, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & { thumbClassName?: string }
+>(({ className, thumbClassName, onCheckedChange, ...props }, ref) => (
   <SwitchPrimitives.Root
     onCheckedChange={wrapValueChange(onCheckedChange, "toggle", "Switch", props, "Switch")}
     className={cn(
@@ -28,6 +28,7 @@ const Switch = React.forwardRef<
     <SwitchPrimitives.Thumb
       className={cn(
         "pointer-events-none block h-[20px] w-[20px] rounded-full bg-background shadow-elev-2 ring-0 transition-transform data-[state=checked]:translate-x-[20px] data-[state=unchecked]:translate-x-0",
+        thumbClassName,
       )}
     />
   </SwitchPrimitives.Root>

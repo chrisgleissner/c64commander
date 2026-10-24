@@ -9,7 +9,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
-import { activeSoundName } from "@/components/sound/SoundPanel";
+import { collapsedSoundName } from "@/components/sound/SoundPanel";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { useAudioProcessingRecord } from "@/lib/config/audioProcessingSettings";
 import { requestSectionOpen, writeSectionState } from "@/lib/ui/collapsibleSectionStore";
@@ -39,7 +39,7 @@ export const AudioProcessingSettingsSection = () => {
       testId="settings-audio-processing"
       badge={
         <span className="text-sm text-primary" data-testid="settings-audio-processing-state">
-          {record.enabled ? activeSoundName(record) : "Off"}
+          {collapsedSoundName(record)}
         </span>
       }
     >

@@ -41,6 +41,10 @@ export interface CollapsibleSectionProps {
    * Omit for a page (like Docs) whose card titles already say enough on their own. */
   summary?: string;
   icon: LucideIcon;
+  /** Drawn in place of the icon, for a card whose header marks itself another way (the Sound card's accent dot). */
+  leading?: ReactNode;
+  /** Let a long badge shrink and end in an ellipsis instead of squeezing the title. */
+  badgeTruncates?: boolean;
   /** Opened on a first visit to this scope, overriding the profile's own default. Set it only
    * where a section is deliberately secondary (closed on a roomy screen) or deliberately the point
    * of the page (open on a small one) - see each call site for which it is. Left unset, the
@@ -55,8 +59,6 @@ export interface CollapsibleSectionProps {
    * without opening the section, matching what these sections did before they were
    * collapsible. */
   actions?: ReactNode;
-  /** Shown under the header whether the section is open or closed (e.g. the quick switches of a card). */
-  peek?: ReactNode;
   /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
    * tile is decoration that costs the title about 46 CSS px of the row. Defaults to on whenever
    * `actions` are present, because that is exactly the row that cannot spare them. */
@@ -118,7 +120,8 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
-  peek,
+  leading,
+  badgeTruncates,
   plainIcon,
   className,
   testId,
@@ -148,7 +151,8 @@ export const CollapsibleSection = ({
       ? titleVariants.reduce((shortest, variant) => (variant.length < shortest.length ? variant : shortest))
       : title;
   const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, fitTitle);
-  const stackActions = fitsOneRow === false;
+  // A truncating badge gives way instead, so the actions never need a row of their own.
+  const stackActions = fitsOneRow === false && !badgeTruncates;
   // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
   // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
   // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
@@ -415,12 +419,14 @@ export const CollapsibleSection = ({
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-              <span className={cn(compact || showPlainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
-                <Icon
-                  className={cn("text-primary", compact || showPlainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
-                  aria-hidden
-                />
-              </span>
+              {leading ?? (
+                <span className={cn(compact || showPlainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+                  <Icon
+                    className={cn("text-primary", compact || showPlainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                    aria-hidden
+                  />
+                </span>
+              )}
               <span className="flex min-w-0 flex-1 flex-col">
                 {/* Still a real heading: the section titles are how the page is navigated, by a
                   screen reader and by anyone scanning it. The badge sits beside the heading
@@ -451,6 +457,7 @@ export const CollapsibleSection = ({
                   <h2
                     className={cn(
                       "min-w-0 break-words font-medium",
+                      badgeTruncates && "shrink-0",
                       // line-clamp still ends in an ellipsis, but at two lines rather than one, so
                       // it is the backstop for a title no shorter wording exists for.
                       titleVariants?.length ? "flex-1 truncate" : "line-clamp-2",
@@ -462,7 +469,7 @@ export const CollapsibleSection = ({
                       title
                     )}
                   </h2>
-                  {badge ? <span className="shrink-0">{badge}</span> : null}
+                  {badge ? <span className={badgeTruncates ? "min-w-0 truncate" : "shrink-0"}>{badge}</span> : null}
                 </span>
                 {summary ? (
                   // Wrapped, not truncated: a summary cut off mid-word tells the reader less
@@ -528,8 +535,6 @@ export const CollapsibleSection = ({
           </div>
         ) : null}
       </div>
-
-      {peek ? <div className={cn(compact ? "px-3 pb-2" : "px-4 pb-3")}>{peek}</div> : null}
 
       <AnimatePresence initial={false}>
         {bodyVisible && bodyMayMount ? (

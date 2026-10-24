@@ -144,13 +144,15 @@ describe("ToneCurveEditor", () => {
     expect(bands()).toBe("0,0,0,0,0,0,0,0,0,0");
   });
 
-  it("draws the curve through the points and keeps the plot at least 160 px high", () => {
+  it("draws the curve from the lowest to the highest band through the points and keeps the plot at least 200 px high", () => {
     render(<Harness initial={[0, 0, 0, 0, 0, 12, 0, 0, 0, 0]} />);
-    expect(screen.getByTestId("sound-tone-curve").getAttribute("d")).toMatch(/^M0/);
+    const d = screen.getByTestId("sound-tone-curve").getAttribute("d") ?? "";
+    expect(Number(d.slice(1).split(" ")[0])).toBeCloseTo(frequencyToFraction(31) * 100, 2);
+    expect(Number(d.trim().split(" ").slice(-2)[0])).toBeCloseTo(frequencyToFraction(16000) * 100, 2);
     const reachable = Math.round(reachableTargets([0, 0, 0, 0, 0, 12, 0, 0, 0, 0])[5] * 10) / 10;
     expect(reachable).toBeLessThan(12);
     expect(screen.getByTestId("sound-tone-point-5")).toHaveAttribute("data-gain", String(reachable));
-    expect(plot().style.height).toBe("176px");
+    expect(plot().className).toContain("min-h-[200px]");
   });
 
   it("does nothing while disabled", () => {

@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 import { useState } from "react";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   MAX_PRESET_NAME_LENGTH,
   MAX_USER_PRESETS,
@@ -38,19 +38,42 @@ export const UserPresets = ({ record, disabled }: { record: AudioProcessingRecor
   };
 
   return (
-    <div className="min-w-0 space-y-2 rounded-lg border border-border/70 p-3" data-testid="sound-user-presets">
-      <Label className="text-sm font-medium">My sounds</Label>
-      <p className="text-sm text-muted-foreground">
-        Save the current sound under a name. Up to {MAX_USER_PRESETS} can be kept.
-      </p>
+    <div className="min-w-0 space-y-2" data-testid="sound-user-presets">
+      <div className="flex min-h-11 items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-medium">My sounds</h3>
+          <p className="text-sm text-muted-foreground">Save this sound by name, up to {MAX_USER_PRESETS}.</p>
+        </div>
+        {naming ? null : (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="-mr-2 min-h-11 shrink-0 gap-1.5 rounded-full px-3 text-sm font-medium"
+            disabled={disabled || full}
+            onClick={() => open({ kind: "new" })}
+            aria-label={full ? undefined : "Save current sound"}
+            data-testid="sound-save-preset"
+          >
+            {full ? (
+              "Limit reached"
+            ) : (
+              <>
+                <Plus className="size-4" aria-hidden />
+                Save
+              </>
+            )}
+          </Button>
+        )}
+      </div>
       {record.userPresets.map((preset) => (
         <div key={preset.id} className="flex min-h-11 items-center gap-2" data-testid={`sound-user-${preset.id}`}>
           <span className="min-w-0 flex-1 truncate text-sm">{preset.name}</span>
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="min-h-11 text-sm"
+            variant="ghost"
+            className="min-h-11 text-sm text-muted-foreground"
             disabled={disabled}
             onClick={() => open({ kind: "rename", id: preset.id, name: preset.name })}
             data-testid={`sound-user-${preset.id}-rename`}
@@ -60,8 +83,8 @@ export const UserPresets = ({ record, disabled }: { record: AudioProcessingRecor
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="min-h-11 text-sm"
+            variant="ghost"
+            className="min-h-11 text-sm text-muted-foreground"
             disabled={disabled}
             onClick={() => deleteUserPreset(preset.id)}
             data-testid={`sound-user-${preset.id}-delete`}
@@ -104,19 +127,7 @@ export const UserPresets = ({ record, disabled }: { record: AudioProcessingRecor
             </Button>
           </div>
         </div>
-      ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="min-h-11 w-full text-sm"
-          disabled={disabled || full}
-          onClick={() => open({ kind: "new" })}
-          data-testid="sound-save-preset"
-        >
-          {full ? "Limit reached" : "Save current sound"}
-        </Button>
-      )}
+      ) : null}
     </div>
   );
 };
