@@ -3006,6 +3006,7 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await installAudioFxMock(page);
+      await page.addInitScript(() => localStorage.setItem("c64u_playback_engine", "local"));
       await page.goto("/play");
       for (const profileId of ["compact", "medium"] as const) {
         await applyDisplayProfileViewport(page, profileId);
