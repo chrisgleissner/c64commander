@@ -14,7 +14,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Cross-platform**: Android and iOS apps, plus a self-hosted Docker web app for Windows, macOS, and Linux.
 - **Device support**: Works with the C64 Ultimate, Ultimate 64 Elite I/II, and Ultimate-II+(L) cartridges.
 - **Search**: Find any page, setting, action, tune or disk by name. Three ways in — the field at the top of Home, the Quick menu, or the `7` key. A result you cannot use yet is still listed, with the reason.
-- **Guided tour**: A first-run walk through every part of the app — playing music with nothing attached, playlists and where content comes from, disks, connecting and controlling a machine, watching and steering it, its configuration, getting around with a keypad, the built-in guides, and appearance. It drives the real app rather than showing pictures of it, and is skippable at any step and restartable from Docs or Settings > About.
+- **Guided tour**: A first-run walk through every part of the app.
 - **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
@@ -90,18 +90,13 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### No C64 Ultimate yet? The app still runs
 
-Start the app on a phone or tablet with no network connection at all — airplane mode, or Wi-Fi and
-mobile data both off — and it offers **Demo Mode**, a built-in simulated C64 Ultimate. There is no
-setting to turn on and no network scan. Choose **Continue in Demo Mode** and Home, configuration,
-disks, playback, the HVSC collection, Remote Input and Live View all work against the simulator; the
-header badge reads **Demo mode** so the simulated device is never mistaken for a real one.
+Start the app on a phone or tablet with no network connection at all and it offers **Demo Mode**, a built-in simulated C64 Ultimate. 
 
-The simulator answers the REST and FTP surfaces and streams a picture and sound for Live View. It does
-not emulate a 6502, so a program shows a demonstration screen, and SID tunes play on the phone's own
-SID engine.
+Choose **Continue in Demo Mode** and Home, configuration,
+disks, playback, the HVSC collection, Remote Input and Live View all work against the simulator.
 
 Close the offer instead, or choose **Try again** while there is still no network, and the app stays
-offline for the session. Tunes stored on the phone still play on the phone.
+offline for the session.
 
 Connect real hardware at any time from **Settings > Device > Connection**. Once the app has reached
 a real device in a session, it never falls back to the simulator.
@@ -110,9 +105,11 @@ a real device in a session, it never falls back to the simulator.
 
 ### Home
 
-Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live, Game, Input), listen (Radio, Last, Recent), operate (Menu, Pause, Backup, Restore), and last the ones that interrupt the machine: Reset, and a Power tile holding Reboot, Power Cycle and Power Off. Every tile is one word on one line, so the grid is three rows rather than four. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
+The home page is your central dashboard and offers often used controls in one place. 
 
-With nothing connected, Home does not become a wall of "Not available": search stays where it is, the promoted tiles are drawn on their own — Radio, Last and Recent need no machine at all, and Live is listed grayed out with the reason rather than hidden — a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
+It opens on an app-wide search and is followed by **Quick Actions**: watch, listen, operate, and reset or reboot your C64U.
+
+Fürther below you find LED control, CPU speed adjustments and various other useful features. 
 
 <table>
   <tr>
