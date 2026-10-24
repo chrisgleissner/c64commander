@@ -50,15 +50,6 @@ export const seekKeyStepFraction = (durationMs: number | undefined, repeat: bool
   return durationMs ? (seconds * 1000) / durationMs : SEEK_KEY_FALLBACK_FRACTION * (seconds / SEEK_STEP_SECONDS);
 };
 
-/**
- * Hold Previous/Next to scrub the current tune; tap to change track.
- *
- * The two gestures share one button, so a hold must *suppress* the click that
- * follows it — otherwise letting go after scrubbing would also skip the track,
- * which is the opposite of what the user just asked for. `seeked` stays set
- * until the next press so the click handler (which fires after pointerup) can
- * still see it.
- */
 /** Where along the bar the pointer is, as a fraction of its width. */
 const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -70,13 +61,9 @@ const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
 
 /**
- * Hold `text` in a live region, but no more often than the announcement interval.
- *
- * The pending status refreshes twice a second. Handed straight to a live region that becomes a
- * screen reader talking over itself continuously, which drowns the rest of the page and tells the
- * listener less than saying it once every few seconds would. Clearing is immediate — a wait that has
- * ended must not keep being announced — and a message held back by the throttle is said when the
- * window opens rather than dropped, so the last state of a wait is always announced.
+ * Hold `text` in a live region, but no more often than the announcement interval, so a status that
+ * refreshes twice a second does not make a screen reader talk over itself. Clearing is immediate, and
+ * a message held back by the throttle is said when the window opens rather than dropped.
  */
 const usePoliteAnnouncement = (text: string | null): string => {
   const [announcement, setAnnouncement] = useState<PoliteAnnouncement | null>(null);
@@ -133,14 +120,9 @@ const useHoldToSeek = (
       window.clearInterval(repeatTimer.current);
       repeatTimer.current = null;
     }
-    // Clear the suppression flag on the next tick — after the click that
-    // follows this pointerup has been handled, but before anything else.
-    //
-    // Leaving it set until the next press would swallow a later activation that
-    // produces no pointerdown to reset it: keyboard or keypad Enter on a focused
-    // button raises `click` alone. That is not a corner case here — the C64U
-    // Remote variant is keypad-first — and the symptom would be a Next button
-    // that silently ignores every other press.
+    // A hold suppresses the click that follows its pointerup; clear the flag on the next tick, after
+    // that click. Keeping it until the next press would swallow Enter on a keypad-first device, which
+    // raises `click` with no pointerdown to reset it.
     if (seeked.current) {
       scrubRef.current?.end?.();
       window.setTimeout(() => {
@@ -295,19 +277,7 @@ export const PlaybackTransport = memo(
     });
     return (
       <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
-        {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
-            44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
-            were, and the row stopped 33 px short of the right edge — visibly ragged against the
-            ranking pair directly above it, which is flush, and against the progress bar and the
-            metadata line, which are flush too. Distributing them puts the first and last on the
-            card's own edges, so every row of this card now starts and ends on the same two lines. */}
-        {/*
-          Centred, with only Play carrying a fill.
-          Four equally-outlined buttons spread across the row gave the card no focal point: squinted
-          at from a distance every one of them read the same, and the thing you press most was
-          indistinguishable from the three you press rarely. Play is now a filled circle and the
-          other three are ghosts, which is the media-player idiom and what the squint test rewards.
-        */}
+        {/* Centered, with only Play filled and the other three ghosts, so the most-used control stands out. */}
         <div className="flex items-center justify-center gap-1.5" data-testid="playback-transport-row">
           <Button
             ref={previousFocusRef}
@@ -415,16 +385,8 @@ export const PlaybackTransport = memo(
               </span>
             </span>
             {onSeekToFraction ? (
-              // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
-              // button so it is reachable by keyboard and by the keypad-first C64U Remote variant,
-              // where there is no pointer at all.
-              //
-              // Every pointer move is reported, and that is deliberate rather than an oversight of
-              // "never seek on a gesture sample": the handler this calls does NOT seek per sample.
-              // It moves the displayed target — which is what makes the bar follow the finger — and
-              // debounces a single seek to where the finger came to rest. Withholding the samples
-              // here would only make the bar lag the finger; the coalescing has to live where the
-              // engine is driven, and it does.
+              // A button so the keypad can reach it. Every pointer move moves the displayed target only;
+              // the handler debounces a single seek to where the finger came to rest.
               <button
                 type="button"
                 data-key-nav-horizontal=""
@@ -462,12 +424,8 @@ export const PlaybackTransport = memo(
                     className="pointer-events-none absolute inset-0 rounded-full border border-border bg-secondary"
                     data-testid="playback-track"
                   />
-                  {/* Behind the played portion, so the two read as one bar: solid where the tune has
-                      played, translucent as far as it is rendered. */}
-                  {/* Shown whenever the tune is not fully rendered — including, and especially, when
-                      rendering is BEHIND the playhead. Hiding it then was backwards: that is exactly
-                      the moment the listener needs to see the renderer catching up rather than wonder
-                      whether playback has died. */}
+                  {/* Behind the played portion: solid where played, translucent as far as rendered. Shown
+                      whenever rendering is incomplete, especially when it is behind the playhead. */}
                   {renderedPercent !== undefined && renderedPercent < 100 ? (
                     <div
                       aria-hidden

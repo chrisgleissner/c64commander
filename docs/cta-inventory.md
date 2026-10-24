@@ -401,9 +401,11 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
   collection start waits for the HVSC tune notes to download, a non-interactive status line
   `sid-radio-preparing` ("Fetching tune notes…") takes the place of the station name or the playlist
   name; Stop stays available when a station is running
-- Now playing: title — `playback-current-title` (title only; the ranking actions sit opposite it and
-  do not move when a long title truncates)
-- Now playing, two lines: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`
+- Now playing: title — `playback-current-title` (title only, across the full width of the card; a long
+  title truncates, so the line is the same height for every tune)
+- Now playing, two slots: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`.
+  Each slot is two line heights at every text size and at least 44 px, whatever the tune says, so the
+  transport below never moves; longer text is clipped and is shown in full under **About this tune**
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]` (icon-only; the accessible name carries the
   state, and on the on-device route it attenuates the samples rather than the device's volume). On the
   C64 route it sets `Vol Master` to OFF and the readout shows OFF; when the sound moves to this device
@@ -458,7 +460,7 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
 - **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying` and not on a device that cannot stream, such as a U2)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button (label **Input**, accessible name "Remote Input") — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
-- Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
+- About this tune — expand/collapse — `tune-details-toggle` — R✅ I✅ — below the progress bar and the playback order buttons, present whenever a tune is current, so changing tunes never adds or removes its row. Reveals `tune-details-body`: the full credits (`tune-details-credits`) and facts (`tune-details-facts`) lines, then the STIL entry; `tune-details-empty` when nothing is known yet. Opening it moves nothing above it
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — minimum 44px target height; tap or drag to jump within the tune; **also operable without a pointer**: it owns `ArrowLeft`/`ArrowRight` while focused (Up and Down still move the ring), which step ∓5 s per press and 15 s per key repeat; the guidance bar names OK as Seek. The new position is applied once, after the keys stop. Rendered for audio this device renders (see _Listen on_ below), and on the C64 route once the app has found the Ultimate's SID player on screen for a tune with its own play routine on a machine that takes key input (a jump there restarts the tune when it goes back, then fast forwards). Otherwise the bar is a plain indicator (`playback-progress`) and not focusable.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track; a tap still skips. Playing on this device it steps five seconds at a time. Playing on the C64 (under the same conditions as the progress bar), holding Next fast forwards with the C64's CPU speed raised one step a second, and holding Previous moves the target back 10, 20, 40, then 80 seconds a second and jumps there on release. Pointer only: a keypad OK press on either button is a tap.
 
@@ -498,13 +500,13 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
   - Keep station tunes — button — `station-queue-keep` — ends the station and keeps its queue as the playlist
   - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
   - Close — button — the dialog's header close control — leaves the station running
-- Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
+- Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(opens `sid-radio-why`, which explains the pick; it is laid over the card directly under the chip and named by the toggle's `aria-controls`, so opening it moves nothing)_
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
 - Rank the current tune: × / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
-  _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
-  in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
+  _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — beside the facts slot, above the
+  transport, in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
   same size and chrome as the transport
 - Find a tune — button (label **Find**, accessible name "Find a tune") — `hvsc-search-open` — R✅ I✅ ; sheet `hvsc-search-sheet`
   - Search box — text — `hvsc-search-input` — R✅ I✅
@@ -544,7 +546,7 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
 **Spectrum card** _(Android only: it exists only where the native plugin can analyse the phone's sound)_
 
 - Spectrum — section toggle — `play-section-toggle-spectrum` (`play-section-spectrum`) — R✅ I✅ — a
-  collapsible card above the playback controls; its state is remembered, and it is open on a first
+  collapsible card below the playback controls; opening it scrolls its body into view; its state is remembered, and it is open on a first
   visit when the tune is playing on the phone. While it is closed, off screen or the document is hidden,
   the native analyser is switched off. Its display has stable L/R output-channel meters:
   solid average level, translucent instantaneous peak, and a held peak marker on one dBFS scale,

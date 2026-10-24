@@ -2518,7 +2518,7 @@ export default function PlayFilesPage() {
     <div className={pageShellClassName}>
       <PlayDeepLinks {...deepLinkHandlers} />
       <AppBar title="Play" />
-      <PageContainer className="[overflow-anchor:none]">
+      <PageContainer>
         <PageStack>
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div className="flex flex-col gap-4" data-testid="play-primary-column">
@@ -2539,20 +2539,16 @@ export default function PlayFilesPage() {
                   // below it. Rendered in both states, and the same height in both, so that starting
                   // or stopping a station never shifts the controls underneath.
                   stationIndicator={
-                    sidRadioFlags.sidRadioEnabled
-                      ? (why) => (
-                          <SidRadioChip
-                            station={sidRadio.station}
-                            whyThisTune={sidRadioWhyThisTune}
-                            collectionProgress={sidRadio.collectionProgress}
-                            preparingCollection={sidRadio.preparingCollection}
-                            onStop={stationHandover.requestStop}
-                            externalWhy={why}
-                          />
-                        )
-                      : undefined
+                    sidRadioFlags.sidRadioEnabled ? (
+                      <SidRadioChip
+                        station={sidRadio.station}
+                        whyThisTune={sidRadioWhyThisTune}
+                        collectionProgress={sidRadio.collectionProgress}
+                        preparingCollection={sidRadio.preparingCollection}
+                        onStop={stationHandover.requestStop}
+                      />
+                    ) : undefined
                   }
-                  stationWhy={sidRadio.station ? sidRadioWhyThisTune : null}
                   stationActive={sidRadio.active}
                   rankingControls={
                     sidRadioFlags.rankingActive ? (

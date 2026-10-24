@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Repeat, Repeat1, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,34 +19,18 @@ import {
   type NowPlayingMetadataSegment,
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
-import { SidRadioWhy } from "./SidRadioChip";
 import { TuneDetails } from "./TuneDetails";
 import { PLAY_TRANSPORT_FOCUS_ORDER, PlaybackTransport } from "./PlaybackTransport";
-
-export { seekKeyStepFraction } from "./PlaybackTransport";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
   currentItemLabel: string | null;
   /**
-   * The single line under the title: composer, year, SID models, video standard, which tune, length.
-   *
-   * Built by `buildNowPlayingMetadataParts` so the order and the omission rules live in one tested
-   * place rather than in this component's JSX. Supplied as labelled parts rather than as a finished
-   * string because the composer is a control and the rest is text; joining first and splitting again
-   * here would mean guessing at where the name ended, and composer names contain the separator's
-   * neighbours often enough for that to be wrong.
+   * Credits and facts under the title, from `buildNowPlayingMetadataParts`. Labelled parts rather
+   * than one string because the composer and the tune count are controls and the rest is text.
    */
   currentItemMetadataParts?: NowPlayingMetadataSegment[];
-  /**
-   * What STIL says about this tune, where it says anything.
-   *
-   * Kept apart from `currentItemMetadata` because it is a different kind of fact. That line is the
-   * SID header — what the file declares about itself. This is the archive's editors describing the
-   * music: what this particular tune is called, who originally wrote it, and any note they left.
-   * STIL covers under a third of the archive, so all three are usually absent and the card renders
-   * exactly as it did before.
-   */
+  /** What STIL says about this tune; under a third of the archive has an entry, so usually all null. */
   stil?: {
     title: string | null;
     originalArtist: string | null;
@@ -57,12 +41,7 @@ export type PlaybackControlsCardProps = {
    * rendered for playback from a device, where the archive is not involved.
    */
   onComposerSelected?: (composer: string) => void;
-  /**
-   * Open the list of tunes in this file.
-   *
-   * The same gesture as the composer beside it: "Tune 3 of 19" states that eighteen others exist,
-   * and until now gave no way to reach any of them.
-   */
+  /** Open the list of tunes in this file ("Tune 3 of 19"). */
   onTunesSelected?: () => void;
   canTransport: boolean;
   hasPrev: boolean;
@@ -105,22 +84,11 @@ export type PlaybackControlsCardProps = {
   /** The progress bar and the time labels follow it, so the clock moving re-renders only them. */
   timeline: PlaybackTimeline;
   /**
-   * Everything shown about a seek that is waiting for the renderer, or undefined when none is.
-   *
-   * A seek past what is rendered cannot be instant — libsidplayfp cannot rewind — so playback holds
-   * while the renderer catches up. Shown explicitly and determinately, because a listener who has
-   * just dragged the bar must never be left wondering whether anything happened, and because a wait
-   * with no end in sight is indistinguishable from a fault.
+   * A seek waiting for the renderer, or undefined. libsidplayfp cannot rewind, so playback holds
+   * until the renderer catches up, and the wait is shown determinately so it never looks like a fault.
    */
   pendingSeek?: PendingSeekPresentation;
-  /**
-   * How much of the tune is already rendered, 0-100, or undefined when that is not a thing here.
-   *
-   * Only on-device playback has this: libsidplayfp cannot rewind, so reaching a position means
-   * rendering everything before it. Shown as a translucent fill behind the played portion so the
-   * listener can see how far a seek will land instantly, and see the renderer catching up when it
-   * will not.
-   */
+  /** How much of the tune is rendered, 0-100, for on-device playback only: a seek up to it lands instantly. */
   renderedPercent?: number;
   outputSelector?: ReactNode;
   volumeControls: ReactNode;
@@ -133,24 +101,18 @@ export type PlaybackControlsCardProps = {
   onRepeatChange: (value: boolean) => void;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
-  /**
-   * The line that says where the queue comes from, drawn above everything else on the card.
-   *
-   * It leads because it is context for the rest: which station (or which playlist) is producing
-   * this tune has to be readable before the tune's own details and long before the controls. The
-   * slot is expected to occupy the same height in every state, so that starting or stopping a
-   * station never moves the title or the transport underneath it.
-   */
-  stationIndicator?: (why: { expanded: boolean; onToggle: () => void }) => ReactNode;
-  /** The station's explanation, drawn below the controls when the indicator's toggle opens it. */
-  stationWhy?: string | null;
+  /** Where the queue comes from, drawn above everything else at the same height in every state. */
+  stationIndicator?: ReactNode;
   /** True while a SID Radio station drives the queue — Shuffle offers to keep its queue as a regular playlist. */
   stationActive?: boolean;
 };
 
-/** Two lines of text-sm and never fewer than the 44 px a link inside it needs; longer text is clipped with an ellipsis. */
+/** Two line heights at every text size and at least the 44 px a link inside it needs; About this tune shows any clipped text. */
 const RESERVED_METADATA_LINES =
-  "h-11 min-w-0 self-stretch break-words text-sm leading-snug text-muted-foreground !overflow-clip [overflow-clip-margin:4px]";
+  "h-[2lh] min-h-11 min-w-0 self-stretch break-words text-sm leading-snug text-muted-foreground !overflow-clip [overflow-clip-margin:4px]";
+
+const joinedText = (parts: NowPlayingMetadataSegment[]): string | null =>
+  parts.map((part) => part.text).join(NOW_PLAYING_METADATA_SEPARATOR) || null;
 
 export const PlaybackControlsCard = ({
   hasCurrentItem,
@@ -195,22 +157,12 @@ export const PlaybackControlsCard = ({
   onRepeatChange,
   rankingControls,
   stationIndicator,
-  stationWhy,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
-  const [stationWhyExpanded, setStationWhyExpanded] = useState(false);
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
-  // Credits clip the composer link's 44px target so it cannot cover the title.
 
-  /**
-   * One metadata segment, with its separator attached to its own end.
-   *
-   * The separator belongs to the segment before it so that a line break falls after the
-   * "·" rather than before it. Rendering it in front of the following segment looks the
-   * same while everything fits and strands a "·" at the start of the next line as soon as
-   * it does not, which on a 320px screen is often.
-   */
+  /** One metadata segment with its separator attached to its own end, so a wrap falls after the "·". */
   const renderMetadataPart = (part: NowPlayingMetadataSegment, index: number, hasNext: boolean) => {
     const body =
       part.kind === "author" && onComposerSelected ? (
@@ -262,17 +214,17 @@ export const PlaybackControlsCard = ({
     stopPending,
     stopping,
     canPause,
-    onPrevious: useStableCallback(onPrevious) as () => void,
-    onPlay: useStableCallback(onPlay) as () => void,
-    onStop: useStableCallback(onStop) as () => void,
-    onPauseResume: useStableCallback(onPauseResume) as () => void,
-    onNext: useStableCallback(onNext) as () => void,
-    onSeek: useStableCallback(onSeek),
-    onScrubStart: useStableCallback(onScrubStart),
-    onScrubStep: useStableCallback(onScrubStep),
-    onScrubEnd: useStableCallback(onScrubEnd),
+    onPrevious: useStableCallback(onPrevious, "onPrevious"),
+    onPlay: useStableCallback(onPlay, "onPlay"),
+    onStop: useStableCallback(onStop, "onStop"),
+    onPauseResume: useStableCallback(onPauseResume, "onPauseResume"),
+    onNext: useStableCallback(onNext, "onNext"),
+    onSeek: useStableCallback(onSeek, "onSeek"),
+    onScrubStart: useStableCallback(onScrubStart, "onScrubStart"),
+    onScrubStep: useStableCallback(onScrubStep, "onScrubStep"),
+    onScrubEnd: useStableCallback(onScrubEnd, "onScrubEnd"),
     isScrubbing,
-    onSeekToFraction: useStableCallback(onSeekToFraction),
+    onSeekToFraction: useStableCallback(onSeekToFraction, "onSeekToFraction"),
     seekDurationMs,
     timeline,
     pendingSeek,
@@ -294,10 +246,7 @@ export const PlaybackControlsCard = ({
 
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
-      {stationIndicator?.({
-        expanded: stationWhyExpanded,
-        onToggle: () => setStationWhyExpanded((value) => !value),
-      })}
+      {stationIndicator}
       <div
         className="grid w-full grid-cols-[minmax(0,1fr)_max-content_max-content] items-center gap-x-2"
         data-testid="playback-current-track"
@@ -305,18 +254,8 @@ export const PlaybackControlsCard = ({
         <div className="col-span-3 mb-0.5 flex h-6 items-center overflow-clip text-xs text-muted-foreground">
           {hasCurrentItem ? (
             <>
-              {/* The title now has the full width of the card to itself.
-
-                It is still truncated rather than wrapped, so the card is exactly as tall for a
-                forty-character HVSC name as for a short one and nothing below it — the metadata, the
-                transport — moves between tunes. Truncation here is `text-overflow`, so the whole name
-                is still in the document and is what a screen reader reads and what a pointer sees as
-                the tooltip.
-
-                The title starts at the left edge of the card, level with the metadata line under it.
-                There used to be a small file-origin glyph in front of it, which indented it by its
-                own width and left the two lines misaligned; where an item came from is in its
-                playlist menu under Details. */}
+              {/* Truncated, not wrapped, so a long name never changes the card's height; the full name stays
+                  in the document for screen readers and as the tooltip. */}
               <div className="flex w-full flex-nowrap items-center">
                 <span
                   className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
@@ -331,39 +270,25 @@ export const PlaybackControlsCard = ({
             "Select a playlist item to start"
           )}
         </div>
-        {/* Credits and facts belong immediately below the title, before the transport. */}
         <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
-          {/* Two metadata lines, and the actions sit on the second one rather than on a row of
-                their own.
-
-                Credits first - the author and the HVSC `released` value, which is one field
-                holding both year and publisher and is printed whole. Then the facts: chip, video
-                standard, which tune of how many, and how long. On a 320px screen that is the
-                difference between three rows and two, and the row the actions used to occupy was
-                otherwise empty.
-
-                Each segment carries its own trailing separator inside a nowrap span, so a wrap
-                happens after the separator rather than before it. Putting the separator in front
-                of the following segment reads the same on one line but leaves a stranded "·" at
-                the start of the next one as soon as the line is too narrow. */}
+          {/* Credits, then facts with the ranking actions beside them. Each segment carries its own
+              trailing separator, so a wrap never strands a "·" at the start of a line. */}
           <p
             className={cn(RESERVED_METADATA_LINES, "col-span-3 mb-1 line-clamp-2")}
             data-testid="playback-current-credits"
-            title={creditsParts.map((part) => part.text).join(" · ") || undefined}
+            title={joinedText(creditsParts) ?? undefined}
           >
             {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
           </p>
           <div className="contents">
-            {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
-                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
+            {/* The 4px clip margin keeps the keypad ring around the tunes link visible. */}
             <p
               className={cn(RESERVED_METADATA_LINES, "line-clamp-2")}
               data-testid="playback-current-facts"
-              title={factsParts.map((part) => part.text).join(" · ") || undefined}
+              title={joinedText(factsParts) ?? undefined}
             >
               {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
             </p>
-            {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
             {rankingControls ? (
               <div className="col-span-2 self-start" data-testid="playback-ranking-row">
                 {rankingControls}
@@ -432,13 +357,14 @@ export const PlaybackControlsCard = ({
             </Button>
           </div>
         </div>
-        {stationWhyExpanded && stationWhy ? (
-          <div className="col-span-3 min-w-0">
-            <SidRadioWhy text={stationWhy} />
-          </div>
-        ) : null}
         <div className="col-span-3 min-w-0">
-          <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
+          <TuneDetails
+            available={hasCurrentItem}
+            credits={joinedText(creditsParts)}
+            facts={joinedText(factsParts)}
+            tuneLine={stilTuneLine}
+            note={stil?.note ?? null}
+          />
         </div>
       </div>
     </div>

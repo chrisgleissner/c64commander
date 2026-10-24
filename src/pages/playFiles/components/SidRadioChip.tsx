@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ListMusic, Radio } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,19 +26,7 @@ export type SidRadioChipProps = {
   /** A collection start is waiting for the HVSC tune notes to download. */
   preparingCollection?: boolean;
   onStop: () => void;
-  /**
-   * Supplied when the explanation is drawn elsewhere, by `SidRadioWhy`, so that opening it cannot
-   * push the controls down. Without it the chip keeps its own state and draws the explanation under
-   * the row.
-   */
-  externalWhy?: { expanded: boolean; onToggle: () => void };
 };
-
-export const SidRadioWhy = ({ text }: { text: string }) => (
-  <p className="pb-2 text-xs text-muted-foreground" data-testid="sid-radio-why">
-    {text}
-  </p>
-);
 
 /** One-line provenance for the tune a station is playing. */
 export const whyThisTuneFor = (station: ActiveStation): string => {
@@ -106,16 +94,14 @@ export const SidRadioChip = ({
   collectionProgress = null,
   preparingCollection = false,
   onStop,
-  externalWhy,
 }: SidRadioChipProps) => {
-  const [ownExpanded, setOwnExpanded] = useState(false);
-  const expanded = externalWhy ? externalWhy.expanded : ownExpanded;
-  const toggleWhy = externalWhy ? externalWhy.onToggle : () => setOwnExpanded((value) => !value);
+  const [expanded, setExpanded] = useState(false);
+  const whyId = useId();
   const friendlyNames = useFriendlySidNames();
 
   return (
     <div
-      className="flex w-full flex-col border-b border-border"
+      className="relative flex w-full flex-col border-b border-border"
       data-testid="now-playing-source"
       data-station-active={station ? "true" : "false"}
     >
@@ -127,7 +113,8 @@ export const SidRadioChip = ({
               className="flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
               data-testid="sid-radio-chip-toggle"
               aria-expanded={expanded}
-              onClick={toggleWhy}
+              aria-controls={whyId}
+              onClick={() => setExpanded((value) => !value)}
             >
               <Radio className="h-4 w-4 shrink-0 text-primary" />
               {preparingCollection ? (
@@ -162,10 +149,15 @@ export const SidRadioChip = ({
               Stop
             </Button>
           </div>
-          {!externalWhy && expanded && whyThisTune ? (
-            <div className="pl-6">
-              <SidRadioWhy text={whyThisTune} />
-            </div>
+          {/* Laid over the card under the chip rather than in the flow, so opening it moves nothing. */}
+          {expanded && whyThisTune ? (
+            <p
+              id={whyId}
+              className="absolute inset-x-0 top-full z-10 rounded-b-md border border-t-0 border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-md"
+              data-testid="sid-radio-why"
+            >
+              {whyThisTune}
+            </p>
           ) : null}
         </div>
       ) : (

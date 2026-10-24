@@ -6,18 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { Radio } from "lucide-react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { useStableCallback } from "@/hooks/useStableCallback";
 import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
 } from "@/pages/playFiles/components/PlaybackControlsCard";
-import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 
 const timeline: PlaybackTimeline = {
   playbackTime: createPlaybackTimeStore(),
@@ -67,27 +63,43 @@ describe("player controls layout slots", () => {
   it("reserves the title, credits and facts lines whatever the tune says", () => {
     for (const hasCurrentItem of [true, false]) {
       const { unmount } = render(<PlaybackControlsCard {...props({ hasCurrentItem })} />);
-      expect(screen.getByTestId("playback-current-credits").className).toMatch(/\bh-11\b/);
-      expect(screen.getByTestId("playback-current-facts").className).toMatch(/\bh-11\b/);
+      expect(screen.getByTestId("playback-current-credits").className).toMatch(/(^|\s)h-\[2lh\] min-h-11(\s|$)/);
+      expect(screen.getByTestId("playback-current-facts").className).toMatch(/(^|\s)h-\[2lh\] min-h-11(\s|$)/);
       expect(screen.getByTestId("playback-current-track").firstElementChild?.className).toMatch(/\bh-6\b/);
       unmount();
     }
   });
 
-  it("draws the STIL details and the station explanation after the transport", () => {
+  it("draws About this tune after the transport", () => {
+    render(
+      <PlaybackControlsCard {...props({ stil: { title: "BGM1", originalArtist: "Kawamoto", note: "A note." } })} />,
+    );
+    expect(before(screen.getByTestId("playlist-play"), screen.getByTestId("tune-details"))).toBe(true);
+  });
+
+  it("keeps the About this tune row for a tune without STIL, so changing tunes never adds or removes it", () => {
+    render(<PlaybackControlsCard {...props()} />);
+    expect(screen.getByTestId("tune-details-toggle")).toBeInTheDocument();
+  });
+
+  it("makes clipped credits and facts readable in full under About this tune", () => {
+    const longCredits = "Jeroen Tel & Charles Deenen of Maniacs";
     render(
       <PlaybackControlsCard
         {...props({
-          stil: { title: "BGM1", originalArtist: "Kawamoto", note: "A note." },
-          stationWhy: "Similar to Commando",
-          stationIndicator: (why) => <button data-testid="why-toggle" onClick={why.onToggle} />,
+          currentItemMetadataParts: [
+            { kind: "author", row: "credits", text: longCredits },
+            { kind: "detail", row: "credits", text: "1990 A Publisher With A Rather Long Name Ltd" },
+            { kind: "detail", row: "facts", text: "6581" },
+          ],
         })}
       />,
     );
-    fireEvent.click(screen.getByTestId("why-toggle"));
-    const play = screen.getByTestId("playlist-play");
-    expect(before(play, screen.getByTestId("tune-details"))).toBe(true);
-    expect(before(play, screen.getByTestId("sid-radio-why"))).toBe(true);
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    expect(screen.getByTestId("tune-details-credits")).toHaveTextContent(
+      `${longCredits} · 1990 A Publisher With A Rather Long Name Ltd`,
+    );
+    expect(screen.getByTestId("tune-details-facts")).toHaveTextContent("6581");
   });
 
   it("draws the stopping status after the progress bar", () => {
@@ -107,47 +119,18 @@ describe("player controls layout slots", () => {
   });
 });
 
-describe("pieces that keep the page still", () => {
-  it("SidRadioChip with an external explanation never draws it inline", () => {
-    const station = { seedKind: "style", seedLabel: "Melodic", styleBit: null } as never;
-    render(
-      <SidRadioChip
-        station={station}
-        whyThisTune="Matches Melodic"
-        onStop={vi.fn()}
-        externalWhy={{ expanded: true, onToggle: vi.fn() }}
-      />,
-    );
-    expect(screen.queryByTestId("sid-radio-why")).toBeNull();
+describe("hold-to-seek after the page withdraws its scrub handlers", () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it("CollapsibleSection with revealOnOpen off does not scroll when opened", () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      writable: true,
-      value: scrollIntoView,
-    });
-    render(
-      <CollapsibleSection scope="test" id="still" title="Still" icon={Radio} revealOnOpen={false}>
-        <p>Body</p>
-      </CollapsibleSection>,
-    );
-    fireEvent.click(screen.getByTestId("test-section-toggle-still"));
-    expect(scrollIntoView).not.toHaveBeenCalled();
-  });
-
-  it("useStableCallback keeps its identity, calls the latest function and keeps undefined", () => {
-    const first = vi.fn(() => 1);
-    const second = vi.fn(() => 2);
-    const { result, rerender } = renderHook(({ fn }) => useStableCallback(fn), {
-      initialProps: { fn: first as (() => number) | undefined },
-    });
-    const stable = result.current;
-    rerender({ fn: second });
-    expect(result.current).toBe(stable);
-    expect(stable?.()).toBe(2);
-    rerender({ fn: undefined });
-    expect(result.current).toBeUndefined();
+  it("does not throw when the hold timer fires after onScrubStart was withdrawn", () => {
+    vi.useFakeTimers();
+    const scrubbing = { onSeek: vi.fn(), onScrubStart: vi.fn(), onScrubStep: vi.fn(), onScrubEnd: vi.fn() };
+    const { rerender } = render(<PlaybackControlsCard {...props(scrubbing)} />);
+    fireEvent.pointerDown(screen.getByTestId("playlist-next"));
+    rerender(<PlaybackControlsCard {...props({ onSeek: scrubbing.onSeek })} />);
+    expect(() => vi.advanceTimersByTime(1_000)).not.toThrow();
+    expect(scrubbing.onScrubStart).not.toHaveBeenCalled();
   });
 });

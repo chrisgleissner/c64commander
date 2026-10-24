@@ -46,8 +46,6 @@ export interface CollapsibleSectionProps {
    * of the page (open on a small one) - see each call site for which it is. Left unset, the
    * display profile decides: closed on the smallest screen, open where there is room. */
   defaultOpen?: boolean;
-  /** Scroll the section into view after the user opens it. Off where the page above must stay still. */
-  revealOnOpen?: boolean;
   /** Shown beside the title - a count, a state, or a warning that must be visible while closed. */
   badge?: ReactNode;
   /** Forwarded to the toggle button, for a caller that registers the header with the keypad
@@ -115,7 +113,6 @@ export const CollapsibleSection = ({
   summary,
   icon: Icon,
   defaultOpen,
-  revealOnOpen = true,
   badge,
   headerRef,
   actions,
@@ -251,7 +248,7 @@ export const CollapsibleSection = ({
    */
   const revealExpanded = useCallback(() => {
     // AnimatePresence also reports the EXIT animation as complete; collapsing must not scroll.
-    if (!open || !revealOnOpen) return;
+    if (!open) return;
     // Only an explicit toggle scrolls. A `defaultOpen` card reports its open animation complete on
     // MOUNT, so without this the page scrolled itself down the moment it loaded — measured as the
     // first content block sitting 201 px above the header's bottom.
@@ -260,7 +257,7 @@ export const CollapsibleSection = ({
     const element = sectionRef.current;
     if (!element || typeof element.scrollIntoView !== "function") return;
     element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  }, [open, revealOnOpen]);
+  }, [open]);
 
   // Search and the tour land on a control inside a card, so the card has to be open first. Scoped
   // to this one id: every other card on the page keeps whatever the user set.

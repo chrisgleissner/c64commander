@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadata";
 import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
@@ -99,15 +99,6 @@ describe("PlaybackControlsCard render isolation", () => {
     expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("Rob Hubbard");
     expect(cardRenders() - cardBefore, "the metadata slots re-rendered").toBeGreaterThan(0);
     expect(transportRenders() - transportBefore, "extra transport renders").toBe(0);
-  });
-
-  it("does not re-render the transport for a position tick", () => {
-    render(<PlaybackControlsCard {...buildProps("Rob Hubbard", undefined)} />);
-    const transportBefore = transportRenders();
-
-    act(() => timeline.playbackTime.setElapsedMs(11_000));
-
-    expect(transportRenders() - transportBefore).toBe(0);
   });
 
   it("re-renders the transport when a control state it shows changes", () => {

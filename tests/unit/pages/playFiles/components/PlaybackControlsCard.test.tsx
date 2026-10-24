@@ -320,7 +320,7 @@ describe("PlaybackControlsCard", () => {
             hasCurrentItem: true,
             currentItemLabel: "Commando",
             stationActive,
-            stationIndicator: () => <div data-testid="station-indicator-slot" />,
+            stationIndicator: <div data-testid="station-indicator-slot" />,
           })}
         />,
       );
@@ -983,7 +983,7 @@ describe("PlaybackControlsCard STIL and composer", () => {
     expect(screen.getByTestId("tune-notes-text")).toHaveTextContent("Devil's Gallop");
   });
 
-  it("adds nothing for the majority of the archive, which STIL does not describe", () => {
+  it("shows no STIL line or note for the majority of the archive, which STIL does not describe", () => {
     render(
       <PlaybackControlsCard
         {...buildProps({
@@ -994,8 +994,8 @@ describe("PlaybackControlsCard STIL and composer", () => {
         })}
       />,
     );
-    expect(screen.queryByTestId("tune-details")).toBeNull();
-    expect(screen.queryByTestId("tune-details-toggle")).toBeNull();
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    expect(screen.getByTestId("tune-details-credits")).toHaveTextContent("Rob Hubbard");
     expect(screen.queryByTestId("playback-current-stil")).toBeNull();
     expect(screen.queryByTestId("tune-notes")).toBeNull();
   });

@@ -22,7 +22,8 @@ import { PLAYBACK_SESSION_KEY, SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/
  * A requestAnimationFrame sampler records the exact bounding box of the transport buttons, the
  * progress bar and the time labels on every frame, from before an interaction until 500 ms after
  * the page has settled. Every sample must equal the first one exactly: no tolerance, because a
- * single pixel of movement is the defect.
+ * single pixel of movement is the defect. A control that is off screen both before and after is not
+ * seen to move, so only movement on screen, or onto or off it, counts.
  */
 
 const MONITORED = [
@@ -139,10 +140,7 @@ const seed = async (
         );
       }
       const w = window as unknown as Record<string, unknown>;
-      // STIL arrives late, as it does when the shard has to be read.
-      const stilMock = new Proxy(stilEntries as Record<string, unknown>, {});
-      w.__stilMock__ = stilMock;
-      w.__playerStableDelayMs = delay;
+      w.__stilMock__ = stilEntries;
       const state = { installedVersion: 84, ingestionState: "ready" };
       const status = () => ({
         installedBaselineVersion: 84,
@@ -157,6 +155,7 @@ const seed = async (
           songlengthSyntaxErrors: 0,
         },
       });
+      // Each tune's file, and with it the SID header, arrives late, as it does when it has to be read.
       const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
       w.__hvscMock__ = {
         addListener: () => ({ remove: async () => {} }),
@@ -229,29 +228,39 @@ const seed = async (
   );
 };
 
-type Box = { x: number; y: number; width: number; height: number };
+type Box = { x: number; y: number; width: number; height: number; onScreen: boolean };
 type Frame = Record<string, Box | null>;
 
-const installSampler = async (page: Page) => {
+const installSampler = async (page: Page, ids: readonly string[] = MONITORED) => {
   await page.evaluate(
     (ids) => {
       const w = window as unknown as {
         __frames?: Record<string, Box | null>[];
         __sampling?: boolean;
+        __sampledIds?: string[];
       };
       w.__frames = [];
       w.__sampling = false;
+      const installed = w.__sampledIds !== undefined;
+      w.__sampledIds = ids;
+      if (installed) return;
       const read = () => {
         const frame: Record<string, Box | null> = {};
         const root = document.querySelector('[data-slot-active="true"]') ?? document;
-        for (const id of ids) {
+        for (const id of w.__sampledIds!) {
           const element = root.querySelector(`[data-testid="${id}"]`);
           if (!element) {
             frame[id] = null;
             continue;
           }
           const rect = element.getBoundingClientRect();
-          frame[id] = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+          frame[id] = {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            onScreen: rect.bottom > 0 && rect.top < window.innerHeight,
+          };
         }
         return frame;
       };
@@ -261,7 +270,7 @@ const installSampler = async (page: Page) => {
       };
       requestAnimationFrame(tick);
     },
-    MONITORED as unknown as string[],
+    [...ids],
   );
 };
 
@@ -284,10 +293,10 @@ type Movement = { id: string; frame: number; dx: number; dy: number; dw: number;
 const firstMovements = (reference: Frame, frames: Frame[]): Movement[] => {
   const moved = new Map<string, Movement>();
   frames.forEach((frame, index) => {
-    for (const id of [...MONITORED, "scrollTop"]) {
+    for (const id of Object.keys(reference)) {
       const a = reference[id];
       const b = frame[id];
-      if (!a || !b) continue;
+      if (!a || !b || (!a.onScreen && !b.onScreen)) continue;
       if (a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height) continue;
       const previous = moved.get(id);
       const movement = {
@@ -352,7 +361,16 @@ const titleOf = async (page: Page) =>
   (await activeSlot(page).getByTestId("playback-current-title").textContent()) ?? "";
 
 const dismissToasts = async (page: Page) => {
-  for (const close of await page.getByTestId("app-toast-close").all()) await close.click().catch(() => undefined);
+  const closes = page.getByTestId("app-toast-close");
+  for (let remaining = await closes.count(); remaining > 0; remaining = await closes.count()) {
+    await closes
+      .first()
+      .click({ timeout: 2_000 })
+      .catch(async (error: unknown) => {
+        // A toast that times out on its own while being clicked is gone, which is all this wants.
+        if ((await closes.count()) >= remaining) throw error;
+      });
+  }
 };
 
 const documentPositionOfPlay = (page: Page) =>
@@ -462,9 +480,24 @@ test.describe("Player controls stay put", () => {
       for (const key of ["m15", "m30", "off"]) {
         await click(`sleep timer ${key}`, slot.getByTestId(`sleep-timer-${key}`));
       }
-      const spectrumHeader = slot.getByTestId("play-section-spectrum").locator("button[aria-expanded]").first();
-      await click("spectrum toggle", spectrumHeader);
-      await click("spectrum toggle back", spectrumHeader);
+    });
+
+    test(`opening the spectrum card shows its body and leaves the controls where they are in the page (${label})`, async ({
+      page,
+    }) => {
+      await open(page);
+      const slot = activeSlot(page);
+      const header = slot.getByTestId("play-section-spectrum").locator("button[aria-expanded]").first();
+      if ((await header.getAttribute("aria-expanded")) === "true") await header.click();
+      await expect(header).toHaveAttribute("aria-expanded", "false");
+      const playInPage = await documentPositionOfPlay(page);
+      await header.scrollIntoViewIfNeeded();
+      await header.click();
+      await expect(slot.getByTestId("spectrum-panel"), "the spectrum body is scrolled into view").toBeInViewport();
+      expect(await documentPositionOfPlay(page), "play button position in the page").toBe(playInPage);
+      await header.click();
+      await expect(slot.getByTestId("spectrum-panel")).toHaveCount(0);
+      expect(await documentPositionOfPlay(page), "play button position in the page after closing").toBe(playInPage);
     });
 
     test(`a running SID Radio station, its explanation and stopping it (${label})`, async ({ page }) => {
@@ -472,10 +505,43 @@ test.describe("Player controls stay put", () => {
       const slot = activeSlot(page);
       await expect(slot.getByTestId("sid-radio-chip")).toBeVisible({ timeout: 10_000 });
       await clickAndExpectUnmoved(page, "open station explanation", slot.getByTestId("sid-radio-chip-toggle"));
+      await expect(slot.getByTestId("sid-radio-why"), "the explanation opens on screen").toBeInViewport();
       await clickAndExpectUnmoved(page, "close station explanation", slot.getByTestId("sid-radio-chip-toggle"));
+      await expect(slot.getByTestId("sid-radio-why")).toHaveCount(0);
       await slot.getByTestId("playlist-next").dispatchEvent("click");
       await clickAndExpectUnmoved(page, "stop station", slot.getByTestId("sid-radio-stop"));
       await expect(slot.getByTestId("sid-radio-chip")).toHaveCount(0);
+    });
+
+    test(`playlist rows stay put while tunes change above them (${label})`, async ({ page }) => {
+      await open(page);
+      const slot = activeSlot(page);
+      await slot.getByTestId("playlist-play").dispatchEvent("click");
+      await expect(slot.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop", { timeout: 20_000 });
+      await dismissToasts(page);
+      await slot
+        .getByTestId("playlist-item")
+        .first()
+        .evaluate((row) => row.scrollIntoView({ block: "start" }));
+      await page.waitForTimeout(300);
+      await installSampler(page, ["playlist-item"]);
+      const reference = await currentFrame(page);
+      const problems: string[] = [];
+      for (let step = 0; step < TUNES.length - 1; step += 1) {
+        // Rows above the playlist, such as Play all N tunes, still come and go between tunes. Scroll
+        // anchoring compensates, but Chrome rounds that adjustment to whole pixels, which leaves a
+        // remainder under one pixel at the larger text sizes; a row that jumps moves by its height.
+        const movements = (
+          await watch(page, reference, () => slot.getByTestId("playlist-next").dispatchEvent("click"))
+        ).filter((m) => m.dx !== 0 || Math.abs(m.dy) >= 1);
+        if (movements.length) {
+          problems.push(
+            `next #${step + 1} -> "${await titleOf(page)}": ${movements.map((m) => `dy=${m.dy}`).join(" ")}`,
+          );
+        }
+        await dismissToasts(page);
+      }
+      expect(problems, `${label}: playlist rows moved`).toEqual([]);
     });
 
     test(`an error toast appearing and being dismissed (${label})`, async ({ page }) => {

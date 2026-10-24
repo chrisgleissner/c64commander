@@ -47,6 +47,18 @@ describe("SidRadioChip", () => {
     expect(screen.getByTestId("sid-radio-why")).toHaveTextContent("similar to Commando");
   });
 
+  it("lays the explanation over the card under the chip, out of flow, and names it as what the toggle controls", () => {
+    render(<SidRadioChip station={songStation} whyThisTune="similar to Commando" onStop={vi.fn()} />);
+    const toggle = screen.getByTestId("sid-radio-chip-toggle");
+    fireEvent.click(toggle);
+    const why = screen.getByTestId("sid-radio-why");
+    expect(why.className).toMatch(/(^|\s)absolute(\s|$)/);
+    expect(why.className).toMatch(/(^|\s)top-full(\s|$)/);
+    expect(screen.getByTestId("now-playing-source").className).toMatch(/(^|\s)relative(\s|$)/);
+    expect(why.id).not.toBe("");
+    expect(toggle).toHaveAttribute("aria-controls", why.id);
+  });
+
   /**
    * This row leads the Now Playing card, so it exists in both states and is the same height in
    * both. If it only appeared during a station, starting one would push the title, the transport

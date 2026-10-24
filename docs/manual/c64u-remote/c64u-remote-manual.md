@@ -620,7 +620,7 @@ Radio keeps at most **200 automatically queued tunes**, including the current tu
 
 While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Repeat** cycles **off → playlist → tune → off**: playlist wraps the retained queue if it runs out, and tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if Repeat was on.
 
-The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
+The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, shown just below it, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
 
 A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.
 
@@ -650,7 +650,7 @@ To pick just one, tap that **1/19**. You see every tune in the file with its num
 
 The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune is playing, and its length. Anything the file does not record is left out, never guessed. Tap the composer's name, and search opens with that name filled in.
 
-The archive's editors have written down two more things a SID file cannot hold. You find them under **About this tune**, below that line, for about a third of the tunes. It starts folded, so the transport and progress bar stay on screen; tap it to open or close it.
+That text has room for four rows: two for the composer, year and publisher, and two for the rest. Anything longer is cut short, and **About this tune**, below the transport and the progress bar, shows all of it. The archive's editors have also written down two more things a SID file cannot hold, for about a third of the tunes, and you find those there too. It starts folded; tap it to open or close it. Nothing above it moves when it opens.
 
 The first is whose music a tune really is. Much C64 music is a cover of a pop record, a film score or an arcade original, and the file names only whoever wrote the C64 version.
 
@@ -1187,9 +1187,9 @@ The best place to look is listed first, in bold.
 | Create a blank disk | **Disks → New disk** | On by default. Turn it off under **New disk** in Settings → Stable Features. |
 | Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings → Play and disk** | On by default. Turn it off under **Launch Safety** in Settings → Stable Features. |
 | Live View (hear and see the machine) | **Home → Live View**, Play, Remote Input | On by default. Turn it off under **Live View** in Settings → Stable Features. |
-| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Audio Mirror** in Settings → Experimental Features. |
-| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Video Mirror** in Settings → Experimental Features. |
-| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. Turn it off under **A/V sync tests** in Settings → Experimental Features. |
+| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Audio Mirror** in Settings → Stable Features. |
+| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Video Mirror** in Settings → Stable Features. |
+| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. Turn it off under **A/V sync tests** in Settings → Stable Features. |
 | Advanced config file actions | **Home → Config** | Off to begin with. Turn it on under **Home advanced config actions** in Settings → Experimental Features. |
 | Advanced drive shortcuts | **Home → Drives** | Off to begin with. Turn it on under **Home drive shortcut actions** in Settings → Experimental Features. |
 | Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on under **Home printer shortcut actions** in Settings → Experimental Features. |
@@ -1202,7 +1202,7 @@ The best place to look is listed first, in bold.
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
 | Demo Mode | **Settings → Connection** | On by default. Turn it off under **Demo Mode** in Settings → Stable Features. Offered when there is no network (see Starting With No Network), and when no C64 Ultimate answers; **Automatic Demo Mode**, in the same section, turns that second offer off. **Preview Demo Mode**, in the same section, switches to it at any time, and **Use the simulated device** appears behind the connectivity badge whenever the app is offline. |
-| Background playback scheduling | **Play**, Android app permissions | On by default. Turn it off under **Background execution** in Settings → Experimental Features. |
+| Background playback scheduling | **Play**, Android app permissions | On by default. Turn it off under **Background execution** in Settings → Stable Features. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the compact profile, the smallest screen the app supports. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
@@ -1215,7 +1215,7 @@ The best place to look is listed first, in bold.
 
 ### Keyboard and Directional Input Reference
 
-On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
+On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Stable Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
 While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 
