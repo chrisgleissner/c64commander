@@ -692,39 +692,43 @@ Open and close the card from its header. While it is closed, or you are on anoth
 
 The **Sound** card on Play changes how the sound from your phone is played, so you hear the effect while you adjust it. It starts as **Original**: nothing is changed.
 
-**Quick changes, with the card closed**
+**The closed card**
 
-- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks.
-- Use the arrows beside the row to step to the next or previous ambiance.
-- **Back to previous sound** switches between the last two sounds.
+- Closed, the card is one row: its name, the active sound, for example **Late night**, and the **On/Off** switch. It reads **Off** while the switch is off.
 - The **On/Off** switch compares the effect with the original. Your settings stay as they are.
+- Tap the row to open the card.
+
+**Ambiance**
+
+- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks, and the card takes the ambiance's color.
+- Use the arrows beside the row to step to the next or previous ambiance.
+- **Previous** switches between the last two sounds.
 - After you change a setting by hand, the card shows **Custom**.
 
 ![The Sound card with its tone curve](../../img/app/play/sound/profiles/compact/01-sound.png)
 
-**The tone curve, with the card open**
+**The tone curve**
 
-- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
-- Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
-- The line is the true response of the sound filters and always passes through the points. If a point cannot reach where you dragged it, it stays on the line at the value it reaches.
+- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB. The scale on the left shows the gain.
+- Drag a point up or down. The point nearest your finger changes; the others stay. The line runs smoothly through every point.
+- Each point shows the level the sound filters actually reach at its frequency. If a point cannot reach where you dragged it, it stays at the value it reaches.
 - The line above the plot names the point, for example **1 kHz, +3 dB**.
-- **Reset** or a double tap puts the curve back to flat.
+- A double tap on a point puts it back to 0 dB. The round-arrow button beside the readout puts the whole curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
 
 **With the keypad**
 
-- Left and right choose a point.
-- OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing.
+- Left and right choose a point. OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing. A short reminder appears under the curve while you use the keys.
+- On **Stereo width** and **Reverb**, left and right jump from one setting to the next; hold the key to move in small steps.
 
 **More options**
 
 - **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening.
-- **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers.
-- **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
-- **Fine tune** under Stereo width and Reverb sets an exact amount.
+- **Stereo width** spreads the SID's single channel across both speakers. Drag the slider, or tap **Off**, **Subtle** or **Wide** below it. The slider settles on a setting when you let go near it, and stays where you leave it otherwise.
+- **Reverb** adds the sound of a space, with the settings **Off**, **Room** and **Hall**, and works the same way.
 - **My sounds** saves the current sound under a name. You can keep five, and rename or delete them. The built-in sounds cannot be changed.
 
-The card applies to tunes played on your phone and to your C64's sound when Live View plays it here. While your C64 itself plays the sound, the card says so and its controls are switched off.
+The card applies to tunes played on your phone and to your C64's sound when Live View plays it here. While only your C64 plays the sound, including when **Listen on** is set to the C64, the card says so and its controls are switched off.
 
 **Settings → Sound** shows the current sound and opens the card.
 
@@ -1270,39 +1274,43 @@ Open and close the card from its header. While it is closed, or you are on anoth
 
 The **Sound** card on Play changes how the sound from your phone is played, so you hear the effect while you adjust it. It starts as **Original**: nothing is changed.
 
-**Quick changes, with the card closed**
+**The closed card**
 
-- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks.
-- Use the arrows beside the row to step to the next or previous ambiance.
-- **Back to previous sound** switches between the last two sounds.
+- Closed, the card is one row: its name, the active sound, for example **Late night**, and the **On/Off** switch. It reads **Off** while the switch is off.
 - The **On/Off** switch compares the effect with the original. Your settings stay as they are.
+- Tap the row to open the card.
+
+**Ambiance**
+
+- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks, and the card takes the ambiance's color.
+- Use the arrows beside the row to step to the next or previous ambiance.
+- **Previous** switches between the last two sounds.
 - After you change a setting by hand, the card shows **Custom**.
 
 ![The Sound card with its tone curve](../../img/app/play/sound/profiles/compact/01-sound.png)
 
-**The tone curve, with the card open**
+**The tone curve**
 
-- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
-- Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
-- The line is the true response of the sound filters and always passes through the points. If a point cannot reach where you dragged it, it stays on the line at the value it reaches.
+- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB. The scale on the left shows the gain.
+- Drag a point up or down. The point nearest your finger changes; the others stay. The line runs smoothly through every point.
+- Each point shows the level the sound filters actually reach at its frequency. If a point cannot reach where you dragged it, it stays at the value it reaches.
 - The line above the plot names the point, for example **1 kHz, +3 dB**.
-- **Reset** or a double tap puts the curve back to flat.
+- A double tap on a point puts it back to 0 dB. The round-arrow button beside the readout puts the whole curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
 
 **With the keypad**
 
-- Left and right choose a point.
-- OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing.
+- Left and right choose a point. OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing. A short reminder appears under the curve while you use the keys.
+- On **Stereo width** and **Reverb**, left and right jump from one setting to the next; hold the key to move in small steps.
 
 **More options**
 
 - **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening.
-- **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers.
-- **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
-- **Fine tune** under Stereo width and Reverb sets an exact amount.
+- **Stereo width** spreads the SID's single channel across both speakers. Drag the slider, or tap **Off**, **Subtle** or **Wide** below it. The slider settles on a setting when you let go near it, and stays where you leave it otherwise.
+- **Reverb** adds the sound of a space, with the settings **Off**, **Room** and **Hall**, and works the same way.
 - **My sounds** saves the current sound under a name. You can keep five, and rename or delete them. The built-in sounds cannot be changed.
 
-The card applies to tunes played on your phone and to your C64's sound when Live View plays it here. While your C64 itself plays the sound, the card says so and its controls are switched off.
+The card applies to tunes played on your phone and to your C64's sound when Live View plays it here. While only your C64 plays the sound, including when **Listen on** is set to the C64, the card says so and its controls are switched off.
 
 **Settings → Sound** shows the current sound and opens the card.
 
