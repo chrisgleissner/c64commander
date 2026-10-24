@@ -2001,7 +2001,6 @@ export const HomeDiskManager = () => {
                   title={driveLabel}
                   titleVariants={driveCardTitleVariants(driveLabel)}
                   icon={HardDrive}
-                  plainIcon
                   testId={`drive-card-${key}`}
                   // Only the primary drive is open on a first visit. The others are there when
                   // they are needed and cost a screen each when they are not.
@@ -2208,7 +2207,6 @@ export const HomeDiskManager = () => {
               title="Soft IEC Drive"
               titleVariants={driveCardTitleVariants("Soft IEC")}
               icon={HardDrive}
-              plainIcon
               testId="drive-soft-iec-row"
               // Closed on a first visit, like Drive B: a host-directory drive is set up once and
               // then left alone, and an open card costs a screen on the smallest supported display.
