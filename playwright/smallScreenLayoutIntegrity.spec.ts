@@ -639,4 +639,51 @@ test.describe("Small screen layout integrity", () => {
       await auditAndAssert(page, `Live View stats (detailed view, ${profileId} profile)`);
     }
   });
+
+  /**
+   * Every card header draws the same bare icon. A tinted tile used to appear on cards without header
+   * actions, which made the icon 28 px against 18 px on the cards that had actions.
+   */
+  for (const profileId of ["compact", "medium", "expanded"] as const) {
+    test(`every card header icon has the same rendered size on the ${profileId} profile @layout`, async ({ page }) => {
+      await setup(page, server.baseUrl);
+      await page.addInitScript(
+        (override) => localStorage.setItem("c64u_display_profile_override", override),
+        profileId,
+      );
+      await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profileId].viewport);
+      const sizes: { page: string; testId: string; width: number; height: number }[] = [];
+      for (const route of [
+        { path: "/play", label: "Play" },
+        { path: "/", label: "Home" },
+        { path: "/settings", label: "Settings" },
+      ]) {
+        await page.goto(route.path, { waitUntil: "domcontentloaded" });
+        await settle(page, profileId);
+        const icons = page.locator('[data-slot-active="true"] [data-testid="section-header-icon"]');
+        await expect(icons.first()).toBeVisible({ timeout: 20_000 });
+        const measured = await icons.evaluateAll(
+          (nodes, label) =>
+            nodes.map((node) => {
+              const box = node.getBoundingClientRect();
+              const card = node.closest("[data-section-id]");
+              return {
+                page: label,
+                testId: card?.getAttribute("data-section-id") ?? "unknown",
+                width: box.width,
+                height: box.height,
+              };
+            }),
+          route.label,
+        );
+        sizes.push(...measured);
+      }
+      expect(sizes.length, "icons measured").toBeGreaterThan(5);
+      const reference = sizes[0];
+      for (const size of sizes) {
+        expect(size.width, `${size.page} ${size.testId} icon width`).toBeCloseTo(reference.width, 1);
+        expect(size.height, `${size.page} ${size.testId} icon height`).toBeCloseTo(reference.height, 1);
+      }
+    });
+  }
 });

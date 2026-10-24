@@ -900,7 +900,7 @@ The mapping turns with your phone. Hold it sideways like a gamepad and the keys 
 
 ![Game Mode with the picture turned](../../img/app/home/remote-input/profiles/compact/08-game-mode-rotated.png)
 
-Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.
+Lying down, or the sensor cannot tell which way up the phone is? The **Angle** control (orientation) in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.
 
 To use different keys, open **Settings → Play and disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.
 

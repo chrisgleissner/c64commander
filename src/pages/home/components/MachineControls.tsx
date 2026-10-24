@@ -17,10 +17,10 @@ import {
   Play,
   Download,
   RefreshCw,
-  Joystick,
   Zap,
   LucideIcon,
 } from "lucide-react";
+import { JOYSTICK_ICON } from "@/lib/ui/joystickIcon";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
@@ -359,7 +359,7 @@ export function MachineControls({
             {watchActions.map((action, index) => renderExtraAction(action, 90 + index * 2))}
             {gameModeVisible ? (
               <QuickActionCard
-                icon={Joystick}
+                icon={JOYSTICK_ICON}
                 label="Game"
                 dataTestId="home-machine-inline-openGameMode"
                 focusId="home-machine-openGameMode"

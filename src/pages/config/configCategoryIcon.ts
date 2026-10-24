@@ -12,7 +12,6 @@ import {
   Clock,
   Cpu,
   FolderOpen,
-  Gamepad2,
   Gauge,
   HardDrive,
   Keyboard,
@@ -27,6 +26,7 @@ import {
   Wifi,
   type LucideIcon,
 } from "lucide-react";
+import { JOYSTICK_ICON } from "@/lib/ui/joystickIcon";
 
 const CATEGORY_ICON_RULES: ReadonlyArray<readonly [RegExp, LucideIcon]> = [
   [/wi-?fi/i, Wifi],
@@ -43,7 +43,7 @@ const CATEGORY_ICON_RULES: ReadonlyArray<readonly [RegExp, LucideIcon]> = [
   [/memory|\broms?\b/i, MemoryStick],
   [/turbo/i, Gauge],
   [/video/i, Tv],
-  [/joystick|controller/i, Gamepad2],
+  [/joystick|controller/i, JOYSTICK_ICON],
   [/user interface/i, Monitor],
   [/u64|c64|cartridge/i, Cpu],
 ];

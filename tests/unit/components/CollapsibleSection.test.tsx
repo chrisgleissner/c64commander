@@ -588,4 +588,46 @@ describe("CollapsibleSection", () => {
       expect(screen.getByTestId("home-section-toggle-drives")).toBeInTheDocument();
     });
   });
+
+  describe("header icon", () => {
+    const profiles = ["compact", "medium", "expanded"] as const;
+    const iconClasses = (withActions: boolean, profile: (typeof profiles)[number]) => {
+      mockProfile = profile;
+      const { container, unmount } = render(
+        <CollapsibleSection
+          scope="test"
+          id={`icon-${profile}-${withActions}`}
+          title="Audio"
+          icon={Radio}
+          actions={withActions ? <button type="button">Reset</button> : undefined}
+        >
+          body
+        </CollapsibleSection>,
+      );
+      const icon = screen.getByTestId("section-header-icon");
+      const result = { className: icon.getAttribute("class"), wrapperClass: icon.parentElement?.className };
+      expect(container.querySelector(".bg-primary\\/10")).toBeNull();
+      unmount();
+      return result;
+    };
+
+    it.each(profiles.flatMap((profile) => [true, false].map((withActions) => [profile, withActions] as const)))(
+      "draws the bare icon without a tinted tile on the %s profile (actions: %s)",
+      (profile, withActions) => {
+        const { className, wrapperClass } = iconClasses(withActions, profile);
+        expect(className).toContain("h-[1.125rem]");
+        expect(className).toContain("w-[1.125rem]");
+        expect(wrapperClass).toBe("shrink-0");
+      },
+    );
+
+    it("uses identical icon and wrapper classes for every profile and actions combination", () => {
+      const seen = new Set(
+        profiles.flatMap((profile) =>
+          [true, false].map((withActions) => JSON.stringify(iconClasses(withActions, profile))),
+        ),
+      );
+      expect(seen.size).toBe(1);
+    });
+  });
 });
