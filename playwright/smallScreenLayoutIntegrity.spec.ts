@@ -679,14 +679,10 @@ test.describe("Small screen layout integrity", () => {
         sizes.push(...measured);
       }
       expect(sizes.length, "icons measured").toBeGreaterThan(5);
-      const reference = sizes.find((size) => size.testId === "playlist") ?? sizes[0];
+      const reference = sizes[0];
       for (const size of sizes) {
         expect(size.width, `${size.page} ${size.testId} icon width`).toBeCloseTo(reference.width, 1);
         expect(size.height, `${size.page} ${size.testId} icon height`).toBeCloseTo(reference.height, 1);
-      }
-      const spectrum = sizes.find((size) => size.testId === "spectrum");
-      if (spectrum) {
-        expect(spectrum.width, "Spectrum icon equals the playlist icon").toBeCloseTo(reference.width, 1);
       }
     });
   }
