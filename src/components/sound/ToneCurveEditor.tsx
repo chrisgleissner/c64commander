@@ -27,8 +27,8 @@ import {
 
 export const TONE_STEP_DB = 1;
 export const TONE_LONG_PRESS_STEP_DB = 3;
-const AXIS_LABEL_BANDS = [0, 2, 4, 6, 8, 9];
-const AXIS_LABELS: Record<number, string> = { 0: "31", 2: "125", 4: "500", 6: "2k", 8: "8k", 9: "16k" };
+const AXIS_LABEL_BANDS = [0, 3, 5, 7, 9];
+const AXIS_LABELS: Record<number, string> = { 0: "31", 3: "250", 5: "1k", 7: "4k", 9: "16k" };
 const CURVE_POINTS = 96;
 const START_BAND = 5;
 
@@ -233,7 +233,7 @@ export const ToneCurveEditor = ({ bandsDb, onChange, disabled = false }: ToneCur
         {AXIS_LABEL_BANDS.map((index) => (
           <span
             key={index}
-            className="absolute -translate-x-1/2"
+            className="absolute -translate-x-1/2 whitespace-nowrap"
             style={{ left: `${frequencyToFraction(TONE_BAND_HZ[index]) * 100}%` }}
           >
             {AXIS_LABELS[index]}

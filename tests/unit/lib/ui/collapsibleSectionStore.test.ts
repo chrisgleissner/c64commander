@@ -163,6 +163,26 @@ describe("a request made before the section exists", () => {
     unsubscribe();
   });
 
+  it("is not taken by an earlier-mounting section that it is not addressed to", () => {
+    const earlier: Array<[string, string]> = [];
+    const addressed: Array<[string, string]> = [];
+    requestSectionOpen("play", "sound");
+
+    const first = subscribeSectionOpenRequest((scope, id) => earlier.push([scope, id]), {
+      scope: "play",
+      id: "spectrum",
+    });
+    const second = subscribeSectionOpenRequest((scope, id) => addressed.push([scope, id]), {
+      scope: "play",
+      id: "sound",
+    });
+
+    expect(earlier).toEqual([]);
+    expect(addressed).toEqual([["play", "sound"]]);
+    first();
+    second();
+  });
+
   it("still reaches a subscriber that was already listening, exactly once", () => {
     const seen: Array<[string, string]> = [];
     const unsubscribe = subscribeSectionOpenRequest((scope, id) => seen.push([scope, id]));

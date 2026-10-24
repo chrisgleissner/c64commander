@@ -664,7 +664,7 @@ The second is what the individual tunes inside a file are called. A list of nine
 
 Set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
 
-#### The spectrum and audio processing
+#### The spectrum
 
 On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays.
 
@@ -683,19 +683,628 @@ On an Android phone or tablet, the **Spectrum** card on Play shows how loud the 
 
 **What the card follows**
 
-- A tune playing on your phone or tablet: the bars follow what its speaker plays at that moment, after the audio processing below.
-- Live View playing your C64's sound here: the bars follow your C64's own sound as it arrives, before that processing. They keep time with your C64, not with the copy your phone or tablet plays a moment later.
+- A tune playing on your phone or tablet: the bars follow what its speaker plays at that moment, after the Sound card below.
+- Live View playing your C64's sound here: the bars follow your C64's own sound as it arrives, before the Sound card. They keep time with your C64, not with the copy your phone or tablet plays a moment later.
 
 ![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/medium/01-spectrum.png)
 
 Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.
 
-**Settings → Audio processing** changes how the sound from your phone or tablet is played. Everything starts off, and with an effect off the sound is left exactly as it was.
+#### The Sound card
+
+The **Sound** card on Play changes how the sound from your phone or tablet is played, so you hear the effect while you adjust it. It starts as **Original**: nothing is changed.
+
+**Quick changes, with the card closed**
+
+- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks.
+- Use the arrows beside the row to step to the next or previous ambiance.
+- **Back to previous sound** switches between the last two sounds.
+- The **On/Off** switch compares the effect with the original. Your settings stay as they are.
+- After you change a setting by hand, the card shows **Custom**.
+
+![The Sound card with its tone curve](../../img/app/play/sound/profiles/medium/01-sound.png)
+
+**The tone curve, with the card open**
+
+- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
+- Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
+- The line above the plot names the point, for example **1 kHz, +3 dB**.
+- **Reset** or a double tap puts the curve back to flat.
+- The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
+
+**With the keypad**
+
+- Left and right choose a point.
+- OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing.
+
+**More options**
 
 - **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening.
-- **Equalizer** raises or lowers **Bass**, **Mid** and **Treble** by up to 12 dB. **Reset** puts them back.
 - **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers.
 - **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
+- **Fine tune** under Stereo width and Reverb sets an exact amount.
+- **My sounds** saves the current sound under a name. You can keep five, and rename or delete them. The built-in sounds cannot be changed.
+
+The card applies to tunes played on your phone or tablet and to your C64's sound when Live View plays it here. While your C64 itself plays the sound, the card says so and its controls are switched off.
+
+**Settings → Sound** shows the current sound and opens the card.
+
+Just below sits the **Live View** card, which brings the running machine's sound and picture into the app. It has a chapter of its own: see [Live View](#live-view).
+
+The rest of Home is a stack of cards. Tap a header to open or close one.
+
+- **CPU & RAM**: the processor speed, turbo behavior and the RAM expansion.
+- **Ports**: the joystick swap, the serial bus, the cartridge preference and the user port.
+- **Video**: the output mode, resolution and scan lines.
+- **Audio**: the SID mixer's channel strips.
+- **User Interface**: the interface type, navigation style and Color Scheme of the machine's own menus.
+- **Lighting**: the case and keyboard lights, on a machine that has them.
+- Then drives, the printer, streams, and **Config**, which saves and loads the machine's settings. See [Configuration and Saving](#configuration-and-saving).
+
+The app remembers which cards you left open. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config too; these cards just save you the search.
+
+The cards show what your C64 reports. While Home is on screen, the app reads those settings again every 10 seconds, when you come back to the app, and right after any action it takes, so a change made in the machine's own menu shows up here within about 10 seconds. A slider you are dragging, a field you are typing in, or a setting still being written is left alone until you are done.
+
+At the foot of the page, the system strip shows which app build, device and firmware you are on. Check it before an upgrade, or when something seems wrong.
+
+**With no C64 connected**, Home rearranges itself. The search field stays, and so do Radio, Last, Recent and Live, with a card below them that explains how to connect. Live needs a machine, so it is grayed out and reads "Needs a connected C64 Ultimate".
+
+The machine's own cards stay as empty titles under a line that says why, and the system strip shows only the app version.
+
+The moment your C64 answers, your open cards are open again. A brief network hiccup will not shuffle the page under you either: the app waits a few seconds before rearranging, and snaps back the instant your machine returns.
+
+### Play
+
+Play is for building a playlist and running it.
+
+![Play overview](../../img/app/play/profiles/medium/01-overview.png)
+
+Choose **Add items** (it reads **Add more items** once the list has something in it), then choose a source.
+
+![Add items source chooser](../../img/app/play/import/profiles/medium/01-import-interstitial.png)
+
+The picker stays inside the source you chose, so **Up** never wanders off somewhere else. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means just that folder or everything beneath it. That can be the difference between adding twelve files and twelve thousand.
+
+**Leaving Android's system picker.** Use Android **Back** to cancel a local file, folder or `.cfg` selection without choosing anything. Back may first close a menu or leave a folder; press it again to return to the app.
+
+> **Tip.** Tick a single program, cartridge or disk, and the confirm button reads **Play** instead of **Add to playlist**: the item joins the playlist and the machine starts it right away. A tune, several files, a whole folder, or an online archive result are only added to the queue. On a small screen the button sits at the top of the sheet and reads **Add** with the count.
+
+![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
+
+Play handles SID and MOD music, PRG programs, CRT cartridges, and disk images. One SID file can hold several pieces of music, which this guide calls tunes. When the app knows how long a tune is, it shows the length and moves on at the right moment.
+
+![Playlist view all](../../img/app/play/profiles/medium/02-view-all.png)
+
+![Playlist while scrolling, with title and filter out of view](../../img/app/play/profiles/medium/03-view-all-scrolled.png)
+
+A playlist can hold a single song, or a whole evening's worth. In **View all**, the title and filter scroll out of view with the rows. Scroll to the top to filter again, or press **Back** to close the sheet.
+
+A short list fits on the Play page. When it grows, open **View all**. There you have room to scan, filter, select and remove, with the playback controls still in sight. **Settings → Play and disk → List preview limit** sets how many rows Play shows before you need View all; it starts at 50.
+
+> **Tip.** Add broadly, then filter narrowly. Add a whole folder, then type a few letters to narrow it down. The filter matches the title, the path, the source and the kind of file.
+
+A filter only hides rows; it never changes the playlist. Clear the box and the whole queue comes back.
+
+The **Songs**, **Progs** and **Disks** boxes narrow the list by kind: SID and MOD music, PRG programs and CRT cartridges, or disk images. On the smallest screens the filter folds into a single **Filter** row once you move on to the list. The row still says what is being filtered, and a tap or OK opens it again.
+
+When the list is long, a column of letters runs down the right edge of View all. Touch or drag along it and the list jumps to the first item that starts with that letter. That item is selected, so its play button, or OK, starts it at once.
+
+With a keypad, a number key does the same for its letters: `2` once for A, twice for B. On a hardware keyboard, a letter key goes straight to that letter.
+
+Every item remembers where it came from. Local files stay local, C64U files point back at the device, archive results remember their source, and SID entries carry their tunes and lengths with them.
+
+Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Bossa in Do*, with a small badge when a tune uses more than one SID chip. Prefer the file names? Turn off **Settings → Play and disk → Friendly SID names**.
+
+The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
+
+The volume row holds speaker/mute, the slider, the dB value, **Shuffle** (crossed arrows) and **Repeat** (loop arrows). The mode buttons align with × and heart beside the metadata above the transport. Highlighted buttons with a dot are on; a **1** inside Repeat means only this tune.
+
+Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.
+
+**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
+
+Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.
+
+Playback carries on when you leave the app or lock your phone or tablet, and your playlist and your place in it are waiting the next time you open it. On Android, a notification names the tune and carries **Pause**, **Next** and **Stop**, so you can run things from the lock screen. When you pause, it stays for ten minutes with **Play** in the first slot; then the session ends, and the next **Play** starts a new one. On Android 13 and later, the app asks once for permission to show this notification, shortly after it first connects and before you play anything. If you decline, playback works the same without it.
+
+Play is the quick way to start a disk and see what it does. When the drives or your disk collection are what you are after, go to Disks.
+
+### Disks
+
+Disks is where the drives and your disk images live.
+
+![Disks overview](../../img/app/disks/profiles/medium/01-overview.png)
+
+At the top are three drive cards: **Drive A**, **Drive B**, and a **Soft IEC Drive** that reads loose files from a folder instead of a disk image. Each card header shows the drive's power and the mounted disk, so you can check and change both without opening it. **Drive A** starts open, the other two closed.
+
+Below the drives, **Add disks** builds your collection from the sources you have.
+
+![Disk collection view](../../img/app/disks/profiles/medium/02-view-all.png)
+
+Add a single image, a folder of them, or a result from the online archive. When you add a folder, the app also groups what it finds, so a multi-disk title usually arrives ready to swap through.
+
+Filter by name, path or group to find something. A filter never deletes or moves anything.
+
+Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.
+
+Come to Disks whenever more than one disk is involved: the collection, the groups and the drives are all on one page. The drives themselves are explained in [Drives and Disk Images](#drives-and-disk-images).
+
+### Config
+
+Config holds every setting your machine has, laid out as one searchable tree.
+
+![Config overview](../../img/app/config/profiles/medium/01-overview.png)
+
+On a Commodore 64 Ultimate the cards follow the machine's own setup menu, such as **Video setup** and **Audio setup**; on other machines each category the device reports has a card of its own. Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.
+
+Config edits the live machine, not a draft, and has no Save button of its own: saving to flash is on Home's **Config** card. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).
+
+Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the cards whose page, group or setting names match, so a setting can be found by its own name. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.
+
+### Settings
+
+Settings controls how the app behaves, and holds your saved devices.
+
+![Settings overview](../../img/app/settings/profiles/medium/01-overview.png)
+
+Settings is a list of chapters, each with a one-line summary under its heading. **Connection** is open on your first visit; the rest start closed, and whatever you leave open stays open next time.
+
+The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, **8/9 on** for example. **HVSC** and **Online Archive** disappear if you switch their features off.
+
+If the device is hard to reach, start in **Connection**. If it answers but seems fragile, start in **Device Safety**.
+
+**Connection** holds your saved devices: each one's name, host, HTTP, FTP and Telnet ports, and network password. Before keeping a device, the app checks that its web service answers. FTP and Telnet are stored as you typed them, and a health check tests them later.
+
+**Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it turns with your phone or tablet or stays in portrait or landscape.
+
+**Style** is a set of colors, corners and shading. It sits on top of **Theme**, which stays your light-or-dark switch. Pick a style, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is set to.
+
+Match my device reads your machine each time you connect. If it cannot read it yet, it keeps the current style and shows a note. Two styles come in one shade only; for those, Theme is grayed out and Settings tells you why.
+
+There are seven styles:
+
+| Style | What it is |
+| --- | --- |
+| Cool Gray | Neutral, with a cool blue lean. The one the app starts with. |
+| Breadbin Beige | The warm beige of the original case. |
+| Ocean Teal | Deep blue-green with a warm coral highlight. |
+| Neon Pop | Translucent covers by day, arcade cabinet by night. |
+| Amber Glow | An amber monitor. Dark only. |
+| Vault Black | Near-black with a two-tone band. Dark only. |
+| High Contrast | Maximum legibility: heavy edges, strong text, no soft fills. |
+
+**Text size** makes everything in the app bigger. Choose **Default**, or **Large**, which is 15 percent larger. The display profile beside it changes the layout, not the type.
+
+If the tab bar along the bottom runs out of room, it scrolls sideways. Reach a page another way, and its tab scrolls into view.
+
+**Card descriptions** adds a one-line summary under each card's title. It starts off. Turn it on if you would rather read what a card holds than remember it; on a small screen it makes each closed card about half as tall again. The Quick menu switches it too, without leaving the page.
+
+**Diagnostics** opens the diagnostics panel and switches debug logging on. It also holds **Settings transfer**.
+
+Settings transfer saves your app settings, feature switches and device-safety tuning to a file you can import on another phone or tablet. Saved devices and passwords are left out, so the file is safe to pass around.
+
+**Notifications** decides whether you see every message or only errors, and how long each stays on screen. **About** shows the version and links to the open source licenses.
+
+Feature switches appear only for features that are safe for anyone to change.
+
+#### Making settings stick
+
+A setting you change from the app reaches the connected Ultimate-family device at once: the colors, the video mode, the LED lights and the rest all change as you go.
+
+By default, that is as far as it goes. Switch the machine off and on, and it comes back the way it was. So go ahead and experiment: nothing you try from the app is permanent.
+
+**Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also saved in the machine's own storage, just as if you had saved it from the machine's setup menu.
+
+> **Take care.** Turn this on deliberately. A setting that makes the machine awkward to use will come back every time you switch on.
+
+If that happens, hold **RESTORE** while you switch the connected Ultimate-family device on. It starts with its default settings instead of the saved ones, and you have a working machine again. Nothing is erased: your saved values are still there, so you can put the setting right and save again.
+
+### Docs
+
+Docs is the built-in help page: a pocket version of this manual, inside the app.
+
+![Docs overview](../../img/app/docs/profiles/medium/01-overview.png)
+
+It has a chapter of numbered steps for each main task: getting started, playing from HVSC, finding a tune, the playlist, SID Radio, where the sound plays, disks, Remote Input, Game Mode, Live View, Config, saving and restoring, devices, connection problems, the keypad keys, the status badge, and Diagnostics. **Contents**, at the top, jumps straight to a chapter.
+
+With a keypad or keyboard, press OK on a chapter to open it and OK again to go in. Down then moves one paragraph or step at a time, so a long chapter can be read to its end; Back leaves it. The page ends with links to the official device manuals and reference material.
+
+### Diagnostics
+
+Diagnostics shows how the connection is doing, what the app has been up to, and anything that has failed.
+
+![Diagnostics overview](../../img/app/diagnostics/profiles/medium/01-overview.png)
+
+Open it when a control does nothing, playback will not start, a file transfer stalls, or the badge stops looking healthy. Inside are the health check, four kinds of activity (Problems, Actions, Logs and Traces), filters, latency and heat-map views, Share, and Clear.
+
+Start with Problems for a plain-language summary. See [Reading Diagnostics](#reading-diagnostics) for the rest, and [Sharing a Diagnostics Report](#sharing-a-diagnostics-report) when you want help.
+
+### Device Switching
+
+**Switch device** is for homes with more than one saved Ultimate-family device.
+
+![Device switcher](../../img/app/diagnostics/switch-device/profiles/medium/01-picker.png)
+
+Long-press the badge, press `#`, or choose **Switch device** in the Quick menu. [Switching Between Devices](#switching-between-devices) has the details.
+
+![Device switcher expanded](../../img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png)
+
+## Everyday Flows
+
+Here are short recipes for the things you will do most. Follow the numbered steps, and that is the whole job. Where the app offers more than one route, the line after the steps says which to take.
+
+### Connect by Hand
+
+1. Open **Settings → Connection**, or use the startup prompt when discovery finds nothing.
+2. Enter a hostname or IP address.
+3. Choose **Save & Connect** or **Connect**.
+4. Enter the network password if asked.
+
+Preferred path: let startup discovery try first, and type the address only if it finds nothing.
+
+### Maintain Saved Devices
+
+1. Open **Settings → Connection**.
+2. Review the saved-device list.
+3. Give each device a name you will recognize, and check its ports.
+4. Choose **Save & Connect** after changing the active device.
+5. Remove any device that is no longer on your network.
+
+Preferred path: Settings to edit devices, **Switch device** to move between them.
+
+### Reboot and Carry On
+
+1. Open **Home**.
+2. Choose **Power**, then **Reboot**.
+3. Confirm.
+4. Watch the badge until it shows healthy again.
+
+Preferred path: Home. Open Diagnostics only if the device does not come back.
+
+### Play a SID or Program
+
+1. Open **Play**.
+2. Choose **Add items**.
+3. Choose Local, C64U, HVSC, or CommoServe.
+4. Select files or folders.
+5. Confirm, then press Play.
+
+Preferred path: choose C64U for files already on your C64, and Local for files on the device running the app.
+
+### Build a Playlist from Folders
+
+1. Open **Play → Add items**.
+2. Choose the source that owns the folder.
+3. Navigate into the folder.
+4. Select the files or folders you want.
+5. Confirm the selection.
+6. Open **View all** if the list is long.
+
+To search instead of browsing, type in the box at the top and choose **Everywhere**; on a small screen a single button shows the current choice and switches it. **This folder**, where the box starts, only narrows what is on screen. **Everywhere** searches the whole source by title or composer, which for HVSC means all sixty thousand or so files.
+
+Some sources have to be read one folder at a time, such as a folder on your device or the card in your C64. These offer a **Scan** button instead of searching as you type.
+
+![Choosing whether a search covers this folder or the whole of HVSC](../../img/app/play/import/profiles/medium/09-hvsc-search-scope.png)
+
+Preferred path: add a whole folder first, then filter the playlist to pick what plays next.
+
+### Filter and Clean a Playlist
+
+1. Open **Play → View all**.
+2. Type a few characters from the title, the path, the source, or the kind of file.
+3. Review the rows that remain.
+4. Tick the ones you do not want and choose **Remove selected items**, or clear the filter to bring the whole list back.
+
+Preferred path: filter first, then remove. The filter alone never removes anything.
+
+### Choose a Tune Inside a SID
+
+1. Add one or more SID files to Play and start one.
+2. On the Now Playing card, tap the tune position, **1/19**, to list every tune in the file, with its name and length where the collection knows them.
+3. Tap a tune to play it, or use **Play all 19 tunes** to add the whole file to the playlist in order.
+
+Preferred path: the Now Playing card. The playlist rows have no tune chooser.
+
+### Mount a Disk
+
+1. Open **Disks**.
+2. Add disks if the collection is empty.
+3. Open the drive's mount action.
+4. Choose a disk.
+
+Preferred path: Disks. Home has drive shortcuts too, but Disks shows your whole collection.
+
+### Build a Disk Collection
+
+1. Open **Disks → Add disks**.
+2. Choose Local, C64U, or CommoServe.
+3. Select disk images or folders.
+4. Confirm the selection.
+5. Use **View all** to inspect the collection.
+
+Preferred path: Disks to build a collection; Play to queue things up and start them.
+
+### Filter, Group, and Rotate Disks
+
+1. Open the disk collection view.
+2. Filter by name, path, or group.
+3. Check the groups the app made when you added the folder, and move any stragglers into the right one.
+4. Mount the first disk.
+5. When the program asks for the next disk, use the rotate controls on the drive card.
+
+Preferred path: group related disks before you need to swap them.
+
+### Mount to a Specific Drive
+
+1. Open **Disks**.
+2. Check that the drive you want is switched on.
+3. Check its bus ID and type if the program is particular.
+4. Choose the disk image.
+5. Mount it to the intended drive.
+
+Preferred path: set the drive up first, then mount.
+
+### Change a Common Setting
+
+1. Try Home's own cards first: CPU & RAM, Ports, Video, Audio, User Interface, Lighting.
+2. If the setting is not there, open **Config** and search.
+3. Change the value.
+4. To make the change survive a power cycle, use **Save** (**To flash**) in the **Config** card on Home, unless **Keep device settings after a restart** is already on.
+
+Preferred path: Home for common settings; Config for everything else.
+
+### Save Device Configuration
+
+Use this to save the current settings to flash once, so the machine still has them after its next power-up.
+
+1. Make the changes you need on Home or Config.
+2. Confirm the device is healthy.
+3. Open the **Config** card on Home.
+4. Choose **Save**, the tile marked **To flash**.
+
+Preferred path: turn on **Keep device settings after a restart** in **Settings → Device Safety**, and the app saves for you a moment after your changes settle.
+
+### Investigate a Problem
+
+1. Tap the header badge or press `*`. If the app is offline, that tap also tries to connect again, and asks for the password if the device wants one.
+2. Run a health check.
+3. Look at Problems, then Errors, then Traces if the order of requests matters.
+4. To ask for help, share a report before you clear anything or restart the app. See [Sharing a Diagnostics Report](#sharing-a-diagnostics-report).
+
+Preferred path: Diagnostics from the badge.
+
+## In Depth
+
+Some parts of the app have more to them than a recipe can hold. This chapter covers them in full.
+
+### SID Music
+
+The **SID**, short for **Sound Interface Device**, is the sound chip in every Commodore 64. It has three voices, and people are still writing music for it today. The files that hold that music are called SIDs too: each is a small program that plays the chip. Tens of thousands of them live in one free archive, the **High Voltage SID Collection**, or **HVSC**.
+
+Your C64 plays all of it, and your phone or tablet plays most of it. This section is about choosing the music yourself. The next one, **SID Radio**, lets the app choose for you.
+
+![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/profiles/medium/01-controls.png)
+
+#### Where the music plays
+
+While a SID tune plays, the Play page shows an **output button** beside the volume slider. It names where the sound is going. Press it to choose:
+
+- **Here**: your phone or tablet plays the tune itself. Your C64 need not even be switched on.
+- **C64**: your C64 plays it on its own SID chip.
+- **Both**: your C64 plays it and also sends the sound across your network, so you hear it in both places.
+
+**Both** is offered when the **Live View** and **Audio Mirror** features are on in Settings, as they are to begin with, and the machine can stream. It disappears if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 on Wi-Fi alone cannot send it.
+
+The output button is for SID tunes only. Programs and disks always run on the C64.
+
+To play music by itself, your phone or tablet needs copies of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them; without them, those tunes start and then play nothing.
+
+The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine. It does this by itself, the first time you play a tune here while the C64 is connected. There is nothing to set up.
+
+The copies stay on your phone or tablet. They are never uploaded, never shared, and never put in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
+
+#### Moving around inside a tune
+
+The same gestures work wherever the tune plays. A short tap on next or previous still skips to the next or previous tune.
+
+- **Tap the progress bar** to jump to that spot, or hold and slide along it. The music picks up wherever you let go.
+
+Playing on your phone or tablet:
+
+- **Press and hold next or previous** to wind forward or back, about five seconds at a time, for as long as you hold.
+- Jumping *forward* past the part already prepared takes a moment, because the app has to work the music out up to that point. The timer waits at the last note you heard while the bar shows progress. Jumping back is instant.
+
+Playing on your C64:
+
+- **Press and hold next** to fast forward. The tune races ahead, faster every second you hold: the app raises your C64's CPU speed one step at a time. Let go and the tune plays on at normal speed from there.
+- **Press and hold previous** to wind back 10 seconds, then 20, 40 and 80 more for each further second you hold. The timer shows where you will land; let go to jump there.
+- A tune cannot run backwards, so jumping back starts it again and fast forwards to the spot. That takes a second or two.
+- **Settings → Play and disk → Mute C64 seeking** chooses what you hear meanwhile. **Rewind only**, the default, silences your C64 while it winds back and lets you hear a fast forward race ahead. **Always** silences both, and **Never** neither. Playing on your phone or tablet, seeking is silent whatever this is set to.
+- Your C64's CPU speed and volume are always put back the way you had them, also when the app closes or loses the connection in the middle: they are restored the next time the app reaches that C64. Nothing is saved to the C64's flash memory.
+- This needs a tune with its own play routine, which is most of them. On a Commodore 64 Ultimate (firmware 1.2.0 or later) or an Ultimate 64 (3.15 or later) the app presses the C64's own keys. On an Ultimate-II+(L), which cannot press keys, it works through the SID player itself, at the C64's normal CPU speed, so long jumps take longer. Otherwise next and previous only step between tunes.
+
+#### The sound itself
+
+**Volume** and **Mute** follow whichever machine is making the sound. Playing here, they change this tune alone and leave your ringer and notifications as they were. Playing on the C64, they move the machine’s own mixer, so with **Both** chosen, **Mute** silences your C64 and the sound it sends here alike. If you choose **Here** while your C64 is muted, the mute moves with the sound: your C64 returns to the volume it had before, and the tune here starts muted, with **Unmute** where you expect it.
+
+Your phone or tablet plays either its own tune or the sound sent from your C64, never both at once. Whichever you start last wins.
+
+The rest is under **Settings → SID Radio**. **Crossfade** blends one tune into the next: **Off (clean cut)**, or **Short (0.6s)**, **Medium (1.5s)**, **Long (3s)** or **Longest (4s)**. It starts at Off.
+
+Only your phone or tablet can play two tunes at once, so Crossfade is grayed out while the output is set to **C64** or **Both**.
+
+The SID chip came in two versions, the **6581** and the **8580**, and music written for one sounds a little different on the other. Most files say which chip the composer used, and those always play on it.
+
+Many older files say nothing. For those, turn on **Match my Commodore 64** and the app reads the chip from your own machine. Until it has, **Otherwise use** picks 6581 or 8580. A line underneath tells you which is in use.
+
+When a tune plays on your phone or tablet, **SID emulation** sets how closely the chip is modeled. **Fast & accurate**, the default, models the chip as closely as **Accurate** but runs it natively, so it needs about a third of the processing power and the battery lasts longer. **Accurate** follows the chip cycle by cycle inside the app itself. **Light** is a lighter model of the chip that also saves processing power and battery, though its sound is not an exact match for a real C64. Fast & accurate is offered on Android; on an iPhone, an iPad and in a web browser, Accurate is the default. A change applies from the next tune.
+
+#### The SID Audio Mixer
+
+A C64 can have more than one SID chip. **Home → Audio** gives you a **master volume**, plus a **volume** and **stereo position** for each SID your machine reports. Pan one SID left and another right for stereo, or turn one down so the other leads. You hear each change at once. The same controls are in **Config → Audio Mixer**.
+
+### SID Radio
+
+HVSC holds around sixty thousand files, and even more tunes, since many files hold several. That is far too many to browse, so SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.
+
+There is no playlist to build, and nothing downloads while you listen. Once the collection is on your device, the app already knows which tunes sound alike.
+
+![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/profiles/medium/02-stations.png)
+
+#### Starting a station
+
+Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for:
+
+- **A mood.** There are nine: Fast-paced, Chill / Ambient, Melodic, Experimental, Nostalgic, Composer deep-dive, Era explorer, Deep cuts, and Game themes. Each draws on tens of thousands of tunes.
+- **A collection.** A fixed list of tunes, such as competition winners or movie themes. See below.
+- **From tunes you like.** Once five tunes carry a heart, this builds a station from them.
+- **Surprise me.** Anything at all.
+
+Switch on **Based on my likes** to tilt any mood toward your own taste. The station keeps the mood's name, but reaches for music closer to what you like.
+
+You can also start from whatever is playing now. Tap **More like this**, and the station follows that tune. The button appears whenever a SID the collection recognizes is playing, even during another station.
+
+#### Collections
+
+A mood plays tunes that sound alike. A collection plays a list, and nothing else. The lists come from the tune notes that the HVSC team writes for its music:
+
+- **Competition winners.** Tunes that took first place at a demo party or an online music competition.
+- **Movie & TV themes**, **Games from other machines** (arcade, console and computer games), **Electronic pioneers** (Jarre, Kraftwerk, Vangelis and others), **Synth-pop**, and **Classical.** C64 versions of music first heard elsewhere.
+- **C64 remixes.** New takes on tunes first written for the C64.
+- **Christmas.** Offered from December 1 to January 6.
+
+![Collections: fixed lists of tunes from the HVSC tune notes](../../img/app/play/sid-radio/profiles/medium/06-collections.png)
+
+Each tile says how many tunes it holds. A collection plays every one of them once, in a new order each time, then tells you it has finished. Hearts and crosses still count: a liked tune, and tunes that sound like it, come sooner, and a crossed-out tune never comes at all.
+
+The tune notes come with HVSC. If yours was installed before the app read them, they are fetched once, the first time you start a collection, so your phone or tablet needs to be online for that.
+
+#### Telling it what you like
+
+While a tune plays, a heart and a cross appear just above its title, at the right of the card. Tap the **heart** to add it to your **Liked tunes** list. Tap the **cross** to skip it: the station moves on at once and steers away from similar tunes. You need not do either; the station plays happily if you just listen.
+
+Your choices stay on your phone or tablet. They belong to the music itself, not to a file name, so they survive an update to the collection even if the tune moves.
+
+**Liked tunes** is an ordinary list: play it, shuffle it, or take a tune off it. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.
+
+#### What a station will and will not do
+
+**It never repeats itself.** No tune plays twice. A mood takes one tune from each file, while a collection plays every tune on its list, even two from the same file.
+
+**A mood skips very short pieces.** The collection holds jingles, sound effects and test tones as well as music. Anything under fifteen seconds is skipped. Change that under **Settings → SID Radio → Shortest tune to play (seconds)**, or set it to zero to hear everything. A collection plays every tune on its list, however short.
+
+**It can run out.** A station follows a chain of similar tunes, and now and then it reaches the end, usually after many skips. The app tells you, and you can pick another mood.
+
+Radio keeps at most **200 automatically queued tunes**, including the current tune and lookahead. Older played tunes leave the playlist. Change **Settings → SID Radio → Radio playlist limit** from **20** to **1000**; older history is trimmed as playback advances. Your own additions, the playing tune and upcoming tunes are kept. The limit does not remove files from HVSC or affect your saved playlist.
+
+While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Repeat** cycles **off → playlist → tune → off**: playlist wraps the retained queue if it runs out, and tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if Repeat was on.
+
+The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
+
+A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.
+
+#### Finding one particular tune
+
+To play one particular piece, tap **Find a tune** and type part of a title or a composer's name. The app searches the whole collection, not just one folder. That matters, because the archive is filed by composer.
+
+Any part of a word will do, in upper or lower case, and accents are ignored: "oorni" finds Lasse Öörni, "mando" finds Commando. Add a second word to narrow it down: "hubbard commando" finds the one that matches both.
+
+Tap a result and it plays at once. Your station keeps its place and carries on when the tune ends. For more music like it, tap the radio icon beside the result, where there is one.
+
+With nothing typed, the sheet lists what you heard recently, so you can find your way back to a tune that has already played.
+
+![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/profiles/medium/04-find-a-tune.png)
+
+#### More than one tune per file
+
+Many SID files hold several tunes: a title screen, a high-score jingle, a loading tune, sometimes twenty more. The second line under the title shows which one is playing and how many there are: **1/19**.
+
+Tap **Play all 19 tunes** to add them all to your playlist in order, each with its own name and length. From then on they behave like any other tracks, and the button disappears.
+
+To pick just one, tap that **1/19**. You see every tune in the file with its number, its name where it has one, and its length. Check the lengths before you choose: a five-minute piece and a one-second jingle often share a file.
+
+![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/profiles/medium/07-tunes-in-this-file.png)
+
+#### What the tune is, and who wrote it
+
+The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune is playing, and its length. Anything the file does not record is left out, never guessed. Tap the composer's name, and search opens with that name filled in.
+
+The archive's editors have written down two more things a SID file cannot hold. You find them under **About this tune**, below that line, for about a third of the tunes. It starts folded, so the transport and progress bar stay on screen; tap it to open or close it.
+
+The first is whose music a tune really is. Much C64 music is a cover of a pop record, a film score or an arcade original, and the file names only whoever wrote the C64 version.
+
+Take Rob Hubbard's *Commando*. He wrote the C64 version, but the music is Tamayo Kawamoto's, from the arcade game. **About this tune** shows it: **BGM1 · music by Tamayo Kawamoto**.
+
+The second is what the individual tunes inside a file are called. A list of nineteen numbered rows becomes a title screen, a high-score jingle and a game-over sting. Any note the editors left about a tune appears underneath. Long notes are trimmed and marked **Show more**; tap one to read the rest.
+
+#### Stopping later
+
+Set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
+
+#### The spectrum
+
+On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays.
+
+**The bars**
+
+- Bass is on the left and treble on the right.
+- Each bar is colored by its level: green for most levels, then yellow, orange and red as the level nears full scale.
+- The small cap above a bar is that pitch's recent peak.
+
+**The meters above the bars**
+
+- **L** and **R** are the left and right playback channels, including the mix from several SID chips. Both rows always stay in place, even when the channels match.
+- The solid fill is the average level. A translucent extension shows the instant peak, and a thin marker holds the recent highest peak.
+- A red block at the right end lights briefly when that channel reaches full scale.
+- The scale under the meters is in dBFS: 0 is full scale, the loudest a digital signal can be.
+
+**What the card follows**
+
+- A tune playing on your phone or tablet: the bars follow what its speaker plays at that moment, after the Sound card below.
+- Live View playing your C64's sound here: the bars follow your C64's own sound as it arrives, before the Sound card. They keep time with your C64, not with the copy your phone or tablet plays a moment later.
+
+![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/medium/01-spectrum.png)
+
+Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.
+
+#### The Sound card
+
+The **Sound** card on Play changes how the sound from your phone or tablet is played, so you hear the effect while you adjust it. It starts as **Original**: nothing is changed.
+
+**Quick changes, with the card closed**
+
+- Tap an ambiance such as **Late night**, **Headphones**, **Phone speaker**, **Warm**, **Bright arcade**, **Hall** or **Studio**. The sound changes at once, without clicks.
+- Use the arrows beside the row to step to the next or previous ambiance.
+- **Back to previous sound** switches between the last two sounds.
+- The **On/Off** switch compares the effect with the original. Your settings stay as they are.
+- After you change a setting by hand, the card shows **Custom**.
+
+![The Sound card with its tone curve](../../img/app/play/sound/profiles/medium/01-sound.png)
+
+**The tone curve, with the card open**
+
+- The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
+- Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
+- The line above the plot names the point, for example **1 kHz, +3 dB**.
+- **Reset** or a double tap puts the curve back to flat.
+- The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
+
+**With the keypad**
+
+- Left and right choose a point.
+- OK starts editing: up and down then change the gain by 1 dB, or 3 dB while a key is held. OK ends editing.
+
+**More options**
+
+- **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening.
+- **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers.
+- **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
+- **Fine tune** under Stereo width and Reverb sets an exact amount.
+- **My sounds** saves the current sound under a name. You can keep five, and rename or delete them. The built-in sounds cannot be changed.
+
+The card applies to tunes played on your phone or tablet and to your C64's sound when Live View plays it here. While your C64 itself plays the sound, the card says so and its controls are switched off.
+
+**Settings → Sound** shows the current sound and opens the card.
 
 ### Live View
 

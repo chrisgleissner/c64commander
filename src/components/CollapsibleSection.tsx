@@ -266,15 +266,18 @@ export const CollapsibleSection = ({
   // to this one id: every other card on the page keeps whatever the user set.
   useEffect(
     () =>
-      subscribeSectionOpenRequest((requestedScope, requestedId) => {
-        if (requestedScope !== scope || requestedId !== id) return;
-        setOpen((current) => {
-          if (current) return current;
-          writeSectionState(scope, id, true);
-          openedByUserRef.current = true;
-          return true;
-        });
-      }),
+      subscribeSectionOpenRequest(
+        (requestedScope, requestedId) => {
+          if (requestedScope !== scope || requestedId !== id) return;
+          setOpen((current) => {
+            if (current) return current;
+            writeSectionState(scope, id, true);
+            openedByUserRef.current = true;
+            return true;
+          });
+        },
+        { scope, id },
+      ),
     [scope, id],
   );
 

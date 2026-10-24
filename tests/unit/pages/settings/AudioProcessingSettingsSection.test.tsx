@@ -17,6 +17,7 @@ vi.mock("@/lib/ui/collapsibleSectionStore", async (importOriginal) => ({
   requestSectionOpen,
 }));
 
+import { readSectionStates } from "@/lib/ui/collapsibleSectionStore";
 import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
 import { applySoundPreset, saveAudioEnabled } from "@/lib/config/audioProcessingSettings";
 
@@ -69,6 +70,7 @@ describe("AudioProcessingSettingsSection", () => {
     openSection();
     fireEvent.click(screen.getByTestId("settings-audio-open-card"));
     expect(requestSectionOpen).toHaveBeenCalledWith("play", "sound");
+    expect(readSectionStates("play").get("sound")).toBe(true);
     expect(screen.getByTestId("play-page")).toBeInTheDocument();
   });
 });

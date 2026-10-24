@@ -13,7 +13,7 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
-import { enableKeypad, ringFocus } from "./focusRing";
+import { KEY_SELECTED_ATTRIBUTE, enableKeypad, ringFocus } from "./focusRing";
 import {
   audioFxCalls,
   installAudioFxMock,
@@ -264,81 +264,169 @@ test.describe("Spectrum card and audio processing", () => {
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
     await expect(page.getByTestId("play-section-spectrum")).toHaveCount(0);
+    await expect(page.getByTestId("play-section-sound")).toHaveCount(0);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
     await expect(page.getByTestId("settings-audio-processing")).toHaveCount(0);
   });
 
-  test("audio processing settings reach the plugin and stay off by default @layout", async ({ page }) => {
+  test("the Sound card sends the chosen ambiance to the plugin and starts off @layout", async ({ page }) => {
     await installAudioFxMock(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
-    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
 
-    const section = page.getByTestId("settings-audio-processing");
-    await expect(section).toBeVisible();
-    if ((await section.getAttribute("data-open")) !== "true")
-      await page.getByTestId("settings-section-toggle-audio-processing").click();
-
+    const card = page.getByTestId("play-section-sound");
+    await expect(card).toBeVisible();
     await expect
       .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
       .toEqual({
         method: "setAudioProcessing",
-        params: { levelling: false, bassDb: 0, midDb: 0, trebleDb: 0, stereoWidth: 0, reverb: 0 },
+        params: { levelling: false, bandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], stereoWidth: 0, reverb: 0 },
       });
 
-    await page.getByTestId("settings-audio-levelling").scrollIntoViewIfNeeded();
-    await page.getByTestId("settings-audio-levelling").click();
-    await page.getByTestId("settings-audio-stereo-wide").click();
-    await page.getByTestId("settings-audio-reverb-room").click();
-    await expect(page.getByTestId("settings-audio-stereo-wide")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("sound-chip-hall").click();
+    await expect(page.getByTestId("sound-active-name")).toHaveText("Hall");
     await expect
       .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
-      .toEqual({
-        method: "setAudioProcessing",
-        params: { levelling: true, bassDb: 0, midDb: 0, trebleDb: 0, stereoWidth: 70, reverb: 25 },
-      });
+      .toMatchObject({ params: { stereoWidth: 70, reverb: 55 } });
 
-    const measured = await measureErgonomics(section);
-    expect(measured.targetCount).toBeGreaterThanOrEqual(8);
+    await page.getByTestId("sound-switch").click();
+    await expect
+      .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
+      .toMatchObject({ params: { stereoWidth: 0, reverb: 0 } });
+    await page.getByTestId("sound-switch").click();
+    await page.getByTestId("sound-chip-warm").click();
+    await page.getByTestId("sound-back").click();
+    await expect(page.getByTestId("sound-active-name")).toHaveText("Hall");
+
+    await page.getByTestId("play-section-toggle-sound").click();
+    await expect(page.getByTestId("sound-body")).toBeVisible();
+    await page.getByTestId("sound-tone-preset-bass-boost").scrollIntoViewIfNeeded();
+    await page.getByTestId("sound-tone-preset-bass-boost").click();
+    await expect
+      .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
+      .toMatchObject({ params: { bandsDb: [6, 6, 5, 3, 1, 0, 0, 0, 0, 0] } });
+
+    const measured = await measureErgonomics(card);
+    expect(measured.targetCount).toBeGreaterThanOrEqual(20);
     expect(measured.textOffenders, "Text below the size floor").toEqual([]);
-    expect(measured.bodyOffenders, "Body text below the size floor").toEqual([]);
     expect(measured.targetOffenders, "Controls below the target size").toEqual([]);
+    const plot = await page.getByTestId("sound-tone-plot").boundingBox();
+    expect(plot?.height ?? 0).toBeGreaterThanOrEqual(160);
     await noHorizontalOverflow(page);
-    await keepShot(section, "audio-processing-compact");
+    await keepShot(card, "sound-card-compact");
   });
 
-  test("the equalizer is reachable and adjustable with the focus ring alone @layout", async ({ page }) => {
+  test("dragging a point of the tone curve changes that band only", async ({ page }) => {
+    await installAudioFxMock(page);
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page, "compact");
+    await page.getByTestId("play-section-toggle-sound").click();
+    const plot = page.getByTestId("sound-tone-plot");
+    await plot.scrollIntoViewIfNeeded();
+    const box = await plot.boundingBox();
+    if (!box) throw new Error("The tone plot has no box");
+    const point = await page.getByTestId("sound-tone-point-7").boundingBox();
+    if (!point) throw new Error("Band 7 has no point");
+    const x = point.x + point.width / 2;
+    await page.mouse.move(x, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, box.y + box.height * 0.25, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.getByTestId("sound-tone-readout")).toHaveText("4 kHz, +6 dB");
+    await expect
+      .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
+      .toMatchObject({ params: { bandsDb: [0, 0, 0, 0, 0, 0, 0, 6, 0, 0] } });
+    await plot.dblclick();
+    await expect
+      .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
+      .toMatchObject({ params: { bandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } });
+    await keepShot(page.getByTestId("play-section-sound"), "sound-card-curve");
+  });
+
+  for (const id of ["compact", "medium", "expanded"] as const) {
+    const profile = { id, ...DISPLAY_PROFILE_VIEWPORTS[id] };
+    for (const theme of ["light", "dark"] as const) {
+      test(`the Sound card fits ${profile.id} in the ${theme} theme @layout`, async ({ page }) => {
+        await installAudioFxMock(page);
+        await page.setViewportSize(profile.viewport);
+        await page.addInitScript(
+          ({ override, mode }) => {
+            localStorage.setItem("c64u_display_profile_override", override);
+            localStorage.setItem("c64u_theme", mode);
+          },
+          { override: profile.override, mode: theme },
+        );
+        await page.goto("/play", { waitUntil: "domcontentloaded" });
+        await settle(page, profile.id);
+        await page.getByTestId("play-section-toggle-sound").click();
+        const card = page.getByTestId("play-section-sound");
+        await expect(page.getByTestId("sound-tone-plot")).toBeVisible();
+        await noHorizontalOverflow(page);
+        const measured = await measureErgonomics(card);
+        expect(measured.textOffenders).toEqual([]);
+        expect(measured.targetOffenders).toEqual([]);
+        await keepShot(card, `sound-card-${profile.id}-${theme}`);
+      });
+    }
+  }
+
+  test("the Sound card is reachable and adjustable with the focus ring alone @layout", async ({ page }) => {
     test.setTimeout(120_000);
     await installAudioFxMock(page);
     await enableKeypad(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
-    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
     await settle(page, "compact");
-    if ((await page.getByTestId("settings-audio-processing").getAttribute("data-open")) !== "true")
-      await page.getByTestId("settings-section-toggle-audio-processing").click();
+    if ((await page.getByTestId("play-section-sound").getAttribute("data-open")) !== "true")
+      await page.getByTestId("play-section-toggle-sound").click();
 
     await page.keyboard.press("ArrowDown");
-    const bass = page.getByTestId("settings-audio-eq-bass");
-    expect(await ringFocus(page, page.getByTestId("settings-audio-levelling"), 120)).toBe(true);
-    await expect(page.getByTestId("settings-audio-eq-bass-value")).toHaveText("0 dB");
-    expect(await ringFocus(page, bass.locator('[role="slider"]'), 40)).toBe(true);
-    const inView = await bass.evaluate((element) => {
+    expect(await ringFocus(page, page.getByTestId("sound-chip-hall"), 120)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("sound-active-name")).toHaveText("Hall");
+
+    const plot = page.getByTestId("sound-tone-plot");
+    expect(await ringFocus(page, plot, 60)).toBe(true);
+    const inView = await plot.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       return rect.top >= 0 && rect.bottom <= window.innerHeight;
     });
-    expect(inView, "The slider the ring selected is scrolled into view").toBe(true);
+    expect(inView, "The tone curve the ring selected is scrolled into view").toBe(true);
     await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
-    await expect(page.getByTestId("settings-audio-eq-bass-value")).toHaveText("+3 dB");
+    await expect(page.getByTestId("sound-tone-readout")).toHaveText("2 kHz, 0 dB");
+    await page.keyboard.press("Enter");
+    await expect(plot).toHaveAttribute("data-editing", "true");
+    for (let n = 0; n < 3; n += 1) await page.keyboard.press("ArrowUp");
+    await expect(page.getByTestId("sound-tone-readout")).toHaveText("2 kHz, +3 dB");
     await expect
       .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
-      .toMatchObject({ params: { bassDb: 3 } });
-    await page.getByTestId("settings-audio-eq-reset").scrollIntoViewIfNeeded();
-    await page.getByTestId("settings-audio-eq-reset").click();
-    await expect(page.getByTestId("settings-audio-eq-bass-value")).toHaveText("0 dB");
+      .toMatchObject({ params: { bandsDb: [0, 0, 0, 0, 0, 0, 3, 0, 0, 0] } });
+    await page.keyboard.press("Enter");
+    await expect(plot).toHaveAttribute("data-editing", "false");
+    await page.keyboard.press("ArrowDown");
+    await expect(plot).not.toHaveAttribute(KEY_SELECTED_ATTRIBUTE, "true");
+    await expect(page.getByTestId("sound-tone-readout")).toHaveText("2 kHz, +3 dB");
+  });
+
+  test("the settings section opens the Sound card on the Play page", async ({ page }) => {
+    await installAudioFxMock(page);
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
+    await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await settle(page, "compact");
+    const section = page.getByTestId("settings-audio-processing");
+    if ((await section.getAttribute("data-open")) !== "true")
+      await page.getByTestId("settings-section-toggle-audio-processing").click();
+    await expect(page.getByTestId("sound-tone-plot")).toHaveCount(0);
+    await page.getByTestId("settings-audio-open-card").click();
+    await expect(page.getByTestId("play-section-sound")).toHaveAttribute("data-open", "true");
+    const measured = await measureErgonomics(page.getByTestId("play-section-sound"));
+    expect(measured.targetOffenders).toEqual([]);
   });
 });

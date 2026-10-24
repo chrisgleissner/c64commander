@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { activeSoundName } from "@/components/sound/SoundPanel";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { useAudioProcessingRecord } from "@/lib/config/audioProcessingSettings";
-import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
+import { requestSectionOpen, writeSectionState } from "@/lib/ui/collapsibleSectionStore";
 import { SettingsSection } from "./SettingsSection";
 
 /**
@@ -26,8 +26,9 @@ export const AudioProcessingSettingsSection = () => {
   const navigate = useNavigate();
   if (!available) return null;
   const openCard = () => {
-    requestSectionOpen("play", "sound");
+    writeSectionState("play", "sound", true);
     navigate("/play");
+    requestSectionOpen("play", "sound");
   };
   return (
     <SettingsSection

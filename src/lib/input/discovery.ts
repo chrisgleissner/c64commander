@@ -262,6 +262,19 @@ export const isNativelyFocusable = (element: Element): boolean => {
 export const isHorizontalKeyOwner = (element: Element | null): boolean =>
   element instanceof Element && element.closest(HORIZONTAL_OWNER_SELECTOR) !== null;
 
+/** True when the focused control keeps this arrow key for itself instead of the ring: Left/Right for a value control, Up/Down while one is being edited. */
+export const controlOwnsDirection = (
+  action: string | null,
+  target: Element | null,
+  active: Element | null,
+): boolean => {
+  if (action === "dpadLeft" || action === "dpadRight")
+    return isHorizontalKeyOwner(target) || isHorizontalKeyOwner(active);
+  if (action === "dpadUp" || action === "dpadDown")
+    return target instanceof Element && target.closest(`[${VERTICAL_OWNER_ATTR}="true"]`) !== null;
+  return false;
+};
+
 const ROW_TOLERANCE_PX = 8;
 
 interface ReadingPosition {

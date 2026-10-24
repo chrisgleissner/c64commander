@@ -69,6 +69,7 @@ export {
   isFocusVisible,
   isFocusDisabled,
   isHorizontalKeyOwner,
+  controlOwnsDirection,
   isNativelyFocusable,
   isSkipped,
   nearestGroupElement,

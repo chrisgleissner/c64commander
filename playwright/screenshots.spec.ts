@@ -3002,6 +3002,28 @@ test.describe("App screenshots", () => {
   );
 
   test(
+    "capture sound card screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installAudioFxMock(page);
+      await page.goto("/play");
+      for (const profileId of ["compact", "medium"] as const) {
+        await applyDisplayProfileViewport(page, profileId);
+        const card = getActiveMain(page).getByTestId("play-section-sound");
+        await expect(card).toBeVisible();
+        if ((await card.getAttribute("data-open")) !== "true") {
+          await card.getByTestId("play-section-toggle-sound").click();
+        }
+        await card.getByTestId("sound-chip-warm").click();
+        const plot = card.getByTestId("sound-tone-plot");
+        await expect(plot).toBeVisible();
+        await plot.evaluate((element) => element.scrollIntoView({ block: "center" }));
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play/sound", profileId, "01-sound.png"));
+      }
+    },
+  );
+
+  test(
     "capture sid radio screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {

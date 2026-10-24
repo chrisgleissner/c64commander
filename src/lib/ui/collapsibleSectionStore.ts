@@ -227,8 +227,21 @@ export const requestSectionOpen = (scope: string, id: string): void => {
   );
 };
 
-export const subscribeSectionOpenRequest = (handler: (scope: string, id: string) => void): (() => void) => {
+export interface SectionOpenTarget {
+  scope: string;
+  id: string;
+}
+
+/**
+ * `target` names the one section this subscriber is. With it, a latched request addressed to another
+ * section is left for that section; without it, the first subscriber to mount takes any request.
+ */
+export const subscribeSectionOpenRequest = (
+  handler: (scope: string, id: string) => void,
+  target?: SectionOpenTarget,
+): (() => void) => {
   if (typeof window === "undefined") return () => undefined;
+  const addressedToTarget = (scope: string, id: string) => !target || (target.scope === scope && target.id === id);
   const listener = (event: Event) => {
     const detail = (event as CustomEvent<SectionOpenRequestDetail>).detail;
     if (!detail) return;
@@ -253,7 +266,11 @@ export const subscribeSectionOpenRequest = (handler: (scope: string, id: string)
    * every section, and a card the user had closed by hand in the meantime opened itself again and
    * persisted that. One request opens one section, once.
    */
-  if (pendingSectionOpen !== null && Date.now() - pendingSectionOpen.atMs <= SECTION_OPEN_LATCH_TTL_MS) {
+  if (
+    pendingSectionOpen !== null &&
+    addressedToTarget(pendingSectionOpen.scope, pendingSectionOpen.id) &&
+    Date.now() - pendingSectionOpen.atMs <= SECTION_OPEN_LATCH_TTL_MS
+  ) {
     const claimed = pendingSectionOpen;
     pendingSectionOpen = null;
     handler(claimed.scope, claimed.id);
