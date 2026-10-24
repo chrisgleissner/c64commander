@@ -75,3 +75,35 @@ export const curveYAt = (points: readonly Pixel[], x: number): number => {
   }
   return NaN;
 };
+
+/**
+ * A hairline at CSS position `at` placed on whole device pixels: its width is the nearest whole number of
+ * device pixels to one CSS pixel, and its edges fall on device pixel boundaries.
+ */
+export const crispLine = (at: number, devicePixelRatio: number): { at: number; width: number } => {
+  const ratio = devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const devicePixels = Math.max(1, Math.round(ratio));
+  const start = Math.round(at * ratio - devicePixels / 2);
+  return { at: (start + devicePixels / 2) / ratio, width: devicePixels / ratio };
+};
+
+export const AXIS_LABEL_GAP_PX = 8;
+
+/**
+ * Which frequency labels to leave out so none crowds another: the ends always stay, and a label is dropped
+ * when it comes within a few pixels of one kept before it. Adjacent top octaves are 22 px apart at 320 px.
+ */
+export const thinAxisLabels = (boxes: readonly ({ left: number; right: number } | null)[]): number[] => {
+  const hidden: number[] = [];
+  const lastIndex = boxes.length - 1;
+  const lastBox = boxes[lastIndex];
+  let keptRight = -Infinity;
+  boxes.forEach((box, index) => {
+    if (!box) return;
+    const crowdsKept = box.left < keptRight + AXIS_LABEL_GAP_PX;
+    const crowdsLast = index < lastIndex && lastBox !== null && box.right + AXIS_LABEL_GAP_PX > lastBox.left;
+    if (index > 0 && (crowdsKept || crowdsLast)) hidden.push(index);
+    else keptRight = box.right;
+  });
+  return hidden;
+};
