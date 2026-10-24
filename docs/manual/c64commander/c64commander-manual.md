@@ -572,16 +572,6 @@ HVSC holds around sixty thousand files, and even more tunes, since many files ho
 
 There is no playlist to build, and nothing downloads while you listen. Once the collection is on your device, the app already knows which tunes sound alike.
 
-#### The spectrum and audio processing
-
-On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays. Bass is on the left and treble on the right. Each bar is colored by its level, green for most levels, turning yellow, orange and red as the level nears full scale, and the small cap above a bar is that pitch's recent peak. Above the spectrum, each audio output channel has one horizontal meter that grows from left to right toward 0: the solid fill shows its average level, a translucent extension shows its instantaneous peak, and a thin marker holds its recent highest peak. A red block at the right end of a meter lights briefly when this channel reaches full scale. **L** and **R** are the left and right playback channels, including the mix from multiple SID chips. The rows stay in place even when both channels match. The scale under the meters is in dBFS, where 0 is full scale and the loudest a digital signal can be. When a tune plays on your phone or tablet, the bars follow what its speaker is playing at that moment, after the audio processing described below. When Live View plays your C64's sound here, the bars follow your C64's own sound as it arrives, before that processing, so they keep time with your C64 rather than with the copy your phone or tablet plays a moment later.
-
-![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/medium/01-spectrum.png)
-
-Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.
-
-**Settings → Audio processing** changes how the sound from your phone or tablet is played. Everything starts off, and with an effect off the sound is left exactly as it was. **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening. **Equalizer** raises or lowers **Bass**, **Mid** and **Treble** by up to 12 dB, with **Reset** to put them back. **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers, and **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
-
 ![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/profiles/medium/02-stations.png)
 
 #### Starting a station
@@ -673,6 +663,39 @@ The second is what the individual tunes inside a file are called. A list of nine
 #### Stopping later
 
 Set a **Sleep timer** if you are listening at bedtime. It sits under the transport controls on Play. Choose **This tune** to stop when the current one ends, or **15m**, **30m**, **45m** or **60m** for that many minutes. It counts down while it waits; **Off** cancels it.
+
+#### The spectrum and audio processing
+
+On an Android phone or tablet, the **Spectrum** card on Play shows how loud the sound is at every pitch, as it plays.
+
+**The bars**
+
+- Bass is on the left and treble on the right.
+- Each bar is colored by its level: green for most levels, then yellow, orange and red as the level nears full scale.
+- The small cap above a bar is that pitch's recent peak.
+
+**The meters above the bars**
+
+- **L** and **R** are the left and right playback channels, including the mix from several SID chips. Both rows always stay in place, even when the channels match.
+- The solid fill is the average level. A translucent extension shows the instant peak, and a thin marker holds the recent highest peak.
+- A red block at the right end lights briefly when that channel reaches full scale.
+- The scale under the meters is in dBFS: 0 is full scale, the loudest a digital signal can be.
+
+**What the card follows**
+
+- A tune playing on your phone or tablet: the bars follow what its speaker plays at that moment, after the audio processing below.
+- Live View playing your C64's sound here: the bars follow your C64's own sound as it arrives, before that processing. They keep time with your C64, not with the copy your phone or tablet plays a moment later.
+
+![The Spectrum card while a tune plays on the phone](../../img/app/play/spectrum/profiles/medium/01-spectrum.png)
+
+Open and close the card from its header. While it is closed, or you are on another page, the app does no work for it. On a small or slow screen the picture simplifies itself, with fewer and plainer bars, to stay smooth.
+
+**Settings → Audio processing** changes how the sound from your phone or tablet is played. Everything starts off, and with an effect off the sound is left exactly as it was.
+
+- **Normalize volume** keeps loud and quiet songs at a similar level, which is handy in the evening.
+- **Equalizer** raises or lowers **Bass**, **Mid** and **Treble** by up to 12 dB. **Reset** puts them back.
+- **Stereo width** (**Off**, **Subtle**, **Wide**) spreads the SID's single channel across both speakers.
+- **Reverb** (**Off**, **Room**, **Hall**) adds the sound of a space.
 
 ### Live View
 
