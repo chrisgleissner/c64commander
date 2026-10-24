@@ -202,13 +202,15 @@ Build playlists from local files, C64 Ultimate storage, HVSC, or CommoServe. Use
 
 #### Spectrum
 
-On Android, the Spectrum card on Play draws the sound your phone is playing as it plays, from bass on the left to treble on the right. Each bar is colored by its level, a small cap marks each pitch's recent peak, and a level meter for each of the left and right channels shows how loud the sound is, with a color change toward red near full scale. It covers tunes played on the phone and your C64's sound when Live View plays it there. Under Settings > Audio processing you can also normalize volume, adjust bass, mid and treble, widen the stereo image and add reverb.
+On Android, the Spectrum card on Play draws the sound your phone is playing as it plays, from bass on the left to treble on the right.
+
+Under Settings > Audio processing you can also normalize volume, adjust bass, mid and treble, widen the stereo image and add reverb.
 
 <img src="docs/img/app/play/spectrum/profiles/medium/01-spectrum.png" alt="Spectrum card on Play: left and right level meters above colored bars from bass to treble with peak caps" width="360"/>
 
 ### SID Radio
 
-Create an endless playlist of similar SID tunes from HVSC. Radio keeps the newest 200 queued tunes by default; change the limit under **Settings → SID Radio**. **Repeat: tune** loops the current tune, and **Shuffle** can turn the radio queue into a shuffled playlist after confirmation. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections. A station never repeats a tune, and never plays two pieces from the same SID file back to back.
+Create an endless playlist of similar SID tunes from HVSC. Radio keeps the newest 200 queued tunes by default. Start with the current song, choose a mood, or build from your liked tunes. Use ♥ and ✕ to shape future selections. 
 
 Collections play a fixed list instead, taken from the HVSC tune notes (STIL): competition winners, movie and TV themes, music from games on other machines, electronic pioneers, synth-pop, classical, C64 remixes, and Christmas songs in season. A collection plays only its own tunes, each once, and your likes decide which come first.
 
