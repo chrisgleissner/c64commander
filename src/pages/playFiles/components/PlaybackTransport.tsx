@@ -294,7 +294,7 @@ export const PlaybackTransport = memo(
       disabled: !canTransport || !hasNext,
     });
     return (
-      <div className="mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
+      <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
         {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
             44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
             were, and the row stopped 33 px short of the right edge — visibly ragged against the

@@ -95,6 +95,11 @@ describe("player controls layout slots", () => {
     expect(before(screen.getByTestId("playback-progress"), screen.getByTestId("playback-stop-status"))).toBe(true);
   });
 
+  it("spans the whole card width with the transport and progress stack", () => {
+    render(<PlaybackControlsCard {...props()} />);
+    expect(screen.getByTestId("playback-controls-stack").className).toMatch(/\bcol-span-3\b/);
+  });
+
   it("reserves a width for both time labels", () => {
     render(<PlaybackControlsCard {...props()} />);
     expect(screen.getByTestId("playback-remaining").className).toMatch(/min-w-\[6ch\]/);
