@@ -7,11 +7,6 @@
  */
 import { TONE_MAX_DB, TONE_MIN_DB, frequencyToFraction } from "@/lib/audio/tone/toneCurve";
 
-export interface TonePoint {
-  hz: number;
-  db: number;
-}
-
 export interface ToneTarget {
   band: number;
   freq: number;
@@ -35,22 +30,49 @@ export const handlePosition = (target: ToneTarget, width: number, height: number
   y: yForDb(target.db, height),
 });
 
-/** The sampled response with the handle points merged in, so the drawn line passes through every handle. */
-export const curvePixels = (
-  freqs: readonly number[],
-  responseDb: readonly number[],
-  targets: readonly ToneTarget[],
-  width: number,
-  height: number,
-): Pixel[] => {
-  const points: TonePoint[] = freqs.map((hz, index) => ({ hz, db: responseDb[index] ?? 0 }));
-  for (const target of targets) points.push({ hz: target.freq, db: target.db });
-  return points
-    .sort((a, b) => a.hz - b.hz)
-    .map((point) => ({ x: xForHz(point.hz, width), y: yForDb(point.db, height) }));
+/** The handle points left to right, with a flat run out to each edge so the curve spans the whole plot. */
+export const handlePixels = (targets: readonly ToneTarget[], width: number, height: number): Pixel[] => {
+  const points = targets.map((target) => handlePosition(target, width, height)).sort((a, b) => a.x - b.x);
+  if (points.length === 0) return [];
+  return [{ x: 0, y: points[0].y }, ...points, { x: width, y: points[points.length - 1].y }];
 };
 
-/** A Catmull-Rom spline through the points as cubic Beziers. It only smooths between samples that already lie on the response. */
+/**
+ * Slopes for a monotone cubic Hermite curve through the points (Fritsch-Butland, as in PCHIP). Where the
+ * neighbouring secants differ in sign the slope is 0, and otherwise it is their weighted harmonic mean, so
+ * the curve never rises above or falls below the points either side of it.
+ */
+export const monotoneSlopes = (points: readonly Pixel[]): number[] => {
+  const widths = points.slice(1).map((point, i) => point.x - points[i].x);
+  const secants = widths.map((dx, i) => (dx === 0 ? 0 : (points[i + 1].y - points[i].y) / dx));
+  return points.map((_, i) => {
+    if (i === 0) return secants[0] ?? 0;
+    if (i === points.length - 1) return secants[i - 1];
+    const before = secants[i - 1];
+    const after = secants[i];
+    if (before * after <= 0) return 0;
+    const w1 = 2 * widths[i] + widths[i - 1];
+    const w2 = widths[i] + 2 * widths[i - 1];
+    return (w1 + w2) / (w1 / before + w2 / after);
+  });
+};
+
+/** The monotone curve through every point, as cubic Beziers whose ends are exactly the points. */
+export const monotonePath = (points: readonly Pixel[]): string => {
+  if (points.length === 0) return "";
+  const f = (n: number) => n.toFixed(3);
+  const slopes = monotoneSlopes(points);
+  let d = `M${f(points[0].x)} ${f(points[0].y)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    const third = (b.x - a.x) / 3;
+    d += ` C${f(a.x + third)} ${f(a.y + slopes[i] * third)} ${f(b.x - third)} ${f(b.y - slopes[i + 1] * third)} ${f(b.x)} ${f(b.y)}`;
+  }
+  return d;
+};
+
+/** A Catmull-Rom spline through the points as cubic Beziers, for the spectrum backdrop. */
 export const smoothPath = (points: readonly Pixel[]): string => {
   if (points.length === 0) return "";
   const f = (n: number) => n.toFixed(3);
@@ -65,17 +87,6 @@ export const smoothPath = (points: readonly Pixel[]): string => {
   return d;
 };
 
-/** The y of the piecewise-linear curve through the points at an x, for checking a handle sits on the line. */
-export const curveYAt = (points: readonly Pixel[], x: number): number => {
-  for (let i = 0; i < points.length - 1; i += 1) {
-    if (x >= points[i].x && x <= points[i + 1].x) {
-      const span = points[i + 1].x - points[i].x;
-      return span === 0 ? points[i].y : points[i].y + ((x - points[i].x) / span) * (points[i + 1].y - points[i].y);
-    }
-  }
-  return NaN;
-};
-
 /**
  * A hairline at CSS position `at` placed on whole device pixels: its width is the nearest whole number of
  * device pixels to one CSS pixel, and its edges fall on device pixel boundaries.
@@ -87,23 +98,11 @@ export const crispLine = (at: number, devicePixelRatio: number): { at: number; w
   return { at: (start + devicePixels / 2) / ratio, width: devicePixels / ratio };
 };
 
-export const AXIS_LABEL_GAP_PX = 8;
+export const FREQUENCY_LABEL_SPACING_PX = 36;
 
-/**
- * Which frequency labels to leave out so none crowds another: the ends always stay, and a label is dropped
- * when it comes within a few pixels of one kept before it. Adjacent top octaves are 22 px apart at 320 px.
- */
-export const thinAxisLabels = (boxes: readonly ({ left: number; right: number } | null)[]): number[] => {
-  const hidden: number[] = [];
-  const lastIndex = boxes.length - 1;
-  const lastBox = boxes[lastIndex];
-  let keptRight = -Infinity;
-  boxes.forEach((box, index) => {
-    if (!box) return;
-    const crowdsKept = box.left < keptRight + AXIS_LABEL_GAP_PX;
-    const crowdsLast = index < lastIndex && lastBox !== null && box.right + AXIS_LABEL_GAP_PX > lastBox.left;
-    if (index > 0 && (crowdsKept || crowdsLast)) hidden.push(index);
-    else keptRight = box.right;
-  });
-  return hidden;
+/** Which bands get a frequency label: all ten when an octave is wide enough for one, otherwise every second one. */
+export const labelledBands = (plotWidthPx: number, bandCount: number): number[] => {
+  const octavePx = xForHz(2, plotWidthPx) - xForHz(1, plotWidthPx);
+  const all = Array.from({ length: bandCount }, (_, band) => band);
+  return octavePx >= FREQUENCY_LABEL_SPACING_PX ? all : all.filter((band) => band % 2 === 1);
 };

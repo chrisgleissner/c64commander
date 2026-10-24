@@ -10,6 +10,7 @@ import { RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { VERTICAL_OWNER_ATTR } from "@/lib/input";
+import { useInputModality } from "@/hooks/useInputModality";
 import {
   TONE_BAND_COUNT,
   TONE_BAND_HZ,
@@ -19,7 +20,7 @@ import {
   isFlat,
   withBandGain,
 } from "@/lib/audio/tone/toneCurve";
-import { buildPlotModel } from "@/lib/audio/tone/toneResponse";
+import { plotTargets } from "@/lib/audio/tone/toneResponse";
 import { useMorphedBands } from "@/lib/audio/tone/useMorphedBands";
 import { ToneCurvePlot } from "@/components/sound/ToneCurvePlot";
 
@@ -38,9 +39,10 @@ interface ToneCurveEditorProps {
 }
 
 /**
- * The ten-band tone curve: a plot of the whole response with one draggable point per band. A touch picks
- * the band nearest to it and a drag changes that band's gain only. With keys, Left and Right pick a band;
- * OK starts and ends gain editing, in which Up and Down change the gain (3 dB while a key is held).
+ * The ten-band tone curve: one draggable point per band and a smooth curve through all of them. A touch
+ * picks the band nearest to it and a drag changes that band's gain only; a double tap puts it back to 0 dB.
+ * With keys, Left and Right pick a band; OK starts and ends gain editing, in which Up and Down change the
+ * gain (3 dB while a key is held). The key hint shows only while keys are in use.
  */
 export const ToneCurveEditor = ({
   bandsDb,
@@ -54,7 +56,8 @@ export const ToneCurveEditor = ({
   const [focused, setFocused] = useState(false);
   const immediate = useRef(false);
   const shownBands = useMorphedBands(bandsDb, animate, immediate);
-  const { freqs, responseDb, targets } = useMemo(() => buildPlotModel(shownBands), [shownBands]);
+  const targets = useMemo(() => plotTargets(shownBands), [shownBands]);
+  const keypad = useInputModality() === "key-navigation";
   const gain = bandsDb[selected] ?? 0;
 
   const setBand = (band: number, db: number) => {
@@ -124,12 +127,11 @@ export const ToneCurveEditor = ({
         </button>
       </div>
       <ToneCurvePlot
-        responseDb={responseDb}
-        freqs={freqs}
         targets={targets}
         selectedBand={selected}
         onChange={setBand}
         onSelect={setSelected}
+        onResetBand={(band) => setBand(band, 0)}
         spectrum={spectrum}
         emphasis={editing}
         disabled={disabled}
@@ -149,7 +151,6 @@ export const ToneCurveEditor = ({
           "data-selected-band": selected,
           "data-testid": "sound-tone-plot",
           className: cn(editing && "ring-2 ring-foreground/70 ring-offset-2 ring-offset-card"),
-          onDoubleClick: () => !disabled && onChange(flatBands()),
           onClick: (event) => event.detail === 0 && !disabled && setEditing((value) => !value),
           onKeyDown,
           onFocus: () => setFocused(true),
@@ -159,11 +160,9 @@ export const ToneCurveEditor = ({
           },
         }}
       />
-      {focused && !disabled ? (
+      {focused && keypad && !disabled ? (
         <p className="text-sm text-muted-foreground" data-testid="sound-tone-hint">
-          {editing
-            ? "Up and down change the gain. OK to finish."
-            : "Left and right choose a band. OK to adjust its gain."}
+          {editing ? "Up and down set the gain, OK to finish" : "Left and right pick a band, OK to adjust"}
         </p>
       ) : null}
     </div>

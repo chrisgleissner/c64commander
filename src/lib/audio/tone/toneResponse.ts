@@ -14,6 +14,7 @@ import {
   TONE_SAMPLE_RATE,
   type BandGains,
 } from "@/lib/audio/tone/toneCurve";
+import type { ToneTarget } from "@/lib/audio/tone/toneGeometry";
 
 export const TONE_RESPONSE_POINTS = 240;
 export const TONE_PLOT_LOW_HZ = 20;
@@ -132,19 +133,8 @@ export const compensatedGains = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_
 export const reachableTargets = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_RATE): number[] =>
   responseAtCentres(compensatedGains(targetsDb, sampleRate), sampleRate);
 
-export interface PlotModel {
-  freqs: readonly number[];
-  responseDb: number[];
-  targets: { band: number; freq: number; db: number }[];
-}
-
-/** What the plot draws for these target points: the true response of the compensated gains and handles on it. */
-export const buildPlotModel = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_RATE): PlotModel => {
-  const gains = compensatedGains(targetsDb, sampleRate);
-  const reached = responseAtCentres(gains, sampleRate);
-  return {
-    freqs: FREQUENCIES_HZ,
-    responseDb: sampleResponse(gains, sampleRate),
-    targets: TONE_BAND_HZ.map((freq, band) => ({ band, freq, db: reached[band] })),
-  };
+/** The handles the plot draws for these target points: each at the value the filters reach at its centre. */
+export const plotTargets = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_RATE): ToneTarget[] => {
+  const reached = reachableTargets(targetsDb, sampleRate);
+  return TONE_BAND_HZ.map((freq, band) => ({ band, freq, db: reached[band] }));
 };

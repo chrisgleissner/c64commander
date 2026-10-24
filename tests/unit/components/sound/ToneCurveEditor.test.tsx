@@ -5,13 +5,14 @@
  * Licensed under the GNU General Public License v3.0 or later.
  * See <https://www.gnu.org/licenses/> for details.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToneCurveEditor } from "@/components/sound/ToneCurveEditor";
 import { flatBands, frequencyToFraction } from "@/lib/audio/tone/toneCurve";
 import { reachableTargets } from "@/lib/audio/tone/toneResponse";
+import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
 
 const WIDTH = 300;
 const HEIGHT = 176;
@@ -43,7 +44,10 @@ describe("ToneCurveEditor", () => {
       toJSON: () => ({}),
     });
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetInputModality();
+  });
 
   it("starts on 1 kHz, flat, with a readout and a disabled reset", () => {
     render(<Harness />);
@@ -135,24 +139,39 @@ describe("ToneCurveEditor", () => {
     expect(bands()).toBe("0,0,0,0,0,3,0,0,0,0");
   });
 
-  it("resets to flat with the button and with a double tap", () => {
+  it("resets the whole curve to flat with the button", () => {
     render(<Harness initial={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} />);
     fireEvent.click(screen.getByTestId("sound-tone-reset"));
     expect(bands()).toBe("0,0,0,0,0,0,0,0,0,0");
-    fireEvent.keyDown(plot(), { key: "PageUp" });
-    fireEvent.doubleClick(plot());
-    expect(bands()).toBe("0,0,0,0,0,0,0,0,0,0");
   });
 
-  it("draws the curve from the lowest to the highest band through the points and keeps the plot at least 200 px high", () => {
+  it("puts only the double-tapped band back to 0 dB", () => {
+    render(<Harness initial={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]} />);
+    fireEvent.doubleClick(plot(), { clientX: frequencyToFraction(4000) * WIDTH, clientY: HEIGHT / 2 });
+    expect(bands()).toBe("1,2,3,4,5,6,7,0,9,10");
+  });
+
+  it("draws the curve across the whole plot through the points and keeps the plot at least 200 px high", () => {
     render(<Harness initial={[0, 0, 0, 0, 0, 12, 0, 0, 0, 0]} />);
     const d = screen.getByTestId("sound-tone-curve").getAttribute("d") ?? "";
-    expect(Number(d.slice(1).split(" ")[0])).toBeCloseTo(frequencyToFraction(31) * 100, 2);
-    expect(Number(d.trim().split(" ").slice(-2)[0])).toBeCloseTo(frequencyToFraction(16000) * 100, 2);
+    expect(Number(d.slice(1).split(" ")[0])).toBeCloseTo(0, 2);
+    expect(Number(d.trim().split(" ").slice(-2)[0])).toBeCloseTo(100, 2);
     const reachable = Math.round(reachableTargets([0, 0, 0, 0, 0, 12, 0, 0, 0, 0])[5] * 10) / 10;
     expect(reachable).toBeLessThan(12);
     expect(screen.getByTestId("sound-tone-point-5")).toHaveAttribute("data-gain", String(reachable));
     expect(plot().className).toContain("min-h-[200px]");
+  });
+
+  it("shows the key hint only while the plot has focus and keys are in use", () => {
+    render(<Harness />);
+    fireEvent.focus(plot());
+    expect(screen.queryByTestId("sound-tone-hint")).not.toBeInTheDocument();
+    act(() => setInputModality("key-navigation"));
+    expect(screen.getByTestId("sound-tone-hint")).toHaveTextContent("Left and right pick a band, OK to adjust");
+    fireEvent.keyDown(plot(), { key: "Enter" });
+    expect(screen.getByTestId("sound-tone-hint")).toHaveTextContent("Up and down set the gain, OK to finish");
+    act(() => setInputModality("pointer"));
+    expect(screen.queryByTestId("sound-tone-hint")).not.toBeInTheDocument();
   });
 
   it("does nothing while disabled", () => {

@@ -5,10 +5,20 @@
  * Licensed under the GNU General Public License v3.0 or later.
  * See <https://www.gnu.org/licenses/> for details.
  */
-import { useId, useLayoutEffect, useRef, useState, type HTMLAttributes, type PointerEvent, type Ref } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type MouseEvent,
+  type PointerEvent,
+  type Ref,
+} from "react";
 
 import { cn } from "@/lib/utils";
 import {
+  TONE_BAND_COUNT,
   TONE_BAND_HZ,
   formatBandHz,
   fractionToDb,
@@ -17,10 +27,11 @@ import {
 } from "@/lib/audio/tone/toneCurve";
 import {
   crispLine,
-  curvePixels,
+  handlePixels,
   handlePosition,
+  labelledBands,
+  monotonePath,
   smoothPath,
-  thinAxisLabels,
   xForHz,
   yForDb,
   type ToneTarget,
@@ -29,14 +40,13 @@ import { CUT_FILL, PITCH_STOPS, inkOn, pairVars, pitchPair } from "@/lib/audio/t
 import { SPECTRUM_LOW_HZ, SPECTRUM_OCTAVES } from "@/lib/audio/spectrum/spectrumBands";
 
 export interface ToneCurvePlotProps {
-  /** The true cascade response in dB at each of {@link freqs}. */
-  responseDb: readonly number[];
-  freqs: readonly number[];
-  /** One handle per band, already on the curve: the value shown is the value the curve reaches. */
+  /** One handle per band at the value the filters reach there; the curve is drawn through all of them. */
   targets: readonly ToneTarget[];
   selectedBand: number;
   onChange: (band: number, db: number) => void;
   onSelect: (band: number) => void;
+  /** A double tap on a band puts it back to 0 dB. */
+  onResetBand: (band: number) => void;
   /** Optional backdrop: levels from 0 to 1 over log-spaced bands from 31.25 Hz. */
   spectrum?: readonly number[] | null;
   /** A fixed height in CSS px; by default the plot is about 16:9, at least 200 px and at most 300 px high. */
@@ -51,12 +61,11 @@ export interface ToneCurvePlotProps {
 
 const VIEW = 100;
 const GUTTER_LEFT_PX = 44;
-const GUTTER_RIGHT_PX = 12;
+const GUTTER_RIGHT_PX = 16;
 const PAD_TOP_PX = 14;
-const PAD_BOTTOM_PX = 34;
+const PAD_BOTTOM_PX = 30;
 const GRID_DB = [12, 6, 0, -6, -12] as const;
-const AXIS_BANDS = [0, 2, 4, 6, 8, 9] as const;
-const AXIS_LABELS = ["31", "125", "500", "2k", "8k", "16k"] as const;
+const BAND_LABELS = ["31", "63", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"] as const;
 
 const dbLabel = (db: number) => (db > 0 ? `+${db}` : db < 0 ? `−${-db}` : "0");
 
@@ -103,18 +112,17 @@ const Grid = ({ width, height }: { width: number; height: number }) => {
   const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
   return (
     <svg className="absolute inset-0 overflow-visible" width={width} height={height} aria-hidden="true">
-      {AXIS_BANDS.map((band) => {
-        const line = crispLine(xForHz(TONE_BAND_HZ[band], width), ratio);
+      {TONE_BAND_HZ.map((hz) => {
+        const line = crispLine(xForHz(hz, width), ratio);
         return (
           <line
-            key={band}
+            key={hz}
             x1={line.at}
             x2={line.at}
             y1={0}
             y2={height}
-            className="stroke-foreground/[0.14]"
+            className="stroke-foreground/[0.06]"
             strokeWidth={line.width}
-            strokeDasharray="1 3"
           />
         );
       })}
@@ -128,9 +136,8 @@ const Grid = ({ width, height }: { width: number; height: number }) => {
             x2={width}
             y1={line.at}
             y2={line.at}
-            className={zero ? "stroke-foreground/40" : "stroke-foreground/[0.16]"}
+            className={zero ? "stroke-foreground/30" : "stroke-foreground/[0.08]"}
             strokeWidth={line.width}
-            strokeDasharray={zero ? undefined : "1 3"}
             data-testid={zero ? "sound-tone-zero" : undefined}
           />
         );
@@ -144,12 +151,11 @@ const Grid = ({ width, height }: { width: number; height: number }) => {
  * (band, db); it holds no tone logic, so its rendering can be replaced without touching the editor.
  */
 export const ToneCurvePlot = ({
-  responseDb,
-  freqs,
   targets,
   selectedBand,
   onChange,
   onSelect,
+  onResetBand,
   spectrum,
   height,
   emphasis = false,
@@ -162,18 +168,15 @@ export const ToneCurvePlot = ({
   const dragging = useRef<number | null>(null);
   const [dragBand, setDragBand] = useState<number | null>(null);
   const area = useBox(areaRef);
-  const axisRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const [hiddenAxis, setHiddenAxis] = useState<readonly number[]>([]);
-  useLayoutEffect(() => {
-    const spans = axisRefs.current.map((span) => span?.getBoundingClientRect() ?? null);
-    const hidden = thinAxisLabels(spans.map((rect) => (rect ? { left: rect.left, right: rect.right } : null)));
-    setHiddenAxis((current) =>
-      current.length === hidden.length && current.every((value, index) => value === hidden[index]) ? current : hidden,
-    );
-  }, [area.width]);
+  const labelled = labelledBands(area.width, TONE_BAND_COUNT);
   const setRootRef = (element: HTMLDivElement | null) => {
     if (typeof plotRef === "function") plotRef(element);
     else if (plotRef) (plotRef as { current: HTMLDivElement | null }).current = element;
+  };
+
+  const bandAt = (clientX: number) => {
+    const box = areaRef.current?.getBoundingClientRect();
+    return box && box.width > 0 ? nearestBandAtFraction((clientX - box.left) / box.width) : null;
   };
 
   const dbAt = (clientY: number) => {
@@ -182,9 +185,8 @@ export const ToneCurvePlot = ({
   };
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    const box = areaRef.current?.getBoundingClientRect();
-    if (disabled || !box || box.width === 0) return;
-    const band = nearestBandAtFraction((event.clientX - box.left) / box.width);
+    const band = disabled ? null : bandAt(event.clientX);
+    if (band === null) return;
     onSelect(band);
     dragging.current = band;
     setDragBand(band);
@@ -204,23 +206,20 @@ export const ToneCurvePlot = ({
     setDragBand(null);
   };
 
-  const inBands = freqs.flatMap((hz, index) => (hz > LOW_HZ && hz < HIGH_HZ ? [index] : []));
-  const curve = smoothPath(
-    curvePixels(
-      inBands.map((index) => freqs[index]),
-      inBands.map((index) => responseDb[index]),
-      targets,
-      VIEW,
-      VIEW,
-    ),
-  );
+  const onDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
+    const band = disabled ? null : bandAt(event.clientX);
+    if (band !== null) onResetBand(band);
+  };
+
+  const curve = monotonePath(handlePixels(targets, VIEW, VIEW));
   const zeroY = yForDb(0, VIEW);
-  const fill = `${curve} L${xForHz(HIGH_HZ, VIEW).toFixed(3)} ${zeroY} L${xForHz(LOW_HZ, VIEW).toFixed(3)} ${zeroY} Z`;
+  const fill = `${curve} L${VIEW} ${zeroY} L0 ${zeroY} Z`;
   const gradient = `${ids}-pitch`;
   const boostMask = `${ids}-boost`;
   const cutMask = `${ids}-cut`;
   const selected = targets.find((target) => target.band === selectedBand);
-  const showBubble = !disabled && selected !== undefined && (emphasis || dragBand !== null);
+  const active = emphasis || dragBand !== null;
+  const showBubble = !disabled && selected !== undefined && active;
 
   return (
     <div
@@ -237,6 +236,7 @@ export const ToneCurvePlot = ({
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
+      onDoubleClick={onDoubleClick}
     >
       {GRID_DB.map((db) => (
         <span
@@ -254,31 +254,23 @@ export const ToneCurvePlot = ({
           {dbLabel(db)}
         </span>
       ))}
-      {AXIS_BANDS.map((band, index) => {
-        const last = index === AXIS_BANDS.length - 1;
+      {labelled.map((band) => {
+        const isSelected = band === selectedBand && !disabled;
         return (
           <span
             key={band}
-            ref={(element) => {
-              axisRefs.current[index] = element;
-            }}
             aria-hidden="true"
             className={cn(
-              "absolute bottom-2.5 whitespace-nowrap text-sm leading-none tabular-nums text-muted-foreground",
-              last ? "right-[3px]" : "-translate-x-1/2",
-              hiddenAxis.includes(index) && "invisible",
+              "snd-hue absolute bottom-2 -translate-x-1/2 whitespace-nowrap text-sm leading-none tabular-nums transition-colors",
+              isSelected ? "font-semibold text-[var(--hue)]" : "text-muted-foreground",
             )}
-            data-hidden={hiddenAxis.includes(index) ? "true" : undefined}
-            style={
-              last
-                ? undefined
-                : {
-                    left: `calc(${GUTTER_LEFT_PX}px + (100% - ${GUTTER_LEFT_PX + GUTTER_RIGHT_PX}px) * ${frequencyToFraction(TONE_BAND_HZ[band]).toFixed(4)})`,
-                  }
-            }
-            data-testid={`sound-tone-axis-${AXIS_LABELS[index]}`}
+            style={{
+              ...pairVars("hue", pitchPair(TONE_BAND_HZ[band])),
+              left: `calc(${GUTTER_LEFT_PX}px + (100% - ${GUTTER_LEFT_PX + GUTTER_RIGHT_PX}px) * ${frequencyToFraction(TONE_BAND_HZ[band]).toFixed(4)})`,
+            }}
+            data-testid={`sound-tone-axis-${BAND_LABELS[band]}`}
           >
-            {AXIS_LABELS[index]}
+            {BAND_LABELS[band]}
           </span>
         );
       })}
@@ -377,7 +369,7 @@ export const ToneCurvePlot = ({
             d={curve}
             fill="none"
             stroke={`url(#${gradient})`}
-            strokeWidth="2.5"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -400,7 +392,10 @@ export const ToneCurvePlot = ({
         {selected && !disabled ? (
           <span
             aria-hidden="true"
-            className="snd-hue pointer-events-none absolute size-10 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-20"
+            className={cn(
+              "snd-hue snd-handle pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full",
+              active ? "size-12 opacity-25" : "size-9 opacity-[0.16]",
+            )}
             style={{
               ...pairVars("hue", pitchPair(selected.freq)),
               left: `${handlePosition(selected, 100, 100).x}%`,
@@ -424,10 +419,8 @@ export const ToneCurvePlot = ({
               data-y={at.y}
               data-selected={isSelected ? "true" : "false"}
               className={cn(
-                "snd-hue snd-handle pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white",
-                isSelected
-                  ? "size-[22px] shadow-[0_2px_6px_rgb(0_0_0/0.35)]"
-                  : "size-[14px] shadow-[0_1px_3px_rgb(0_0_0/0.3)]",
+                "snd-hue snd-handle pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card",
+                isSelected ? "size-5 shadow-[0_2px_6px_rgb(0_0_0/0.3)]" : "size-3.5 shadow-[0_1px_3px_rgb(0_0_0/0.25)]",
               )}
               style={{ ...pairVars("hue", hue), left: `${at.x}%`, top: `${at.y}%`, background: "var(--hue)" }}
             />
