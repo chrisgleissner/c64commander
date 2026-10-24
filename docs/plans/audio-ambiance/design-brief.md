@@ -7,8 +7,9 @@ not inviting. This brief replaces the visuals. The data and math layer (true fil
 
 ## Principles
 
-1. **Precise.** The drawn curve is the true response of the filters, handles sit exactly on it (see AMB-03 acceptance),
-   and nothing wobbles. No overshoot, no end kinks, no stray bumps.
+1. **Precise.** The curve passes through the centre of every handle and moves smoothly from one to the next; each
+   handle sits at the value the filters reach at its band (see AMB-03 acceptance). Nothing wobbles: no overshoot
+   between handles, no end kinks, no stray bumps.
 2. **Alive and colorful, with taste.** Color carries meaning, never decoration: pitch, ambiance and gain each map to color.
 3. **Inviting.** The curve is the hero. It looks like an instrument you want to touch, with a clear touch affordance.
 4. **Calm hierarchy.** One focal element, quiet labels, no nested card chrome, generous spacing.
@@ -38,15 +39,21 @@ not inviting. This brief replaces the visuals. The data and math layer (true fil
 - Expanded card order: header (title "Sound", On/Off switch with a clear label), ambiance chip row, the curve plot,
   readout, tone preset chips, a Normalize volume switch, then two notched sliders (Stereo width, Reverb); no collapsed fine-tune fold. No card inside a card.
 - **Plot.** Edge to edge within the card padding, minimum 200 px high at 320 px width (taller on larger profiles, about
-  16:9), corner radius from tokens. Horizontal guide lines at +12, +6, 0, -6, -12 dB: the 0 dB line is a clear thin
-  line, the others faint and dotted. Vertical guides only at the labeled frequencies. dB labels on the left inside the
-  plot, frequency labels along the bottom at the true band positions (31, 125, 500, 2k, 8k, 16k), minimum 14 px,
-  tabular numerals, muted color, never overlapping at 320 px.
-- **Curve.** 2.5 px stroke, round caps, the pitch gradient, a soft glow (blurred duplicate at about 30% opacity), drawn from the
-  sampled true response with a smooth path.
-- **Handles.** Ten solid dots, 14 px visual, white ring of 2 px, soft shadow, in the pitch hue, exactly on the curve.
-  Selected handle: 22 px with a halo and a value bubble above it ("1 kHz  +3.0 dB", pill with the hue). Hit area 44 px.
-  While dragging, a vertical guide line from the handle to the axis.
+  16:9), corner radius from tokens. Horizontal hairlines at +12, +6, 0, -6, -12 dB: the 0 dB line is clear, the
+  others faint. A faint vertical hairline at each of the ten bands. dB labels (+12, +6, 0, -6, -12) in a left gutter,
+  frequency labels along the bottom at the band positions: all ten when an octave is at least 36 px wide, otherwise
+  every second band (63, 250, 1k, 4k, 16k). Minimum 14 px, tabular numerals, muted color; the selected band's label
+  takes its pitch color. Never overlapping at 320 px.
+- **Curve.** 3 px stroke, round caps, the pitch gradient, a soft glow (blurred duplicate at about 30% opacity). It is a
+  monotone cubic through the handle centres (Fritsch-Butland slopes, as in PCHIP), drawn in the same plot coordinates
+  as the handles, with flat runs from the first and last handle to the plot edges. The true filter response is not
+  drawn: between handles it ripples, which made the line wander around the points.
+- **Handles.** Ten solid dots, 14 px visual, a 2 px ring in the card color, soft shadow, in the pitch hue.
+  Selected handle: 20 px with a halo that grows while it is dragged or edited with keys, and a value bubble above it
+  ("1 kHz  +3.0 dB", pill with the hue). The whole column of a band is its hit area. While dragging, a vertical guide
+  line from the handle to the axis. A double tap resets that band to 0 dB.
+- **Hints.** No permanent instructions. A short key hint appears under the plot only while it has focus and the last
+  input was a navigation key.
 - **Spectrum backdrop.** The live spectrum as a very faint area (8 to 12% opacity) behind the curve. Stops when hidden.
 - **Header readout.** Title left, readout of the selected band (tabular numerals) and an icon-style Reset (rotate-left
   glyph, 44 px hit area, tooltip text) right.

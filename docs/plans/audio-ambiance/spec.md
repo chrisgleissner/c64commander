@@ -50,8 +50,11 @@ curve, and adds one-tap ambiance presets.
 ### AMB-03 The tone curve editor
 
 - Requirement: A graph of the whole curve (frequency on a log axis, gain in dB) with ten draggable points and one smooth
-  line that is the true magnitude response of the ten filters (240 log-spaced samples, `toneResponse.ts`), with every point on that line, the Spectrum card's colors, and a numeric readout of the touched band ("1 kHz, +3 dB"). Dragging
-  changes only the gain; band frequencies are fixed. Double tap or "Reset" returns to flat. Keypad: left and right move
+  line through the centre of every point (a monotone cubic, so it cannot overshoot between points). Each point sits at
+  the value the true magnitude response of the ten filters reaches at its band (`toneResponse.ts`). The graph has a dB
+  scale, the Spectrum card's colors, and a numeric readout of the touched band ("1 kHz, +3 dB"). Dragging
+  changes only the gain; band frequencies are fixed. A double tap resets the tapped band; "Reset" returns the whole
+  curve to flat. A key hint shows only while keys are in use. Keypad: left and right move
   the selected band, up and down change gain by 1 dB, long press by 3 dB, with the selected band and value announced
   and visible. Tone presets: Flat, Bass boost, Treble boost, Vocal presence, Loudness, Warm, Bright. The editor must be
   usable at 320 px (a minimum 160 px plot height, 44 px point hit areas).
