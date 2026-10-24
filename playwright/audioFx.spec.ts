@@ -74,6 +74,7 @@ test.describe("Spectrum card and audio processing", () => {
     disableTraceAssertions(testInfo, "Layout coverage with a mocked native plugin; trace assertions disabled.");
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => localStorage.setItem("c64u_playback_engine", "local"));
   });
 
   test.afterEach(async () => {
@@ -218,6 +219,8 @@ test.describe("Spectrum card and audio processing", () => {
         params: { levelling: false, bandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], stereoWidth: 0, reverb: 0 },
       });
 
+    await page.getByTestId("play-section-toggle-sound").click();
+    await expect(page.getByTestId("sound-body")).toBeVisible();
     await page.getByTestId("sound-chip-hall").click();
     await expect(page.getByTestId("sound-active-name")).toHaveText("Hall");
     await expect
@@ -233,8 +236,6 @@ test.describe("Spectrum card and audio processing", () => {
     await page.getByTestId("sound-back").click();
     await expect(page.getByTestId("sound-active-name")).toHaveText("Hall");
 
-    await page.getByTestId("play-section-toggle-sound").click();
-    await expect(page.getByTestId("sound-body")).toBeVisible();
     await page.getByTestId("sound-tone-preset-bass-boost").scrollIntoViewIfNeeded();
     await page.getByTestId("sound-tone-preset-bass-boost").click();
     await expect.poll(async () => (await lastBands(page))[1]).toBeGreaterThan(3);
@@ -251,7 +252,7 @@ test.describe("Spectrum card and audio processing", () => {
     await keepShot(card, "sound-card-compact");
   });
 
-  test("dragging a point of the tone curve changes that band only", async ({ page }) => {
+  test("dragging a point of the tone curve changes that band only, and a double tap resets it", async ({ page }) => {
     await installAudioFxMock(page);
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
@@ -270,9 +271,12 @@ test.describe("Spectrum card and audio processing", () => {
     await page.mouse.move(x, box.y + box.height * 0.25, { steps: 5 });
     await page.mouse.up();
     await expect(page.getByTestId("sound-tone-readout")).toHaveText("4 kHz, +6 dB");
+    await expect(page.getByTestId("sound-tone-hint"), "No key hint for a touch user").toHaveCount(0);
     await expect.poll(async () => (await lastBands(page))[7]).toBeGreaterThan(5.5);
     await expectHandlesOnTheCurve(page);
-    await plot.dblclick();
+    const moved = await page.getByTestId("sound-tone-point-7").boundingBox();
+    if (!moved) throw new Error("Band 7 has no point after the drag");
+    await page.mouse.dblclick(moved.x + moved.width / 2, moved.y + moved.height / 2);
     await expect
       .poll(async () => (await audioFxCalls(page)).filter((c) => c.method === "setAudioProcessing").pop())
       .toMatchObject({ params: { bandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } });
@@ -331,6 +335,7 @@ test.describe("Spectrum card and audio processing", () => {
     expect(inView, "The tone curve the ring selected is scrolled into view").toBe(true);
     await page.keyboard.press("ArrowRight");
     await expect(page.getByTestId("sound-tone-readout")).toHaveText("2 kHz, 0 dB");
+    await expect(page.getByTestId("sound-tone-hint")).toHaveText("Left and right pick a band, OK to adjust");
     await page.keyboard.press("Enter");
     await expect(plot).toHaveAttribute("data-editing", "true");
     for (let n = 0; n < 3; n += 1) await page.keyboard.press("ArrowUp");
