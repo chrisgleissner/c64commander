@@ -58,7 +58,7 @@ features:
     enabled: true
     visible_to_user: false
     developer_only: true
-    group: experimental
+    group: stable
     title: Background execution
     description: Allow native background playback timing and auto-advance scheduling.
 
@@ -140,7 +140,7 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
-    group: experimental
+    group: stable
     title: Keyboard and keypad navigation
     description: >-
       Drive the app with a hardware keyboard, remote, or keypad. Numeric T9 text
@@ -193,7 +193,7 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
-    group: experimental
+    group: stable
     title: A/V sync tests
     description: >-
       Adds A/V-sync and tap-latency measurement tools to Live View on Home.
@@ -203,7 +203,7 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
-    group: experimental
+    group: stable
     title: Audio Mirror
     description: >-
       Hear the running machine's audio in Live View, with optional recording.
@@ -212,7 +212,7 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
-    group: experimental
+    group: stable
     title: Video Mirror
     description: >-
       See the running machine's video in Live View, with zoom/pan in Remote
@@ -230,7 +230,7 @@ features:
     enabled: false
     visible_to_user: false
     developer_only: true
-    group: experimental
+    group: stable
     title: Appearance Style Gallery
     description: >-
       Show the /dev/styles route: every widget under every appearance style,

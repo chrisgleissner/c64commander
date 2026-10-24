@@ -64,7 +64,7 @@ describe("featureFlags persistence and logging", () => {
       demo_mode_enabled: "stable",
       lighting_studio_enabled: "experimental",
       remote_input_enabled: "stable",
-      background_execution_enabled: "experimental",
+      background_execution_enabled: "stable",
       home_telnet_reu_snapshot_enabled: "experimental",
       ram_snapshots_enabled: "stable",
       home_telnet_config_actions_enabled: "experimental",
@@ -72,16 +72,16 @@ describe("featureFlags persistence and logging", () => {
       home_telnet_printer_actions_enabled: "experimental",
       home_telnet_power_cycle_enabled: "experimental",
       home_telnet_clear_ram_reboot_enabled: "experimental",
-      keypad_input_enabled: "experimental",
+      keypad_input_enabled: "stable",
       launch_safety_enabled: "stable",
       disk_explorer_enabled: "stable",
       in_image_search_enabled: "experimental",
       live_view_enabled: "stable",
-      av_sync_tests_enabled: "experimental",
-      audio_mirror_enabled: "experimental",
-      video_mirror_enabled: "experimental",
+      av_sync_tests_enabled: "stable",
+      audio_mirror_enabled: "stable",
+      video_mirror_enabled: "stable",
       new_disk_enabled: "stable",
-      app_styles_gallery_enabled: "experimental",
+      app_styles_gallery_enabled: "stable",
     });
   });
 
@@ -107,22 +107,22 @@ describe("featureFlags persistence and logging", () => {
     }
   });
 
-  it("ships the A/V Sync tests as a user-visible, default-on experimental flag", () => {
+  it("ships the A/V Sync tests as a user-visible, default-on stable flag", () => {
     const flag = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "av_sync_tests_enabled");
     expect(flag).toBeDefined();
     expect(flag?.enabled).toBe(true);
     expect(flag?.visible_to_user).toBe(true);
     expect(flag?.developer_only).toBe(false);
-    expect(flag?.group).toBe("experimental");
+    expect(flag?.group).toBe("stable");
   });
 
-  it("ships keyboard and keypad navigation as a user-visible, default-on experimental flag", () => {
+  it("ships keyboard and keypad navigation as a user-visible, default-on stable flag", () => {
     const keypad = FEATURE_FLAG_DEFINITIONS.find((definition) => definition.id === "keypad_input_enabled");
     expect(keypad).toBeDefined();
     expect(keypad?.enabled).toBe(true);
     expect(keypad?.visible_to_user).toBe(true);
     expect(keypad?.developer_only).toBe(false);
-    expect(keypad?.group).toBe("experimental");
+    expect(keypad?.group).toBe("stable");
     // Standard-user toggleable is derived as visible_to_user && !developer_only,
     // so this row remains available for users who need to disable keyboard navigation.
     expect(Boolean(keypad?.visible_to_user) && !keypad?.developer_only).toBe(true);
