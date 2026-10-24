@@ -261,14 +261,14 @@ test.describe("Spectrum card and audio processing", () => {
     await page.getByTestId("play-section-toggle-sound").click();
     const plot = page.getByTestId("sound-tone-plot");
     await plot.scrollIntoViewIfNeeded();
-    const box = await plot.boundingBox();
-    if (!box) throw new Error("The tone plot has no box");
+    const area = await page.getByTestId("sound-tone-area").boundingBox();
+    if (!area) throw new Error("The tone plot has no drawing area");
     const point = await page.getByTestId("sound-tone-point-7").boundingBox();
     if (!point) throw new Error("Band 7 has no point");
     const x = point.x + point.width / 2;
-    await page.mouse.move(x, box.y + box.height / 2);
+    await page.mouse.move(x, area.y + area.height / 2);
     await page.mouse.down();
-    await page.mouse.move(x, box.y + box.height * 0.25, { steps: 5 });
+    await page.mouse.move(x, area.y + area.height * 0.25, { steps: 5 });
     await page.mouse.up();
     await expect(page.getByTestId("sound-tone-readout")).toHaveText("4 kHz, +6 dB");
     await expect(page.getByTestId("sound-tone-hint"), "No key hint for a touch user").toHaveCount(0);
