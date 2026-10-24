@@ -89,7 +89,7 @@ describe("SoundCard", () => {
     render(<SoundCard c64Plays={false} />);
     openBody();
     fireEvent.click(screen.getByTestId("sound-tone-preset-bass-boost"));
-    expect(loadAudioProcessing().bandsDb).toEqual([6, 6, 5, 3, 1, 0, 0, 0, 0, 0]);
+    expect(loadAudioProcessingRecord().sound.bandsDb).toEqual([6, 6, 5, 3, 1, 0, 0, 0, 0, 0]);
     expect(screen.getByTestId("sound-tone-preset-bass-boost")).toHaveAttribute("aria-pressed", "true");
   });
 

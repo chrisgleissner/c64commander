@@ -45,6 +45,7 @@ import {
   useAudioProcessing,
 } from "@/lib/config/audioProcessingSettings";
 import { AUDIO_PROCESSING_PUSH_DELAY_MS, installAudioProcessingSync } from "@/lib/audio/audioProcessingSync";
+import { compensatedGains } from "@/lib/audio/tone/toneResponse";
 import { AMBIANCE_PRESETS } from "@/lib/audio/tone/ambiancePresets";
 
 const flatWith = (index: number, db: number) => Object.assign(new Array<number>(10).fill(0), { [index]: db });
@@ -70,7 +71,7 @@ describe("audio processing settings record", () => {
     saveAudioReverb(55);
     expect(loadAudioProcessing()).toEqual({
       levelling: true,
-      bandsDb: flatWith(5, 4).map((v, i) => (i === 8 ? -3 : v)),
+      bandsDb: compensatedGains(flatWith(5, 4).map((v, i) => (i === 8 ? -3 : v))),
       stereoWidth: 35,
       reverb: 55,
     });
@@ -95,7 +96,7 @@ describe("audio processing settings record", () => {
     localStorage.setItem("c64u_audio_reverb", "25");
     expect(loadAudioProcessing()).toEqual({
       levelling: true,
-      bandsDb: [0, 3, 3, 0, -2, -2, -2, 12, 12, 12],
+      bandsDb: compensatedGains([0, 3, 3, 0, -2, -2, -2, 12, 12, 12]),
       stereoWidth: 35,
       reverb: 25,
     });
@@ -303,7 +304,10 @@ describe("audio processing sync", () => {
     expect(setAudioProcessing).not.toHaveBeenCalled();
     vi.advanceTimersByTime(AUDIO_PROCESSING_PUSH_DELAY_MS + 1);
     expect(setAudioProcessing).toHaveBeenCalledTimes(1);
-    expect(setAudioProcessing).toHaveBeenCalledWith({ ...DEFAULT_AUDIO_PROCESSING, bandsDb: flatWith(1, 4) });
+    expect(setAudioProcessing).toHaveBeenCalledWith({
+      ...DEFAULT_AUDIO_PROCESSING,
+      bandsDb: compensatedGains(flatWith(1, 4)),
+    });
     stop();
   });
 

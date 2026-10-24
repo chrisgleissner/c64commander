@@ -35,33 +35,6 @@ export const isFlat = (bands: BandGains): boolean => bands.every((value) => valu
 export const legacyBands = (bassDb: number, midDb: number, trebleDb: number): number[] =>
   normalizeBands([0, bassDb, bassDb, 0, midDb, midDb, midDb, trebleDb, trebleDb, trebleDb]);
 
-const peakingMagnitudeDb = (centreHz: number, gainDb: number, hz: number): number => {
-  if (gainDb === 0) return 0;
-  const amplitude = 10 ** (gainDb / 40);
-  const alpha = Math.sin((2 * Math.PI * centreHz) / TONE_SAMPLE_RATE) / (2 * TONE_BAND_Q);
-  const cosC = Math.cos((2 * Math.PI * centreHz) / TONE_SAMPLE_RATE);
-  const a0 = 1 + alpha / amplitude;
-  const coefficients = [
-    (1 + alpha * amplitude) / a0,
-    (-2 * cosC) / a0,
-    (1 - alpha * amplitude) / a0,
-    (-2 * cosC) / a0,
-    (1 - alpha / amplitude) / a0,
-  ];
-  const w = (2 * Math.PI * hz) / TONE_SAMPLE_RATE;
-  const re = (k: number) => Math.cos(k * w);
-  const im = (k: number) => -Math.sin(k * w);
-  const nr = coefficients[0] + coefficients[1] * re(1) + coefficients[2] * re(2);
-  const ni = coefficients[1] * im(1) + coefficients[2] * im(2);
-  const dr = 1 + coefficients[3] * re(1) + coefficients[4] * re(2);
-  const di = coefficients[3] * im(1) + coefficients[4] * im(2);
-  return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
-};
-
-/** The combined response of all ten bands at one frequency, in dB: the line the editor draws. */
-export const responseDbAt = (bands: BandGains, hz: number): number =>
-  TONE_BAND_HZ.reduce((sum, centre, index) => sum + peakingMagnitudeDb(centre, bands[index] ?? 0, hz), 0);
-
 const PLOT_LOW_HZ = 20;
 const PLOT_HIGH_HZ = 20000;
 
@@ -71,13 +44,6 @@ export const frequencyToFraction = (hz: number): number =>
 
 export const fractionToFrequency = (fraction: number): number =>
   PLOT_LOW_HZ * (PLOT_HIGH_HZ / PLOT_LOW_HZ) ** Math.min(1, Math.max(0, fraction));
-
-/** The curve sampled at evenly spaced positions of the log axis. */
-export const sampleCurve = (bands: BandGains, points: number): { fraction: number; db: number }[] =>
-  Array.from({ length: points }, (_, index) => {
-    const fraction = index / (points - 1);
-    return { fraction, db: responseDbAt(bands, fractionToFrequency(fraction)) };
-  });
 
 export const dbToFraction = (db: number): number => (TONE_MAX_DB - db) / (TONE_MAX_DB - TONE_MIN_DB);
 

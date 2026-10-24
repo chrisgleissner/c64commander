@@ -708,6 +708,7 @@ The **Sound** card on Play changes how the sound from your phone or tablet is pl
 
 - The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
 - Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
+- The line is the true response of the sound filters and always passes through the points. If a point cannot reach where you dragged it, it stays on the line at the value it reaches.
 - The line above the plot names the point, for example **1 kHz, +3 dB**.
 - **Reset** or a double tap puts the curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
@@ -1285,6 +1286,7 @@ The **Sound** card on Play changes how the sound from your phone or tablet is pl
 
 - The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB.
 - Touch the plot and drag up or down. The point nearest your finger changes; the others stay.
+- The line is the true response of the sound filters and always passes through the points. If a point cannot reach where you dragged it, it stays on the line at the value it reaches.
 - The line above the plot names the point, for example **1 kHz, +3 dB**.
 - **Reset** or a double tap puts the curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.

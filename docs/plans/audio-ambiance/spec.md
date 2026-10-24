@@ -49,8 +49,8 @@ curve, and adds one-tap ambiance presets.
 
 ### AMB-03 The tone curve editor
 
-- Requirement: A graph of the whole curve (frequency on a log axis, gain in dB) with ten draggable points, a smooth
-  interpolated line, the Spectrum card's colors, and a numeric readout of the touched band ("1 kHz, +3 dB"). Dragging
+- Requirement: A graph of the whole curve (frequency on a log axis, gain in dB) with ten draggable points and one smooth
+  line that is the true magnitude response of the ten filters (240 log-spaced samples, `toneResponse.ts`), with every point on that line, the Spectrum card's colors, and a numeric readout of the touched band ("1 kHz, +3 dB"). Dragging
   changes only the gain; band frequencies are fixed. Double tap or "Reset" returns to flat. Keypad: left and right move
   the selected band, up and down change gain by 1 dB, long press by 3 dB, with the selected band and value announced
   and visible. Tone presets: Flat, Bass boost, Treble boost, Vocal presence, Loudness, Warm, Bright. The editor must be
@@ -59,8 +59,9 @@ curve, and adds one-tap ambiance presets.
 
 ### AMB-04 The native equalizer
 
-- Requirement: Replace the 3-band equalizer in `dsp/AudioFx.kt` with ten peaking biquad bands (Q about 1.4 so adjacent
-  bands overlap smoothly), coefficients recomputed on parameter change and ramped over about 20 ms to avoid clicks.
+- Requirement: Replace the 3-band equalizer in `dsp/AudioFx.kt` with ten peaking biquad bands (Q 1.4 so adjacent
+  bands overlap smoothly; the web response and the Kotlin filter are checked against one shared fixture within 0.1 dB, and the
+  settings store the points the user placed while the bridge sends gains solved so the response passes through them), coefficients recomputed on parameter change and ramped over about 20 ms to avoid clicks.
   Idle bands cost nothing. The JS bridge carries ten gains. A legacy bridge call with bass/mid/treble remains accepted and
   mapped (bass to 62/125 Hz, mid to 500/1000/2000 Hz, treble to 4/8/16 kHz) until the next release. CPU budget: the
   complete chain costs at most 3% of one core on the Pixel 4 and is measured on the handset too.

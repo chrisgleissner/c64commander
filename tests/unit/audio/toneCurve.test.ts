@@ -23,8 +23,6 @@ import {
   legacyBands,
   nearestBandAtFraction,
   normalizeBands,
-  responseDbAt,
-  sampleCurve,
   withBandGain,
 } from "@/lib/audio/tone/toneCurve";
 
@@ -33,26 +31,6 @@ const only = (index: number, db: number) => flatBands().map((v, i) => (i === ind
 describe("tone curve math", () => {
   it("has ten fixed bands from 31 Hz to 16 kHz", () => {
     expect(TONE_BAND_HZ).toEqual([31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]);
-  });
-
-  it("is exactly flat for a flat setting", () => {
-    expect(responseDbAt(flatBands(), 1000)).toBe(0);
-    expect(isFlat(flatBands())).toBe(true);
-  });
-
-  it("peaks at the gain of a single band at its centre", () => {
-    expect(responseDbAt(only(5, 9), 1000)).toBeCloseTo(9, 1);
-    expect(responseDbAt(only(5, -12), 1000)).toBeCloseTo(-12, 1);
-  });
-
-  it("falls to almost nothing two octaves from a single band", () => {
-    expect(Math.abs(responseDbAt(only(5, 12), 250))).toBeLessThan(1.5);
-    expect(Math.abs(responseDbAt(only(5, 12), 4000))).toBeLessThan(1.5);
-  });
-
-  it("adds the responses of overlapping neighbours", () => {
-    const both = responseDbAt([...flatBands().slice(0, 4), 6, 6, ...flatBands().slice(6)], 700);
-    expect(both).toBeGreaterThan(5);
   });
 
   it("clamps and rounds gains to whole decibels within plus or minus 12", () => {
@@ -92,13 +70,6 @@ describe("tone curve math", () => {
     expect(nearestBandAtFraction(1)).toBe(9);
   });
 
-  it("samples the curve from the first to the last position", () => {
-    const points = sampleCurve(only(5, 6), 50);
-    expect(points).toHaveLength(50);
-    expect(points[0].fraction).toBe(0);
-    expect(points[49].fraction).toBe(1);
-  });
-
   it("formats readouts", () => {
     expect(formatBandHz(31)).toBe("31 Hz");
     expect(formatBandHz(1000)).toBe("1 kHz");
@@ -127,11 +98,5 @@ describe("tone curve math", () => {
   it("names the tone preset the curve equals, and none after an edit", () => {
     expect(activeTonePreset(TONE_PRESETS[1].bandsDb)?.id).toBe("bass-boost");
     expect(activeTonePreset(withBandGain(TONE_PRESETS[1].bandsDb, 0, 5))).toBeUndefined();
-  });
-
-  it("raises the bass for the bass boost preset and the treble for the treble boost preset", () => {
-    expect(responseDbAt(TONE_PRESETS[1].bandsDb, 62)).toBeGreaterThan(4);
-    expect(responseDbAt(TONE_PRESETS[2].bandsDb, 8000)).toBeGreaterThan(4);
-    expect(responseDbAt(TONE_PRESETS[2].bandsDb, 62)).toBeLessThan(1);
   });
 });

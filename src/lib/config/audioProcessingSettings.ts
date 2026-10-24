@@ -16,6 +16,7 @@ import {
   soundsEqual,
   type SoundSettings,
 } from "@/lib/audio/tone/ambiancePresets";
+import { compensatedGains } from "@/lib/audio/tone/toneResponse";
 import { clampToneDb, legacyBands, normalizeBands, withBandGain } from "@/lib/audio/tone/toneCurve";
 
 export const AUDIO_PROCESSING_KEY = "audio_processing";
@@ -216,10 +217,10 @@ const withSound = (record: AudioProcessingRecord, sound: SoundSettings): AudioPr
   sound,
 });
 
-/** What the native chain should do now: the stored sound, or all off while the switch is off. */
+/** What the native chain should do now: the stored sound with band gains solved so the curve passes through the stored points, or all off while the switch is off. */
 export const effectiveAudioProcessing = (record: AudioProcessingRecord): AudioProcessingParams =>
   record.enabled
-    ? { ...cloneSound(record.sound) }
+    ? { ...cloneSound(record.sound), bandsDb: compensatedGains(record.sound.bandsDb) }
     : { levelling: false, bandsDb: new Array<number>(10).fill(0), stereoWidth: 0, reverb: 0 };
 
 export const loadAudioProcessing = (): AudioProcessingParams => effectiveAudioProcessing(loadAudioProcessingRecord());

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToneCurveEditor } from "@/components/sound/ToneCurveEditor";
 import { flatBands, frequencyToFraction } from "@/lib/audio/tone/toneCurve";
+import { reachableTargets } from "@/lib/audio/tone/toneResponse";
 
 const WIDTH = 300;
 const HEIGHT = 176;
@@ -146,8 +147,10 @@ describe("ToneCurveEditor", () => {
   it("draws the curve through the points and keeps the plot at least 160 px high", () => {
     render(<Harness initial={[0, 0, 0, 0, 0, 12, 0, 0, 0, 0]} />);
     expect(screen.getByTestId("sound-tone-curve").getAttribute("d")).toMatch(/^M0/);
-    expect(screen.getByTestId("sound-tone-point-5")).toHaveAttribute("data-gain", "12");
-    expect(plot().className).toContain("h-44");
+    const reachable = Math.round(reachableTargets([0, 0, 0, 0, 0, 12, 0, 0, 0, 0])[5] * 10) / 10;
+    expect(reachable).toBeLessThan(12);
+    expect(screen.getByTestId("sound-tone-point-5")).toHaveAttribute("data-gain", String(reachable));
+    expect(plot().style.height).toBe("176px");
   });
 
   it("does nothing while disabled", () => {
