@@ -888,7 +888,7 @@ With the joystick **Hidden** and the picture off, there is nothing to draw, so G
 
 **Settings → Play and disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.
 
-A hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Angle** control in Game Mode's toolbar, or **Auto** to follow the sensor again.
+A hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Angle** control (orientation) in Game Mode's toolbar, or **Auto** to follow the sensor again.
 
 ### File Sources
 

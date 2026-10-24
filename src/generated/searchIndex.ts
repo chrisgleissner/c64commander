@@ -261,7 +261,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     subtitleDefault: "Picture, sound and a joystick on this device",
     keywords: ["joystick", "controller", "play games", "remote", "orientation", "angle", "rotate"],
     group: "action",
-    iconId: "gamepad",
+    iconId: "joystick",
     target: { kind: "action", handlerId: "startGameMode" },
     requires: [
       { kind: "flag", flag: "remote_input_enabled" },
@@ -828,7 +828,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     subtitleDefault: "Which keys steer in Game Mode",
     keywords: ["joystick", "keypad", "binding", "diamond", "t9", "custom"],
     group: "setting",
-    iconId: "gamepad",
+    iconId: "joystick",
     target: {
       kind: "control",
       path: "/settings",
@@ -846,7 +846,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     subtitleDefault: "Auto, Visible or Hidden in Game Mode",
     keywords: ["joystick", "touch", "overlay", "game mode"],
     group: "setting",
-    iconId: "gamepad",
+    iconId: "joystick",
     target: {
       kind: "control",
       path: "/settings",
@@ -1089,7 +1089,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     subtitleDefault: "Steer and fire with the number keys",
     keywords: ["help", "game", "joystick", "fire", "keypad"],
     group: "docs",
-    iconId: "gamepad",
+    iconId: "joystick",
     target: { kind: "section", path: "/docs", scope: "docs", id: "game-mode" },
     requires: [{ kind: "flag", flag: "remote_input_enabled" }],
   },
