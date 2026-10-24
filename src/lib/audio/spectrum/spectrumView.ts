@@ -7,7 +7,7 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { readSpectrum, setSpectrumEnabled, type SpectrumFrame } from "@/lib/native/audioFx";
+import { readSpectrum, setSpectrumDemand, type SpectrumFrame } from "@/lib/native/audioFx";
 import type { StreamUdpSpectrumRequest as SpectrumRequest } from "@/lib/native/streamUdp";
 import {
   SPECTRUM_BALLISTICS,
@@ -201,7 +201,7 @@ export class SpectrumView {
     }
     this.profile = options.profile;
     this.readFrame = options.read ?? readSpectrum;
-    this.setEnabled = options.setEnabled ?? setSpectrumEnabled;
+    this.setEnabled = options.setEnabled ?? ((enabled) => setSpectrumDemand("spectrum-card", enabled));
     this.now = options.now ?? (() => performance.now());
     this.requestFrame = options.requestFrame ?? ((callback) => window.requestAnimationFrame(callback));
     this.cancelFrame = options.cancelFrame ?? ((handle) => window.cancelAnimationFrame(handle));

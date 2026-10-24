@@ -108,6 +108,20 @@ export const setSpectrumEnabled = async (enabled: boolean): Promise<boolean> => 
   }
 };
 
+const spectrumOwners = new Set<string>();
+
+/**
+ * One owner's wish for the analyser. It runs while any owner wants it, so the Spectrum card closing does
+ * not stop the Sound card's backdrop, and the other way round. Resolves false when the call did not reach it.
+ */
+export const setSpectrumDemand = (owner: string, wanted: boolean): Promise<boolean> => {
+  const before = spectrumOwners.size > 0;
+  if (wanted) spectrumOwners.add(owner);
+  else spectrumOwners.delete(owner);
+  const after = spectrumOwners.size > 0;
+  return before === after ? Promise.resolve(true) : setSpectrumEnabled(after);
+};
+
 const isFrame = (value: unknown): value is SpectrumFrame => {
   const frame = value as Partial<SpectrumFrame> | null | undefined;
   return (
@@ -152,5 +166,6 @@ export const probeAudioFx = (): Promise<boolean> => {
 
 export const resetAudioFxForTests = () => {
   failureStreaks.clear();
+  spectrumOwners.clear();
   probe = null;
 };

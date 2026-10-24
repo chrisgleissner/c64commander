@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 vi.mock("@/lib/native/audioFx", () => ({
   readSpectrum: vi.fn(async () => null),
-  setSpectrumEnabled: vi.fn(async () => true),
+  setSpectrumDemand: vi.fn(async () => true),
 }));
 
 import {
@@ -24,7 +24,7 @@ import {
 } from "@/lib/audio/spectrum/spectrumView";
 import type { SpectrumFrame } from "@/lib/native/audioFx";
 import { addLog } from "@/lib/logging";
-import { readSpectrum, setSpectrumEnabled } from "@/lib/native/audioFx";
+import { readSpectrum, setSpectrumDemand } from "@/lib/native/audioFx";
 import * as spectrumRenderer from "@/lib/audio/spectrum/spectrumRenderer";
 
 const makeContext = () => {
@@ -877,7 +877,7 @@ describe("SpectrumView", () => {
         expect(created[0]).toBe(canvas);
         expect(created[1]).not.toBe(canvas);
         view.setState({ visible: true, paused: false });
-        expect(setSpectrumEnabled).toHaveBeenLastCalledWith(true);
+        expect(setSpectrumDemand).toHaveBeenLastCalledWith("spectrum-card", true);
         expect(raf).toHaveBeenCalledTimes(1);
         callbacks[0](16);
         await Promise.resolve();
@@ -885,7 +885,7 @@ describe("SpectrumView", () => {
         expect(view.framesDrawn).toBe(1);
         view.setState({ visible: false, paused: false });
         expect(caf).toHaveBeenCalled();
-        expect(setSpectrumEnabled).toHaveBeenLastCalledWith(false);
+        expect(setSpectrumDemand).toHaveBeenLastCalledWith("spectrum-card", false);
       } finally {
         document.documentElement.classList.remove("c64-motion-reduced");
         hardwareConcurrency.mockRestore();

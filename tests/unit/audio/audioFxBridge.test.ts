@@ -27,6 +27,7 @@ import {
   readSpectrum,
   resetAudioFxForTests,
   setAudioProcessing,
+  setSpectrumDemand,
   setSpectrumEnabled,
 } from "@/lib/native/audioFx";
 import { resetPluginAvailabilityForTests } from "@/lib/native/pluginAvailability";
@@ -62,6 +63,16 @@ describe("audio fx bridge", () => {
     expect(await setSpectrumEnabled(true)).toBe(true);
     expect(plugin.setSpectrumEnabled).toHaveBeenCalledWith({ enabled: true });
     expect(await readSpectrum()).toEqual(frame);
+  });
+
+  it("keeps the analyser on while any owner still wants it, and switches it only on the first and last wish", async () => {
+    await setSpectrumDemand("spectrum-card", true);
+    await setSpectrumDemand("sound-card", true);
+    await setSpectrumDemand("spectrum-card", false);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }]]);
+    await setSpectrumDemand("sound-card", false);
+    await setSpectrumDemand("sound-card", false);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
   });
 
   it("passes a look-ahead request to the plugin and keeps the frames ahead", async () => {
