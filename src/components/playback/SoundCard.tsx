@@ -12,6 +12,9 @@ import { SoundBody, collapsedSoundName, soundAccentId } from "@/components/sound
 import { Switch } from "@/components/ui/switch";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 import { useAvMirror } from "@/hooks/useAvMirror";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
+import { resolveSoundingRoute } from "@/pages/playFiles/playbackVolumeBinding";
 import { accentVars, soundAccent } from "@/lib/audio/tone/soundPalette";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { saveAudioEnabled, useAudioProcessingRecord } from "@/lib/config/audioProcessingSettings";
@@ -83,14 +86,37 @@ export const SoundCard = ({ c64Plays, soundOnPhone = false }: SoundCardProps) =>
   );
 };
 
+export interface SoundSources {
+  engine: "c64" | "local";
+  connectionState: string;
+  /** A tune is rendering on this phone. */
+  local: boolean;
+  /** A tune is running on the C64. */
+  remote: boolean;
+  /** Live View plays the C64's sound here. */
+  mirrorAudio: boolean;
+}
+
+/**
+ * Whether this phone produces the sound the card would shape. While a tune plays, that is where it renders
+ * or whether Live View brings its sound here; with nothing playing, it is where the next tune goes, so the
+ * card is already disabled when Listen on is set to the C64.
+ */
+export const phoneSounds = ({ engine, connectionState, local, remote, mirrorAudio }: SoundSources): boolean =>
+  local || mirrorAudio || (!remote && resolveSoundingRoute(engine, connectionState) === "local");
+
 /** Follows the source actually playing: the card is disabled while only the C64 makes the sound. */
 export const PlaybackSoundCard = () => {
   const playback = useActivePlayback();
   const mirror = useAvMirror();
-  return (
-    <SoundCard
-      c64Plays={playback.remote && !playback.local && !mirror.audioLive}
-      soundOnPhone={playback.local || mirror.audioLive}
-    />
-  );
+  const { engine } = usePlaybackEngine();
+  const { state: connectionState } = useConnectionState();
+  const onPhone = phoneSounds({
+    engine,
+    connectionState,
+    local: playback.local,
+    remote: playback.remote,
+    mirrorAudio: mirror.audioLive,
+  });
+  return <SoundCard c64Plays={!onPhone} soundOnPhone={playback.local || mirror.audioLive} />;
 };

@@ -66,15 +66,22 @@ const overlaps = (items: Box[], gap = 2): string[] => {
   return found;
 };
 
-const open = async (page: Page, profile: "compact" | "medium", theme: "light" | "dark", tall: boolean) => {
+const open = async (
+  page: Page,
+  profile: "compact" | "medium",
+  theme: "light" | "dark",
+  tall: boolean,
+  listenOn: "local" | "c64" = "local",
+) => {
   const { viewport, override } = DISPLAY_PROFILE_VIEWPORTS[profile];
   await page.setViewportSize(tall ? { width: viewport.width, height: TALL_PX } : viewport);
   await page.addInitScript(
-    ({ value, mode }) => {
+    ({ value, mode, engine }) => {
       localStorage.setItem("c64u_display_profile_override", value);
       localStorage.setItem("c64u_theme", mode);
+      localStorage.setItem("c64u_playback_engine", engine);
     },
-    { value: override, mode: theme },
+    { value: override, mode: theme, engine: listenOn },
   );
 };
 
@@ -160,12 +167,8 @@ test.describe("Sound card look", () => {
         expect(measured.targetOffenders, "Controls below 44 px").toEqual([]);
         const plot = await card.getByTestId("sound-tone-plot").boundingBox();
         expect(plot?.height ?? 0).toBeGreaterThanOrEqual(200);
-        expect(
-          overlaps(await boxes(card, '[data-testid^="sound-tone-axis-"]:not([data-hidden])'), 6),
-          "Frequency labels",
-        ).toEqual([]);
-        for (const end of ["31", "16k"])
-          await expect(card.getByTestId(`sound-tone-axis-${end}`)).not.toHaveAttribute("data-hidden");
+        expect(overlaps(await boxes(card, '[data-testid^="sound-tone-axis-"]'), 6), "Frequency labels").toEqual([]);
+        for (const label of ["1k", "16k"]) await expect(card.getByTestId(`sound-tone-axis-${label}`)).toBeVisible();
         for (const slider of ["sound-stereo", "sound-reverb"]) {
           const root = card.getByTestId(slider);
           expect(overlaps(await boxes(root, '[data-testid*="-notch-"]'), 4), `${slider} notch labels`).toEqual([]);
@@ -206,10 +209,14 @@ test.describe("Sound card look", () => {
     });
 
     test(`disabled, it says why and greys out on compact in the ${theme} theme @layout`, async ({ page }) => {
-      await open(page, "compact", theme, true);
+      await open(page, "compact", theme, true, "c64");
       await page.addInitScript(() => localStorage.setItem("c64u_feature_flag:audio_mirror_enabled", "0"));
       await page.goto("/play", { waitUntil: "domcontentloaded" });
       await settle(page, "compact");
+      await expect(
+        page.getByTestId("sound-switch"),
+        "Listen on the C64 disables the card before a tune",
+      ).toBeDisabled();
       await page.getByRole("button", { name: /Add items|Add more items/i }).click();
       await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
       await page

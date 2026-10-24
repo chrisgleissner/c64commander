@@ -13,9 +13,11 @@ const playback = vi.hoisted(() => ({ value: { local: false, remote: false, any: 
 const mirror = vi.hoisted(() => ({ value: { audioLive: false } }));
 vi.mock("@/lib/audio/useAudioFxAvailable", () => ({ useAudioFxAvailable: () => available.value }));
 vi.mock("@/hooks/useActivePlayback", () => ({ useActivePlayback: () => playback.value }));
+const connection = vi.hoisted(() => ({ state: "REAL_CONNECTED" }));
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror.value }));
+vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connection.state }) }));
 
-import { PlaybackSoundCard, SOUND_ON_C64_MESSAGE, SoundCard } from "@/components/playback/SoundCard";
+import { PlaybackSoundCard, SOUND_ON_C64_MESSAGE, SoundCard, phoneSounds } from "@/components/playback/SoundCard";
 import { AMBIANCE_PRESETS } from "@/lib/audio/tone/ambiancePresets";
 import { soundAccent } from "@/lib/audio/tone/soundPalette";
 import { loadAudioProcessing, loadAudioProcessingRecord } from "@/lib/config/audioProcessingSettings";
@@ -186,15 +188,48 @@ describe("SoundCard", () => {
   });
 });
 
+describe("phoneSounds", () => {
+  const idle = { local: false, remote: false, mirrorAudio: false };
+  it.each([
+    ["Listen on is the C64 and nothing plays", { engine: "c64", connectionState: "REAL_CONNECTED", ...idle }, false],
+    ["Listen on is here and nothing plays", { engine: "local", connectionState: "REAL_CONNECTED", ...idle }, true],
+    [
+      "Listen on is the C64 with no device in reach",
+      { engine: "c64", connectionState: "OFFLINE_NO_DEMO", ...idle },
+      true,
+    ],
+    ["Listen on is the C64 in Demo Mode", { engine: "c64", connectionState: "DEMO_ACTIVE", ...idle }, true],
+    ["a tune plays on the C64", { engine: "c64", connectionState: "REAL_CONNECTED", ...idle, remote: true }, false],
+    [
+      "a tune plays on the C64 with its sound mirrored here",
+      { engine: "c64", connectionState: "REAL_CONNECTED", ...idle, remote: true, mirrorAudio: true },
+      true,
+    ],
+    ["a tune carried on here", { engine: "c64", connectionState: "REAL_CONNECTED", ...idle, local: true }, true],
+  ] as const)("answers correctly when %s", (_name, sources, expected) => {
+    expect(phoneSounds(sources)).toBe(expected);
+  });
+});
+
 describe("PlaybackSoundCard", () => {
   beforeEach(() => {
     localStorage.clear();
     available.value = true;
     mirror.value = { audioLive: false };
+    connection.state = "REAL_CONNECTED";
+  });
+
+  it("is disabled with its explanation while Listen on is the C64 and nothing plays yet", () => {
+    localStorage.setItem("c64u_playback_engine", "c64");
+    playback.value = { local: false, remote: false, any: false };
+    render(<PlaybackSoundCard />);
+    openBody();
+    expect(screen.getByTestId("sound-unavailable")).toHaveTextContent(SOUND_ON_C64_MESSAGE);
+    expect(screen.getByTestId("sound-switch")).toBeDisabled();
   });
 
   it.each([
-    ["nothing is playing", { local: false, remote: false, any: false }, false, false],
+    ["nothing is playing and Listen on is here", { local: false, remote: false, any: false }, false, false],
     ["a tune plays on this phone", { local: true, remote: false, any: true }, false, false],
     ["a tune plays on the C64", { local: false, remote: true, any: true }, false, true],
     [
@@ -204,6 +239,7 @@ describe("PlaybackSoundCard", () => {
       false,
     ],
   ])("when %s", (_name, active, audioLive, disabled) => {
+    localStorage.setItem("c64u_playback_engine", "local");
     playback.value = active;
     mirror.value = { audioLive };
     render(<PlaybackSoundCard />);
