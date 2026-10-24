@@ -11,6 +11,7 @@ import { openAllCards } from "./cards";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
+import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { saveCoverageFromPage } from "./withCoverage";
 import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
@@ -375,6 +376,44 @@ test.describe("Game Mode", () => {
     await expect(override).toHaveAttribute("data-source", "auto");
     await expect(override).toHaveAttribute("data-rotation", "0");
   });
+
+  for (const profileId of ["compact", "medium"] as const) {
+    for (const scaleId of ["default", LARGEST_TEXT_SCALE_ID]) {
+      test(`the four angle buttons share one row of 44 px targets on the ${profileId} profile at the ${scaleId} text size`, async ({
+        page,
+      }) => {
+        await page.addInitScript(
+          ({ profile, scale }: { profile: string; scale: string }) => {
+            localStorage.setItem("c64u_display_profile_override", profile);
+            localStorage.setItem("c64u_text_scale", scale);
+          },
+          { profile: profileId, scale: scaleId },
+        );
+        await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profileId].viewport);
+        await page.goto("/");
+        await waitForConnected(page);
+        await page.getByTestId("home-machine-inline-openGameMode").click();
+        await expectInGameMode(page);
+        await page.getByTestId("remote-input-restore-chrome").click();
+
+        const group = page.getByRole("group", { name: "Orientation" });
+        await expect(group).toBeVisible();
+        await expect(group.getByText("Angle")).toBeVisible();
+        const boxes = [];
+        for (const value of ["auto", "0", "90", "270"]) {
+          const button = page.getByTestId(`remote-input-rotation-${value}`);
+          await button.scrollIntoViewIfNeeded();
+          boxes.push(await button.boundingBox());
+        }
+        for (const box of boxes) {
+          expect(box).not.toBeNull();
+          expect(Math.abs(box!.y - boxes[0]!.y), "all four buttons share one top").toBeLessThanOrEqual(0.5);
+          expect(box!.width, "target width").toBeGreaterThanOrEqual(43.5);
+          expect(box!.height, "target height").toBeGreaterThanOrEqual(43.5);
+        }
+      });
+    }
+  }
 });
 
 test.describe("Game Mode on a U2", () => {

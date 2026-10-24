@@ -1063,7 +1063,7 @@ throughout.
   ("Game" on the compact display profile);
   the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
   right-aligned, reads "Exit", and carries the accessible name "Exit Game Mode"
-- Orientation override (inside Game mode) — buttons —
+- Angle (orientation) override (inside Game mode; group accessible name "Orientation") — buttons —
   `remote-input-rotation-override` (group), `remote-input-rotation-{auto,0,90,270}`
   — R✅ I✅ _(pins the picture rotation and the key permutation for this session;
   `data-rotation` / `data-source` on the group carry the resolved state)_

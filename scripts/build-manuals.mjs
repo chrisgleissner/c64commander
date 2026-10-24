@@ -1886,14 +1886,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
                   "home/remote-input/profiles/{profile}/08-game-mode-rotated.png",
                 ),
                 "",
-                "Lying down, or the sensor cannot tell which way up the phone is? The **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.",
+                "Lying down, or the sensor cannot tell which way up the phone is? The **Angle** control (orientation) in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**. The choice lasts while the sheet is open, and is forgotten afterward.",
                 "",
                 "To use different keys, open **Settings → Play and disk → Joystick keys**. It offers **Diamond (8-centered)**, the layout above; **Classic T9**, with 2, 4, 6 and 8 to steer and 5 to fire; and **Custom**, where you press the key you want for each direction. Set it up holding the phone upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Orientation** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
+                "**Settings → Play and disk → Joystick keys** decides which keys steer. **Classic T9** steers with 2, 4, 6 and 8, fires with 5, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** steers with the four keys around 8 and fires with 8 itself. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers too, whatever you choose. The mapping turns with your device, so set it up holding the device upright and every other way round follows. If the sensor cannot tell which way up the device is, choose **0°**, **90°** or **270°** with the **Angle** control in Game Mode's toolbar, or **Auto** to follow the sensor again.",
               ]),
           "",
         ]
@@ -2458,7 +2458,7 @@ export const INDEX_TERMS = [
   { term: "Now Playing card", match: ["Now Playing"] },
   { term: "NTSC", match: ["**NTSC**"] },
   { term: "number keys", match: ["Number Keys", "number keys"] },
-  { term: "orientation", match: ["**Orientation**", "Orientation"] },
+  { term: "orientation", match: ["**Orientation**", "Orientation", "(orientation)"] },
   { term: "output button", match: ["**output button**"] },
   { term: "PAL", match: ["**PAL**"] },
   { term: "palettes", match: ["Screen colors"] },

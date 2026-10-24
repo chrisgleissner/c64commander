@@ -259,7 +259,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     titleDefault: "Game Mode",
     subtitleKey: "search.action.gameMode.subtitle",
     subtitleDefault: "Picture, sound and a joystick on this device",
-    keywords: ["joystick", "controller", "play games", "remote"],
+    keywords: ["joystick", "controller", "play games", "remote", "orientation", "angle", "rotate"],
     group: "action",
     iconId: "gamepad",
     target: { kind: "action", handlerId: "startGameMode" },

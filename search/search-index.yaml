@@ -245,7 +245,7 @@ entries:
     title: Game Mode
     subtitle_key: search.action.gameMode.subtitle
     subtitle: Picture, sound and a joystick on this device
-    keywords: [joystick, controller, play games, remote]
+    keywords: [joystick, controller, play games, remote, orientation, angle, rotate]
     group: action
     icon: gamepad
     target: { kind: action, handlerId: startGameMode }
