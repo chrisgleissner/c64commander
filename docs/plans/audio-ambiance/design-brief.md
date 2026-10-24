@@ -33,7 +33,7 @@ not inviting. This brief replaces the visuals. The data and math layer (true fil
 ## Layout and elements
 
 - Expanded card order: header (title "Sound", On/Off switch with a clear label), ambiance chip row, the curve plot,
-  readout, tone preset chips, fine tune (Normalize, Stereo width, Reverb) in a collapsed fold. No card inside a card.
+  readout, tone preset chips, a Normalize volume switch, then two notched sliders (Stereo width, Reverb); no collapsed fine-tune fold. No card inside a card.
 - **Plot.** Edge to edge within the card padding, minimum 200 px high at 320 px width (taller on larger profiles, about
   16:9), corner radius from tokens. Horizontal guide lines at +12, +6, 0, -6, -12 dB: the 0 dB line is a clear thin
   line, the others faint and dotted. Vertical guides only at the labeled frequencies. dB labels on the left inside the
@@ -61,3 +61,16 @@ not inviting. This brief replaces the visuals. The data and math layer (true fil
   320 px; contrast met in light and dark; colors differ per ambiance and per pitch; the card looks balanced when
   collapsed, expanded and in the disabled state; looks good at arm's length; nothing looks like a default form control.
 - Behavior and tests from `spec.md` are unchanged and must stay green.
+
+## Notched sliders (Stereo width and Reverb)
+
+- One slider per effect, full width, 44 px touch height, a track with a filled portion in the effect's accent, a large
+  thumb with a soft shadow, and visible **notches** (small ticks with a label beneath each: Off, Subtle, Wide; Off, Room, Hall).
+- Dragging is continuous; the thumb snaps magnetically to a notch when released or when within about 6% of the track
+  to it, with a subtle scale pulse on snap. Tapping a notch label or tick jumps there (spring, at most 200 ms).
+- A live readout above the thumb ("Subtle, 35"). The active notch label is bold and in the accent color. Under reduced
+  motion: no pulse, instant jump.
+- Accessibility: role slider, `aria-valuetext` with the notch name, Left/Right jump between notches, hold repeats in
+  steps of 5, focus ring visible against the accent. Targets 44 px, label text at least 14 px, fits 320 px with three
+  labels without collisions.
+- The same slider component is used for both effects (shared component, props: notches, accent, value).

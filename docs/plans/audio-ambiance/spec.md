@@ -28,8 +28,8 @@ curve, and adds one-tap ambiance presets.
 
 - Requirement: A collapsible card titled **Sound** on the Play page. Collapsed: the active ambiance name, the On/Off
   switch and a row of ambiance chips (horizontal scroll with a visible edge fade, 44 px targets, current chip
-  highlighted). Expanded: the tone curve editor, Tone presets, and the controls for **Normalize volume**, **Stereo
-  width** and **Reverb** (each a segmented control with an "amount" slider behind a "Fine tune" fold). The expanded
+  highlighted). Expanded: the tone curve editor, Tone presets, a **Normalize volume** switch, and one **notched slider** each for **Stereo
+  width** (notches Off, Subtle, Wide) and **Reverb** (notches Off, Room, Hall). There is no separate "Fine tune" fold and no segmented duplicate: the slider is the only control. The thumb moves continuously and snaps magnetically to a notch within a small distance; each notch is labeled under the track and tapping a label or tick jumps straight to it; the value is read out ("Subtle, 35"). Keypad: Left and Right jump to the previous or next notch, holding repeats in steps of 5. The expanded
   state persists. The card works by touch and by keypad (focus ring, scroll into view) and fits 320 px without
   horizontal scroll or text under 14 px.
 - Verification: unit; Playwright on compact, medium and expanded profiles; keypad-only walk; handset and Pixel.
