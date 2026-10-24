@@ -32,6 +32,9 @@ not inviting. This brief replaces the visuals. The data and math layer (true fil
 
 ## Layout and elements
 
+- **Collapsed card:** one row of at most 56 px: accent dot, "Sound", the active ambiance name (accent color, truncating with
+  an ellipsis only if needed at 320 px), the On/Off switch and a chevron. Hit areas 44 px. The ambiance accent tints the
+  dot and a thin left edge only. This is the default state and must look intentional and calm next to the Spectrum card.
 - Expanded card order: header (title "Sound", On/Off switch with a clear label), ambiance chip row, the curve plot,
   readout, tone preset chips, a Normalize volume switch, then two notched sliders (Stereo width, Reverb); no collapsed fine-tune fold. No card inside a card.
 - **Plot.** Edge to edge within the card padding, minimum 200 px high at 320 px width (taller on larger profiles, about

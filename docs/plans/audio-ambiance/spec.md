@@ -26,9 +26,11 @@ curve, and adds one-tap ambiance presets.
 
 ### AMB-01 The Sound card
 
-- Requirement: A collapsible card titled **Sound** on the Play page. Collapsed: the active ambiance name, the On/Off
-  switch and a row of ambiance chips (horizontal scroll with a visible edge fade, 44 px targets, current chip
-  highlighted). Expanded: the tone curve editor, Tone presets, a **Normalize volume** switch, and one **notched slider** each for **Stereo
+- Requirement: A fully collapsible card titled **Sound** on the Play page. **Collapsed it is one row of at most 56 px**:
+  a small accent dot or icon, the label "Sound" and the active ambiance name at a glance (for example "Sound  Warm", or
+  "Sound  Custom"; when processing is off, "Sound  Off"), the On/Off switch, and the open/close chevron. Nothing else is
+  visible when collapsed: no chip row, no peek, no hints. Tapping the row or the chevron opens it; the card starts
+  collapsed on first use and remembers its state. Expanded: the tone curve editor, Tone presets, a **Normalize volume** switch, and one **notched slider** each for **Stereo
   width** (notches Off, Subtle, Wide) and **Reverb** (notches Off, Room, Hall). There is no separate "Fine tune" fold and no segmented duplicate: the slider is the only control. The thumb moves continuously and snaps magnetically to a notch within a small distance; each notch is labeled under the track and tapping a label or tick jumps straight to it; the value is read out ("Subtle, 35"). Keypad: Left and Right jump to the previous or next notch, holding repeats in steps of 5. The expanded
   state persists. The card works by touch and by keypad (focus ring, scroll into view) and fits 320 px without
   horizontal scroll or text under 14 px.
