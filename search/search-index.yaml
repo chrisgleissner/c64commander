@@ -245,9 +245,9 @@ entries:
     title: Game Mode
     subtitle_key: search.action.gameMode.subtitle
     subtitle: Picture, sound and a joystick on this device
-    keywords: [joystick, controller, play games, remote]
+    keywords: [joystick, controller, play games, remote, orientation, angle, rotate]
     group: action
-    icon: gamepad
+    icon: joystick
     target: { kind: action, handlerId: startGameMode }
     requires:
       - { kind: flag, flag: remote_input_enabled }
@@ -741,7 +741,7 @@ entries:
     subtitle: Which keys steer in Game Mode
     keywords: [joystick, keypad, binding, diamond, t9, custom]
     group: setting
-    icon: gamepad
+    icon: joystick
     target:
       {
         kind: control,
@@ -760,7 +760,7 @@ entries:
     subtitle: Auto, Visible or Hidden in Game Mode
     keywords: [joystick, touch, overlay, game mode]
     group: setting
-    icon: gamepad
+    icon: joystick
     target:
       { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-game-mode-joystick }
     requires:
@@ -972,7 +972,7 @@ entries:
     subtitle: Steer and fire with the number keys
     keywords: [help, game, joystick, fire, keypad]
     group: docs
-    icon: gamepad
+    icon: joystick
     target: { kind: section, path: /docs, scope: docs, id: game-mode }
     requires:
       - { kind: flag, flag: remote_input_enabled }

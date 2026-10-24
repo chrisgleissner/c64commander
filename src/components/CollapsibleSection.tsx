@@ -59,10 +59,6 @@ export interface CollapsibleSectionProps {
    * without opening the section, matching what these sections did before they were
    * collapsible. */
   actions?: ReactNode;
-  /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
-   * tile is decoration that costs the title about 46 CSS px of the row. Defaults to on whenever
-   * `actions` are present, because that is exactly the row that cannot spare them. */
-  plainIcon?: boolean;
   /** Extra classes on the card root, for a caller that has to place the card itself. */
   className?: string;
   /** Root testid. Defaults to `${scope}-section-${id}`. */
@@ -122,7 +118,6 @@ export const CollapsibleSection = ({
   actions,
   leading,
   badgeTruncates,
-  plainIcon,
   className,
   testId,
   toggleTestId,
@@ -153,10 +148,6 @@ export const CollapsibleSection = ({
   const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, fitTitle);
   // A truncating badge gives way instead, so the actions never need a row of their own.
   const stackActions = fitsOneRow === false && !badgeTruncates;
-  // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
-  // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
-  // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
-  const showPlainIcon = plainIcon ?? actions != null;
 
   /*
    * Closed on every profile, for now.
@@ -386,24 +377,13 @@ export const CollapsibleSection = ({
               // flex-1, so this button — not the actions beside it — absorbs whatever the row is
               // short of. A content basis (flex-auto) shares the deficit instead, which moved the
               // clipping onto the action: "Reset" was drawn in 66 px of the 70 it needs. The title
-              // gets its room back from the tile and the gutter below, not from the action.
+              // gets its room back from the gutter below, not from the action.
               "flex min-w-0 flex-1 items-center justify-between text-left",
               // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
               // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
               // 218 px of scrollable height cannot spare — roughly one extra card on screen.
-              // min-h-11 is the 44px touch floor. The compact profile trims padding and drops the icon
-              // tile, but it must not take the row below the floor: the target handset's touchscreen
-              // is off by default, not absent, and this app also runs on small touch phones.
-              //
-              // The other profiles keep the tile but no longer let it set the row height. A closed
-              // card is one line of text, and Settings stacks eleven of them; at py-3 around a
-              // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
-              // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
-              // touch floor, and gives back most of a screen over the length of the page.
-              // A header carrying controls also gives up the wider gutter, for the same reason it gives
-              // up the icon tile: px-4 is 47 CSS px of the row at the Larger text size, which is more
-              // than "Printers" needs to be drawn in full.
-              compact || showPlainIcon ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
+              // min-h-11 is the 44px touch floor; the padding never takes the row below it.
+              "min-h-11 gap-2 px-3 py-1.5",
             )}
             // The accessibility tree exposes the HTML id, not data-testid, so this is what
             // makes the header addressable from outside the browser.
@@ -413,17 +393,12 @@ export const CollapsibleSection = ({
             aria-controls={resolvedBodyId}
           >
             <span className="flex min-w-0 flex-1 items-center gap-2.5">
-              {/*
-              Compact drops the tile around the icon and keeps the icon itself. The tile was a 30 px
-              box in a 47 px row, so it — not the title — set the height of every closed card, and a
-              320x427 screen has 218 px of scrollable height to spend. The icon still carries the
-              scanning cue; the box around it was decoration.
-            */}
               {leading ?? (
-                <span className={cn(compact || showPlainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+                <span className="shrink-0">
                   <Icon
-                    className={cn("text-primary", compact || showPlainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                    className="h-[1.125rem] w-[1.125rem] text-primary"
                     aria-hidden
+                    data-testid="section-header-icon"
                   />
                 </span>
               )}

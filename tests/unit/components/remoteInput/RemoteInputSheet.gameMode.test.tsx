@@ -591,16 +591,27 @@ describe("RemoteInputSheet — Game Mode", () => {
     });
   });
 
-  describe("orientation label", () => {
-    it("keeps the Orientation label on one line and lets the buttons wrap below it", () => {
+  describe("angle control", () => {
+    it("labels the row Angle, keeps the accessible name Orientation, and never wraps the four buttons", () => {
       mirrorState.videoState = "live";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
       fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
 
       const row = screen.getByTestId("remote-input-rotation-override");
-      expect(row.className).toContain("flex-wrap");
-      expect(screen.getByText("Orientation").className).toContain("whitespace-nowrap");
+      expect(row).toHaveAttribute("aria-label", "Orientation");
+      expect(screen.getByRole("group", { name: "Orientation" })).toBe(row);
+      expect(screen.getByText("Angle").className).toContain("whitespace-nowrap");
+      expect(screen.queryByText("Orientation")).not.toBeInTheDocument();
+      const buttons = ["auto", "0", "90", "270"].map((value) => screen.getByTestId(`remote-input-rotation-${value}`));
+      const grid = buttons[0].parentElement as HTMLElement;
+      expect(grid.className).toContain("grid-cols-4");
+      expect(grid.className).not.toContain("flex-wrap");
+      for (const button of buttons) {
+        expect(button.parentElement).toBe(grid);
+        expect(button.className).toContain("h-11");
+        expect(button.className).toContain("min-w-11");
+      }
     });
   });
 

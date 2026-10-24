@@ -42,7 +42,7 @@ const STAT_FIELDS: ReadonlyArray<{ label: string; key: keyof AvSyncStats; testid
 /** A collapsible section with a header (icon + title + summary) and a toggle chevron. */
 /*
  * A disclosure nested INSIDE the Live View card, not one of the page-level cards. Those all render
- * through `@/components/CollapsibleSection`, which draws a bordered card with an icon tile and the
+ * through `@/components/CollapsibleSection`, which draws a bordered card with a bare icon and the
  * page's card padding — chrome that reads as a top-level card and is wrong one level down. This
  * keeps the flatter nested treatment and the canonical component's 44px touch floor.
  *

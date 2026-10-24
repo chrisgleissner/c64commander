@@ -374,25 +374,31 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const selectedRotation: DeviceRotation | "auto" = rotationSource === "auto" ? "auto" : deviceRotation;
   const rotationOverride = (
     <div
-      className="flex flex-wrap items-center gap-1"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1"
+      role="group"
+      aria-label="Orientation"
       data-testid="remote-input-rotation-override"
       data-rotation={deviceRotation}
       data-source={rotationSource}
     >
-      <span className="mr-1 shrink-0 whitespace-nowrap text-xs text-muted-foreground">Orientation</span>
-      {ROTATION_CHOICES.map(({ label, value }) => (
-        <Button
-          key={label}
-          size="sm"
-          variant={selectedRotation === value ? "default" : "secondary"}
-          className="h-8 px-2"
-          aria-pressed={selectedRotation === value}
-          data-testid={`remote-input-rotation-${value}`}
-          onClick={() => (value === "auto" ? clearPin() : pin(value))}
-        >
-          {label}
-        </Button>
-      ))}
+      <span aria-hidden className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+        Angle
+      </span>
+      <div className="grid min-w-[11.75rem] flex-1 grid-cols-4 gap-1">
+        {ROTATION_CHOICES.map(({ label, value }) => (
+          <Button
+            key={label}
+            size="sm"
+            variant={selectedRotation === value ? "default" : "secondary"}
+            className="h-11 min-w-11 px-1"
+            aria-pressed={selectedRotation === value}
+            data-testid={`remote-input-rotation-${value}`}
+            onClick={() => (value === "auto" ? clearPin() : pin(value))}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 
