@@ -83,4 +83,144 @@ describe("useDiskLibrary device switch guard", () => {
 
     expect(result.current.disks.map((entry) => entry.id)).toEqual([disk.id]);
   });
+
+  it("replaces the disk of a removed saved device when the same file is added from the same Ultimate saved again", async () => {
+    vi.resetModules();
+    const store = await import("@/lib/savedDevices/store");
+    const { useDiskLibrary } = await import("@/hooks/useDiskLibrary");
+    const { createDiskEntry } = await import("@/lib/disks/diskTypes");
+    const savedDevice = (id: string) => ({
+      id,
+      name: "Elite",
+      host: "u64-elite",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E" as const,
+      lastKnownHostname: "elite",
+      lastKnownUniqueId: "UID-ELITE",
+      hasPassword: false,
+    });
+    store.addSavedDevice(savedDevice("device-before"));
+    store.selectSavedDevice("device-before");
+    const before = createDiskEntry({ path: "/Games/Boulder Dash 1.d64", location: "ultimate" });
+    const { result } = renderHook(() => useDiskLibrary("shared"));
+    act(() => {
+      result.current.addDisks([before]);
+      result.current.updateDiskGroup(before.id, "My games");
+    });
+    act(() => {
+      store.removeSavedDevice("device-before");
+      store.addSavedDevice(savedDevice("device-after"));
+      store.selectSavedDevice("device-after");
+    });
+    const after = createDiskEntry({ path: "/Games/Boulder Dash 1.d64", location: "ultimate" });
+    expect(after.id).not.toBe(before.id);
+
+    act(() => {
+      result.current.addDisks([after]);
+    });
+
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([after.id]);
+    expect(result.current.disks[0].group).toBe("My games");
+  });
+
+  it("keeps the disks of a saved device that still exists when the same path is added from another device", async () => {
+    vi.resetModules();
+    const store = await import("@/lib/savedDevices/store");
+    const { useDiskLibrary } = await import("@/hooks/useDiskLibrary");
+    const { createDiskEntry } = await import("@/lib/disks/diskTypes");
+    const { result } = renderHook(() => useDiskLibrary("shared"));
+    const first = createDiskEntry({ path: "/Games/a.d64", location: "ultimate" });
+    act(() => {
+      result.current.addDisks([first]);
+    });
+    store.addSavedDevice({
+      id: "device-second",
+      name: "Second",
+      host: "second-c64",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E",
+      lastKnownHostname: "second",
+      lastKnownUniqueId: "UID-SECOND",
+      hasPassword: false,
+    });
+    store.selectSavedDevice("device-second");
+    const second = createDiskEntry({ path: "/Games/a.d64", location: "ultimate" });
+
+    act(() => {
+      result.current.addDisks([second]);
+    });
+
+    expect(result.current.disks.map((disk) => disk.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
+  const orphanScenario = async (afterUniqueId: string, beforeUniqueId = "UID-ELITE") => {
+    vi.resetModules();
+    const store = await import("@/lib/savedDevices/store");
+    const { useDiskLibrary } = await import("@/hooks/useDiskLibrary");
+    const { createDiskEntry } = await import("@/lib/disks/diskTypes");
+    const device = (id: string, uniqueId: string) => ({
+      id,
+      name: id,
+      host: `${id}-host`,
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "U64E" as const,
+      lastKnownHostname: id,
+      lastKnownUniqueId: uniqueId,
+      hasPassword: false,
+    });
+    store.addSavedDevice(device("device-before", beforeUniqueId));
+    store.selectSavedDevice("device-before");
+    const before = {
+      ...createDiskEntry({ path: "/Games/a.d64", location: "ultimate" }),
+      configRef: { fileName: "a.cfg" } as never,
+      configOverrides: [{ category: "Audio", item: "Vol", value: "1" }] as never,
+      importOrder: 7,
+    };
+    const { result } = renderHook(() => useDiskLibrary("shared"));
+    act(() => {
+      result.current.addDisks([before]);
+      result.current.updateDiskName(before.id, "My name");
+    });
+    act(() => {
+      store.removeSavedDevice("device-before");
+      store.addSavedDevice(device("device-after", afterUniqueId));
+      store.selectSavedDevice("device-after");
+    });
+    const after = createDiskEntry({ path: "/Games/a.d64", location: "ultimate" });
+    act(() => {
+      result.current.addDisks([after]);
+    });
+    return { result, before, after };
+  };
+
+  it("keeps everything the user set on the disk it replaces", async () => {
+    const { result, after } = await orphanScenario("UID-ELITE");
+
+    expect(result.current.disks).toHaveLength(1);
+    expect(result.current.disks[0]).toMatchObject({
+      id: after.id,
+      name: "My name",
+      importOrder: 7,
+      configRef: { fileName: "a.cfg" },
+      configOverrides: [{ category: "Audio", item: "Vol", value: "1" }],
+    });
+  });
+
+  it("does not let another machine's disk at the same path take over the disk of a removed device", async () => {
+    const { result, before, after } = await orphanScenario("UID-OTHER");
+
+    expect(result.current.disks.map((disk) => disk.id).sort()).toEqual([before.id, after.id].sort());
+  });
+
+  it("does not replace a disk of the simulated device, which Demo Mode removes again", async () => {
+    const { result, before, after } = await orphanScenario("MOCK-DEMO", "MOCK-DEMO");
+
+    expect(result.current.disks.map((disk) => disk.id).sort()).toEqual([before.id, after.id].sort());
+  });
 });

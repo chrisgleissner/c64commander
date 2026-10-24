@@ -91,8 +91,6 @@ export const formatPrinterLabel = (itemName: string) => {
 
 export const formatPrinterOptionLabel = (value: string) => {
   const normalized = value.trim();
-  if (normalized === "PNG B&W") return "PNG B/W";
-  if (normalized === "PNG COLOR") return "PNG Color";
   if (normalized === "IBM Graphics Printer") return "IBM Graphics";
   if (normalized === "Commodore MPS") return "MPS";
   if (normalized === "Epson FX-80/JX-80") return "Epson FX";

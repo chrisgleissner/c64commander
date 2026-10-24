@@ -218,12 +218,41 @@ describe("usePlaybackPersistence repository session persistence", () => {
 
     expect(repository.saveSession).not.toHaveBeenCalled();
 
-    result.current.soundingTuneRef.current = result.current.playlist[1];
+    result.current.soundingTuneRef.current = result.current.playlist[0];
     await act(async () => {
       result.current.setCurrentIndex(0);
     });
 
     await waitFor(() => expect(repository.saveSession).toHaveBeenCalled());
+  });
+
+  it("writes no repository session while the record names another tune than the render holds, then writes the new tune", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const { result } = renderHook(() => useHarness(playlistStorageKey));
+    await waitFor(() => expect(repository.replacePlaylistItems).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      result.current.setCurrentIndex(0);
+    });
+    repository.saveSession.mockClear();
+
+    result.current.soundingTuneRef.current = result.current.playlist[1];
+    await act(async () => {
+      result.current.setIsPlaying(true);
+    });
+    expect(repository.saveSession.mock.calls.filter(([session]) => session.isPlaying)).toEqual([]);
+
+    await act(async () => {
+      result.current.setCurrentIndex(1);
+    });
+
+    await waitFor(() =>
+      expect(repository.saveSession).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          currentPlaylistItemId: "hvsc:hvsc-library:/MUSICIANS/Test/two.sid",
+          isPlaying: true,
+        }),
+      ),
+    );
   });
 
   it("persists the shuffle cycle anchor without losing it on a later session write", async () => {

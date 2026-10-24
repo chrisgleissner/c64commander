@@ -8,7 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureWithinRoot, getParentPathWithinRoot } from "./paths";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { ftpReplyCodeOf } from "@/lib/ftp/ftpReply";
 import type { SourceEntry, SourceLocation } from "./types";
 
 const PAGE_SIZE = 200;
@@ -79,10 +80,16 @@ const getStoredPath = (source: SourceLocation) => {
   return raw || null;
 };
 
-const setStoredPath = (source: SourceLocation, path: string) => {
+const setStoredPath = (navKey: string, path: string) => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(buildNavKey(source), path);
+  localStorage.setItem(navKey, path);
 };
+
+/** The replies of an FTP server that could not open a folder: 550, and 451 on the Ultimate's own server. */
+const FTP_FOLDER_UNREADABLE_REPLIES = [451, 550];
+
+/** Only the device saying it could not open the folder counts as gone; a refused data connection, a login problem or a transport failure does not. */
+const isMissingFolderFailure = (error: Error) => FTP_FOLDER_UNREADABLE_REPLIES.includes(ftpReplyCodeOf(error) ?? 0);
 
 /** How long to let typing settle before an indexed whole-source search runs. */
 const SEARCH_DEBOUNCE_MS = 180;
@@ -110,8 +117,9 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const searchIsInstant = Boolean(source?.searchIsInstant);
 
   const loadEntries = useCallback(
-    async (nextPath: string, options?: { query?: string; offset?: number; append?: boolean }) => {
+    async (nextPath: string, options?: { query?: string; offset?: number; append?: boolean; remembered?: boolean }) => {
       if (!source) return;
+      const navKey = buildNavKey(source);
       const token = loadingTokenRef.current + 1;
       loadingTokenRef.current = token;
       setIsLoading(true);
@@ -145,19 +153,31 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
           setTotalCount(page.totalCount);
           setNextOffset(page.nextOffset);
         } else {
-          const result = await source.listEntries(safePath);
+          const result = options?.remembered
+            ? await source.listEntries(safePath, { refusalExpected: true })
+            : await source.listEntries(safePath);
           if (loadingTokenRef.current !== token) return;
           setEntries(sortEntriesByName(result));
           setTotalCount(result.length);
           setNextOffset(null);
         }
         setPath(safePath);
+        setStoredPath(navKey, safePath);
         // A folder listing has arrived, so whatever search results were on screen are gone. Leaving
         // the flag set would keep the results header over an ordinary listing.
         setIsSearching(false);
       } catch (err) {
         if (loadingTokenRef.current !== token) return;
         const error = err as Error;
+        if (options?.remembered && nextPath !== source.rootPath && isMissingFolderFailure(error)) {
+          localStorage.removeItem(navKey);
+          addLog("warn", "Remembered folder is gone; browsing the root instead", {
+            sourceId: source.id,
+            path: nextPath,
+            error: error.message,
+          });
+          return "missing" as const;
+        }
         setError(error.message);
         addErrorLog("Source browse failed", {
           sourceId: source.id,
@@ -275,7 +295,9 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     setIsSearching(false);
     const stored = getStoredPath(source);
     const initialPath = stored ? ensureWithinRoot(stored, source.rootPath) : source.rootPath;
-    void loadEntries(initialPath, { query: "" });
+    void loadEntries(initialPath, { query: "", remembered: Boolean(stored) }).then((outcome) => {
+      if (outcome === "missing") void loadEntries(source.rootPath, { query: "" });
+    });
   }, [loadEntries, source]);
 
   // A pending keystroke must not fire into an unmounted sheet, or into the next source.
@@ -287,11 +309,6 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     },
     [],
   );
-
-  useEffect(() => {
-    if (!source) return;
-    setStoredPath(source, path);
-  }, [path, source]);
 
   /**
    * Go to a folder, leaving any whole-source search behind.

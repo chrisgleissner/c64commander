@@ -7,7 +7,13 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { clockPhaseErrors } from "../../../playwright/parity/playbackParityScenarios";
+import {
+  CLOCK_PHASE_LIMIT_MS,
+  clockPhaseErrors,
+  judgeClockPhase,
+  clockPhaseBySecond,
+  clockWentBackwards,
+} from "../../../playwright/parity/playbackParityScenarios";
 
 const ticks = (startMs: number, firstSecond: number, count: number, offsetMs = 0) =>
   Array.from({ length: count }, (_, index) => ({
@@ -51,5 +57,76 @@ describe("clockPhaseErrors", () => {
       { atMs: 29_980, seconds: 40 },
     ];
     expect(clockPhaseErrors(device, page, [[0, 40_000]])).toEqual([50, -20]);
+  });
+});
+
+describe("a steady window judged per second", () => {
+  const LATE_PER_FIVE = 1;
+  const verdict = (lagsMs: number[], latePerFive = LATE_PER_FIVE) => {
+    const device = ticks(10_000, 40, lagsMs.length);
+    const page = lagsMs.map((lag, index) => ({ atMs: 10_000 + index * 1000 + lag, seconds: 40 + index }));
+    return judgeClockPhase(clockPhaseBySecond(device, page, [[0, 60_000]]), CLOCK_PHASE_LIMIT_MS, latePerFive);
+  };
+  const clean = [17, 19, 17, 19, 17, 19, 17, 19, 17, 19];
+  const withLate = (late: Record<number, number>) => clean.map((lag, index) => late[index] ?? lag);
+
+  it("passes a clean window and the loaded-runner shape of two moderately late seconds in ten", () => {
+    expect(verdict(clean)).toBeNull();
+    expect(verdict(withLate({ 3: 223, 7: 225 }))).toBeNull();
+  });
+
+  it("counts a late second once, not once per clock", () => {
+    const device = ticks(10_000, 40, 10);
+    const page = ticks(10_000, 40, 10, 20).map((tick, index) =>
+      index === 2 ? { ...tick, atMs: tick.atMs + 205 } : tick,
+    );
+    expect(clockPhaseBySecond(device, page, [[0, 60_000]])).toHaveLength(10);
+  });
+
+  it("fails three late seconds in ten", () => {
+    expect(verdict(withLate({ 1: 223, 4: 225, 8: 230 }))).toMatch(/3 of 10 seconds/);
+  });
+
+  it("fails every second late by a steady offset", () => {
+    expect(verdict([200, 202, 205, 208, 210, 214, 200, 202, 205, 208])).not.toBeNull();
+  });
+
+  it("fails a window shorter than eight seconds, however late they are", () => {
+    expect(verdict([600, 20, 600, 20])).toMatch(/only 4 seconds/);
+    expect(verdict([20, 19, 20, 19, 20, 19])).toMatch(/only 6 seconds/);
+  });
+
+  it("fails a clock that drifts by a tenth of a second per second", () => {
+    expect(verdict([-250, -200, -150, -100, -50, 0, 50, 100, 150, 200])).not.toBeNull();
+  });
+
+  it("fails a page second read from a 300 ms poll", () => {
+    expect(verdict([10, 140, 270, 100, 230, 60, 190, 290, 40, 160])).not.toBeNull();
+  });
+
+  it("fails any second later than half a second, however few", () => {
+    expect(verdict(withLate({ 5: 600 }))).toMatch(/more than 500 ms/);
+    expect(verdict(withLate({ 5: 1400 }))).toMatch(/more than 500 ms/);
+    expect(verdict(withLate({ 2: 900, 6: 900 }))).toMatch(/more than 500 ms/);
+  });
+
+  it("fails a page clock that stopped, so a second never showed", () => {
+    const device = ticks(10_000, 40, 10);
+    const page = ticks(10_000, 40, 6, 20);
+    expect(
+      judgeClockPhase(clockPhaseBySecond(device, page, [[0, 60_000]]), CLOCK_PHASE_LIMIT_MS, LATE_PER_FIVE),
+    ).toMatch(/one clock and not on the other/);
+  });
+
+  it("allows no late second when the allowance is zero or not a number", () => {
+    expect(verdict(withLate({ 4: 225 }), 0)).not.toBeNull();
+    expect(verdict(withLate({ 4: 225 }), Number.NaN)).not.toBeNull();
+    expect(verdict(withLate({ 4: 225 }), -1)).not.toBeNull();
+  });
+
+  it("sees a clock that steps backwards, which has the right seconds in the wrong order", () => {
+    const stepped = [40, 41, 42, 41, 42, 43].map((seconds, index) => ({ atMs: 10_000 + index * 1000, seconds }));
+    expect(clockWentBackwards(stepped, [[0, 60_000]])).toBe(true);
+    expect(clockWentBackwards(ticks(10_000, 40, 8), [[0, 60_000]])).toBe(false);
   });
 });

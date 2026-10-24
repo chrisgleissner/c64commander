@@ -67,6 +67,18 @@ describe("PlaybackConfigOverrideEditor", () => {
     } as any);
   });
 
+  it("offers no category and reads none while the list on hand belongs to the previous device", () => {
+    vi.mocked(useC64Categories).mockReturnValue({
+      data: { categories: ["Audio Mixer"] },
+      isPlaceholderData: true,
+    } as any);
+
+    render(<PlaybackConfigOverrideEditor item={createPlaylistItem()} onChangeOverrides={vi.fn()} />);
+
+    expect(screen.queryByRole("option", { name: "Audio Mixer" })).toBeNull();
+    expect(vi.mocked(useC64Category)).not.toHaveBeenCalledWith("Audio Mixer", true, expect.anything());
+  });
+
   it("updates an existing override", () => {
     const onChangeOverrides = vi.fn();
     render(

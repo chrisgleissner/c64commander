@@ -14,6 +14,7 @@ import { addErrorLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 describe("useSourceNavigator", () => {
@@ -574,5 +575,141 @@ describe("useSourceNavigator whole-source search", () => {
     expect(onC64u.result.current.path).toBe("/");
     expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64", expect.anything());
     expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64");
+  });
+  it("does not copy the folder of the previous device into the folder memory of the device switched to", async () => {
+    let host = "u2";
+    const listEntries = vi.fn().mockResolvedValue([]);
+    const buildSource = (): SourceLocation => ({
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      navigationScope: () => host,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    });
+    const { result, rerender } = renderHook(({ source }) => useSourceNavigator(source), {
+      initialProps: { source: buildSource() },
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalled());
+    await act(async () => {
+      result.current.navigateTo("/USB0/test-data/d64");
+    });
+    await waitFor(() => expect(result.current.path).toBe("/USB0/test-data/d64"));
+
+    host = "c64u";
+    listEntries.mockClear();
+    listEntries.mockImplementation(() => new Promise(() => undefined));
+    rerender({ source: buildSource() });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+    rerender({ source: buildSource() });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(2));
+
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate:c64u")).not.toBe("/USB0/test-data/d64");
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64");
+    expect(listEntries).not.toHaveBeenCalledWith("/USB0/test-data/d64", expect.anything());
+  });
+  it("forgets a remembered folder that no longer exists and lists the root instead", async () => {
+    localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/removed");
+    const listEntries = vi.fn().mockImplementation(async (path: string) => {
+      if (path === "/USB2/removed") throw new Error("FTP LIST /USB2/removed refused (550): No such directory");
+      return [{ type: "dir", name: "USB2", path: "/USB2" }];
+    });
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.path).toBe("/");
+    expect(result.current.error).toBeNull();
+    expect(addErrorLog).not.toHaveBeenCalled();
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/");
+  });
+
+  it.each([
+    ["Android", "FTP LIST /USB2/removed refused (451): 451 Requested action aborted: local error in processing."],
+    ["iOS", "FTP command failed (451)"],
+    ["web bridge", "FTP list failed: 451 Requested action aborted: local error in processing."],
+    ["550", "FTP LIST /USB2/removed refused (550): No such directory"],
+  ])("forgets a remembered folder the device could not open (%s)", async (_client, message) => {
+    localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/removed");
+    const listEntries = vi.fn().mockImplementation(async (path: string) => {
+      if (path === "/USB2/removed") throw new Error(message);
+      return [{ type: "dir", name: "USB2", path: "/USB2" }];
+    });
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.path).toBe("/");
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/");
+    expect(listEntries).toHaveBeenCalledWith("/USB2/removed", { refusalExpected: true });
+    expect(addErrorLog).not.toHaveBeenCalled();
+  });
+
+  it("keeps a remembered folder when the listing fails without a device reply", async () => {
+    localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/kept");
+    const listEntries = vi.fn().mockRejectedValue(new Error("Network request failed"));
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.error).toBe("Network request failed"));
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/USB2/kept");
+    expect(listEntries).not.toHaveBeenCalledWith("/");
+  });
+
+  it.each([
+    "FTP LIST /USB2/kept refused (425): Can't open data connection",
+    "FTP LIST /USB2/kept refused (426): Connection closed",
+    "FTP LIST /USB2/kept refused (421): Service not available",
+    "FTP LIST /USB2/kept refused (450): Requested file action not taken",
+    "FTP LIST /USB2/kept refused (530): Not logged in",
+    "Host not found",
+    "404 Not Found",
+  ])("keeps a remembered folder when the listing fails with %s", async (message) => {
+    localStorage.setItem("c64u_source_nav:ultimate:ultimate", "/USB2/kept");
+    const listEntries = vi.fn().mockRejectedValue(new Error(message));
+    const source: SourceLocation = {
+      id: "ultimate",
+      type: "ultimate",
+      name: "Ultimate",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.error).toBe(message));
+    expect(localStorage.getItem("c64u_source_nav:ultimate:ultimate")).toBe("/USB2/kept");
+    expect(listEntries).not.toHaveBeenCalledWith("/");
   });
 });

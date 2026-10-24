@@ -29,7 +29,12 @@ vi.mock("@/lib/c64api", () => ({
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { addLog } from "@/lib/logging";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
-import { CONFIG_LOOKUP_PROBE_EVERY, createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
+import {
+  CONFIG_LOOKUP_PROBE_EVERY,
+  CONFIG_LOOKUP_SKIPPED_NOTICE,
+  createConfigListing,
+  SONGLENGTHS_LOOKUP_SKIPPED_NOTICE,
+} from "@/lib/sourceNavigation/guardedConfigListing";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const entry = { type: "file", name: "a.cfg", path: "/USB2/Games/a.cfg" } as const;
@@ -440,5 +445,43 @@ describe("createConfigListing", () => {
     vi.mocked(listFtpDirectory).mockResolvedValueOnce({ entries: [entry] } as never);
     await expect(listing.listEntries("/USB2/After")).resolves.toHaveLength(1);
     expect(listFtpDirectory).toHaveBeenCalledTimes(4);
+  });
+
+  it("runs lookups together from the start when the scan of the add has already been answered by the device", async () => {
+    const releases: Array<() => void> = [];
+    vi.mocked(listFtpDirectory).mockImplementation(
+      () => new Promise((resolve) => releases.push(() => resolve({ entries: [] } as never))),
+    );
+    const listing = createConfigListing(createUltimateSourceLocation());
+    listing.noteDeviceAnswered();
+
+    const lookups = [listing.listEntries("/USB2/A"), listing.listEntries("/USB2/B")];
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(listFtpDirectory).toHaveBeenCalledTimes(2);
+    releases.forEach((release) => release());
+    await Promise.all(lookups);
+  });
+
+  it("names what was not looked up for the kind of add", async () => {
+    vi.mocked(listFtpDirectory).mockRejectedValue(new Error("timed out"));
+    const settingsOnly = createConfigListing(createUltimateSourceLocation());
+    const withSonglengths = createConfigListing(createUltimateSourceLocation(), undefined, { songlengths: true });
+    await expect(settingsOnly.listEntries("/USB2/One")).rejects.toThrow();
+    await expect(withSonglengths.listEntries("/USB2/One")).rejects.toThrow();
+
+    expect(settingsOnly.skippedNotice()).toBe(CONFIG_LOOKUP_SKIPPED_NOTICE);
+    expect(withSonglengths.skippedNotice()).toBe(SONGLENGTHS_LOOKUP_SKIPPED_NOTICE);
+  });
+
+  it("lists the songlengths folders it did not ask the device about, and not the settings folders", async () => {
+    vi.mocked(listFtpDirectory).mockRejectedValue(new Error("timed out"));
+    const listing = createConfigListing(createUltimateSourceLocation(), undefined, { songlengths: true });
+    await expect(listing.listSonglengthsFolder("/USB2/One")).rejects.toThrow();
+    await expect(listing.listSonglengthsFolder("/USB2/Two")).resolves.toEqual([]);
+    await expect(listing.listEntries("/USB2/Settings")).resolves.toEqual([]);
+
+    expect(listing.skippedSonglengthsFolders()).toEqual(["/USB2/One", "/USB2/Two"]);
   });
 });

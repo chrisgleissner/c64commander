@@ -15,7 +15,7 @@ import {
   subscribeSimulatedDeviceContentRemoved,
 } from "@/lib/connection/simulatedDeviceContent";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
-import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { getSavedDeviceById, getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
 export type AddDisksOptions = {
   expectedSelectedDeviceId?: string | null;
@@ -62,6 +62,47 @@ export type DiskLibrary = {
 // save effect detect and skip exactly that transitional render. See
 // HARD9-048.
 type DiskLibraryState = { uniqueId: string | null; disks: DiskEntry[] };
+
+const originMachineId = (disk: DiskEntry) => disk.origin?.originDeviceLastKnownUniqueId?.trim().toLowerCase() || null;
+
+/**
+ * An Ultimate disk of a saved device that has since been removed, for the same file of the same machine as a disk
+ * being added now. Content of the simulated device is never matched, so ending Demo Mode cannot remove a real disk.
+ */
+const isOrphanOf = (disk: DiskEntry, added: DiskEntry) => {
+  const originDeviceId = disk.origin?.originDeviceId;
+  const machineId = originMachineId(disk);
+  return (
+    disk.location === "ultimate" &&
+    added.location === "ultimate" &&
+    disk.path === added.path &&
+    Boolean(originDeviceId) &&
+    !getSavedDeviceById(originDeviceId as string) &&
+    machineId !== null &&
+    machineId === originMachineId(added) &&
+    !isSimulatedDeviceOrigin(disk.origin) &&
+    !isSimulatedDeviceOrigin(added.origin)
+  );
+};
+
+/** What the user set on a disk: it moves to the entry that replaces it. */
+const userFieldsOf = ({
+  name,
+  group,
+  importOrder,
+  configRef,
+  configOrigin,
+  configOverrides,
+  configCandidates,
+}: DiskEntry) => ({
+  name,
+  group,
+  importOrder,
+  configRef,
+  configOrigin,
+  configOverrides,
+  configCandidates,
+});
 
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [libraryState, setLibraryState] = useState<DiskLibraryState>({ uniqueId: null, disks: [] });
@@ -116,7 +157,13 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
         const existing = new Set(prev.map((disk) => disk.id));
         entries.forEach((entry) => {
           if (existing.has(entry.id)) return;
-          next.push(entry);
+          const orphanIndex = next.findIndex((disk) => isOrphanOf(disk, entry));
+          if (orphanIndex < 0) {
+            next.push(entry);
+            return;
+          }
+          const orphan = next[orphanIndex];
+          next[orphanIndex] = { ...entry, ...userFieldsOf(orphan) };
         });
         return next;
       });

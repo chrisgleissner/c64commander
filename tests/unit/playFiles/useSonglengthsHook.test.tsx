@@ -213,6 +213,149 @@ describe("useSonglengths", () => {
     expect(candidates.some((path) => path.toLowerCase().includes("songlengths"))).toBe(true);
   });
 
+  it("reads a songlengths file again after a read that was canceled, instead of keeping the empty result for the session", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        if (reads === 1) throw new DOMException("Aborted", "AbortError");
+        return new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer;
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+
+    const failed = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(failed?.pathToSeconds?.get("/MUSICIANS/demo.sid")).toBeUndefined();
+    await flushPromises();
+
+    const retried = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+
+    expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+    expect(reads).toBe(2);
+  });
+
+  it("reads a songlengths file once, and logs one failure, for every batch of an add while the device is unreachable", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        throw new Error("FTP list failed: Timeout (control socket)");
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+
+    const batches = 12;
+    for (let batch = 0; batch < batches; batch += 1) {
+      await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+      await flushPromises();
+    }
+
+    expect(reads).toBe(1);
+    expect(
+      addErrorLogMock.mock.calls.filter(([message]) => /Failed to read or parse songlengths/.test(message)),
+    ).toHaveLength(1);
+  });
+
+  it("reads a songlengths file again once the wait after a failed read has passed", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        if (reads === 1) throw new Error("FTP read aborted");
+        return new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer;
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    await flushPromises();
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    expect(reads).toBe(1);
+
+    clock.mockReturnValue(now + 16_000);
+    const retried = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+    clock.mockRestore();
+
+    expect(reads).toBe(2);
+    expect(retried?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+  });
+
+  it("doubles the wait before a songlengths file is read again while it keeps failing", async () => {
+    let reads = 0;
+    const songlengthsFile = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        reads += 1;
+        throw new Error("FTP read aborted");
+      },
+    };
+    const extraFiles: SonglengthsFileEntry[] = [{ path: "/DOCUMENTS/Songlengths.md5", file: songlengthsFile }];
+    const { result } = renderUseSonglengths([]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    const load = async () => {
+      await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid", extraFiles);
+      await flushPromises();
+    };
+
+    await load();
+    clock.mockReturnValue(now + 16_000);
+    await load();
+    expect(reads).toBe(2);
+    clock.mockReturnValue(now + 16_000 + 16_000);
+    await load();
+    expect(reads).toBe(2);
+    clock.mockReturnValue(now + 16_000 + 31_000);
+    await load();
+    clock.mockRestore();
+
+    expect(reads).toBe(3);
+  });
+
+  it("lets a retry replace a songlengths file whose read failed, and read it again at once", async () => {
+    const failing = {
+      name: "Songlengths.md5",
+      webkitRelativePath: "/DOCUMENTS/Songlengths.md5",
+      lastModified: 456,
+      arrayBuffer: async () => {
+        throw new Error("FTP read aborted");
+      },
+    };
+    const working = {
+      ...failing,
+      arrayBuffer: async () => new TextEncoder().encode("; /MUSICIANS/demo.sid\nabc=0:30 0:45\n").buffer,
+    };
+    const { result } = renderUseSonglengths([]);
+    act(() => result.current?.mergeSonglengthsFiles([{ path: "/DOCUMENTS/Songlengths.md5", file: failing }]));
+    await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid");
+    await flushPromises();
+
+    act(() =>
+      result.current?.mergeSonglengthsFiles([{ path: "/DOCUMENTS/Songlengths.md5", file: working }], {
+        replaceFailed: true,
+      }),
+    );
+    const data = await result.current?.loadSonglengthsForPath("/MUSICIANS/demo.sid");
+
+    expect(data?.pathToSeconds.get("/MUSICIANS/demo.sid")).toEqual([30, 45]);
+  });
+
   it("keeps the songlengths bundle cache across playlist identity changes (HARD9-008)", async () => {
     const reads = { count: 0 };
     const songlengthsFile = {

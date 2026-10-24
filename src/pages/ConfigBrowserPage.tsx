@@ -13,8 +13,8 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion } from "framer-motion";
 import { Search, Loader2 } from "lucide-react";
 import { configRefreshAction } from "@/pages/config/ConfigRefreshButton";
+import { useLiveConfigCategories } from "@/pages/config/useLiveConfigCategories";
 import {
-  useC64Categories,
   useC64Category,
   useC64SetConfig,
   useC64Connection,
@@ -61,16 +61,11 @@ import {
   resolveMenuMapping,
   TERMINOLOGY_OVERLAY,
   unroutedCategories,
-  type MenuHierarchy,
-  type MenuNode,
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
-import {
-  filterCategoriesByQuery,
-  filterMenuPagesByQuery,
-  type MenuPageEntry,
-} from "@/lib/config/menuMapping/searchMenuPages";
+import { filterCategoriesByQuery, filterMenuPagesByQuery } from "@/lib/config/menuMapping/searchMenuPages";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { flattenMenuPages, pageReadsRest, soleRestCategory } from "@/pages/config/menuPageQueries";
 import { rollbackAudioMixerItem } from "@/pages/config/audioMixerRollback";
 import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
 import { useRowChangeCallbacks, useStagedConfigRows } from "@/pages/config/stagedConfigRows";
@@ -931,38 +926,10 @@ const CategorySection = memo(function CategorySection({
   );
 });
 
-const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
-  const entries: MenuPageEntry[] = [];
-  for (const node of hierarchy.nodes) {
-    if (node.kind === "group") {
-      for (const child of node.children ?? []) entries.push({ page: child, groupLabel: node.label });
-    } else {
-      entries.push({ page: node, groupLabel: null });
-    }
-  }
-  return entries;
-};
-
-/** Whether a menu page edits a REST item (or, without `item`, any item of the category). */
-const pageReadsRest = (node: MenuNode, category: string, item?: string): boolean =>
-  (node.kind === "item" && node.rest?.category === category && (item === undefined || node.rest.item === item)) ||
-  (node.children ?? []).some((child) => pageReadsRest(child, category, item));
-
-// The single REST category a page reads from when it is a flat, single-category page
-// (used to delegate the Audio Mixer page to the specialized CategorySection).
-const soleRestCategory = (page: MenuNode): string | null => {
-  const categories = new Set<string>();
-  const walk = (node: MenuNode) => {
-    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
-    for (const child of node.children ?? []) walk(child);
-  };
-  walk(page);
-  return categories.size === 1 ? [...categories][0] : null;
-};
-
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
-  const { data: categoriesData, isLoading, isError, error, refetch } = useC64Categories(CONFIG_BROWSER_QUERY_OPTIONS);
+  const { liveCategories, hasList, isLoading, isError, error, refetch } =
+    useLiveConfigCategories(CONFIG_BROWSER_QUERY_OPTIONS);
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   // One callback per section for the life of the page, so a section is not re-rendered for a new function.
@@ -1031,7 +998,6 @@ export default function ConfigBrowserPage() {
     [menuPages],
   );
 
-  const liveCategories = categoriesData?.categories ?? [];
   // Categories whose unclaimed items smart-routing cannot place on any menu page (an
   // unknown/future category with no owner, keyword, or default). The residual Advanced
   // section renders ONLY these; when there are none it is omitted entirely (no junk drawer).
@@ -1074,10 +1040,10 @@ export default function ConfigBrowserPage() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : isError && !categoriesData?.categories ? (
+          ) : isError && !hasList ? (
             <div className="space-y-3 py-8 text-center text-sm text-muted-foreground" data-testid="config-load-error">
               <p>Config categories could not be loaded.</p>
-              <p className="text-xs">{(error as Error | null)?.message ?? "Retry the device request."}</p>
+              <p className="text-xs">{error?.message ?? "Retry the device request."}</p>
               <Button variant="outline" size="sm" onClick={() => void refetch()} data-testid="config-retry">
                 Retry
               </Button>

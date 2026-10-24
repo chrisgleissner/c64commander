@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Fragment } from "react";
 import { Waves } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
@@ -79,12 +80,12 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
               data-live-view-controlled={liveViewControlled ? "true" : undefined}
             >
               <div
-                className="flex items-center justify-between gap-2 text-xs"
+                className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs"
                 aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port}`}
               >
                 <button
                   type="button"
-                  className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
+                  className="flex min-h-11 flex-auto items-center gap-2 text-left"
                   onClick={() => handleStreamEditOpen(entry.key)}
                   disabled={locked}
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
@@ -97,13 +98,18 @@ export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
                       : entry.label.toUpperCase()}
                   </span>
                   <span
-                    // Wraps rather than truncating: this row carries a fixed label and two buttons,
-                    // so the address is left 83 CSS px of the 128 it needs on a 320 px screen, and
-                    // a multicast endpoint cut to "239.0.1." identifies nothing.
-                    className="min-w-0 break-all font-semibold text-foreground"
+                    className="font-semibold tabular-nums text-foreground"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}
                   >
-                    {buildStreamEndpointLabel(draft.ip, draft.port)}
+                    {buildStreamEndpointLabel(draft.ip, draft.port)
+                      .split(":")
+                      .map((part, index, parts) => (
+                        <Fragment key={`${index}-${part}`}>
+                          {part}
+                          {index < parts.length - 1 ? ":" : null}
+                          {index < parts.length - 1 ? <wbr /> : null}
+                        </Fragment>
+                      ))}
                   </span>
                 </button>
                 <div className="flex items-center gap-1">

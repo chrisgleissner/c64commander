@@ -102,6 +102,7 @@ vi.mock("@/lib/native/safUtils", () => ({
 
 vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
   isSonglengthsFileName: vi.fn(() => false),
+  mayHoldSonglengthsFile: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/config/configDiscovery", () => ({
@@ -410,5 +411,50 @@ describe("addFileSelections config discovery", () => {
       configRef: null,
       sourceId: "hvsc-library",
     });
+  });
+
+  it("ends the songlengths search of a local folder with the cancel instead of logging each folder it did not list", async () => {
+    const logging = await import("@/lib/logging");
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    const controller = { current: null as AbortController | null };
+    const deps = { ...createDeps(), addItemsAbortControllerRef: controller };
+    deps.collectSonglengthsCandidates = vi.fn(() => ["/Music/A/songlengths.md5", "/Music/B/songlengths.md5"]);
+    const listEntries = vi.fn(async () => {
+      controller.current?.abort();
+      return [];
+    });
+
+    const result = await createAddFileSelectionsHandler(deps as never)(createSource("local", listEntries), [
+      { type: "file", name: "tune.sid", path: "/Music/A/tune.sid", sizeBytes: 4096 },
+    ]);
+
+    expect(listEntries).toHaveBeenCalledTimes(1);
+    expect(result).toBe(false);
+    expect(addLogSpy.mock.calls.filter(([, message]) => /scanning for songlengths file/.test(String(message)))).toEqual(
+      [],
+    );
+    addLogSpy.mockRestore();
+  });
+
+  it("stores the folders it could not look in for a songlengths file because the device did not answer", async () => {
+    const { getSavedDevicesSnapshot } = await import("@/lib/savedDevices/store");
+    const { clearSkippedSonglengthsFolders, getSkippedSonglengthsFolders } =
+      await import("@/pages/playFiles/songlengthsRetryStore");
+    clearSkippedSonglengthsFolders();
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates = vi.fn(() => ["/Music/A/songlengths.md5", "/Music/B/songlengths.md5"]);
+    const listEntries = vi.fn(async () => {
+      if (listEntries.mock.calls.length > 1) throw new Error("FTP list failed: Timeout (control socket)");
+      return [];
+    });
+
+    await createAddFileSelectionsHandler(deps as never)(createSource("ultimate", listEntries), [
+      { type: "file", name: "tune.sid", path: "/Music/A/tune.sid", sizeBytes: 4096 },
+    ]);
+
+    const stored = getSkippedSonglengthsFolders(getSavedDevicesSnapshot().selectedDeviceId);
+    expect(stored.length).toBeGreaterThan(0);
+    expect(stored.every((folder) => folder.startsWith("/Music/"))).toBe(true);
+    clearSkippedSonglengthsFolders();
   });
 });

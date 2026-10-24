@@ -64,6 +64,26 @@ describe("ftpSourceAdapter", () => {
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
   });
 
+  describe("a refusal the caller expects", () => {
+    it("tells the FTP client when the caller can recover from the device refusing the folder", async () => {
+      listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+      await createUltimateSourceLocation().listEntries("/Usb0/Games", { refusalExpected: true });
+
+      expect(listFtpDirectoryMock).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/Usb0/Games", refusalExpected: true }),
+      );
+    });
+
+    it("does not ask for a quiet refusal otherwise", async () => {
+      listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+      await createUltimateSourceLocation().listEntries("/Usb0/Other");
+
+      expect(listFtpDirectoryMock.mock.calls[0][0]).not.toHaveProperty("refusalExpected");
+    });
+  });
+
   describe("a folder the device cannot open", () => {
     const echo = (name: string, path: string) => ({ entries: [{ type: "dir" as const, name, path }] });
 

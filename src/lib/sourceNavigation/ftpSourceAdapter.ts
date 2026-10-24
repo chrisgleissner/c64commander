@@ -142,7 +142,10 @@ const isUnreadableFolderEcho = async (
 /** The key a folder is cached under: duplicate slashes collapsed and no trailing slash, except for the root. */
 const listingFolderPath = (path: string) => normalizeSourcePath(path).replace(/(.)\/$/, "$1");
 
-const listEntries = async (path: string, options?: { skipCache?: boolean }): Promise<SourceEntry[]> => {
+const listEntries = async (
+  path: string,
+  options?: { skipCache?: boolean; refusalExpected?: boolean },
+): Promise<SourceEntry[]> => {
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
   const normalizedPath = listingFolderPath(path);
@@ -153,7 +156,11 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
   }
 
   const request = { host, port: getStoredFtpPort(), password };
-  const result = await listFtpDirectory({ ...request, path: normalizedPath });
+  const result = await listFtpDirectory({
+    ...request,
+    path: normalizedPath,
+    ...(options?.refusalExpected ? { refusalExpected: true } : {}),
+  });
   if (await isUnreadableFolderEcho(request, normalizedPath, result.entries || [])) {
     throw new UnreadableFolderError(path || "/");
   }

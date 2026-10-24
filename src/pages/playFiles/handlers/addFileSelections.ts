@@ -19,11 +19,6 @@ import { reportUserError } from "@/lib/uiErrors";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
-import { getC64APIConfigSnapshot } from "@/lib/c64api";
-import { readFtpFile } from "@/lib/ftp/ftpClient";
-import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
-import { base64ToUint8 } from "@/lib/sid/sidUtils";
-import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
@@ -39,6 +34,10 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
+import { buildUltimateSonglengthsFile } from "@/pages/playFiles/handlers/ultimateSonglengthsFile";
+import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
+import { recordSkippedSonglengthsFolders } from "@/pages/playFiles/songlengthsRetryStore";
+import { searchSonglengthsFolders } from "@/pages/playFiles/handlers/songlengthsFolderSearch";
 import { createConfigListing } from "@/lib/sourceNavigation/guardedConfigListing";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
@@ -126,14 +125,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     return error;
   };
 
-  const isAbortError = (error: unknown) => {
-    if (!error || typeof error !== "object") return false;
-    const candidate = error as { message?: unknown; name?: unknown };
-    return (
-      candidate.name === "AbortError" ||
-      (typeof candidate.message === "string" && /cancelled|aborted/i.test(candidate.message))
-    );
-  };
+  const isAbortError = (error: unknown) => (error as { name?: unknown } | null)?.name === "AbortError";
 
   const parseArchiveSelectionPath = (path: string) => {
     const [resultId, rawCategory] = path.split("/");
@@ -146,60 +138,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
   const hasMd5SonglengthsFile = (entries: SonglengthsFileEntry[] | undefined) =>
     Boolean(entries?.some((entry) => entry.path.toLowerCase().endsWith(".md5")));
-
-  const formatSonglengthsMib = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
-
-  const buildUltimateSonglengthsFile = (
-    entryPath: string,
-    entryName: string,
-    modifiedAt?: string | null,
-    sizeBytes?: number | null,
-    signal?: AbortSignal,
-  ): LocalPlayFile => {
-    const normalizedPath = normalizeSourcePath(entryPath);
-    const lastModified = parseModifiedAt(modifiedAt) ?? Date.now();
-    const totalBytes = typeof sizeBytes === "number" && sizeBytes > 0 ? sizeBytes : 0;
-    return {
-      name: entryName,
-      webkitRelativePath: normalizedPath,
-      lastModified,
-      arrayBuffer: async () => {
-        const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
-        try {
-          const { data } = await readFtpFile({
-            host: normalizeFtpHost(rawHost),
-            port: getStoredFtpPort(),
-            password,
-            path: normalizedPath,
-            // No idle timeout: a slow multi-MB songlengths read over the c64u's
-            // single-threaded FTP must run to completion. User-cancellation (via
-            // the add-flow signal) is the escape, not a short transfer timeout —
-            // a timeout that truncates the transfer can wedge the firmware's FTP
-            // data channel.
-            timeoutMs: 0,
-            totalBytes,
-            signal,
-            onProgress: ({ bytesRead, totalBytes: total }) => {
-              const readMib = formatSonglengthsMib(bytesRead);
-              const message =
-                total > 0
-                  ? `Reading song-length database… ${readMib} / ${formatSonglengthsMib(total)} MB`
-                  : `Reading song-length database… ${readMib} MB`;
-              setAddItemsProgress((prev) => ({ ...prev, message }));
-            },
-          });
-          const bytes = base64ToUint8(data);
-          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-        } finally {
-          setAddItemsProgress((prev) =>
-            typeof prev.message === "string" && prev.message.startsWith("Reading song-length database")
-              ? { ...prev, message: "Scanning…" }
-              : prev,
-          );
-        }
-      },
-    };
-  };
 
   const hasResolvedSelectionMetadata = (selection: SelectedItem) =>
     selection.durationMs !== undefined ||
@@ -328,6 +266,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         throw createAbortError();
       }
     };
+    const abortRejection = new Promise<never>((_, reject) => {
+      if (abortSignal.aborted) reject(createAbortError());
+      else abortSignal.addEventListener("abort", () => reject(createAbortError()), { once: true });
+    });
+    abortRejection.catch(() => undefined);
+    const untilAborted = <T>(work: Promise<T>) => Promise.race([work, abortRejection]);
     const handleConnectionChange = (event: Event) => {
       const detail = (event as CustomEvent<{ reason?: string }>).detail;
       if (detail?.reason !== "saved-device-switch") return;
@@ -460,7 +404,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             batch.length,
             async () => {
               throwIfAborted();
-              const resolvedItems = await applySonglengthsToItems(batch);
+              const resolvedItems = await untilAborted(applySonglengthsToItems(batch));
               throwIfAborted();
               appendedArchiveItems += resolvedItems.length;
               // throwIfAborted must not run inside the updater: React may invoke it
@@ -559,7 +503,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const selectedFiles: SourceEntry[] = [];
       const skippedFolders: SourceRecursiveFailure[] = [];
-      const configListing = createConfigListing(source, abortSignal);
+      let deviceListedRecursively = false;
+      let songlengthsFoldersNotReached: string[] = [];
+      const configListing = createConfigListing(source, abortSignal, { songlengths: true });
       const selectedFilesByParent = new Map<string, SourceEntry[]>();
       const registerSelectedFile = (file: SourceEntry) => {
         const parent = getParentPath(file.path);
@@ -630,11 +576,13 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             const resolvedItems =
               source.type === "hvsc"
                 ? batch
-                : await applySonglengthsToItems(batch, discoveredSonglengths, {
-                    allowMd5Fallback:
-                      source.type === "ultimate" &&
-                      (hasMd5SonglengthsFile(songlengthsFiles) || hasMd5SonglengthsFile(discoveredSonglengths)),
-                  });
+                : await untilAborted(
+                    applySonglengthsToItems(batch, discoveredSonglengths, {
+                      allowMd5Fallback:
+                        source.type === "ultimate" &&
+                        (hasMd5SonglengthsFile(songlengthsFiles) || hasMd5SonglengthsFile(discoveredSonglengths)),
+                    }),
+                  );
             throwIfAborted();
             addLog("debug", "[hvsc-perf] applySonglengthsToItems done", {
               count: resolvedItems.length,
@@ -776,6 +724,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             } else {
               const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
               throwIfAborted();
+              if (source.type === "ultimate" && !nested.partialFailures?.length) deviceListedRecursively = true;
               if (nested.partialFailures?.length) {
                 skippedFolders.push(...nested.partialFailures);
                 addLog("warn", "Playlist scan skipped folders", {
@@ -836,7 +785,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         files: selectedFiles.length,
         ms: Date.now() - scanT0,
       });
-
+      if (deviceListedRecursively && selectedFiles.length && !skippedFolders.length) configListing.noteDeviceAnswered();
       if (source.type === "local" || source.type === "ultimate") {
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
@@ -873,7 +822,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               });
               return undefined;
             }
-            return buildUltimateSonglengthsFile(normalizedPath, entryName, modifiedAt, sizeBytes, abortSignal);
+            return buildUltimateSonglengthsFile(
+              { path: normalizedPath, name: entryName, modifiedAt, sizeBytes },
+              () => addItemsAbortControllerRef?.current?.signal,
+              setAddItemsProgress,
+            );
           }
           const entry = entriesMap?.get(normalizedPath);
           return (
@@ -945,6 +898,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                   resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
                 );
               } catch (error) {
+                if (isAbortError(error)) throw error;
                 addLog("debug", "Failed to list entries while scanning for songlengths file", {
                   folder,
                   sourceId: source.id,
@@ -988,39 +942,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               addSonglengthsEntry(resolved.path, file);
             });
           } else {
-            const foldersToScan = new Set(
-              candidatePaths.map((path) => {
-                const trimmed = path.replace(/\/[^/]+$/, "/");
-                return normalizeSourcePath(trimmed || "/");
-              }),
-            );
-            // Shallowest first, so a folder whose parent was listed without it is skipped rather than asked for.
-            const listed = new Map<string, SourceEntry[]>();
-            for (const folder of [...foldersToScan].sort((a, b) => a.length - b.length)) {
-              if (!mayHoldSonglengthsFile(folder, listed)) continue;
-              try {
-                throwIfAborted();
-                const entries = await source.listEntries(folder);
-                listed.set(normalizeSourcePath(folder).replace(/(.)\/+$/, "$1"), entries);
-                throwIfAborted();
-                const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
-                if (!songEntry) continue;
-                const songPath = normalizeSourcePath(songEntry.path);
+            songlengthsFoldersNotReached = await searchSonglengthsFolders({
+              candidatePaths,
+              listing: configListing,
+              sourceId: source.id,
+              throwIfAborted,
+              isAbortError,
+              onSonglengthsEntry: (entry) =>
                 addSonglengthsEntry(
-                  songPath,
-                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt, songEntry.sizeBytes),
-                );
-              } catch (error) {
-                addLog("debug", "Failed to list entries while scanning for songlengths file", {
-                  folder,
-                  sourceId: source.id,
-                  error: (error as Error).message,
-                });
-              }
-            }
+                  normalizeSourcePath(entry.path),
+                  resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt, entry.sizeBytes),
+                ),
+            });
           }
         }
-
         if (discovered.length) {
           discoveredSonglengths = discovered;
           mergeSonglengthsFiles(discovered);
@@ -1114,6 +1049,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           supportedFiles: appendedPlaylistItems,
           elapsedMs: Date.now() - startedAt,
         });
+      }
+      if (!isSimulatedDeviceTarget()) {
+        recordSkippedSonglengthsFolders(selectedDeviceIdAtStart, [
+          ...songlengthsFoldersNotReached,
+          ...configListing.skippedSonglengthsFolders(),
+        ]);
       }
       const notices = [skippedFolders.length ? INCOMPLETE_SCAN_NOTICE : "", configListing.skippedNotice()].filter(
         Boolean,

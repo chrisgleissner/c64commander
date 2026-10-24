@@ -18,11 +18,14 @@ type ListingSource = Pick<SourceLocation, "id" | "type" | "listEntries" | "peekC
 export const CONFIG_LOOKUP_PROBE_EVERY = 25;
 
 export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up while the device could not be reached.";
+export const SONGLENGTHS_LOOKUP_SKIPPED_NOTICE =
+  "Settings and song length files were not looked up while the device could not be reached.";
 
 /**
- * The folder listing used to look for settings files beside the files of one add.
+ * The folder listing used to look for settings files, and for songlengths files, beside the files of one add.
+ * Both lookups share what is known about the device and keep their own schedule for asking it again.
  *
- * Looking for a settings file is optional, so once the phone knows it is offline, or a listing from the device has
+ * Looking for them is optional, so once the phone knows it is offline, or a listing from the device has
  * failed without an answer from the device, the remaining folders are answered from the source's cache (or as
  * empty) instead of each waiting for its own connection timeout. Every CONFIG_LOOKUP_PROBE_EVERY-th lookup asks the
  * device again. Until one lookup has been answered the lookups run one at a time, so a first failure is seen before
@@ -32,15 +35,20 @@ export const CONFIG_LOOKUP_SKIPPED_NOTICE = "Settings files were not looked up w
  * lookup started, and an answer counts only if its lookup started after the latest failed lookup started. What was
  * skipped is counted so the add can say so. A cancel ends lookups at once; a request already sent finishes unobserved.
  */
-export const createConfigListing = (source: ListingSource, signal?: AbortSignal) => {
+export const createConfigListing = (
+  source: ListingSource,
+  signal?: AbortSignal,
+  options?: { songlengths?: boolean },
+) => {
+  const notice = options?.songlengths ? SONGLENGTHS_LOOKUP_SKIPPED_NOTICE : CONFIG_LOOKUP_SKIPPED_NOTICE;
   let deviceUnreachable = false;
   let deviceAnswered = false;
   let lookupsStarted = 0;
   let lastFailureStart = 0;
   let lastSuccessStart = 0;
   let skipped = 0;
-  let sinceLastProbe = 0;
   let noticeLogged = false;
+  const skippedSonglengthsFolders = new Set<string>();
   let chain: Promise<unknown> = Promise.resolve();
 
   const abortError = () => {
@@ -57,64 +65,82 @@ export const createConfigListing = (source: ListingSource, signal?: AbortSignal)
     : null;
   aborted?.catch(() => undefined);
 
-  const lookUp = async (path: string): Promise<SourceEntry[]> => {
-    if (signal?.aborted) throw abortError();
-    const fromDevice = source.type === "ultimate" && !isSimulatedDeviceTarget();
-    const probing = deviceUnreachable && (sinceLastProbe += 1) >= CONFIG_LOOKUP_PROBE_EVERY;
-    if (fromDevice && ((deviceUnreachable && !probing) || isNetworkKnownOffline())) {
-      skipped += 1;
-      return source.peekCachedEntries?.(path) ?? [];
-    }
-    if (probing) sinceLastProbe = 0;
-    const started = (lookupsStarted += 1);
-    const answered = () => {
-      if (started < lastFailureStart) return;
-      lastSuccessStart = Math.max(lastSuccessStart, started);
-      deviceUnreachable = false;
-      deviceAnswered = true;
-    };
-    try {
-      const pending = source.listEntries(path);
-      const entries = await (aborted ? Promise.race([pending, aborted]) : pending);
-      answered();
-      return entries;
-    } catch (error) {
-      if (!fromDevice || (error as Error)?.name === "AbortError") throw error;
-      if (isDeviceAnswer(error)) {
-        answered();
-      } else {
+  const makeListEntries = (probeEvery: number, rememberSkipped = false) => {
+    let sinceLastProbe = 0;
+    const lookUp = async (path: string): Promise<SourceEntry[]> => {
+      if (signal?.aborted) throw abortError();
+      const fromDevice = source.type === "ultimate" && !isSimulatedDeviceTarget();
+      const probing = deviceUnreachable && (sinceLastProbe += 1) >= probeEvery;
+      if (fromDevice && ((deviceUnreachable && !probing) || isNetworkKnownOffline())) {
         skipped += 1;
-        if (started > lastSuccessStart) {
-          lastFailureStart = Math.max(lastFailureStart, started);
-          deviceUnreachable = true;
-          deviceAnswered = false;
-        }
+        if (rememberSkipped) skippedSonglengthsFolders.add(path);
+        return source.peekCachedEntries?.(path) ?? [];
       }
-      throw error;
-    }
-  };
+      if (probing) sinceLastProbe = 0;
+      const started = (lookupsStarted += 1);
+      const answered = () => {
+        if (started < lastFailureStart) return;
+        lastSuccessStart = Math.max(lastSuccessStart, started);
+        deviceUnreachable = false;
+        deviceAnswered = true;
+      };
+      try {
+        const pending = source.listEntries(path);
+        const entries = await (aborted ? Promise.race([pending, aborted]) : pending);
+        answered();
+        return entries;
+      } catch (error) {
+        if (!fromDevice || (error as Error)?.name === "AbortError") throw error;
+        if (isDeviceAnswer(error)) {
+          answered();
+        } else {
+          skipped += 1;
+          if (rememberSkipped) skippedSonglengthsFolders.add(path);
+          if (started > lastSuccessStart) {
+            lastFailureStart = Math.max(lastFailureStart, started);
+            deviceUnreachable = true;
+            deviceAnswered = false;
+          }
+        }
+        throw error;
+      }
+    };
 
-  const listEntries = (path: string): Promise<SourceEntry[]> => {
-    if (deviceAnswered) return lookUp(path);
-    const run = chain.then(() => lookUp(path));
-    chain = run.catch(() => undefined);
-    return run;
+    return (path: string): Promise<SourceEntry[]> => {
+      if (deviceAnswered) return lookUp(path);
+      const run = chain.then(() => lookUp(path));
+      chain = run.catch(() => undefined);
+      return run;
+    };
   };
 
   return {
-    listEntries,
+    listEntries: makeListEntries(CONFIG_LOOKUP_PROBE_EVERY),
+    listSonglengthsFolder: makeListEntries(CONFIG_LOOKUP_PROBE_EVERY, true),
+    skippedSonglengthsFolders: () => [...skippedSonglengthsFolders],
+    /** The scan of the add listed folders from the device, so lookups need not be run one at a time. */
+    noteDeviceAnswered: () => {
+      lookupsStarted += 1;
+      lastSuccessStart = Math.max(lastSuccessStart, lookupsStarted);
+      deviceUnreachable = false;
+      deviceAnswered = true;
+    },
     skippedLookups: () => skipped,
     /** Logs what was skipped and returns the notice for the add's message, or "" when nothing was. */
     skippedNotice: () => {
       if (skipped === 0) return "";
       if (!noticeLogged) {
         noticeLogged = true;
-        addLog("warn", "Settings files were not looked up in some folders: the device could not be reached", {
-          sourceId: source.id,
-          folders: skipped,
-        });
+        addLog(
+          "warn",
+          `${options?.songlengths ? "Settings and song length" : "Settings"} files were not looked up in some folders: the device could not be reached`,
+          {
+            sourceId: source.id,
+            folders: skipped,
+          },
+        );
       }
-      return CONFIG_LOOKUP_SKIPPED_NOTICE;
+      return notice;
     },
   };
 };
