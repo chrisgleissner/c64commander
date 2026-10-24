@@ -42,6 +42,7 @@ import {
   isHorizontalKeyOwner,
   normalizeKeyEvent,
   OWNS_KEYS_ATTR,
+  VERTICAL_OWNER_ATTR,
   SKIP_ATTR,
   setInputModality,
   subscribeInputModality,
@@ -620,6 +621,12 @@ export const FocusNavigationProvider = ({
       if (
         (action === "dpadLeft" || action === "dpadRight") &&
         (isHorizontalKeyOwner(event.target as Element | null) || isHorizontalKeyOwner(activeElement))
+      ) {
+        return;
+      }
+      if (
+        (action === "dpadUp" || action === "dpadDown") &&
+        (event.target as Element | null)?.closest?.(`[${VERTICAL_OWNER_ATTR}="true"]`)
       ) {
         return;
       }

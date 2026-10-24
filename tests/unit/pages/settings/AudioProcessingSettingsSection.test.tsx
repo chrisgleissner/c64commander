@@ -5,94 +5,70 @@
  * Licensed under the GNU General Public License v3.0 or later.
  * See <https://www.gnu.org/licenses/> for details.
  */
-
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const available = vi.hoisted(() => ({ value: true }));
 vi.mock("@/lib/audio/useAudioFxAvailable", () => ({ useAudioFxAvailable: () => available.value }));
+const requestSectionOpen = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/ui/collapsibleSectionStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ui/collapsibleSectionStore")>()),
+  requestSectionOpen,
+}));
 
 import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
-import { loadAudioProcessing, saveAudioEqBand } from "@/lib/config/audioProcessingSettings";
+import { applySoundPreset, saveAudioEnabled } from "@/lib/config/audioProcessingSettings";
+
+const renderSection = () =>
+  render(
+    <MemoryRouter initialEntries={["/settings"]}>
+      <Routes>
+        <Route path="/settings" element={<AudioProcessingSettingsSection />} />
+        <Route path="/play" element={<p data-testid="play-page">Play</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
 
 const openSection = () => {
-  render(<AudioProcessingSettingsSection />);
-  const root = screen.getByTestId("settings-audio-processing");
-  if (!screen.queryByTestId("settings-audio-levelling")) {
-    fireEvent.click(within(root).getAllByRole("button")[0]);
+  renderSection();
+  if (!screen.queryByTestId("settings-audio-open-card")) {
+    fireEvent.click(within(screen.getByTestId("settings-audio-processing")).getAllByRole("button")[0]);
   }
 };
-
-const thumbOf = (id: string) => within(screen.getByTestId(`settings-audio-eq-${id}-row`)).getByRole("slider");
 
 describe("AudioProcessingSettingsSection", () => {
   beforeEach(() => {
     localStorage.clear();
     available.value = true;
+    requestSectionOpen.mockClear();
   });
 
   it("renders nothing where the phone cannot process its own sound", () => {
     available.value = false;
-    render(<AudioProcessingSettingsSection />);
+    renderSection();
     expect(screen.queryByTestId("settings-audio-processing")).not.toBeInTheDocument();
   });
 
-  it("starts flat and off, with no On badge and Reset disabled", () => {
+  it("holds no copy of the sound controls", () => {
     openSection();
-    expect(screen.queryByText("On")).not.toBeInTheDocument();
-    expect(screen.getByTestId("settings-audio-eq-reset")).toBeDisabled();
-    expect(screen.getByTestId("settings-audio-eq-bass-value")).toHaveTextContent("0 dB");
-    expect(screen.getByTestId("settings-audio-stereo-off")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("settings-audio-reverb-off")).toHaveAttribute("aria-pressed", "true");
+    for (const id of ["sound-body", "sound-tone-plot", "sound-switch", "sound-chip-hall"]) {
+      expect(screen.queryByTestId(id)).not.toBeInTheDocument();
+    }
   });
 
-  it("persists the Normalize volume switch and shows the On badge", () => {
-    openSection();
-    fireEvent.click(screen.getByTestId("settings-audio-levelling"));
-    expect(loadAudioProcessing().levelling).toBe(true);
-    expect(screen.getByText("On")).toBeInTheDocument();
+  it("names the current sound, and Off while the switch is off", () => {
+    applySoundPreset("warm");
+    renderSection();
+    expect(screen.getByTestId("settings-audio-processing-state")).toHaveTextContent("Warm");
+    act(() => saveAudioEnabled(false));
+    expect(screen.getByTestId("settings-audio-processing-state")).toHaveTextContent("Off");
   });
 
-  it.each([
-    ["bass", "bassDb"],
-    ["mid", "midDb"],
-    ["treble", "trebleDb"],
-  ] as const)("moves the %s slider from the keyboard and shows the signed value", (id, key) => {
+  it("opens the Sound card on the Play page", () => {
     openSection();
-    const thumb = thumbOf(id);
-    act(() => thumb.focus());
-    fireEvent.keyDown(thumb, { key: "ArrowRight" });
-    expect(loadAudioProcessing()[key]).toBeGreaterThan(0);
-    expect(screen.getByTestId(`settings-audio-eq-${id}-value`).textContent).toMatch(/^\+\d+ dB$/);
-    fireEvent.keyDown(thumb, { key: "Home" });
-    expect(loadAudioProcessing()[key]).toBe(-12);
-  });
-
-  it("resets the equalizer and leaves stereo width and reverb alone", () => {
-    saveAudioEqBand("bassDb", 5);
-    saveAudioEqBand("trebleDb", -4);
-    openSection();
-    fireEvent.click(screen.getByTestId("settings-audio-reverb-hall"));
-    const reset = screen.getByTestId("settings-audio-eq-reset");
-    expect(reset).toBeEnabled();
-    fireEvent.click(reset);
-    expect(loadAudioProcessing()).toMatchObject({ bassDb: 0, midDb: 0, trebleDb: 0, reverb: 55 });
-    expect(screen.getByTestId("settings-audio-eq-reset")).toBeDisabled();
-  });
-
-  it("stores the stereo width and reverb presets and highlights the chosen one", () => {
-    openSection();
-    fireEvent.click(screen.getByTestId("settings-audio-stereo-wide"));
-    fireEvent.click(screen.getByTestId("settings-audio-reverb-room"));
-    expect(loadAudioProcessing()).toMatchObject({ stereoWidth: 70, reverb: 25 });
-    expect(screen.getByTestId("settings-audio-stereo-wide")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("settings-audio-stereo-off")).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTestId("settings-audio-reverb-room")).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("highlights the nearest preset for a stored value from a finer control", () => {
-    localStorage.setItem("c64u_audio_stereo_width", "40");
-    openSection();
-    expect(screen.getByTestId("settings-audio-stereo-subtle")).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByTestId("settings-audio-open-card"));
+    expect(requestSectionOpen).toHaveBeenCalledWith("play", "sound");
+    expect(screen.getByTestId("play-page")).toBeInTheDocument();
   });
 });

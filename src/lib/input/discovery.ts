@@ -35,6 +35,12 @@ export const SKIP_ATTR = "data-key-nav-skip";
  */
 export const OWNS_KEYS_ATTR = "data-key-nav-owns-keys";
 
+/**
+ * Set to "true" on a focused control that is being edited with Up/Down (a gain, for instance), so the
+ * ring leaves those two keys to it. The control must clear it again, or Up/Down could never leave it.
+ */
+export const VERTICAL_OWNER_ATTR = "data-key-nav-vertical";
+
 /** Marks text the ring stops on so it can be read, not operated: OK has nothing to do there. */
 export const READING_STOP_ATTR = "data-key-nav-reading";
 

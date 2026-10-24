@@ -55,6 +55,8 @@ export interface CollapsibleSectionProps {
    * without opening the section, matching what these sections did before they were
    * collapsible. */
   actions?: ReactNode;
+  /** Shown under the header whether the section is open or closed (e.g. the quick switches of a card). */
+  peek?: ReactNode;
   /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
    * tile is decoration that costs the title about 46 CSS px of the row. Defaults to on whenever
    * `actions` are present, because that is exactly the row that cannot spare them. */
@@ -116,6 +118,7 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
+  peek,
   plainIcon,
   className,
   testId,
@@ -522,6 +525,8 @@ export const CollapsibleSection = ({
           </div>
         ) : null}
       </div>
+
+      {peek ? <div className={cn(compact ? "px-3 pb-2" : "px-4 pb-3")}>{peek}</div> : null}
 
       <AnimatePresence initial={false}>
         {bodyVisible && bodyMayMount ? (
