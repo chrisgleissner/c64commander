@@ -64,7 +64,7 @@ describe("SidRadioChip", () => {
     expect(idleRow).toHaveTextContent("Your playlist");
     expect(screen.queryByTestId("sid-radio-chip")).toBeNull();
     expect(screen.queryByTestId("sid-radio-stop")).toBeNull();
-    const idleHeight = idleRow.className.match(/min-h-\[[^\]]+\]/)?.[0];
+    const idleHeight = idleRow.className.match(/(?:^|\s)(h-\d+)(?:\s|$)/)?.[1];
     expect(idleHeight).toBeDefined();
 
     rerender(<SidRadioChip station={songStation} onStop={vi.fn()} />);

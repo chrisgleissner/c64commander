@@ -166,6 +166,7 @@ export const SpectrumCard = ({ soundOnPhone, paused }: SpectrumCardProps) => {
       summary="Live level of the sound from this phone"
       icon={AudioWaveform}
       defaultOpen={openByDefault}
+      revealOnOpen={false}
       testId="play-section-spectrum"
     >
       <SpectrumPanel soundOnPhone={soundOnPhone} paused={paused} profile={profile} />

@@ -32,6 +32,7 @@ import {
   type NowPlayingMetadataSegment,
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
+import { SidRadioWhy } from "./SidRadioChip";
 import { TuneDetails } from "./TuneDetails";
 import {
   readShownPlaybackTime,
@@ -156,10 +157,16 @@ export type PlaybackControlsCardProps = {
    * slot is expected to occupy the same height in every state, so that starting or stopping a
    * station never moves the title or the transport underneath it.
    */
-  stationIndicator?: ReactNode;
+  stationIndicator?: (why: { expanded: boolean; onToggle: () => void }) => ReactNode;
+  /** The station's explanation, drawn below the controls when the indicator's toggle opens it. */
+  stationWhy?: string | null;
   /** True while a SID Radio station drives the queue — Shuffle offers to keep its queue as a regular playlist. */
   stationActive?: boolean;
 };
+
+/** Two lines of text-sm and never fewer than the 44 px a link inside it needs; longer text is clipped with an ellipsis. */
+const RESERVED_METADATA_LINES =
+  "h-11 min-w-0 self-stretch break-words text-sm leading-snug text-muted-foreground !overflow-clip [overflow-clip-margin:4px]";
 
 const PLAY_TRANSPORT_FOCUS_ORDER = {
   previous: 100,
@@ -369,13 +376,13 @@ export const PlaybackControlsCard = ({
   onRepeatChange,
   rankingControls,
   stationIndicator,
+  stationWhy,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const [stationWhyExpanded, setStationWhyExpanded] = useState(false);
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
   // Credits clip the composer link's 44px target so it cannot cover the title.
-  const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
-  const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
   /**
    * One metadata segment, with its separator attached to its own end.
@@ -474,12 +481,15 @@ export const PlaybackControlsCard = ({
 
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
-      {stationIndicator}
+      {stationIndicator?.({
+        expanded: stationWhyExpanded,
+        onToggle: () => setStationWhyExpanded((value) => !value),
+      })}
       <div
         className="grid w-full grid-cols-[minmax(0,1fr)_max-content_max-content] items-center gap-x-2"
         data-testid="playback-current-track"
       >
-        <div className="col-span-3 mb-0.5 text-xs text-muted-foreground">
+        <div className="col-span-3 mb-0.5 flex h-6 items-center overflow-clip text-xs text-muted-foreground">
           {hasCurrentItem ? (
             <>
               {/* The title now has the full width of the card to itself.
@@ -509,9 +519,8 @@ export const PlaybackControlsCard = ({
           )}
         </div>
         {/* Credits and facts belong immediately below the title, before the transport. */}
-        {hasCurrentItem ? (
-          <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
-            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
+        <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
+          {/* Two metadata lines, and the actions sit on the second one rather than on a row of
                 their own.
 
                 Credits first - the author and the HVSC `released` value, which is one field
@@ -524,55 +533,31 @@ export const PlaybackControlsCard = ({
                 happens after the separator rather than before it. Putting the separator in front
                 of the following segment reads the same on one line but leaves a stranded "·" at
                 the start of the next one as soon as the line is too narrow. */}
-            {creditsParts.length ? (
-              <p
-                className={cn(
-                  "col-span-3 min-w-0 break-words text-sm leading-snug text-muted-foreground",
-                  hasComposerLink && "mb-1 min-h-11 overflow-clip [overflow-clip-margin:4px]",
-                )}
-                data-testid="playback-current-credits"
-              >
-                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
-              </p>
-            ) : null}
-            {factsParts.length || rankingControls ? (
-              <div className="contents">
-                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
+          <p
+            className={cn(RESERVED_METADATA_LINES, "col-span-3 mb-1 line-clamp-2")}
+            data-testid="playback-current-credits"
+            title={creditsParts.map((part) => part.text).join(" · ") || undefined}
+          >
+            {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
+          </p>
+          <div className="contents">
+            {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
                     that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
-                <p
-                  className={cn(
-                    "min-w-0 self-stretch overflow-clip break-words text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]",
-                    hasTunesLink && "min-h-11",
-                  )}
-                  data-testid="playback-current-facts"
-                >
-                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
-                </p>
-                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
-                {rankingControls ? (
-                  <div className="col-span-2 self-start" data-testid="playback-ranking-row">
-                    {rankingControls}
-                  </div>
-                ) : null}
+            <p
+              className={cn(RESERVED_METADATA_LINES, "line-clamp-2")}
+              data-testid="playback-current-facts"
+              title={factsParts.map((part) => part.text).join(" · ") || undefined}
+            >
+              {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
+            </p>
+            {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
+            {rankingControls ? (
+              <div className="col-span-2 self-start" data-testid="playback-ranking-row">
+                {rankingControls}
               </div>
             ) : null}
-            {/* What STIL says about this tune, folded away by default.
-
-                STIL is the archive's editorial record rather than the file's own header: what this
-                particular tune is called, who wrote the music being arranged, and a note about it. A
-                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
-                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
-                names Rob Hubbard, who arranged it.
-
-                All of it is worth reading and none of it is needed to identify the tune or to work
-                the transport, so it is the part of the card that gives way on a small screen. See
-                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
-                archive, which STIL does not cover. */}
-            <div className="col-span-3 min-w-0">
-              <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
-            </div>
           </div>
-        ) : null}
+        </div>
         <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
           {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
             44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
@@ -676,15 +661,6 @@ export const PlaybackControlsCard = ({
               <SkipForward className="h-4 w-4" />
             </Button>
           </div>
-          {stopping ? (
-            <p
-              role="status"
-              className="text-center text-sm font-medium text-foreground"
-              data-testid="playback-stop-status"
-            >
-              Stopping…
-            </p>
-          ) : null}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span
@@ -698,7 +674,9 @@ export const PlaybackControlsCard = ({
               >
                 {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
                 <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
-                <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
+                <span className="inline-block min-w-[5ch]">
+                  <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
+                </span>
               </span>
               {onSeekToFraction ? (
                 // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
@@ -835,7 +813,7 @@ export const PlaybackControlsCard = ({
                   data-scrubbing={isScrubbing ? "true" : undefined}
                 />
               )}
-              <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
+              <span className="min-w-[6ch] shrink-0 text-right tabular-nums" data-testid="playback-remaining">
                 <ShownPlaybackTime timeline={timeline} field="remainingLabel" />
               </span>
             </div>
@@ -869,6 +847,15 @@ export const PlaybackControlsCard = ({
               className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
               data-testid="playback-counters"
             />
+            {stopping ? (
+              <p
+                role="status"
+                className="text-center text-sm font-medium text-foreground"
+                data-testid="playback-stop-status"
+              >
+                Stopping…
+              </p>
+            ) : null}
           </div>
         </div>
         {outputSelector ? <div className="col-span-3 mt-3">{outputSelector}</div> : null}
@@ -930,6 +917,14 @@ export const PlaybackControlsCard = ({
               ) : null}
             </Button>
           </div>
+        </div>
+        {stationWhyExpanded && stationWhy ? (
+          <div className="col-span-3 min-w-0">
+            <SidRadioWhy text={stationWhy} />
+          </div>
+        ) : null}
+        <div className="col-span-3 min-w-0">
+          <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
         </div>
       </div>
     </div>

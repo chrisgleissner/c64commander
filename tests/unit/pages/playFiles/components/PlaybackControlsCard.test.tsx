@@ -320,7 +320,7 @@ describe("PlaybackControlsCard", () => {
             hasCurrentItem: true,
             currentItemLabel: "Commando",
             stationActive,
-            stationIndicator: <div data-testid="station-indicator-slot" />,
+            stationIndicator: () => <div data-testid="station-indicator-slot" />,
           })}
         />,
       );
@@ -541,10 +541,10 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-current-credits").className).not.toMatch(/\b(pl-|ml-|indent-)/);
   });
 
-  it("shows nothing extra for a tune that names neither", () => {
+  it("keeps the credits line reserved but empty for a tune that names neither", () => {
     render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, currentItemLabel: "Untitled" })} />);
 
-    expect(screen.queryByTestId("playback-current-credits")).toBeNull();
+    expect(screen.getByTestId("playback-current-credits")).toBeEmptyDOMElement();
     // And the empty-state text does not leak in just because there are no credits.
     expect(screen.getByTestId("playback-current-track")).not.toHaveTextContent("Select a playlist item");
   });

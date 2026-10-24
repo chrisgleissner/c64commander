@@ -26,7 +26,19 @@ export type SidRadioChipProps = {
   /** A collection start is waiting for the HVSC tune notes to download. */
   preparingCollection?: boolean;
   onStop: () => void;
+  /**
+   * Supplied when the explanation is drawn elsewhere, by `SidRadioWhy`, so that opening it cannot
+   * push the controls down. Without it the chip keeps its own state and draws the explanation under
+   * the row.
+   */
+  externalWhy?: { expanded: boolean; onToggle: () => void };
 };
+
+export const SidRadioWhy = ({ text }: { text: string }) => (
+  <p className="pb-2 text-xs text-muted-foreground" data-testid="sid-radio-why">
+    {text}
+  </p>
+);
 
 /** One-line provenance for the tune a station is playing. */
 export const whyThisTuneFor = (station: ActiveStation): string => {
@@ -43,7 +55,7 @@ export const whyThisTuneFor = (station: ActiveStation): string => {
 };
 
 /** Every state of this row is exactly this tall, so starting or stopping a station moves nothing. */
-const ROW_HEIGHT = "min-h-[2.75rem]";
+const ROW_HEIGHT = "h-11";
 
 const stationName = (station: ActiveStation, friendlyNames: boolean): string => {
   // Only a song station's seed label is a file name; a style or taste station is seeded by a mood or
@@ -94,8 +106,11 @@ export const SidRadioChip = ({
   collectionProgress = null,
   preparingCollection = false,
   onStop,
+  externalWhy,
 }: SidRadioChipProps) => {
-  const [expanded, setExpanded] = useState(false);
+  const [ownExpanded, setOwnExpanded] = useState(false);
+  const expanded = externalWhy ? externalWhy.expanded : ownExpanded;
+  const toggleWhy = externalWhy ? externalWhy.onToggle : () => setOwnExpanded((value) => !value);
   const friendlyNames = useFriendlySidNames();
 
   return (
@@ -112,7 +127,7 @@ export const SidRadioChip = ({
               className="flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
               data-testid="sid-radio-chip-toggle"
               aria-expanded={expanded}
-              onClick={() => setExpanded((value) => !value)}
+              onClick={toggleWhy}
             >
               <Radio className="h-4 w-4 shrink-0 text-primary" />
               {preparingCollection ? (
@@ -147,10 +162,10 @@ export const SidRadioChip = ({
               Stop
             </Button>
           </div>
-          {expanded && whyThisTune ? (
-            <p className="pb-2 pl-6 text-xs text-muted-foreground" data-testid="sid-radio-why">
-              {whyThisTune}
-            </p>
+          {!externalWhy && expanded && whyThisTune ? (
+            <div className="pl-6">
+              <SidRadioWhy text={whyThisTune} />
+            </div>
           ) : null}
         </div>
       ) : (
