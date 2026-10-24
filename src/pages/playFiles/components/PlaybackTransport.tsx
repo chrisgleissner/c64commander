@@ -77,8 +77,8 @@ const usePoliteAnnouncement = (text: string | null): string => {
       return next;
     };
     const settled = apply();
-    if (text === null || settled?.text === text) return;
-    const waitMs = Math.max(0, PENDING_ANNOUNCEMENT_INTERVAL_MS - (Date.now() - (settled?.atMs ?? 0)));
+    if (settled === null || settled.text === text) return;
+    const waitMs = Math.max(0, PENDING_ANNOUNCEMENT_INTERVAL_MS - (Date.now() - settled.atMs));
     const timer = window.setTimeout(apply, waitMs);
     return () => window.clearTimeout(timer);
   }, [text]);
