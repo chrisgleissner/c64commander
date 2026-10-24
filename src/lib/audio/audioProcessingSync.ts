@@ -6,13 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadAudioProcessing } from "@/lib/config/audioProcessingSettings";
+import { AUDIO_PROCESSING_KEY, loadAudioProcessing } from "@/lib/config/audioProcessingSettings";
 import { setAudioProcessing } from "@/lib/native/audioFx";
 
 /** Window over which a burst of slider changes is merged into one call to the plugin. */
 export const AUDIO_PROCESSING_PUSH_DELAY_MS = 60;
-
-const SETTING_KEY_PREFIX = "c64u_audio_";
 
 export const pushAudioProcessing = (): Promise<boolean> => setAudioProcessing(loadAudioProcessing());
 
@@ -31,7 +29,7 @@ export const installAudioProcessingSync = (): (() => void) => {
   };
   const onSettingChanged = (event: Event) => {
     const key = (event as CustomEvent<{ key?: unknown }>).detail?.key;
-    if (typeof key === "string" && key.startsWith(SETTING_KEY_PREFIX)) schedule();
+    if (key === AUDIO_PROCESSING_KEY) schedule();
   };
   window.addEventListener("c64u-app-settings-updated", onSettingChanged);
   void pushAudioProcessing();

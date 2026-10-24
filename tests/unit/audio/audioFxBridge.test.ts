@@ -31,7 +31,7 @@ import {
 } from "@/lib/native/audioFx";
 import { resetPluginAvailabilityForTests } from "@/lib/native/pluginAvailability";
 
-const params = { levelling: true, bassDb: 1, midDb: 2, trebleDb: 3, stereoWidth: 35, reverb: 25 };
+const params = { levelling: true, bandsDb: [0, 1, 1, 0, 2, 2, 2, 3, 3, 3], stereoWidth: 35, reverb: 25 };
 const frame = {
   enabled: true,
   active: true,

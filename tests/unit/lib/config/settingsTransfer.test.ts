@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
+import { AUDIO_PROCESSING_KEY, loadAudioProcessingRecord, saveAudioReverb } from "@/lib/config/audioProcessingSettings";
 
 const { featureFlagManagerMocks, isKnownFeatureFlagIdMock } = vi.hoisted(() => ({
   featureFlagManagerMocks: {
@@ -186,6 +187,33 @@ describe("settingsTransfer", () => {
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
+    });
+
+    it("imports the audio processing record from an export", async () => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(55);
+      const exported = await exportSettingsSnapshot();
+      expect(exported.audioProcessing?.sound.reverb).toBe(55);
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: exported.audioProcessing };
+      expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
+      expect(loadAudioProcessingRecord().sound.reverb).toBe(55);
+    });
+
+    it("leaves the audio settings alone when an older export has no audio section", async () => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(25);
+      expect(await importSettingsJson(JSON.stringify(validPayload))).toEqual({ ok: true });
+      expect(loadAudioProcessingRecord().sound.reverb).toBe(25);
+    });
+
+    it("replaces an unusable audio section with the original sound", async () => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(25);
+      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: { version: 7 } };
+      expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
+      expect(loadAudioProcessingRecord().sound.reverb).toBe(0);
+      expect(JSON.parse(localStorage.getItem(AUDIO_PROCESSING_KEY) ?? "{}").version).toBe(2);
     });
 
     it("rejects invalid JSON", async () => {

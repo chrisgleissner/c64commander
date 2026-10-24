@@ -155,9 +155,8 @@ export interface StreamUdpAudioFocusEvent {
 /** Optional processing applied to everything the phone plays. Every field at its default is a bit-exact bypass. */
 export interface StreamUdpAudioProcessing {
   levelling: boolean;
-  bassDb: number;
-  midDb: number;
-  trebleDb: number;
+  /** Ten equalizer gains in dB, 31 Hz to 16 kHz. The plugin still accepts bassDb, midDb and trebleDb from older callers. */
+  bandsDb: number[];
   stereoWidth: number;
   reverb: number;
 }
