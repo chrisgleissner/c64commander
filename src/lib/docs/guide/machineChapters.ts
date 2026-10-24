@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Disc, Gamepad2, Keyboard as KeyboardIcon, MonitorPlay, Save, Sliders } from "lucide-react";
+import { Disc, Keyboard as KeyboardIcon, MonitorPlay, Save, Sliders } from "lucide-react";
+import { JOYSTICK_ICON } from "@/lib/ui/joystickIcon";
 import { appDeviceName, isKeypadEdition } from "@/lib/docs/deviceNames";
 import { backKeyName, menuKeyName } from "@/lib/docs/guide/keyNames";
 import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/types";
@@ -116,7 +117,7 @@ export const gameModeChapter = ({ variantId }: GuideContext): GuideChapter => {
     id: "game-mode",
     title: keypad ? "Play a game with Game Mode and the keypad" : "Play a game with Game Mode",
     navLabel: "Game Mode",
-    icon: Gamepad2,
+    icon: JOYSTICK_ICON,
     blocks: [
       {
         kind: "text",

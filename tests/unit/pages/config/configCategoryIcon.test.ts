@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Joystick } from "lucide-react";
+import { JOYSTICK_ICON } from "@/lib/ui/joystickIcon";
 import { configCategoryIcon } from "@/pages/config/configCategoryIcon";
 
 const MENU_PAGES = [
@@ -58,5 +59,10 @@ describe("configCategoryIcon", () => {
 
   it("matches the Wi-Fi rule before the network rule", () => {
     expect(configCategoryIcon("WiFi settings")).not.toBe(configCategoryIcon("Network Settings"));
+  });
+
+  it("draws the joystick category with the joystick icon Home uses for Game, not a gamepad", () => {
+    expect(configCategoryIcon("Joystick & controllers")).toBe(JOYSTICK_ICON);
+    expect(JOYSTICK_ICON).toBe(Joystick);
   });
 });

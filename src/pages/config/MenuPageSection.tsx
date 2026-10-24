@@ -126,7 +126,6 @@ export const MenuPageSection = memo(function MenuPageSection({
       toggleTestId={headerId}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
-      plainIcon
       actions={configRefreshAction(isOpen, refreshFocusRef, page.label, slug, handleRefresh, headerId)}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: page.label }, "ConfigHeader")}
     >
