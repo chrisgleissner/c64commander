@@ -12,16 +12,23 @@ import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import uk.gleissner.c64commander.dsp.AudioFxHub
+import uk.gleissner.c64commander.dsp.FxParams
 import uk.gleissner.c64commander.dsp.SpectrumFrame
 
 /** The small Capacitor surface for the shared native audio-processing state. */
 internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
   fun setProcessing(call: PluginCall) {
+    val bands = call.data?.optJSONArray("bandsDb")
+    val bandsDb =
+        if (bands != null) DoubleArray(bands.length()) { bands.optDouble(it, 0.0) }
+        else FxParams.legacyBands(
+            call.getDouble("bassDb") ?: 0.0,
+            call.getDouble("midDb") ?: 0.0,
+            call.getDouble("trebleDb") ?: 0.0,
+        )
     hub().setParams(
         levelling = call.getBoolean("levelling", false) == true,
-        bassDb = call.getDouble("bassDb") ?: 0.0,
-        midDb = call.getDouble("midDb") ?: 0.0,
-        trebleDb = call.getDouble("trebleDb") ?: 0.0,
+        bandsDb = bandsDb,
         stereoWidth = call.getDouble("stereoWidth") ?: 0.0,
         reverb = call.getDouble("reverb") ?: 0.0,
     )

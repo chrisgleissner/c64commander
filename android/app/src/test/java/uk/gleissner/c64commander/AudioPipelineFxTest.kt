@@ -178,7 +178,7 @@ class AudioPipelineFxTest {
   @Test
   fun theMasterGainFollowsTheProcessingChain() {
     val hub = AudioFxHub()
-    hub.setParams(false, 0.0, 12.0, 0.0, 0.0, 0.0)
+    hub.setParams(false, doubleArrayOf(0.0, 0.0, 0.0, 0.0, 0.0, 12.0, 0.0, 0.0, 0.0, 0.0), 0.0, 0.0)
     val run = start(hub, TestSignals.sine(5 * rate, rate, 1000.0, 0.4))
     try {
       run.pipeline.setGain(0.5)

@@ -13,36 +13,29 @@ import kotlin.math.abs
 /** What the listener asked for. All off is the default and means the samples are not touched. */
 internal class FxParams(
     val levelling: Boolean,
-    val bassDb: Double,
-    val midDb: Double,
-    val trebleDb: Double,
+    val bandsDb: DoubleArray,
     val stereoWidth: Double,
     val reverb: Double,
 ) {
   val isNeutral: Boolean
-    get() = !levelling && bassDb == 0.0 && midDb == 0.0 && trebleDb == 0.0 && stereoWidth == 0.0 && reverb == 0.0
+    get() = !levelling && bandsDb.all { it == 0.0 } && stereoWidth == 0.0 && reverb == 0.0
 
   companion object {
-    val OFF = FxParams(false, 0.0, 0.0, 0.0, 0.0, 0.0)
+    const val EQ_RANGE_DB = 12.0
 
-    fun clamped(
-        levelling: Boolean,
-        bassDb: Double,
-        midDb: Double,
-        trebleDb: Double,
-        stereoWidth: Double,
-        reverb: Double,
-    ): FxParams =
+    val OFF = FxParams(false, DoubleArray(Equalizer.BANDS), 0.0, 0.0)
+
+    /** The old three-band call: bass is 62 and 125 Hz, mid is 500 Hz to 2 kHz, treble is 4 to 16 kHz. */
+    fun legacyBands(bassDb: Double, midDb: Double, trebleDb: Double): DoubleArray =
+        doubleArrayOf(0.0, bassDb, bassDb, 0.0, midDb, midDb, midDb, trebleDb, trebleDb, trebleDb)
+
+    fun clamped(levelling: Boolean, bandsDb: DoubleArray, stereoWidth: Double, reverb: Double): FxParams =
         FxParams(
             levelling,
-            clamp(bassDb, -EQ_RANGE_DB, EQ_RANGE_DB),
-            clamp(midDb, -EQ_RANGE_DB, EQ_RANGE_DB),
-            clamp(trebleDb, -EQ_RANGE_DB, EQ_RANGE_DB),
+            DoubleArray(Equalizer.BANDS) { clamp(bandsDb.getOrElse(it) { 0.0 }, -EQ_RANGE_DB, EQ_RANGE_DB) },
             clamp(stereoWidth, 0.0, 100.0),
             clamp(reverb, 0.0, 100.0),
         )
-
-    const val EQ_RANGE_DB = 12.0
 
     private fun clamp(value: Double, low: Double, high: Double): Double =
         if (value.isNaN()) 0.0 else value.coerceIn(low, high)
@@ -63,6 +56,10 @@ internal class AudioFxHub(nanoTime: () -> Long = System::nanoTime) {
 
   val analyzer = SpectrumAnalyzer(nanoTime)
 
+  fun setParams(levelling: Boolean, bandsDb: DoubleArray, stereoWidth: Double, reverb: Double) {
+    params = FxParams.clamped(levelling, bandsDb, stereoWidth, reverb)
+  }
+
   fun setParams(
       levelling: Boolean,
       bassDb: Double,
@@ -70,9 +67,7 @@ internal class AudioFxHub(nanoTime: () -> Long = System::nanoTime) {
       trebleDb: Double,
       stereoWidth: Double,
       reverb: Double,
-  ) {
-    params = FxParams.clamped(levelling, bassDb, midDb, trebleDb, stereoWidth, reverb)
-  }
+  ) = setParams(levelling, FxParams.legacyBands(bassDb, midDb, trebleDb), stereoWidth, reverb)
 
   fun readSpectrum(targetNanos: Long = 0L): SpectrumFrame = analyzer.read(spectrumEnabled, targetNanos)
 
@@ -108,7 +103,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     val params = hub.params
     if (params.levelling && !levellingOn) leveller.reset(playFrame)
     levellingOn = params.levelling
-    equalizer.setTargets(params.bassDb, params.midDb, params.trebleDb)
+    equalizer.setTargets(params.bandsDb)
     widener.setTarget(params.stereoWidth / 100.0)
     reverb.setTarget(params.reverb / 100.0)
     return levellingOn || levellerMix > 0.0 || !equalizer.isIdle || !widener.isIdle || !reverb.isIdle

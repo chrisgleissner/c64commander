@@ -60,14 +60,24 @@ class AudioFxTest {
     val hub = AudioFxHub()
     hub.setParams(true, -40.0, 99.0, Double.NaN, 400.0, -3.0)
     val p = hub.params
-    assertEquals(-12.0, p.bassDb, 0.0)
-    assertEquals(12.0, p.midDb, 0.0)
-    assertEquals(0.0, p.trebleDb, 0.0)
+    assertEquals(-12.0, p.bandsDb[1], 0.0)
+    assertEquals(12.0, p.bandsDb[5], 0.0)
+    assertEquals(0.0, p.bandsDb[8], 0.0)
     assertEquals(100.0, p.stereoWidth, 0.0)
     assertEquals(0.0, p.reverb, 0.0)
     assertTrue(p.levelling)
     assertTrue(FxParams.OFF.isNeutral)
     assertFalse(p.isNeutral)
+  }
+
+  @Test
+  fun tenGainsAreClampedAndMissingOnesReadAsFlat() {
+    val hub = AudioFxHub()
+    hub.setParams(false, doubleArrayOf(30.0, -30.0, Double.NaN, 5.0), 0.0, 0.0)
+    val bands = hub.params.bandsDb
+    assertEquals(10, bands.size)
+    assertEquals(listOf(12.0, -12.0, 0.0, 5.0), bands.take(4))
+    assertEquals(0.0, bands[9], 0.0)
   }
 
   @Test
