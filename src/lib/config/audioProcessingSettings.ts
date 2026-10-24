@@ -16,14 +16,7 @@ import {
   soundsEqual,
   type SoundSettings,
 } from "@/lib/audio/tone/ambiancePresets";
-import {
-  TONE_MAX_DB,
-  TONE_MIN_DB,
-  clampToneDb,
-  legacyBands,
-  normalizeBands,
-  withBandGain,
-} from "@/lib/audio/tone/toneCurve";
+import { clampToneDb, legacyBands, normalizeBands, withBandGain } from "@/lib/audio/tone/toneCurve";
 
 export const AUDIO_PROCESSING_KEY = "audio_processing";
 export const AUDIO_PROCESSING_VERSION = 2 as const;
