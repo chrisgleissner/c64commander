@@ -11,10 +11,10 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
 };
 const postinstallCommand = packageJson.scripts?.postinstall ?? "";
 
-const runScript = (cwd: string) =>
+const runScript = (cwd: string, env: NodeJS.ProcessEnv = process.env) =>
   spawnSync(process.execPath, [scriptPath], {
     cwd,
-    env: process.env,
+    env,
     encoding: "utf8",
   });
 
@@ -33,6 +33,90 @@ afterEach(() => {
 });
 
 describe("install-git-hooks", () => {
+  const git = (cwd: string, args: string[], env: NodeJS.ProcessEnv = process.env) => {
+    const result = spawnSync("git", args, { cwd, env, encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
+    return result.stdout.trim();
+  };
+
+  it.each(["/custom/hook-guard", ".githooks", ""])("preserves the explicitly configured hook path %j", (hooksPath) => {
+    const root = createTempDir("install-git-hooks-custom-");
+    git(root, ["init"]);
+    git(root, ["config", "core.hooksPath", hooksPath]);
+
+    expect(runScript(root).status).toBe(0);
+
+    expect(git(root, ["config", "--get", "core.hooksPath"])).toBe(hooksPath);
+  });
+
+  it("preserves an inherited global hook path without adding a local override", () => {
+    const root = createTempDir("install-git-hooks-global-");
+    const globalConfig = path.join(root, "global.gitconfig");
+    writeFileSync(globalConfig, "[core]\n hooksPath = /global/hook-guard\n");
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: "1" };
+    git(root, ["init"], env);
+
+    expect(runScript(root, env).status).toBe(0);
+
+    expect(git(root, ["config", "--get", "core.hooksPath"], env)).toBe("/global/hook-guard");
+    expect(spawnSync("git", ["config", "--local", "--get", "core.hooksPath"], { cwd: root, env }).status).toBe(1);
+  });
+
+  it("does not replace the shared hook path when installing from a linked worktree", () => {
+    const root = createTempDir("install-git-hooks-linked-");
+    git(root, ["init"]);
+    git(root, [
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.test",
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "core.hooksPath=",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "initial",
+    ]);
+    const linked = path.join(root, "linked");
+    git(root, ["worktree", "add", "--detach", linked]);
+    git(root, ["config", "core.hooksPath", "/shared/hook-guard"]);
+
+    expect(runScript(linked).status).toBe(0);
+
+    expect(git(root, ["config", "--get", "core.hooksPath"])).toBe("/shared/hook-guard");
+    expect(git(linked, ["config", "--get", "core.hooksPath"])).toBe("/shared/hook-guard");
+  });
+
+  it("reports a hook configuration read failure instead of overwriting the configuration", () => {
+    const root = createTempDir("install-git-hooks-read-error-");
+    mkdirSync(path.join(root, ".git"));
+    const binDir = path.join(root, "bin");
+    mkdirSync(binDir);
+    const gitStub = path.join(binDir, "git");
+    writeFileSync(
+      gitStub,
+      `#!/bin/sh
+if [ "$1" = rev-parse ]; then exit 0; fi
+if [ "$1" = config ] && [ "$2" = --get ]; then
+  printf '%s\\n' 'cannot read hook config' >&2
+  exit 2
+fi
+printf '%s\\n' 'unexpected hook configuration write' >&2
+exit 99
+`,
+    );
+    chmodSync(gitStub, 0o755);
+
+    const result = runScript(root, { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}` });
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(`Could not inspect Git hook configuration in ${root}`);
+    expect(result.stderr).toContain("cannot read hook config");
+    expect(result.stderr).not.toContain("unexpected hook configuration write");
+  });
+
   it("exits successfully when no .git path exists", () => {
     const root = createTempDir("install-git-hooks-no-git-");
 
