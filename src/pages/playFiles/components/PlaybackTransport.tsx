@@ -200,6 +200,7 @@ export type PlaybackTransportProps = Pick<
   | "seekDurationMs"
   | "timeline"
   | "pendingSeek"
+  | "elapsedFollowsDeviceClock"
   | "renderedPercent"
 >;
 
@@ -240,6 +241,7 @@ export const PlaybackTransport = memo(
     seekDurationMs,
     timeline,
     pendingSeek,
+    elapsedFollowsDeviceClock = false,
     renderedPercent,
   }: PlaybackTransportProps) => {
     const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
@@ -372,6 +374,7 @@ export const PlaybackTransport = memo(
             <span
               className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "text-foreground")}
               data-testid="playback-elapsed"
+              data-follows-device-clock={elapsedFollowsDeviceClock ? "true" : undefined}
               // Held, not merely lagging. While the renderer works towards a target the engine is
               // silent, and this clock stays at the last position that was genuinely audible. A
               // clock ticking on through that silence is the single thing this whole state exists

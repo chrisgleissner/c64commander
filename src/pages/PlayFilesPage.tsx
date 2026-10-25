@@ -2610,6 +2610,7 @@ export default function PlayFilesPage() {
                   seekDurationMs={currentDurationMs}
                   renderedPercent={renderedPercent}
                   pendingSeek={pendingSeek}
+                  elapsedFollowsDeviceClock={remoteSeek.followsClock}
                   outputSelector={
                     playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
                       <PlaybackEngineToggle />

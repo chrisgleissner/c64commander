@@ -599,6 +599,10 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
     await relaunch();
   },
   recordClocks: (during) => recordClocks(host, during),
+  followsDeviceClock: () =>
+    js<boolean>(
+      `document.querySelector('[data-testid="playback-elapsed"]')?.getAttribute("data-follows-device-clock") === "true"`,
+    ),
   report: (line) => {
     log(`${host}: ${line}`);
     notes.push(`${host}: ${line}`);

@@ -256,7 +256,7 @@ export class RemoteSidSeekController {
       } catch (error) {
         addLog("warn", "Remote fast forward could not read where it stopped", errorDetails(error));
       }
-      let landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+      let landing = this.fastForwardLanding(run.model, true);
       if (landed) this.landingListener?.(landing, "fast forward");
       await run.speedWrites;
       await this.giveBack(run.session, reason);
@@ -267,12 +267,22 @@ export class RemoteSidSeekController {
           .catch((error) =>
             addLog("warn", "Remote fast forward could not read where the restore left it", errorDetails(error)),
           );
-        landing = { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: true };
+        landing = this.fastForwardLanding(run.model, true);
       }
       addLog("debug", "Remote fast forward ended", { reason, positionSeconds: landing.seconds });
       this.checkPatchedPlayerNext();
       return landing;
     });
+  }
+
+  /**
+   * Where a fast forward stopped: half a second past the second the clock showed last. The fraction of the
+   * second the hold started from no longer applies once the clock ran fast, so it is dropped where the clock
+   * is the position; elsewhere the model counts tune seconds and keeps its own.
+   */
+  private fastForwardLanding(model: PositionModel, completed: boolean): RemoteSeekLanding {
+    const second = this.clockIsPosition ? Math.floor(model.seconds) : model.seconds;
+    return { seconds: second + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed };
   }
 
   /**
@@ -578,11 +588,7 @@ export class RemoteSidSeekController {
     // The tune moved while the key was down; the page has to learn where to, or it shows the old place.
     if (run) {
       await this.machine.settle(run.model, true).then(
-        () =>
-          this.landingListener?.(
-            { seconds: run.model.seconds + CLOCK_ROUNDING_SECONDS, atMs: Date.now(), completed: false },
-            "fast forward",
-          ),
+        () => this.landingListener?.(this.fastForwardLanding(run.model, false), "fast forward"),
         (error) =>
           addLog(
             "warn",

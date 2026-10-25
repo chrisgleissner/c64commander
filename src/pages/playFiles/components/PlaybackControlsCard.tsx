@@ -88,6 +88,8 @@ export type PlaybackControlsCardProps = {
    * until the renderer catches up, and the wait is shown determinately so it never looks like a fault.
    */
   pendingSeek?: PendingSeekPresentation;
+  /** The elapsed time currently follows a tick read from the device clock. */
+  elapsedFollowsDeviceClock?: boolean;
   /** How much of the tune is rendered, 0-100, for on-device playback only: a seek up to it lands instantly. */
   renderedPercent?: number;
   outputSelector?: ReactNode;
@@ -146,6 +148,7 @@ export const PlaybackControlsCard = ({
   timeline,
   renderedPercent,
   pendingSeek,
+  elapsedFollowsDeviceClock = false,
   outputSelector,
   volumeControls,
   shuffleSeed,
@@ -228,6 +231,7 @@ export const PlaybackControlsCard = ({
     seekDurationMs,
     timeline,
     pendingSeek,
+    elapsedFollowsDeviceClock,
     renderedPercent,
   };
   const shuffleOn = !stationActive && shuffleEnabled;
