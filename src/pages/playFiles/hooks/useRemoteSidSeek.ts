@@ -113,7 +113,7 @@ export const useRemoteSidSeek = ({
   playbackTime,
   durationMs,
   rebasePlaybackPosition,
-}: Options): { handlers: PlaybackSeekHandlers | null; targetMs: number | null } => {
+}: Options): { handlers: PlaybackSeekHandlers | null; targetMs: number | null; followsClock: boolean } => {
   const [controller, setController] = useState<RemoteSidSeekController | null>(null);
   const [targetMs, setTargetMs] = useState<number | null>(null);
   const controllerRef = useRef<RemoteSidSeekController | null>(null);
@@ -131,6 +131,12 @@ export const useRemoteSidSeek = ({
   const latestLandingRef = useRef<RemoteSeekLanding | null>(null);
   /** Moves on with every gesture and landing, so a clock tick measured before one is not applied after it. */
   const seekEpochRef = useRef(0);
+  /** The shown position was last put on the C64's own clock tick, not on a landing's estimate. */
+  const [followsClock, setFollowsClock] = useState(false);
+  const newSeekEpoch = useCallback(() => {
+    seekEpochRef.current += 1;
+    setFollowsClock(false);
+  }, []);
   /** A jump has been asked for: running, queued, or a tap on the bar still settling. */
   const jumpAwaited = useCallback(() => jumpingRef.current || dragTimerRef.current !== null, []);
   const live = useRef({ playbackTime, durationMs, rebasePlaybackPosition });
@@ -143,7 +149,7 @@ export const useRemoteSidSeek = ({
   const [probeRound, setProbeRound] = useState(0);
 
   const resetGestures = useCallback(() => {
-    seekEpochRef.current += 1;
+    newSeekEpoch();
     holdRef.current = null;
     holdsDownRef.current = 0;
     queuedTargetRef.current = null;
@@ -153,7 +159,7 @@ export const useRemoteSidSeek = ({
     if (dragTimerRef.current !== null) clearTimeout(dragTimerRef.current);
     rewindTimerRef.current = dragTimerRef.current = null;
     setTargetMs(null);
-  }, []);
+  }, [newSeekEpoch]);
 
   const clampMs = (ms: number) => Math.max(0, Math.min(live.current.durationMs ?? Number.MAX_SAFE_INTEGER, ms));
 
@@ -172,6 +178,7 @@ export const useRemoteSidSeek = ({
     if (controllerRef.current !== owned || holdRef.current || jumpingRef.current || owned.isBusy) return;
     latestLandingRef.current = { seconds: tick.clockSeconds, atMs: tick.tickAtMs, completed: true };
     live.current.rebasePlaybackPosition(clampMs(tick.clockSeconds * 1000 + Date.now() - tick.tickAtMs));
+    setFollowsClock(true);
   }, []);
 
   // The probe, the clock reads and a seek's hold on the C64 lasted as long as the Play page did, which ended when another
@@ -247,7 +254,7 @@ export const useRemoteSidSeek = ({
           created.landingListener = (landing, kind) => {
             // A controller let go of (another tune, another route) has nothing to say about this one.
             if (controllerRef.current !== created) return;
-            seekEpochRef.current += 1;
+            newSeekEpoch();
             latestLandingRef.current = landing;
             if (kind === "fast forward" ? jumpAwaited() : queuedTargetRef.current !== null) return;
             live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
@@ -282,7 +289,7 @@ export const useRemoteSidSeek = ({
       }
     };
     // `item` is read through its id: a new object for the same tune must not restart the probe.
-  }, [seekable, itemId, songNr, trackInstanceId, deviceId, probeRound, resetGestures, syncToClock]);
+  }, [seekable, itemId, songNr, trackInstanceId, deviceId, probeRound, resetGestures, syncToClock, newSeekEpoch]);
 
   // The phone's timer and the C64's drift apart, and a resumed or rebased timeline can land between
   // two of the C64's seconds; following its clock now and then keeps them on the same second.
@@ -340,7 +347,7 @@ export const useRemoteSidSeek = ({
 
   const land = useCallback(
     (landing: RemoteSeekLanding | null) => {
-      seekEpochRef.current += 1;
+      newSeekEpoch();
       if (landing) {
         latestLandingRef.current = landing;
         live.current.rebasePlaybackPosition(clampMs(landing.seconds * 1000 + Date.now() - landing.atMs));
@@ -350,7 +357,7 @@ export const useRemoteSidSeek = ({
       }
       setTargetMs(null);
     },
-    [syncToClock],
+    [syncToClock, newSeekEpoch],
   );
   /** A hold's landing must not clear the target of a jump asked for since. */
   const landFastForward = useCallback(
@@ -373,7 +380,7 @@ export const useRemoteSidSeek = ({
     async (toSeconds: number) => {
       const owned = controllerRef.current;
       if (!owned) return;
-      seekEpochRef.current += 1;
+      newSeekEpoch();
       setTargetMs(clampMs(toSeconds * 1000));
       headingToRef.current = toSeconds;
       if (jumpingRef.current) {
@@ -401,7 +408,7 @@ export const useRemoteSidSeek = ({
         headingToRef.current = null;
       }
     },
-    [currentSeconds, land],
+    [currentSeconds, land, newSeekEpoch],
   );
 
   const onScrubStart = useCallback(() => {
@@ -416,7 +423,7 @@ export const useRemoteSidSeek = ({
       if (!owned || holdRef.current || holdsDownRef.current === 0) return;
       // During a jump, a rewind counts back from where that jump is heading, and queues behind it.
       const fromSeconds = headingToRef.current ?? currentSeconds();
-      seekEpochRef.current += 1;
+      newSeekEpoch();
       if (deltaSeconds > 0) {
         const hold: Hold = { direction: "forward", fromSeconds, rewindSteps: 0, ended: false };
         holdRef.current = hold;
@@ -452,7 +459,7 @@ export const useRemoteSidSeek = ({
         showTarget();
       }, REWIND_STEP_INTERVAL_MS);
     },
-    [currentSeconds, landFastForward],
+    [currentSeconds, landFastForward, newSeekEpoch],
   );
 
   const onScrubEnd = useCallback(() => {
@@ -500,5 +507,5 @@ export const useRemoteSidSeek = ({
           onSeekToFraction: durationMs ? onSeekToFraction : undefined,
         }
       : null;
-  return { handlers, targetMs };
+  return { handlers, targetMs, followsClock: controller !== null && followsClock };
 };
