@@ -6,14 +6,59 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CLOCK_PHASE_LIMIT_MS,
   clockPhaseErrors,
   judgeClockPhase,
   clockPhaseBySecond,
   clockWentBackwards,
+  PARITY_SCENARIOS,
+  type ParityDriver,
 } from "../../../playwright/parity/playbackParityScenarios";
+
+describe("clock sampling after a seek", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const scenario = () => PARITY_SCENARIOS.find((entry) => entry.name.startsWith("shows the C64's own second"))!;
+
+  it("starts its steady measurement only after a delayed device-clock read has reached the page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const sampledAt: number[] = [];
+    const measurementStarted = new Error("measurement started");
+    const driver = {
+      followsDeviceClock: async () => Date.now() >= 7200,
+      recordClocks: async (during: () => Promise<void>) => during(),
+      wait: async (ms: number) => {
+        if (ms >= 10_000) {
+          sampledAt.push(Date.now());
+          throw measurementStarted;
+        }
+        vi.setSystemTime(Date.now() + ms);
+      },
+    } as unknown as ParityDriver;
+    await expect(scenario().run(driver, "c64")).rejects.toBe(measurementStarted);
+    expect(sampledAt).toEqual([7200]);
+  });
+
+  it("fails without sampling when the page never follows the device clock", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const waits: number[] = [];
+    const driver = {
+      followsDeviceClock: async () => false,
+      recordClocks: async (during: () => Promise<void>) => during(),
+      wait: async (ms: number) => {
+        waits.push(ms);
+        if (ms >= 10_000) throw new Error("attempted steady measurement before clock synchronization");
+        vi.setSystemTime(Date.now() + ms);
+      },
+    } as unknown as ParityDriver;
+    await expect(scenario().run(driver, "c64")).rejects.toThrow("the page did not re-read the C64's clock");
+    expect(waits).not.toContain(10_000);
+  });
+});
 
 const ticks = (startMs: number, firstSecond: number, count: number, offsetMs = 0) =>
   Array.from({ length: count }, (_, index) => ({
