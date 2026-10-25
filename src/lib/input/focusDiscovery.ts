@@ -405,7 +405,7 @@ export class FocusDiscoveryEngine {
     if (!this.scheduled || !this.started) return;
     const scan = createDiscoveryScan();
     const scope = resolveActiveScope(this.doc, scan);
-    if (scope.kind === "overlay" || restartsLeft <= 0) {
+    if (restartsLeft <= 0) {
       this.flushPendingRefresh();
       return;
     }
