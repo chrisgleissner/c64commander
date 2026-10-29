@@ -10,6 +10,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
+import {
+  AUDIO_PROCESSING_KEY,
+  loadAudioProcessingRecord,
+  saveAudioReverb,
+  saveUserPreset,
+} from "@/lib/config/audioProcessingSettings";
 
 const { featureFlagManagerMocks, isKnownFeatureFlagIdMock } = vi.hoisted(() => ({
   featureFlagManagerMocks: {
@@ -186,6 +192,40 @@ describe("settingsTransfer", () => {
       expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
       expect(featureFlagManagerMocks.replaceOverrides).toHaveBeenCalledWith({});
+    });
+
+    it("imports the audio processing record from an export", async () => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(55);
+      const exported = await exportSettingsSnapshot();
+      expect(exported.audioProcessing?.sound.reverb).toBe(55);
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: exported.audioProcessing };
+      expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
+      expect(loadAudioProcessingRecord().sound.reverb).toBe(55);
+    });
+
+    it("leaves the audio settings alone when an older export has no audio section", async () => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(25);
+      expect(await importSettingsJson(JSON.stringify(validPayload))).toEqual({ ok: true });
+      expect(loadAudioProcessingRecord().sound.reverb).toBe(25);
+    });
+
+    it.each([
+      ["a future version", { version: 7 }],
+      ["a sound without bands", { version: 2, sound: { levelling: true, reverb: 55 } }],
+      ["null", null],
+      ["text", "loud"],
+    ])("keeps the current sound settings and saved sounds when the audio section is %s", async (_name, section) => {
+      localStorage.removeItem(AUDIO_PROCESSING_KEY);
+      saveAudioReverb(25);
+      saveUserPreset("Mine");
+      const before = localStorage.getItem(AUDIO_PROCESSING_KEY);
+      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: section };
+      expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
+      expect(localStorage.getItem(AUDIO_PROCESSING_KEY)).toBe(before);
+      expect(loadAudioProcessingRecord().userPresets.map((preset) => preset.name)).toEqual(["Mine"]);
     });
 
     it("rejects invalid JSON", async () => {

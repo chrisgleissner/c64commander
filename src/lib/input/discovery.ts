@@ -35,6 +35,12 @@ export const SKIP_ATTR = "data-key-nav-skip";
  */
 export const OWNS_KEYS_ATTR = "data-key-nav-owns-keys";
 
+/**
+ * Set to "true" on a focused control that is being edited with Up/Down (a gain, for instance), so the
+ * ring leaves those two keys to it. The control must clear it again, or Up/Down could never leave it.
+ */
+export const VERTICAL_OWNER_ATTR = "data-key-nav-vertical";
+
 /** Marks text the ring stops on so it can be read, not operated: OK has nothing to do there. */
 export const READING_STOP_ATTR = "data-key-nav-reading";
 
@@ -255,6 +261,19 @@ export const isNativelyFocusable = (element: Element): boolean => {
 /** True when Left/Right belong to this element's control rather than the ring. */
 export const isHorizontalKeyOwner = (element: Element | null): boolean =>
   element instanceof Element && element.closest(HORIZONTAL_OWNER_SELECTOR) !== null;
+
+/** True when the focused control keeps this arrow key for itself instead of the ring: Left/Right for a value control, Up/Down while one is being edited. */
+export const controlOwnsDirection = (
+  action: string | null,
+  target: Element | null,
+  active: Element | null,
+): boolean => {
+  if (action === "dpadLeft" || action === "dpadRight")
+    return isHorizontalKeyOwner(target) || isHorizontalKeyOwner(active);
+  if (action === "dpadUp" || action === "dpadDown")
+    return target instanceof Element && target.closest(`[${VERTICAL_OWNER_ATTR}="true"]`) !== null;
+  return false;
+};
 
 const ROW_TOLERANCE_PX = 8;
 

@@ -451,7 +451,7 @@ test.describe("Transport position while skipping on a phone", () => {
     await server.close();
   });
 
-  test("the transport follows the metadata at a fixed gap when the next tune has longer credits @layout", async ({
+  test("the transport stays at the same position when the next tune has longer credits @layout", async ({
     page,
   }, testInfo) => {
     await page.addInitScript((override) => {
@@ -475,7 +475,7 @@ test.describe("Transport position while skipping on a phone", () => {
       const credits = activeSlot(page).getByTestId("playback-current-credits");
       await expect(credits).toContainText(authorText, { timeout: 20_000 });
       const creditsHeight = await credits.evaluate((element) => element.getBoundingClientRect().height);
-      const { gap, detailsAboveTransport } = await activeSlot(page)
+      const { gap, rowTop, detailsAboveTransport } = await activeSlot(page)
         .getByTestId("playback-transport-row")
         .evaluate((row) => {
           const details = document.querySelector('[data-slot-active="true"] [data-testid="playback-current-details"]');
@@ -483,19 +483,24 @@ test.describe("Transport position while skipping on a phone", () => {
             ...[...(details?.querySelectorAll("p") ?? [])].map((paragraph) => paragraph.getBoundingClientRect().bottom),
           );
           const rowTop = row.getBoundingClientRect().top;
-          return { gap: rowTop - detailsBottom, detailsAboveTransport: detailsBottom <= rowTop };
+          const detailsTop = Math.min(
+            ...[...(details?.querySelectorAll("p") ?? [])].map((paragraph) => paragraph.getBoundingClientRect().top),
+          );
+          return {
+            gap: rowTop - detailsBottom,
+            rowTop: rowTop - detailsTop,
+            detailsAboveTransport: detailsBottom <= rowTop,
+          };
         });
-      return { creditsHeight, gap, detailsAboveTransport };
+      return { creditsHeight, gap, rowTop, detailsAboveTransport };
     };
 
     const short = await transportGapBelowDetails(0, "A-Short", "Rob Hubbard");
     const long = await transportGapBelowDetails(1, "B-Long", "Charles Deenen");
-    expect(
-      long.creditsHeight,
-      "the second tune must have taller credits for this test to mean anything",
-    ).toBeGreaterThan(short.creditsHeight);
+    expect(long.creditsHeight, "the credits slot has the same height for every tune").toBe(short.creditsHeight);
     expect(short.detailsAboveTransport, "metadata precedes the transport (short credits)").toBe(true);
     expect(long.detailsAboveTransport, "metadata precedes the transport (long credits)").toBe(true);
+    expect(long.rowTop, "transport offset below the details block").toBe(short.rowTop);
     expect(long.gap, "gap between the metadata and the transport").toBe(short.gap);
   });
 });

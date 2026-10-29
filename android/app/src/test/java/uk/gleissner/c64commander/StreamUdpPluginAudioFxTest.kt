@@ -71,12 +71,23 @@ class StreamUdpPluginAudioFxTest {
     plugin.setAudioProcessing(c)
     val p = hub.params
     assertTrue(p.levelling)
-    assertEquals(12.0, p.bassDb, 0.0)
-    assertEquals(-3.0, p.midDb, 0.0)
-    assertEquals(-12.0, p.trebleDb, 0.0)
+    assertEquals(12.0, p.bandsDb[1], 0.0)
+    assertEquals(-3.0, p.bandsDb[5], 0.0)
+    assertEquals(-12.0, p.bandsDb[8], 0.0)
     assertEquals(100.0, p.stereoWidth, 0.0)
     assertEquals(25.0, p.reverb, 0.0)
     assertEquals(0, resolved()!!.length())
+  }
+
+  @Test
+  fun setAudioProcessingAcceptsTenBandGainsAndPrefersThemOverTheLegacyFields() {
+    val (c, _) =
+        call {
+          `when`(it.data).thenReturn(JSObject("{\"bandsDb\":[1,2,3,4,5,6,7,8,9,20]}"))
+          `when`(it.getDouble("bassDb")).thenReturn(12.0)
+        }
+    plugin.setAudioProcessing(c)
+    assertEquals(listOf(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 12.0), hub.params.bandsDb.toList())
   }
 
   @Test

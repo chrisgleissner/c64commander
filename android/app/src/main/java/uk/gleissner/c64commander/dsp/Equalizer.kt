@@ -10,16 +10,19 @@ package uk.gleissner.c64commander.dsp
 
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
- * Three-band equalizer: low shelf at 120 Hz, peaking filter at 1 kHz, high shelf at 6 kHz.
+ * Ten-band graphic equalizer made of peaking biquads at [CENTRE_HZ] with a Q of [BAND_Q].
  *
- * Each band's gain moves towards its target at a bounded rate (a 12 dB change takes about 50 ms), the
- * coefficients being recomputed once per processed chunk, so changing a slider does not click. A band
- * at 0 dB that is not moving is skipped, and its filter memory cleared.
+ * Each band's gain moves towards its target at a bounded rate (a 12 dB change takes about 20 ms) and
+ * the coefficients are recomputed once per [BLOCK_FRAMES] frames while a band moves, so changing a
+ * slider does not click. A band at 0 dB that is not moving is skipped, and its filter memory cleared.
+ *
+ * [peakGainDb] is the highest point of the cascade's response, which [AudioFx] uses to lower the signal
+ * ahead of a boost so that full-scale audio does not clip.
  */
 internal class Equalizer(private val sampleRate: Int) {
   private val targetDb = DoubleArray(BANDS)
@@ -31,25 +34,38 @@ internal class Equalizer(private val sampleRate: Int) {
   private val a2 = DoubleArray(BANDS)
   private val z1 = DoubleArray(BANDS * 2)
   private val z2 = DoubleArray(BANDS * 2)
+  private val restFrames = IntArray(BANDS)
+  private val coefficients = DoubleArray(COEFFICIENTS)
+  private val peakGrid = PeakGrid(sampleRate)
 
-  fun setTargets(bassDb: Double, midDb: Double, trebleDb: Double) {
-    targetDb[BASS] = bassDb
-    targetDb[MID] = midDb
-    targetDb[TREBLE] = trebleDb
+  /** How far above 0 dB the cascade's response of the current targets reaches, 0 for a flat or cut-only curve. */
+  var peakGainDb = 0.0
+    private set
+  private val settleFrames = (SETTLE_SECONDS * sampleRate).toInt()
+
+  fun setTargets(gainsDb: DoubleArray) {
+    require(gainsDb.size == BANDS) { "Equalizer needs $BANDS gains, got ${gainsDb.size}" }
+    if (gainsDb.contentEquals(targetDb)) return
+    gainsDb.copyInto(targetDb)
+    val peakDb = peakGrid.peakResponseDb(targetDb, coefficients)
+    peakGainDb = if (peakDb < PEAK_THRESHOLD_DB) 0.0 else peakDb
   }
 
   /** True when every band is at 0 dB and staying there, so [process] would not touch the samples. */
   val isIdle: Boolean
-    get() =
-        currentDb[BASS] == 0.0 && targetDb[BASS] == 0.0 &&
-            currentDb[MID] == 0.0 && targetDb[MID] == 0.0 &&
-            currentDb[TREBLE] == 0.0 && targetDb[TREBLE] == 0.0 &&
-            stateIsClear()
+    get() {
+      for (band in 0 until BANDS) {
+        if (currentDb[band] != 0.0 || targetDb[band] != 0.0 || bandHasState(band)) return false
+      }
+      return true
+    }
 
   fun process(left: FloatArray, right: FloatArray, frames: Int, seconds: Double) {
     if (frames == 0) return
-    val maxStep = RAMP_DB_PER_SECOND * seconds / frames
-    for (sample in 0 until frames) {
+    var from = 0
+    while (from < frames) {
+      val count = minOf(BLOCK_FRAMES, frames - from)
+      val maxStep = RAMP_DB_PER_SECOND * seconds * count / frames
       for (band in 0 until BANDS) {
         val delta = targetDb[band] - currentDb[band]
         if (delta != 0.0) {
@@ -57,25 +73,34 @@ internal class Equalizer(private val sampleRate: Int) {
               if (Math.abs(delta) <= maxStep) targetDb[band] else currentDb[band] + Math.copySign(maxStep, delta)
           design(band, currentDb[band])
         }
-        // Keep the zero-dB filter alive until its compatible state has decayed. Clearing it at
-        // the instant the coefficient reaches zero discards an old-coefficient tail as a step.
+        // A zero-dB filter keeps running until its tail has decayed; clearing it the instant the gain
+        // reaches zero would discard that tail as a step.
         if (currentDb[band] != 0.0 || bandHasState(band)) {
-          run(band, 0, left, sample, 1)
-          run(band, 1, right, sample, 1)
+          run(band, 0, left, from, count)
+          run(band, 1, right, from, count)
         }
+        restFrames[band] = if (currentDb[band] == 0.0 && targetDb[band] == 0.0) restFrames[band] + count else 0
+        if (restFrames[band] >= settleFrames) clearState(band)
       }
+      from += count
+    }
+  }
+
+  private fun clearState(band: Int) {
+    for (slot in band * 2..band * 2 + 1) {
+      z1[slot] = 0.0
+      z2[slot] = 0.0
     }
   }
 
   fun reset() {
+    restFrames.fill(0)
     currentDb.fill(0.0)
     targetDb.fill(0.0)
     z1.fill(0.0)
     z2.fill(0.0)
+    peakGainDb = 0.0
   }
-
-  private fun stateIsClear(): Boolean =
-      !bandHasState(BASS) && !bandHasState(MID) && !bandHasState(TREBLE)
 
   private fun bandHasState(band: Int): Boolean {
     val slot = band * 2
@@ -103,61 +128,84 @@ internal class Equalizer(private val sampleRate: Int) {
   }
 
   private fun design(band: Int, gainDb: Double) {
-    val amplitude = 10.0.pow(gainDb / 40.0)
-    val omega = 2.0 * PI * CENTRE_HZ[band] / sampleRate
-    val cosW = cos(omega)
-    val sinW = sin(omega)
-    val n0: Double
-    val n1: Double
-    val n2: Double
-    val m0: Double
-    val m1: Double
-    val m2: Double
-    when (band) {
-      MID -> {
-        val alpha = sinW / (2.0 * MID_Q)
-        n0 = 1.0 + alpha * amplitude
-        n1 = -2.0 * cosW
-        n2 = 1.0 - alpha * amplitude
-        m0 = 1.0 + alpha / amplitude
-        m1 = -2.0 * cosW
-        m2 = 1.0 - alpha / amplitude
-      }
-      else -> {
-        val alpha = sinW / 2.0 * sqrt(2.0)
-        val root = 2.0 * sqrt(amplitude) * alpha
-        if (band == BASS) {
-          n0 = amplitude * ((amplitude + 1) - (amplitude - 1) * cosW + root)
-          n1 = 2 * amplitude * ((amplitude - 1) - (amplitude + 1) * cosW)
-          n2 = amplitude * ((amplitude + 1) - (amplitude - 1) * cosW - root)
-          m0 = (amplitude + 1) + (amplitude - 1) * cosW + root
-          m1 = -2 * ((amplitude - 1) + (amplitude + 1) * cosW)
-          m2 = (amplitude + 1) + (amplitude - 1) * cosW - root
-        } else {
-          n0 = amplitude * ((amplitude + 1) + (amplitude - 1) * cosW + root)
-          n1 = -2 * amplitude * ((amplitude - 1) + (amplitude + 1) * cosW)
-          n2 = amplitude * ((amplitude + 1) + (amplitude - 1) * cosW - root)
-          m0 = (amplitude + 1) - (amplitude - 1) * cosW + root
-          m1 = 2 * ((amplitude - 1) - (amplitude + 1) * cosW)
-          m2 = (amplitude + 1) - (amplitude - 1) * cosW - root
-        }
-      }
-    }
-    b0[band] = n0 / m0
-    b1[band] = n1 / m0
-    b2[band] = n2 / m0
-    a1[band] = m1 / m0
-    a2[band] = m2 / m0
+    val c = coefficients
+    peakingCoefficientsInto(c, CENTRE_HZ[band], sampleRate, gainDb)
+    b0[band] = c[0]
+    b1[band] = c[1]
+    b2[band] = c[2]
+    a1[band] = c[3]
+    a2[band] = c[4]
   }
 
   companion object {
-    const val BASS = 0
-    const val MID = 1
-    const val TREBLE = 2
-    private const val BANDS = 3
-    private val CENTRE_HZ = doubleArrayOf(120.0, 1000.0, 6000.0)
-    private const val MID_Q = 0.7
-    private const val RAMP_DB_PER_SECOND = 240.0
+    val CENTRE_HZ = doubleArrayOf(31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0)
+    const val BANDS = 10
+    const val BAND_Q = 1.4
+    const val BLOCK_FRAMES = 8
+    private const val COEFFICIENTS = 5
+    private const val PEAK_THRESHOLD_DB = 0.01
+    private const val SETTLE_SECONDS = 0.15
+    private const val RAMP_DB_PER_SECOND = 600.0
     private const val TINY = 1e-25
+
+    /** Normalised peaking biquad (RBJ cookbook): b0, b1, b2, a1, a2. */
+    fun peakingCoefficients(centreHz: Double, sampleRate: Int, gainDb: Double): DoubleArray =
+        DoubleArray(COEFFICIENTS).also { peakingCoefficientsInto(it, centreHz, sampleRate, gainDb) }
+
+    fun peakingCoefficientsInto(out: DoubleArray, centreHz: Double, sampleRate: Int, gainDb: Double) {
+      val amplitude = 10.0.pow(gainDb / 40.0)
+      val omega = 2.0 * PI * centreHz / sampleRate
+      val cosW = cos(omega)
+      val alpha = sin(omega) / (2.0 * BAND_Q)
+      val a0 = 1.0 + alpha / amplitude
+      out[0] = (1.0 + alpha * amplitude) / a0
+      out[1] = -2.0 * cosW / a0
+      out[2] = (1.0 - alpha * amplitude) / a0
+      out[3] = -2.0 * cosW / a0
+      out[4] = (1.0 - alpha / amplitude) / a0
+    }
+  }
+}
+
+/** Log-spaced test frequencies from 20 Hz to 20 kHz, with their trigonometry computed once. */
+private class PeakGrid(private val sampleRate: Int) {
+  private val totals = DoubleArray(POINTS)
+  private val cos1 = DoubleArray(POINTS)
+  private val sin1 = DoubleArray(POINTS)
+  private val cos2 = DoubleArray(POINTS)
+  private val sin2 = DoubleArray(POINTS)
+
+  init {
+    for (i in 0 until POINTS) {
+      val hz = LOW_HZ * (HIGH_HZ / LOW_HZ).pow(i.toDouble() / (POINTS - 1))
+      val w = 2.0 * PI * minOf(hz, sampleRate * 0.49) / sampleRate
+      cos1[i] = cos(w)
+      sin1[i] = sin(w)
+      cos2[i] = cos(2.0 * w)
+      sin2[i] = sin(2.0 * w)
+    }
+  }
+
+  /** The largest dB value of the whole cascade's response over the grid, at least 0. */
+  fun peakResponseDb(gainsDb: DoubleArray, scratch: DoubleArray): Double {
+    totals.fill(0.0)
+    for (band in 0 until Equalizer.BANDS) {
+      if (gainsDb[band] == 0.0) continue
+      Equalizer.peakingCoefficientsInto(scratch, Equalizer.CENTRE_HZ[band], sampleRate, gainsDb[band])
+      for (i in 0 until POINTS) {
+        val nr = scratch[0] + scratch[1] * cos1[i] + scratch[2] * cos2[i]
+        val ni = -(scratch[1] * sin1[i] + scratch[2] * sin2[i])
+        val dr = 1.0 + scratch[3] * cos1[i] + scratch[4] * cos2[i]
+        val di = -(scratch[3] * sin1[i] + scratch[4] * sin2[i])
+        totals[i] += 10.0 * log10((nr * nr + ni * ni) / (dr * dr + di * di))
+      }
+    }
+    return maxOf(0.0, totals.max())
+  }
+
+  private companion object {
+    const val POINTS = 96
+    const val LOW_HZ = 20.0
+    const val HIGH_HZ = 20000.0
   }
 }

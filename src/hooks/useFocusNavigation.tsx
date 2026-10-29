@@ -39,7 +39,7 @@ import {
   findContextMenuTrigger,
   resolveActiveScope,
   getInputModality,
-  isHorizontalKeyOwner,
+  controlOwnsDirection,
   normalizeKeyEvent,
   OWNS_KEYS_ATTR,
   SKIP_ATTR,
@@ -617,12 +617,7 @@ export const FocusNavigationProvider = ({
       // only fall back to sibling navigation when nothing owns horizontal. The
       // event TARGET is where the key is headed (it equals the focused element in
       // a real browser), so it is the right thing to test.
-      if (
-        (action === "dpadLeft" || action === "dpadRight") &&
-        (isHorizontalKeyOwner(event.target as Element | null) || isHorizontalKeyOwner(activeElement))
-      ) {
-        return;
-      }
+      if (controlOwnsDirection(action, event.target as Element | null, activeElement)) return;
       if (action === null) {
         emitKeyInputDiagnostics({
           rawEvent: event,

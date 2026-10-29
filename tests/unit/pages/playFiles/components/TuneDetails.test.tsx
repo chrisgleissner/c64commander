@@ -9,23 +9,43 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { TuneDetails } from "@/pages/playFiles/components/TuneDetails";
+import { TuneDetails, type TuneDetailsProps } from "@/pages/playFiles/components/TuneDetails";
+
+const details = (overrides: Partial<TuneDetailsProps> = {}) => (
+  <TuneDetails available tuneKey="a:1" credits={null} facts={null} tuneLine={null} note={null} {...overrides} />
+);
 
 afterEach(cleanup);
 
 describe("TuneDetails", () => {
-  it("renders nothing when STIL has neither a tune line nor a note", () => {
-    const { container } = render(<TuneDetails tuneLine={null} note={null} />);
+  it("renders nothing while no tune is current", () => {
+    const { container } = render(details({ available: false, tuneLine: "BGM1", credits: "Rob Hubbard" }));
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("treats a note of nothing but whitespace as no note at all", () => {
-    const { container } = render(<TuneDetails tuneLine={null} note="   " />);
-    expect(container).toBeEmptyDOMElement();
+  it("keeps its toggle for a tune that STIL does not cover, so the row never comes and goes between tunes", () => {
+    render(details());
+    expect(screen.getByTestId("tune-details-toggle")).toBeInTheDocument();
+  });
+
+  it("says so when nothing is known, and treats a whitespace note as no note", () => {
+    render(details({ note: "   " }));
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    expect(screen.getByTestId("tune-details-empty")).toBeInTheDocument();
+    expect(screen.queryByTestId("tune-notes")).toBeNull();
+  });
+
+  it("shows the full credits and facts that the card clips to two lines", () => {
+    const credits = "Jeroen Tel & Charles Deenen of Maniacs · 1990 A Publisher With A Rather Long Name Ltd";
+    render(details({ credits, facts: "6581 · PAL · Tune 1 of 3 · 2:00" }));
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    expect(screen.getByTestId("tune-details-credits")).toHaveTextContent(credits);
+    expect(screen.getByTestId("tune-details-facts")).toHaveTextContent("6581 · PAL · Tune 1 of 3 · 2:00");
+    expect(screen.queryByTestId("tune-details-empty")).toBeNull();
   });
 
   it("starts collapsed and says what it opens", () => {
-    render(<TuneDetails tuneLine="BGM1 · music by Tamayo Kawamoto" note="A note." />);
+    render(details({ tuneLine: "BGM1 · music by Tamayo Kawamoto", note: "A note." }));
     const toggle = screen.getByTestId("tune-details-toggle");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(toggle).toHaveTextContent("About this tune");
@@ -35,7 +55,7 @@ describe("TuneDetails", () => {
   });
 
   it("opens onto the STIL line and the note, and shuts again", () => {
-    render(<TuneDetails tuneLine="BGM1 · music by Tamayo Kawamoto" note="A note." />);
+    render(details({ tuneLine: "BGM1 · music by Tamayo Kawamoto", note: "A note." }));
     const toggle = screen.getByTestId("tune-details-toggle");
 
     fireEvent.click(toggle);
@@ -49,25 +69,37 @@ describe("TuneDetails", () => {
   });
 
   it("shuts again when the tune changes", () => {
-    const { rerender } = render(<TuneDetails tuneLine="BGM1" note="A note." />);
+    const { rerender } = render(details({ tuneLine: "BGM1", note: "A note." }));
     fireEvent.click(screen.getByTestId("tune-details-toggle"));
     expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "true");
 
-    rerender(<TuneDetails tuneLine="BGM2" note="Another note." />);
+    rerender(details({ tuneKey: "a:2", tuneLine: "BGM2", note: "Another note." }));
     expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("stays open while the facts, credits and notes of the same tune are refined", () => {
+    const { rerender } = render(details({ facts: "6581 · PAL · 3:00" }));
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    rerender(details({ facts: "6581 · PAL · 2:12", credits: "Rob Hubbard", tuneLine: "BGM1", note: "A note." }));
+    expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("tune-details-facts")).toHaveTextContent("2:12");
+  });
+
+  it("names its body in aria-controls only while the body is rendered", () => {
+    render(details());
+    const toggle = screen.getByTestId("tune-details-toggle");
+    expect(toggle).not.toHaveAttribute("aria-controls");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-controls", screen.getByTestId("tune-details-body").id);
+  });
+
   it("names the control for automation that addresses it by resource id", () => {
-    render(<TuneDetails tuneLine="BGM1" note={null} />);
+    render(details({ tuneLine: "BGM1", note: null }));
     expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("id", "tune-details-toggle");
   });
 
   it("keeps the hit target at the project's floor even though the label is small text", () => {
-    render(<TuneDetails tuneLine="BGM1" note={null} />);
-    // 44 px: the general tap-target floor in AGENTS.md, enforced by
-    // smallScreenErgonomics.spec.ts (MIN_TARGET_PX). The 40 px figure in
-    // docs/ux-guidelines.md is scoped to CloseControl, the interstitial dismissal glyph,
-    // and does not apply to an ordinary disclosure button.
+    render(details({ tuneLine: "BGM1", note: null }));
     expect(screen.getByTestId("tune-details-toggle").className).toContain("min-h-11");
   });
 });
