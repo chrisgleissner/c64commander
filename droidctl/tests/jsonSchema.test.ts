@@ -73,7 +73,7 @@ describe("toJsonSchema", () => {
       maximum: 65535,
     });
     expect(toJsonSchema(z.number().lt(10))).toEqual({ type: "number", exclusiveMaximum: 10 });
-    expect(() => toJsonSchema(z.number().finite())).toThrow(/number check "finite"/);
+    expect(() => toJsonSchema(z.number().multipleOf(2))).toThrow(/number check "multiple_of"/);
   });
 
   it("advertises arrays, unions, enums and literals", () => {
@@ -94,6 +94,6 @@ describe("toJsonSchema", () => {
   });
 
   it("refuses a construct it cannot advertise rather than understating the validator", () => {
-    expect(() => toJsonSchema(z.date())).toThrow(/cannot derive a JSON Schema from ZodDate/);
+    expect(() => toJsonSchema(z.date())).toThrow(/cannot derive a JSON Schema from zod type "date"/);
   });
 });

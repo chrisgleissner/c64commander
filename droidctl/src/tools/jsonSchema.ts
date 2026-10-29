@@ -8,43 +8,44 @@
 
 import type { JsonSchema } from "./types.js";
 
-interface ZodCheck {
-  readonly kind: string;
+interface ZodCheckDef {
+  readonly check: string;
   readonly value?: number;
+  readonly minimum?: number;
+  readonly maximum?: number;
   readonly inclusive?: boolean;
-  readonly regex?: RegExp;
+  readonly format?: string;
+  readonly pattern?: RegExp;
+}
+
+interface ZodCheck {
+  readonly _zod: { readonly def: ZodCheckDef };
 }
 
 /**
- * zod always populates the field belonging to the node's own type, so each is
- * read through a narrowing cast. A fallback here would be an untestable branch
+ * Only the fields of zod 4's schema definitions that this walker reads. zod always
+ * populates the field belonging to the node's own type, so a node is read through
+ * the fields its `type` names. A fallback here would be an untestable branch
  * standing in for a zod release that renamed its internals, which would break
  * loudly at the first tool schema anyway.
  */
 interface ZodDef {
-  readonly typeName: string;
-  readonly description?: string;
-  readonly minLength?: { value: number } | null;
-  readonly maxLength?: { value: number } | null;
+  readonly type: string;
   readonly innerType?: unknown;
-  readonly schema?: unknown;
-  readonly type?: unknown;
-  readonly value?: unknown;
-  readonly unknownKeys?: string;
+  readonly defaultValue?: unknown;
+  readonly options?: readonly unknown[];
+  readonly entries?: Readonly<Record<string, string | number>>;
+  readonly values?: readonly unknown[];
+  readonly element?: unknown;
+  readonly shape?: Readonly<Record<string, unknown>>;
+  readonly catchall?: { readonly def: { readonly type: string } };
+  readonly checks?: readonly ZodCheck[];
 }
 
-type Narrowed<T> = ZodDef & T;
-
-function defOf(schema: unknown): ZodDef {
-  return (schema as { _def: ZodDef })._def;
-}
-
-function narrow<T>(def: ZodDef): Narrowed<T> {
-  return def as Narrowed<T>;
-}
-
-function isOptional(schema: unknown): boolean {
-  return (schema as { isOptional: () => boolean }).isOptional();
+interface ZodSchema {
+  readonly def: ZodDef;
+  readonly description?: string;
+  isOptional(): boolean;
 }
 
 /**
@@ -54,76 +55,97 @@ function isOptional(schema: unknown): boolean {
  * schema that understates what the validator will reject.
  */
 export function toJsonSchema(schema: unknown): JsonSchema {
-  const def = defOf(schema);
-  const body = convert(schema, def);
-  return def.description === undefined ? body : { ...body, description: def.description };
+  const zodSchema = schema as ZodSchema;
+  const body = convert(zodSchema);
+  return zodSchema.description === undefined ? body : { ...body, description: zodSchema.description };
 }
 
-function convert(schema: unknown, def: ZodDef): JsonSchema {
-  switch (def.typeName) {
-    case "ZodOptional":
+function convert(schema: ZodSchema): JsonSchema {
+  const def = schema.def;
+  switch (def.type) {
+    case "optional":
       return toJsonSchema(def.innerType);
-    case "ZodDefault":
-      return { ...toJsonSchema(def.innerType), default: narrow<{ defaultValue: () => unknown }>(def).defaultValue() };
-    case "ZodNullable":
+    case "default":
+      return { ...toJsonSchema(def.innerType), default: def.defaultValue };
+    case "nullable":
       return { anyOf: [toJsonSchema(def.innerType), { type: "null" }] };
-    // A refinement is a runtime-only predicate with nothing to introspect, so the
-    // derived schema is the unrefined one. State such a rule in the field's
-    // description, because JSON Schema validation alone will not enforce it.
-    case "ZodEffects":
-      return toJsonSchema(def.schema);
-    case "ZodObject":
-      return objectSchema(def);
-    case "ZodArray":
-      return arraySchema(def);
-    case "ZodUnion":
-      return { anyOf: narrow<{ options: readonly unknown[] }>(def).options.map((o) => toJsonSchema(o)) };
-    case "ZodEnum":
-      return { type: "string", enum: [...narrow<{ values: readonly string[] }>(def).values] };
-    case "ZodLiteral":
-      return literalSchema(def.value);
-    case "ZodBoolean":
+    case "object":
+      return objectSchema(schema);
+    case "array":
+      return arraySchema(schema);
+    case "union":
+      return { anyOf: (def.options ?? []).map((option) => toJsonSchema(option)) };
+    case "enum":
+      return { type: "string", enum: Object.values(def.entries ?? {}) };
+    case "literal":
+      return literalSchema(def.values ?? []);
+    case "boolean":
       return { type: "boolean" };
-    case "ZodNumber":
-      return numberSchema(narrow<{ checks: readonly ZodCheck[] }>(def).checks);
-    case "ZodString":
-      return stringSchema(narrow<{ checks: readonly ZodCheck[] }>(def).checks);
+    case "number":
+      return numberSchema(def.checks ?? []);
+    case "string":
+      return stringSchema(def.checks ?? []);
     default:
       throw new Error(
-        `toJsonSchema cannot derive a JSON Schema from ${def.typeName}; extend it before using that construct in a tool schema. Schema: ${String(schema)}`,
+        `toJsonSchema cannot derive a JSON Schema from zod type "${def.type}"; extend it before using that construct in a tool schema. Schema: ${String(schema)}`,
       );
   }
 }
 
-function objectSchema(def: ZodDef): JsonSchema {
-  if (def.unknownKeys !== "strict") {
+function unknownKeysMode(def: ZodDef): string {
+  const catchall = def.catchall?.def.type;
+  if (catchall === undefined) {
+    return "strip";
+  }
+  if (catchall === "never") {
+    return "strict";
+  }
+  if (catchall === "unknown" || catchall === "any") {
+    return "passthrough";
+  }
+  return catchall;
+}
+
+function objectSchema(schema: ZodSchema): JsonSchema {
+  const mode = unknownKeysMode(schema.def);
+  if (mode !== "strict") {
     throw new Error(
-      `A tool object schema must be .strict() so the advertised schema can close it to additional properties; this one is "${def.unknownKeys}".`,
+      `A tool object schema must be .strict() so the advertised schema can close it to additional properties; this one is "${mode}".`,
     );
   }
   const properties: Record<string, JsonSchema> = {};
   const required: string[] = [];
-  for (const [key, child] of Object.entries(narrow<{ shape: () => Record<string, unknown> }>(def).shape())) {
-    properties[key] = toJsonSchema(child);
-    if (!isOptional(child)) {
+  for (const [key, child] of Object.entries(schema.def.shape ?? {})) {
+    const childSchema = child as ZodSchema;
+    properties[key] = toJsonSchema(childSchema);
+    if (!childSchema.isOptional()) {
       required.push(key);
     }
   }
   return { type: "object", properties, required, additionalProperties: false };
 }
 
-function arraySchema(def: ZodDef): JsonSchema {
-  const schema: Record<string, unknown> = { type: "array", items: toJsonSchema(def.type) };
-  if (def.minLength) {
-    schema["minItems"] = def.minLength.value;
+function arraySchema(schema: ZodSchema): JsonSchema {
+  const items = toJsonSchema(schema.def.element);
+  const advertised: Record<string, unknown> = { type: "array", items };
+  for (const check of schema.def.checks ?? []) {
+    const checkDef = check._zod.def;
+    if (checkDef.check === "min_length") {
+      advertised["minItems"] = checkDef.minimum;
+    } else if (checkDef.check === "max_length") {
+      advertised["maxItems"] = checkDef.maximum;
+    } else {
+      throw new Error(`toJsonSchema does not know how to advertise the array check "${checkDef.check}".`);
+    }
   }
-  if (def.maxLength) {
-    schema["maxItems"] = def.maxLength.value;
-  }
-  return schema as JsonSchema;
+  return advertised as JsonSchema;
 }
 
-function literalSchema(value: unknown): JsonSchema {
+function literalSchema(values: readonly unknown[]): JsonSchema {
+  if (values.length !== 1) {
+    throw new Error(`toJsonSchema supports exactly one value per literal, not ${values.length}.`);
+  }
+  const [value] = values;
   const type = typeof value;
   if (type !== "string" && type !== "number" && type !== "boolean") {
     throw new Error(`toJsonSchema supports string, number and boolean literals, not ${type}.`);
@@ -132,17 +154,22 @@ function literalSchema(value: unknown): JsonSchema {
 }
 
 function numberSchema(checks: readonly ZodCheck[]): JsonSchema {
-  const schema: Record<string, unknown> = { type: checks.some((check) => check.kind === "int") ? "integer" : "number" };
-  for (const check of checks) {
-    if (check.kind === "int") {
+  const checkDefs = checks.map((check) => check._zod.def);
+  const schema: Record<string, unknown> = {
+    type: checkDefs.some((check) => check.check === "number_format" && check.format === "safeint")
+      ? "integer"
+      : "number",
+  };
+  for (const check of checkDefs) {
+    if (check.check === "number_format" && check.format === "safeint") {
       continue;
     }
-    if (check.kind === "min") {
+    if (check.check === "greater_than") {
       schema[check.inclusive ? "minimum" : "exclusiveMinimum"] = check.value;
-    } else if (check.kind === "max") {
+    } else if (check.check === "less_than") {
       schema[check.inclusive ? "maximum" : "exclusiveMaximum"] = check.value;
     } else {
-      throw new Error(`toJsonSchema does not know how to advertise the number check "${check.kind}".`);
+      throw new Error(`toJsonSchema does not know how to advertise the number check "${check.check}".`);
     }
   }
   return schema as JsonSchema;
@@ -151,14 +178,16 @@ function numberSchema(checks: readonly ZodCheck[]): JsonSchema {
 function stringSchema(checks: readonly ZodCheck[]): JsonSchema {
   const schema: Record<string, unknown> = { type: "string" };
   for (const check of checks) {
-    if (check.kind === "min") {
-      schema["minLength"] = check.value;
-    } else if (check.kind === "max") {
-      schema["maxLength"] = check.value;
-    } else if (check.kind === "regex") {
-      schema["pattern"] = (check as { regex: RegExp }).regex.source;
+    const checkDef = check._zod.def;
+    if (checkDef.check === "min_length") {
+      schema["minLength"] = checkDef.minimum;
+    } else if (checkDef.check === "max_length") {
+      schema["maxLength"] = checkDef.maximum;
+    } else if (checkDef.check === "string_format" && checkDef.format === "regex") {
+      schema["pattern"] = checkDef.pattern?.source;
     } else {
-      throw new Error(`toJsonSchema does not know how to advertise the string check "${check.kind}".`);
+      const label = checkDef.check === "string_format" ? checkDef.format : checkDef.check;
+      throw new Error(`toJsonSchema does not know how to advertise the string check "${label}".`);
     }
   }
   return schema as JsonSchema;

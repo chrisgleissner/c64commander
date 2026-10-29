@@ -21,19 +21,19 @@ import { parseZodArgs } from "../src/tools/types.js";
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
+/** zod 4 schema definitions, read through the field that each node's `type` names. */
 interface ZodInternals {
-  _def: {
-    typeName: string;
+  def: {
+    type: string;
     innerType?: unknown;
-    schema?: unknown;
-    type?: unknown;
+    element?: unknown;
     options?: unknown[];
+    entries?: Record<string, unknown>;
     values?: unknown[];
-    value?: unknown;
-    checks?: { kind: string; regex?: RegExp; value?: number }[];
+    shape?: Record<string, unknown>;
+    checks?: { _zod: { def: { check: string; format?: string; pattern?: RegExp } } }[];
   };
-  shape?: Record<string, unknown>;
-  isOptional?: () => boolean;
+  isOptional: () => boolean;
 }
 
 const REGEX_CANDIDATES = ["480x640", "sample", "1", "a"];
@@ -44,36 +44,36 @@ function unwrap(schema: unknown): ZodInternals {
 
 function generate(schema: unknown, key: string): unknown {
   const node = unwrap(schema);
-  const typeName = node._def.typeName;
+  const type = node.def.type;
 
-  switch (typeName) {
-    case "ZodOptional":
-    case "ZodNullable":
-    case "ZodDefault":
-      return generate(node._def.innerType, key);
-    case "ZodEffects":
-      return generate(node._def.schema, key);
-    case "ZodObject": {
+  switch (type) {
+    case "optional":
+    case "nullable":
+    case "default":
+      return generate(node.def.innerType, key);
+    case "object": {
       const value: Record<string, unknown> = {};
-      for (const [field, child] of Object.entries(node.shape ?? {})) {
+      for (const [field, child] of Object.entries(node.def.shape ?? {})) {
         value[field] = generate(child, field);
       }
       return value;
     }
-    case "ZodArray":
-      return [generate(node._def.type, key)];
-    case "ZodUnion":
-      return generate((node._def.options ?? [])[0], key);
-    case "ZodEnum":
-      return (node._def.values ?? [])[0];
-    case "ZodLiteral":
-      return node._def.value;
-    case "ZodBoolean":
+    case "array":
+      return [generate(node.def.element, key)];
+    case "union":
+      return generate((node.def.options ?? [])[0], key);
+    case "enum":
+      return Object.values(node.def.entries ?? {})[0];
+    case "literal":
+      return (node.def.values ?? [])[0];
+    case "boolean":
       return true;
-    case "ZodNumber":
+    case "number":
       return 1;
-    case "ZodString": {
-      const regex = (node._def.checks ?? []).find((check) => check.kind === "regex")?.regex;
+    case "string": {
+      const regex = (node.def.checks ?? [])
+        .map((check) => check._zod.def)
+        .find((check) => check.check === "string_format" && check.format === "regex")?.pattern;
       if (!regex) {
         return `${key}-value`;
       }
@@ -84,17 +84,13 @@ function generate(schema: unknown, key: string): unknown {
       return candidate;
     }
     default:
-      throw new Error(`The contract test does not know how to generate a ${typeName} (field ${key}).`);
+      throw new Error(`The contract test does not know how to generate a zod ${type} (field ${key}).`);
   }
 }
 
 function zodRequiredKeys(schema: unknown): string[] {
-  let node = unwrap(schema);
-  while (node._def.typeName === "ZodEffects") {
-    node = unwrap(node._def.schema);
-  }
-  return Object.entries(node.shape ?? {})
-    .filter(([, child]) => unwrap(child).isOptional?.() !== true)
+  return Object.entries(unwrap(schema).def.shape ?? {})
+    .filter(([, child]) => unwrap(child).isOptional() !== true)
     .map(([key]) => key)
     .sort();
 }
@@ -265,11 +261,7 @@ describe("tool contract", () => {
 
       it("declares a JSON Schema property for every zod key", () => {
         const declared = Object.keys(descriptor.inputSchema.properties ?? {}).sort();
-        let node = unwrap(descriptor.argsSchema);
-        while (node._def.typeName === "ZodEffects") {
-          node = unwrap(node._def.schema);
-        }
-        expect(declared).toEqual(Object.keys(node.shape ?? {}).sort());
+        expect(declared).toEqual(Object.keys(unwrap(descriptor.argsSchema).def.shape ?? {}).sort());
       });
 
       it("round-trips a generated payload through both schemas", () => {
