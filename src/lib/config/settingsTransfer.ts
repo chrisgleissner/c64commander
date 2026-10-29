@@ -58,6 +58,13 @@ import {
 } from "@/lib/config/featureFlags";
 import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { variant } from "@/generated/variant";
+import { addLog } from "@/lib/logging";
+import {
+  loadAudioProcessingRecord,
+  parseAudioProcessingRecord,
+  saveAudioProcessingRecord,
+  type AudioProcessingRecord,
+} from "@/lib/config/audioProcessingSettings";
 import {
   clearDeviceSafetyOverride,
   isDeviceSafetyPresetValue,
@@ -115,6 +122,7 @@ export type SettingsExportPayload = {
   // on import — pre-035 files omit it and import without a warning.
   variantId: string;
   appSettings: SettingsAppSettingsPayload;
+  audioProcessing?: AudioProcessingRecord;
   featureFlags: Partial<Record<FeatureFlagId, boolean>>;
   deviceSafety: {
     mode: DeviceSafetyMode;
@@ -222,6 +230,17 @@ const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
   value === "CONSERVATIVE" ||
   value === "TROUBLESHOOTING";
 
+const importAudioProcessing = (value: unknown) => {
+  const record = parseAudioProcessingRecord(value);
+  if (!record) {
+    addLog("warn", "Settings import: the audio processing section is unusable; keeping the current sound settings", {
+      version: typeof value === "object" && value !== null ? (value as { version?: unknown }).version : typeof value,
+    });
+    return;
+  }
+  saveAudioProcessingRecord(record);
+};
+
 export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> => {
   await featureFlagManager.load();
   const safety = loadDeviceSafetyConfig();
@@ -245,6 +264,7 @@ export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> =
       remoteFunction1Action: loadRemoteFunction1Action(),
       remoteFunction3Action: loadRemoteFunction3Action(),
     },
+    audioProcessing: loadAudioProcessingRecord(),
     featureFlags: featureFlagManager.getExplicitOverrides(),
     deviceSafety: {
       mode: safety.mode,
@@ -420,6 +440,8 @@ export const importSettingsJson = async (
   saveArchiveClientIdOverride(safeApp.archiveClientIdOverride);
   saveArchiveUserAgentOverride(safeApp.archiveUserAgentOverride);
   saveRemoteFunctionActions(...resolveImportedFunctionActions(appSettings as Record<string, unknown>));
+
+  if (payload.audioProcessing !== undefined) importAudioProcessing(payload.audioProcessing);
 
   saveDeviceSafetyMode(safeSafety.mode);
   // An export holds the values the mode resolved to, not which ones the user overrode. Storing a
