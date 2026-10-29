@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ListMusic, Radio } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -97,13 +97,29 @@ export const SidRadioChip = ({
 }: SidRadioChipProps) => {
   const [expanded, setExpanded] = useState(false);
   const whyId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const closeWhenFocusLeaves = (event: FocusEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setExpanded(false);
+    };
+    document.addEventListener("focusin", closeWhenFocusLeaves);
+    return () => document.removeEventListener("focusin", closeWhenFocusLeaves);
+  }, [expanded]);
   const friendlyNames = useFriendlySidNames();
 
   return (
     <div
+      ref={rootRef}
       className="relative flex w-full flex-col border-b border-border"
       data-testid="now-playing-source"
       data-station-active={station ? "true" : "false"}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !expanded) return;
+        event.stopPropagation();
+        setExpanded(false);
+      }}
     >
       {station ? (
         <div className="flex w-full flex-col" data-testid="sid-radio-chip">

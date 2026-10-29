@@ -504,7 +504,9 @@ test.describe("Player controls stay put", () => {
       await open(page, true);
       const slot = activeSlot(page);
       await expect(slot.getByTestId("sid-radio-chip")).toBeVisible({ timeout: 10_000 });
-      await clickAndExpectUnmoved(page, "open station explanation", slot.getByTestId("sid-radio-chip-toggle"));
+      const toggle = slot.getByTestId("sid-radio-chip-toggle");
+      await expect(toggle, "open station explanation: the control exists").toBeVisible();
+      expectUnmoved("open station explanation", await clickWatched(page, toggle));
       await expect(slot.getByTestId("sid-radio-why"), "the explanation opens on screen").toBeInViewport();
       await clickAndExpectUnmoved(page, "close station explanation", slot.getByTestId("sid-radio-chip-toggle"));
       await expect(slot.getByTestId("sid-radio-why")).toHaveCount(0);

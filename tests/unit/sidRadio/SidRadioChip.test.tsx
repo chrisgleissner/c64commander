@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
@@ -57,6 +57,29 @@ describe("SidRadioChip", () => {
     expect(screen.getByTestId("now-playing-source").className).toMatch(/(^|\s)relative(\s|$)/);
     expect(why.id).not.toBe("");
     expect(toggle).toHaveAttribute("aria-controls", why.id);
+  });
+
+  it("closes the explanation on Escape, so it does not stay laid over controls the focus ring can still reach", () => {
+    render(<SidRadioChip station={songStation} whyThisTune="similar to Commando" onStop={vi.fn()} />);
+    const toggle = screen.getByTestId("sid-radio-chip-toggle");
+    fireEvent.click(toggle);
+    fireEvent.keyDown(toggle, { key: "Escape" });
+    expect(screen.queryByTestId("sid-radio-why")).toBeNull();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("closes the explanation when focus moves to a control outside the chip, and keeps it while focus moves to Stop", () => {
+    render(
+      <>
+        <SidRadioChip station={songStation} whyThisTune="similar to Commando" onStop={vi.fn()} />
+        <button type="button" data-testid="elsewhere" />
+      </>,
+    );
+    fireEvent.click(screen.getByTestId("sid-radio-chip-toggle"));
+    act(() => screen.getByTestId("sid-radio-stop").focus());
+    expect(screen.getByTestId("sid-radio-why")).toBeInTheDocument();
+    act(() => screen.getByTestId("elsewhere").focus());
+    expect(screen.queryByTestId("sid-radio-why")).toBeNull();
   });
 
   /**

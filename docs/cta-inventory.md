@@ -500,7 +500,7 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
   - Keep station tunes — button — `station-queue-keep` — ends the station and keeps its queue as the playlist
   - Return to my playlist — button — `station-queue-return` — ends the station and puts the saved playlist back
   - Close — button — the dialog's header close control — leaves the station running
-- Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(opens `sid-radio-why`, which explains the pick; it is laid over the card directly under the chip and named by the toggle's `aria-controls`, so opening it moves nothing)_
+- Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(opens `sid-radio-why`, which explains the pick; it is laid over the card directly under the chip and named by the toggle's `aria-controls`, so opening it moves nothing; Escape or moving focus out of the chip closes it)_
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
   and Un-like — button — `liked-tune-unlike`
