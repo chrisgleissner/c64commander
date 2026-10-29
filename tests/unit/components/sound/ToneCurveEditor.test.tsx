@@ -228,4 +228,10 @@ describe("ToneCurveEditor", () => {
       .filter((text) => /^([+−]\d+|0)$/.test(text ?? ""));
     expect(labels).toEqual(["+12", "+6", "0", "−6", "−12"]);
   });
+
+  it("leaves Escape alone when it is not editing, and Enter that something else already handled", () => {
+    render(<Harness />);
+    expect(fireEvent.keyDown(plot(), { key: "Escape" })).toBe(true);
+    expect(plot()).toHaveAttribute("data-editing", "false");
+  });
 });

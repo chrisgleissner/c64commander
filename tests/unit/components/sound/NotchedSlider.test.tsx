@@ -112,4 +112,64 @@ describe("NotchedSlider", () => {
     expect(thumb()).toHaveAttribute("tabindex", "-1");
     expect(thumb()).toHaveAttribute("aria-disabled", "true");
   });
+
+  it("jumps to the ends with Home and End and ignores other keys", () => {
+    render(<Harness initial={30} />);
+    fireEvent.keyDown(thumb(), { key: "End" });
+    expect(value()).toBe(100);
+    fireEvent.keyDown(thumb(), { key: "Home" });
+    expect(value()).toBe(0);
+    fireEvent.keyDown(thumb(), { key: "a" });
+    expect(value()).toBe(0);
+  });
+
+  it("does not report a change, or pulse, when the notch tapped is already the value", () => {
+    render(<Harness initial={30} />);
+    fireEvent.click(screen.getByTestId("reverb-notch-room"));
+    expect(value()).toBe(30);
+    expect(pulse()).toBe(0);
+  });
+
+  it("ignores a pointer move that does not follow a press", () => {
+    render(<Harness initial={30} />);
+    const track = thumb().parentElement as HTMLElement;
+    fireEvent.pointerMove(track, { clientX: 200, pointerId: 1 });
+    expect(value()).toBe(30);
+  });
+
+  it("does not move for a small wobble but follows a real drag, and stops after release", () => {
+    render(<Harness initial={0} />);
+    const track = thumb().parentElement as HTMLElement;
+    fireEvent.pointerDown(track, { clientX: 13, pointerId: 1 });
+    expect(value()).toBe(0);
+    fireEvent.pointerMove(track, { clientX: 14, pointerId: 1 });
+    expect(value()).toBe(0);
+    fireEvent.pointerMove(track, { clientX: 130, pointerId: 1 });
+    const dragged = value();
+    expect(dragged).toBeGreaterThan(30);
+    fireEvent.pointerUp(track, { pointerId: 1 });
+    fireEvent.pointerMove(track, { clientX: 230, pointerId: 1 });
+    expect(value()).toBe(dragged);
+  });
+
+  it("lays out notches at the very ends of the range and marks only the one at the value", () => {
+    const ends: Notch[] = [
+      { id: "none", label: "None", value: 0 },
+      { id: "all", label: "All", value: 100 },
+    ];
+    render(
+      <NotchedSlider
+        label="Amount"
+        notches={ends}
+        value={100}
+        onChange={() => {}}
+        accent={{ light: "#000", dark: "#fff" }}
+        testIdPrefix="amt"
+      />,
+    );
+    expect(screen.getByTestId("amt-notch-all")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("amt-notch-none")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByTestId("amt-tick-none")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("amt-tick-all")).not.toBeInTheDocument();
+  });
 });
