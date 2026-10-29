@@ -622,7 +622,7 @@ Radio keeps at most **200 automatically queued tunes**, including the current tu
 
 While a station runs, it chooses what comes next. **Shuffle** offers to stop radio and keep its queued tunes as a shuffled playlist. Confirming replaces your saved playlist; **Cancel** keeps radio running. **Repeat** cycles **off → playlist → tune → off**: playlist wraps the retained queue if it runs out, and tune plays the current tune indefinitely; Next and Previous still change tunes. Stop lets the final tune finish and returns your playlist even if Repeat was on.
 
-The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
+The line at the top of the Now Playing card says where the music comes from. Tap it to see why this tune was chosen, shown just below it, or tap **Stop** beside it to end the station. Each station starts fresh, so the same mood brings different music every time.
 
 A station plays in place of your playlist, but your playlist is kept, even if the app is closed. When you stop the station, the tune playing now finishes, playback stops, and your playlist comes back as you left it. If you added or removed tunes while the station played, the app asks first whether to keep the station's tunes or return to your playlist.
 
@@ -652,7 +652,7 @@ To pick just one, tap that **1/19**. You see every tune in the file with its num
 
 The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune is playing, and its length. Anything the file does not record is left out, never guessed. Tap the composer's name, and search opens with that name filled in.
 
-The archive's editors have written down two more things a SID file cannot hold. You find them under **About this tune**, below that line, for about a third of the tunes. It starts folded, so the transport and progress bar stay on screen; tap it to open or close it.
+That text has room for four rows: two for the composer, year and publisher, and two for the rest. Anything longer is cut short, and **About this tune**, below the transport and the progress bar, shows all of it. The archive's editors have also written down two more things a SID file cannot hold, for about a third of the tunes, and you find those there too. It starts folded; tap it to open or close it. Nothing above it moves when it opens.
 
 The first is whose music a tune really is. Much C64 music is a cover of a pop record, a film score or an arcade original, and the file names only whoever wrote the C64 version.
 

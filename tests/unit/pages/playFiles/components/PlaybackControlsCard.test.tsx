@@ -541,10 +541,10 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playback-current-credits").className).not.toMatch(/\b(pl-|ml-|indent-)/);
   });
 
-  it("shows nothing extra for a tune that names neither", () => {
+  it("keeps the credits line reserved but empty for a tune that names neither", () => {
     render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, currentItemLabel: "Untitled" })} />);
 
-    expect(screen.queryByTestId("playback-current-credits")).toBeNull();
+    expect(screen.getByTestId("playback-current-credits")).toBeEmptyDOMElement();
     // And the empty-state text does not leak in just because there are no credits.
     expect(screen.getByTestId("playback-current-track")).not.toHaveTextContent("Select a playlist item");
   });
@@ -983,7 +983,7 @@ describe("PlaybackControlsCard STIL and composer", () => {
     expect(screen.getByTestId("tune-notes-text")).toHaveTextContent("Devil's Gallop");
   });
 
-  it("adds nothing for the majority of the archive, which STIL does not describe", () => {
+  it("shows no STIL line or note for the majority of the archive, which STIL does not describe", () => {
     render(
       <PlaybackControlsCard
         {...buildProps({
@@ -994,8 +994,8 @@ describe("PlaybackControlsCard STIL and composer", () => {
         })}
       />,
     );
-    expect(screen.queryByTestId("tune-details")).toBeNull();
-    expect(screen.queryByTestId("tune-details-toggle")).toBeNull();
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    expect(screen.getByTestId("tune-details-credits")).toHaveTextContent("Rob Hubbard");
     expect(screen.queryByTestId("playback-current-stil")).toBeNull();
     expect(screen.queryByTestId("tune-notes")).toBeNull();
   });

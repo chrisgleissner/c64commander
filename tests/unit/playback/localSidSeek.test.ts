@@ -117,7 +117,7 @@ describe("LocalSidChunkScheduler seek support", () => {
 describe("hold-to-seek click suppression", () => {
   it("is documented as clearing on the tick after pointerup", async () => {
     const { readFileSync } = await import("node:fs");
-    const source = readFileSync("src/pages/playFiles/components/PlaybackControlsCard.tsx", "utf8");
+    const source = readFileSync("src/pages/playFiles/components/PlaybackTransport.tsx", "utf8");
 
     // The flag must be cleared asynchronously in stop(), not only in start():
     // clearing it only on the next press is what swallowed a later keypad click.
@@ -140,7 +140,7 @@ describe("hold-to-seek click suppression", () => {
 describe("scrub feedback contract", () => {
   it("moves the target on every repeat tick, not once per engine seek", async () => {
     const { readFileSync } = await import("node:fs");
-    const card = readFileSync("src/pages/playFiles/components/PlaybackControlsCard.tsx", "utf8");
+    const card = readFileSync("src/pages/playFiles/components/PlaybackTransport.tsx", "utf8");
     // The repeat interval must drive scrub.step (the target), not onSeek.
     expect(card).toMatch(/repeatTimer\.current = window\.setInterval\(\(\) => \{\s*scrub\.step\?\.\(deltaSeconds\)/);
     // Releasing the button lands on the target.

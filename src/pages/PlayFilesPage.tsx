@@ -2521,320 +2521,327 @@ export default function PlayFilesPage() {
       <AppBar title="Play" />
       <PageContainer>
         <PageStack>
-          {lightingStudioEnabled && lightingResolved.sourceCue ? (
-            <LightingAutomationCue
-              label={lightingResolved.sourceCue.label}
-              onOpenStudio={openStudio}
-              onOpenContextLens={openContextLens}
-            />
-          ) : null}
-          <PlaybackSpectrumCard paused={isPaused} />
-          <PlaybackSoundCard />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
-            <div
-              className="bg-card border border-border rounded-panel p-4 space-y-4"
-              data-section-label="Playback controls"
-              data-testid="play-section-playback"
-            >
-              <PlaybackControlsCard
-                hasCurrentItem={Boolean(currentItem)}
-                currentItemLabel={currentDisplay?.title ?? null}
-                currentItemMetadataParts={currentItemMetadataParts}
-                stil={stilInfo}
-                onComposerSelected={openSearchForComposer}
-                {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}
-                // Which station (or, when none is running, which playlist) is producing this tune
-                // leads the card: it is context for the title, the transport and everything else
-                // below it. Rendered in both states, and the same height in both, so that starting
-                // or stopping a station never shifts the controls underneath.
-                stationIndicator={
-                  sidRadioFlags.sidRadioEnabled ? (
-                    <SidRadioChip
-                      station={sidRadio.station}
-                      whyThisTune={sidRadioWhyThisTune}
-                      collectionProgress={sidRadio.collectionProgress}
-                      preparingCollection={sidRadio.preparingCollection}
-                      onStop={stationHandover.requestStop}
+            <div className="flex flex-col gap-4" data-testid="play-primary-column">
+              <div
+                className="bg-card border border-border rounded-panel p-4 space-y-4"
+                data-section-label="Playback controls"
+                data-testid="play-section-playback"
+              >
+                <PlaybackControlsCard
+                  hasCurrentItem={Boolean(currentItem)}
+                  currentItemLabel={currentDisplay?.title ?? null}
+                  currentItemMetadataParts={currentItemMetadataParts}
+                  tuneKey={currentItem ? `${currentItem.id}:${currentSongNr}` : null}
+                  stil={stilInfo}
+                  onComposerSelected={openSearchForComposer}
+                  {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}
+                  // Which station (or, when none is running, which playlist) is producing this tune
+                  // leads the card: it is context for the title, the transport and everything else
+                  // below it. Rendered in both states, and the same height in both, so that starting
+                  // or stopping a station never shifts the controls underneath.
+                  stationIndicator={
+                    sidRadioFlags.sidRadioEnabled ? (
+                      <SidRadioChip
+                        station={sidRadio.station}
+                        whyThisTune={sidRadioWhyThisTune}
+                        collectionProgress={sidRadio.collectionProgress}
+                        preparingCollection={sidRadio.preparingCollection}
+                        onStop={stationHandover.requestStop}
+                      />
+                    ) : undefined
+                  }
+                  stationActive={sidRadio.active}
+                  rankingControls={
+                    sidRadioFlags.rankingActive ? (
+                      <NowPlayingRanking
+                        md5={currentTuneMd5}
+                        enabled={sidRadioFlags.rankingActive}
+                        onNotForMe={
+                          sidRadio.active
+                            ? () => {
+                                // Record the skip HERE, where the ✕ actually
+                                // drives the queue. useSidRadio.steer() also calls
+                                // recordSkip, but nothing consumes steer — so
+                                // `skips` and `skipToLaunchMs` were never
+                                // populated and the pinned budget could not be
+                                // measured at all.
+                                const started = performance.now();
+                                void Promise.resolve(handleNext()).finally(() =>
+                                  recordSkip(performance.now() - started),
+                                );
+                              }
+                            : undefined
+                        }
+                      />
+                    ) : undefined
+                  }
+                  canTransport={canTransport}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  isPlaying={isPlaying}
+                  isPaused={pauseShown}
+                  hasPlaylist={hasPlaylist}
+                  isPlaylistLoading={isPlaylistLoading}
+                  canPause={canPause}
+                  onPrevious={() => void handlePrevious()}
+                  onPlay={() => void handlePlay()}
+                  onStop={stopPlayback}
+                  stopPending={stopPending}
+                  stopping={stopping}
+                  onPauseResume={() => void handlePauseResume()}
+                  onNext={() => void handleNext()}
+                  {...(remoteSeek.handlers ?? {
+                    onSeek:
+                      localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
+                        ? (deltaSeconds: number) => void handleSeekBy(deltaSeconds)
+                        : undefined,
+                    onScrubStart:
+                      localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
+                        ? () => beginScrub(currentDurationMs)
+                        : undefined,
+                    onScrubStep: scrubBy,
+                    onSeekToFraction:
+                      localEngineActive && currentItem?.category === "sid" && currentDurationMs
+                        ? (fraction: number) => seekToFraction(fraction, currentDurationMs)
+                        : undefined,
+                    onScrubEnd: () => void endScrub(),
+                  })}
+                  isScrubbing={isScrubbing}
+                  timeline={timeline}
+                  seekDurationMs={currentDurationMs}
+                  renderedPercent={renderedPercent}
+                  pendingSeek={pendingSeek}
+                  elapsedFollowsDeviceClock={remoteSeek.followsClock}
+                  outputSelector={
+                    playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
+                      <PlaybackEngineToggle />
+                    ) : null
+                  }
+                  volumeControls={
+                    <VolumeControls
+                      {...volumeBinding}
+                      previewIntervalMs={volumeSliderPreviewIntervalMs}
+                      useNativeRangeInput={isAndroid}
                     />
-                  ) : undefined
-                }
-                stationActive={sidRadio.active}
-                rankingControls={
-                  sidRadioFlags.rankingActive ? (
-                    <NowPlayingRanking
-                      md5={currentTuneMd5}
-                      enabled={sidRadioFlags.rankingActive}
-                      onNotForMe={
-                        sidRadio.active
-                          ? () => {
-                              // Record the skip HERE, where the ✕ actually
-                              // drives the queue. useSidRadio.steer() also calls
-                              // recordSkip, but nothing consumes steer — so
-                              // `skips` and `skipToLaunchMs` were never
-                              // populated and the pinned budget could not be
-                              // measured at all.
-                              const started = performance.now();
-                              void Promise.resolve(handleNext()).finally(() => recordSkip(performance.now() - started));
-                            }
-                          : undefined
-                      }
-                    />
-                  ) : undefined
-                }
-                canTransport={canTransport}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                isPlaying={isPlaying}
-                isPaused={pauseShown}
-                hasPlaylist={hasPlaylist}
-                isPlaylistLoading={isPlaylistLoading}
-                canPause={canPause}
-                onPrevious={() => void handlePrevious()}
-                onPlay={() => void handlePlay()}
-                onStop={stopPlayback}
-                stopPending={stopPending}
-                stopping={stopping}
-                onPauseResume={() => void handlePauseResume()}
-                onNext={() => void handleNext()}
-                {...(remoteSeek.handlers ?? {
-                  onSeek:
-                    localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
-                      ? (deltaSeconds: number) => void handleSeekBy(deltaSeconds)
-                      : undefined,
-                  onScrubStart:
-                    localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
-                      ? () => beginScrub(currentDurationMs)
-                      : undefined,
-                  onScrubStep: scrubBy,
-                  onSeekToFraction:
-                    localEngineActive && currentItem?.category === "sid" && currentDurationMs
-                      ? (fraction: number) => seekToFraction(fraction, currentDurationMs)
-                      : undefined,
-                  onScrubEnd: () => void endScrub(),
-                })}
-                isScrubbing={isScrubbing}
-                timeline={timeline}
-                seekDurationMs={currentDurationMs}
-                renderedPercent={renderedPercent}
-                pendingSeek={pendingSeek}
-                elapsedFollowsDeviceClock={remoteSeek.followsClock}
-                outputSelector={
-                  playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null
-                }
-                volumeControls={
-                  <VolumeControls
-                    {...volumeBinding}
-                    previewIntervalMs={volumeSliderPreviewIntervalMs}
-                    useNativeRangeInput={isAndroid}
-                  />
-                }
-                shuffleSeed={shuffleSeed}
-                shuffleEnabled={shuffleEnabled}
-                onShuffleChange={(value) => {
-                  if (value && sidRadio.active) stationHandover.requestShuffleQueue(() => setShuffleEnabled(true));
-                  else setShuffleEnabled(Boolean(value));
-                }}
-                repeatOneEnabled={repeatOneEnabled}
-                onRepeatOneChange={setRepeatOneEnabled}
-                repeatEnabled={repeatEnabled}
-                onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
-              />
-              {/*
-               * One row for everything on this page that opens a sheet: start or change a station,
-               * open the Likes list, reach the controller. They are grouped because they are the
-               * same kind of action, and Remote Input comes last because it leaves the music
-               * behind — the two station actions are about what plays, and belong nearer the
-               * controls that play it. Sharing one wrapping row also costs no extra height over
-               * the two-row arrangement it replaces.
-               */}
-              {sidRadioFlags.sidRadioEnabled || (remoteInputEnabled && isPlaying) ? (
-                <div className="flex w-full flex-col gap-2">
-                  {/* The station's identity and its Stop now lead the card above; what is left here
+                  }
+                  shuffleSeed={shuffleSeed}
+                  shuffleEnabled={shuffleEnabled}
+                  onShuffleChange={(value) => {
+                    if (value && sidRadio.active) stationHandover.requestShuffleQueue(() => setShuffleEnabled(true));
+                    else setShuffleEnabled(Boolean(value));
+                  }}
+                  repeatOneEnabled={repeatOneEnabled}
+                  onRepeatOneChange={setRepeatOneEnabled}
+                  repeatEnabled={repeatEnabled}
+                  onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
+                />
+                {/*
+                 * One row for everything on this page that opens a sheet: start or change a station,
+                 * open the Likes list, reach the controller. They are grouped because they are the
+                 * same kind of action, and Remote Input comes last because it leaves the music
+                 * behind — the two station actions are about what plays, and belong nearer the
+                 * controls that play it. Sharing one wrapping row also costs no extra height over
+                 * the two-row arrangement it replaces.
+                 */}
+                {sidRadioFlags.sidRadioEnabled || (remoteInputEnabled && isPlaying) ? (
+                  <div className="flex w-full flex-col gap-2">
+                    {/* The station's identity and its Stop now lead the card above; what is left here
                       are the actions that start or change a station, which belong after the
                       controls they will replace rather than before them. */}
-                  <div className="flex flex-wrap gap-2">
-                    {/*
-                     * First in the row, because it acts on the tune you are listening to rather than
-                     * on what plays next. Shown only when the file actually holds more than one, so
-                     * it never appears offering to do nothing.
-                     */}
-                    {canPlayAllTunes ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="play-all-tunes"
-                        title={`Add all ${subsongCount} tunes in this file to the playlist`}
-                        onClick={() => void playAllTunes()}
-                      >
-                        <ListMusic className="mr-1.5 h-4 w-4" /> Play all {subsongCount} tunes
-                      </Button>
-                    ) : null}
-                    {/*
-                     * Offered whenever a SID is playing, including while a station is already
-                     * running — which is exactly when people want it. Hearing something you like is
-                     * what makes you want more of it, and a station is what produces that; requiring
-                     * the listener to stop the station first, and so throw away the one tune that
-                     * prompted them, made the obvious move the awkward one. Re-seeding is a single
-                     * tap and needs no confirmation: the thing it replaces is a station, and starting
-                     * another is the whole point of the control.
-                     */}
-                    {sidRadioFlags.sidRadioEnabled && currentSeedMd548 && currentItem?.category === "sid" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={SHEET_OPENER_CLASS}
-                        aria-label="More like this"
-                        data-testid="sid-radio-start"
-                        disabled={!sidRadioSeedIsHvscTune}
-                        title={
-                          sidRadioSeedIsHvscTune
-                            ? `Start a station from ${currentDisplay?.title ?? "this tune"}`
-                            : "Not available: this tune is not in the HVSC library."
-                        }
-                        onClick={() =>
-                          void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
-                        }
-                      >
-                        <RadioIcon className="mr-1.5 h-4 w-4" /> Similar
-                      </Button>
-                    ) : null}
-                    {/*
-                     * Offered while a station is playing too, which it was not before: the mood a
-                     * Song station is constrained to is changed from this sheet, and stopping the
-                     * station to reach that control would throw away the seed it is meant to keep.
-                     */}
-                    {sidRadioFlags.sidRadioEnabled ? (
-                      <>
+                    <div className="flex flex-wrap gap-2">
+                      {/*
+                       * First in the row, because it acts on the tune you are listening to rather than
+                       * on what plays next. Shown only when the file actually holds more than one, so
+                       * it never appears offering to do nothing.
+                       */}
+                      {canPlayAllTunes ? (
                         <Button
                           variant="outline"
                           size="sm"
-                          id="sid-radio-launcher"
-                          className={SHEET_OPENER_CLASS}
-                          aria-label="SID Radio"
-                          data-testid="sid-radio-launcher"
-                          onClick={() => {
-                            void sidRadio.ensureStylePopulations();
-                            setSidRadioLauncherOpen(true);
-                          }}
+                          data-testid="play-all-tunes"
+                          title={`Add all ${subsongCount} tunes in this file to the playlist`}
+                          onClick={() => void playAllTunes()}
                         >
-                          <RadioIcon className="mr-1.5 h-4 w-4" /> Radio
+                          <ListMusic className="mr-1.5 h-4 w-4" /> Play all {subsongCount} tunes
                         </Button>
-                        {/* A station chooses for you, which is the point of it right up until you
+                      ) : null}
+                      {/*
+                       * Offered whenever a SID is playing, including while a station is already
+                       * running — which is exactly when people want it. Hearing something you like is
+                       * what makes you want more of it, and a station is what produces that; requiring
+                       * the listener to stop the station first, and so throw away the one tune that
+                       * prompted them, made the obvious move the awkward one. Re-seeding is a single
+                       * tap and needs no confirmation: the thing it replaces is a station, and starting
+                       * another is the whole point of the control.
+                       */}
+                      {sidRadioFlags.sidRadioEnabled && currentSeedMd548 && currentItem?.category === "sid" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={SHEET_OPENER_CLASS}
+                          aria-label="More like this"
+                          data-testid="sid-radio-start"
+                          disabled={!sidRadioSeedIsHvscTune}
+                          title={
+                            sidRadioSeedIsHvscTune
+                              ? `Start a station from ${currentDisplay?.title ?? "this tune"}`
+                              : "Not available: this tune is not in the HVSC library."
+                          }
+                          onClick={() =>
+                            void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
+                          }
+                        >
+                          <RadioIcon className="mr-1.5 h-4 w-4" /> Similar
+                        </Button>
+                      ) : null}
+                      {/*
+                       * Offered while a station is playing too, which it was not before: the mood a
+                       * Song station is constrained to is changed from this sheet, and stopping the
+                       * station to reach that control would throw away the seed it is meant to keep.
+                       */}
+                      {sidRadioFlags.sidRadioEnabled ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            id="sid-radio-launcher"
+                            className={SHEET_OPENER_CLASS}
+                            aria-label="SID Radio"
+                            data-testid="sid-radio-launcher"
+                            onClick={() => {
+                              void sidRadio.ensureStylePopulations();
+                              setSidRadioLauncherOpen(true);
+                            }}
+                          >
+                            <RadioIcon className="mr-1.5 h-4 w-4" /> Radio
+                          </Button>
+                          {/* A station chooses for you, which is the point of it right up until you
                             want one specific tune. Without this the only way to hear it was to stop
                             the station, drill through the composer folders in the picker to a tune
                             you could already name, and lose the station. */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          id="hvsc-search-open"
-                          className={SHEET_OPENER_CLASS}
-                          aria-label="Find a tune"
-                          data-testid="hvsc-search-open"
-                          onClick={() => setHvscSearchOpen(true)}
-                        >
-                          <Search className="mr-1.5 h-4 w-4" /> Find
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          id="sid-radio-liked-tunes-open"
-                          className={SHEET_OPENER_CLASS}
-                          aria-label="Liked tunes"
-                          data-testid="sid-radio-liked-tunes-open"
-                          onClick={() => likedTunesSheet.set(true)}
-                        >
-                          <Heart className="mr-1.5 h-4 w-4" /> Liked
-                        </Button>
-                      </>
-                    ) : null}
-                    {/* A running program, cartridge or disk image is overwhelmingly likely to be
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            id="hvsc-search-open"
+                            className={SHEET_OPENER_CLASS}
+                            aria-label="Find a tune"
+                            data-testid="hvsc-search-open"
+                            onClick={() => setHvscSearchOpen(true)}
+                          >
+                            <Search className="mr-1.5 h-4 w-4" /> Find
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            id="sid-radio-liked-tunes-open"
+                            className={SHEET_OPENER_CLASS}
+                            aria-label="Liked tunes"
+                            data-testid="sid-radio-liked-tunes-open"
+                            onClick={() => likedTunesSheet.set(true)}
+                          >
+                            <Heart className="mr-1.5 h-4 w-4" /> Liked
+                          </Button>
+                        </>
+                      ) : null}
+                      {/* A running program, cartridge or disk image is overwhelmingly likely to be
                         a game, so Game Mode leads the row there; a running tune is not, so it
                         follows Remote Input instead. */}
-                    {remoteInputEnabled && isPlaying ? (
-                      gameModeLeadsTransportRow ? (
-                        <>
-                          {gameModeAvailable ? playGameModeButton : null}
-                          {playRemoteInputButton}
-                        </>
-                      ) : (
-                        <>
-                          {playRemoteInputButton}
-                          {gameModeAvailable ? playGameModeButton : null}
-                        </>
-                      )
+                      {remoteInputEnabled && isPlaying ? (
+                        gameModeLeadsTransportRow ? (
+                          <>
+                            {gameModeAvailable ? playGameModeButton : null}
+                            {playRemoteInputButton}
+                          </>
+                        ) : (
+                          <>
+                            {playRemoteInputButton}
+                            {gameModeAvailable ? playGameModeButton : null}
+                          </>
+                        )
+                      ) : null}
+                    </div>
+                    {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
+                      <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
+                        {SID_RADIO_NOTICE_TEXT[sidRadio.notice]}
+                      </p>
                     ) : null}
                   </div>
-                  {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
-                    <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
-                      {SID_RADIO_NOTICE_TEXT[sidRadio.notice]}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {/* Above the panel's own settings rather than inside it: this is a decision about the
+                ) : null}
+                {/* Above the panel's own settings rather than inside it: this is a decision about the
                   listening session, not about how a file is played, and it is the one control here
                   that has to be findable in the dark. */}
-              <SleepTimerControl
-                mode={sleepTimer.mode}
-                onChange={sleepTimer.setMode}
-                nowMs={sleepTimer.nowMs}
-                isPlaying={isPlaying}
-              />
-              <PlaybackSettingsPanel
-                durationSliderMax={DURATION_SLIDER_STEPS}
-                durationSliderValue={durationSecondsToSlider(durationSeconds)}
-                durationInput={durationInput}
-                onDurationSliderChange={handleDurationSliderChange}
-                onDurationSliderCommit={handleDurationSliderCommit}
-                onDurationInputChange={handleDurationInputChange}
-                onDurationInputBlur={handleDurationInputBlur}
-                onChooseSonglengthsFile={async () => {
-                  if (!isAndroid) {
-                    songlengthsInputRef.current?.click();
-                    return;
-                  }
-                  try {
-                    const result = await FolderPicker.pickFile({
-                      mimeTypes: ["text/plain", "application/octet-stream"],
-                    });
-                    if (!result?.uri || !result?.permissionPersisted) {
-                      throw new Error("Songlengths file access was not granted.");
-                    }
-                    handleSonglengthsPicked({
-                      path: normalizeSourcePath(`/${result.name ?? "songlengths.md5"}`),
-                      uri: result.uri,
-                      name: result.name ?? "songlengths.md5",
-                      sizeBytes: result.sizeBytes ?? null,
-                      modifiedAt: result.modifiedAt ?? null,
-                    });
-                  } catch (error) {
-                    // A user dismissing the SAF file picker (Android back-out)
-                    // throws "File selection canceled". That is an expected,
-                    // benign outcome, not an application error. Routing it
-                    // through reportUserError logged it at error severity and
-                    // raised a persistent destructive (red) toast for a normal
-                    // cancel — a false-positive foreground error. Swallow
-                    // expected user-cancellations; the genuine "access was not
-                    // granted" throw above is not classified "cancelled" and so
-                    // still surfaces. Mirrors the local-folder-picker fix. See
-                    // HARD23-006 (sibling of HARD23-002).
-                    if (classifyError(error).category === "cancelled") {
+                <SleepTimerControl
+                  mode={sleepTimer.mode}
+                  onChange={sleepTimer.setMode}
+                  nowMs={sleepTimer.nowMs}
+                  isPlaying={isPlaying}
+                />
+                <PlaybackSettingsPanel
+                  durationSliderMax={DURATION_SLIDER_STEPS}
+                  durationSliderValue={durationSecondsToSlider(durationSeconds)}
+                  durationInput={durationInput}
+                  onDurationSliderChange={handleDurationSliderChange}
+                  onDurationSliderCommit={handleDurationSliderCommit}
+                  onDurationInputChange={handleDurationInputChange}
+                  onDurationInputBlur={handleDurationInputBlur}
+                  onChooseSonglengthsFile={async () => {
+                    if (!isAndroid) {
+                      songlengthsInputRef.current?.click();
                       return;
                     }
-                    reportUserError({
-                      operation: "SONGLENGTHS_PICK",
-                      title: "Songlengths file selection failed",
-                      description: (error as Error).message,
-                      error,
-                    });
-                  }
-                }}
-                activeSonglengthsPath={activeSonglengthsPath}
-                songlengthsName={songlengthsSummary.fileName}
-                songlengthsSizeLabel={songlengthsSummary.sizeLabel}
-                songlengthsEntryCount={songlengthsSummary.entryCount}
-                songlengthsError={songlengthsSummary.error}
-              />
+                    try {
+                      const result = await FolderPicker.pickFile({
+                        mimeTypes: ["text/plain", "application/octet-stream"],
+                      });
+                      if (!result?.uri || !result?.permissionPersisted) {
+                        throw new Error("Songlengths file access was not granted.");
+                      }
+                      handleSonglengthsPicked({
+                        path: normalizeSourcePath(`/${result.name ?? "songlengths.md5"}`),
+                        uri: result.uri,
+                        name: result.name ?? "songlengths.md5",
+                        sizeBytes: result.sizeBytes ?? null,
+                        modifiedAt: result.modifiedAt ?? null,
+                      });
+                    } catch (error) {
+                      // A user dismissing the SAF file picker (Android back-out)
+                      // throws "File selection canceled". That is an expected,
+                      // benign outcome, not an application error. Routing it
+                      // through reportUserError logged it at error severity and
+                      // raised a persistent destructive (red) toast for a normal
+                      // cancel — a false-positive foreground error. Swallow
+                      // expected user-cancellations; the genuine "access was not
+                      // granted" throw above is not classified "cancelled" and so
+                      // still surfaces. Mirrors the local-folder-picker fix. See
+                      // HARD23-006 (sibling of HARD23-002).
+                      if (classifyError(error).category === "cancelled") {
+                        return;
+                      }
+                      reportUserError({
+                        operation: "SONGLENGTHS_PICK",
+                        title: "Songlengths file selection failed",
+                        description: (error as Error).message,
+                        error,
+                      });
+                    }
+                  }}
+                  activeSonglengthsPath={activeSonglengthsPath}
+                  songlengthsName={songlengthsSummary.fileName}
+                  songlengthsSizeLabel={songlengthsSummary.sizeLabel}
+                  songlengthsEntryCount={songlengthsSummary.entryCount}
+                  songlengthsError={songlengthsSummary.error}
+                />
+              </div>
+              {lightingStudioEnabled && lightingResolved.sourceCue ? (
+                <LightingAutomationCue
+                  label={lightingResolved.sourceCue.label}
+                  onOpenStudio={openStudio}
+                  onOpenContextLens={openContextLens}
+                />
+              ) : null}
+              <PlaybackSpectrumCard paused={isPaused} />
+              <PlaybackSoundCard />
             </div>
 
             <div data-section-label="Playlist" data-testid="play-section-playlist">
