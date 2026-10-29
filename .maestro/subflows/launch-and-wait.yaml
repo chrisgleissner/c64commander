@@ -136,6 +136,10 @@ tags:
           text: "Not now"
           optional: true
       - waitForAnimationToEnd
+      # The first-run tour can open after Home has rendered, later than the startup
+      # dialog pass above. Dismiss it inside this readiness retry before checking the
+      # Home control beneath its modal overlay.
+      - runFlow: dismiss-tour.yaml
       - assertVisible: "Search the app"
 
 # The search field is the first thing Home renders, so reaching it says the page has
