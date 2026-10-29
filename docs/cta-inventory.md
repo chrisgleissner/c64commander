@@ -569,8 +569,11 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
 - Tone curve — slider — `sound-tone-plot` — R✅ I✅ — one ring stop: Left/Right choose one of the ten bands, OK
   starts and ends gain editing (`data-key-nav-vertical`), Up/Down then change the gain by 1 dB (3 dB on key
   repeat), Page Up/Down by 3 dB. A short key hint (`sound-tone-hint`) shows under the plot only while the plot has
-  focus and the last input was a navigation key. Touch picks the nearest band and a drag changes its gain only;
-  a double tap resets that band to 0 dB. Readout `sound-tone-readout`. Reset — icon button — `sound-tone-reset`
+  focus and the last input was a navigation key. A touch picks the nearest band and changes nothing; only a drag
+  (more than 4 px) changes that band's gain, to the height under the pointer, so a stray tap cannot move it. A double
+  tap resets that band to 0 dB. Readout `sound-tone-readout` shows the band and the gain that was set, from -12 to
+  +12 dB, which is also what the nudge buttons limit; the handle and the curve sit where the filters actually reach,
+  which can be a little inside a set value of +12 or -12 dB. Reset — icon button — `sound-tone-reset`
   — R✅ I✅ `[disabled: flat]` — puts the whole curve back to flat. Under the plot, four 44 px touch buttons
   pick the band and nudge its gain by 1 dB: Previous band `sound-tone-band-prev`, Next band
   `sound-tone-band-next` (disabled at the first and last band), Lower gain `sound-tone-gain-down` and Raise gain

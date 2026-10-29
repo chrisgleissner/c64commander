@@ -56,11 +56,46 @@ describe("ToneCurveEditor", () => {
     expect(plot()).toHaveAttribute("role", "slider");
   });
 
-  it("changes only the band nearest to the touch, by the touch height", () => {
+  it("selects the band nearest to a tap and leaves every gain alone", () => {
     render(<Harness />);
-    fireEvent.pointerDown(plot(), { clientX: frequencyToFraction(4000) * WIDTH, clientY: HEIGHT * 0.25, pointerId: 1 });
+    const x = frequencyToFraction(4000) * WIDTH;
+    fireEvent.pointerDown(plot(), { clientX: x, clientY: HEIGHT * 0.25, pointerId: 1 });
+    fireEvent.pointerUp(plot(), { clientX: x, clientY: HEIGHT * 0.25, pointerId: 1 });
+    expect(bands()).toBe("0,0,0,0,0,0,0,0,0,0");
+    expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("4 kHz, 0 dB");
+  });
+
+  it("treats a wobble of a few pixels as a tap and a larger move as a drag that sets the gain by height", () => {
+    render(<Harness />);
+    const x = frequencyToFraction(4000) * WIDTH;
+    fireEvent.pointerDown(plot(), { clientX: x, clientY: HEIGHT / 2, pointerId: 1 });
+    fireEvent.pointerMove(plot(), { clientX: x + 1, clientY: HEIGHT / 2 + 2, pointerId: 1 });
+    expect(bands()).toBe("0,0,0,0,0,0,0,0,0,0");
+    fireEvent.pointerMove(plot(), { clientX: x, clientY: HEIGHT * 0.25, pointerId: 1 });
     expect(bands()).toBe("0,0,0,0,0,0,0,6,0,0");
     expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("4 kHz, +6 dB");
+  });
+
+  it("reads and limits the gain the person set, not the level the filters reach", () => {
+    render(<Harness initial={[0, 0, 0, 0, 0, 12, 0, 0, 0, 0]} />);
+    expect(reachableTargets([0, 0, 0, 0, 0, 12, 0, 0, 0, 0])[5]).toBeLessThan(11.5);
+    expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("1 kHz, +12 dB");
+    expect(plot()).toHaveAttribute("aria-valuenow", "12");
+    expect(screen.getByTestId("sound-tone-gain-up")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("sound-tone-gain-down"));
+    expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("1 kHz, +11 dB");
+    expect(screen.getByTestId("sound-tone-gain-up")).toBeEnabled();
+  });
+
+  it("keeps the nudge limits at plus and minus 12 dB for a band the neighbors pull inward", () => {
+    render(<Harness initial={[-12, -12, 0, 0, 0, 0, 0, 0, 0, 0]} />);
+    fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("31 Hz, -12 dB");
+    expect(screen.getByTestId("sound-tone-gain-down")).toBeDisabled();
   });
 
   it("drags the picked band without switching to the band under the pointer", () => {
@@ -75,7 +110,9 @@ describe("ToneCurveEditor", () => {
 
   it("clamps a drag past the edges of the plot to plus or minus 12 dB", () => {
     render(<Harness />);
-    fireEvent.pointerDown(plot(), { clientX: frequencyToFraction(1000) * WIDTH, clientY: HEIGHT * 3, pointerId: 1 });
+    const x = frequencyToFraction(1000) * WIDTH;
+    fireEvent.pointerDown(plot(), { clientX: x, clientY: HEIGHT / 2, pointerId: 1 });
+    fireEvent.pointerMove(plot(), { clientX: x, clientY: HEIGHT * 3, pointerId: 1 });
     expect(bands()).toBe("0,0,0,0,0,-12,0,0,0,0");
   });
 

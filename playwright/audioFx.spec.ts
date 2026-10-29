@@ -266,6 +266,10 @@ test.describe("Spectrum card and audio processing", () => {
     const point = await page.getByTestId("sound-tone-point-7").boundingBox();
     if (!point) throw new Error("Band 7 has no point");
     const x = point.x + point.width / 2;
+    await page.mouse.click(x, area.y + area.height * 0.2);
+    await expect(page.getByTestId("sound-tone-readout"), "A tap selects the band and changes nothing").toHaveText(
+      "4 kHz, 0 dB",
+    );
     await page.mouse.move(x, area.y + area.height / 2);
     await page.mouse.down();
     await page.mouse.move(x, area.y + area.height * 0.25, { steps: 5 });

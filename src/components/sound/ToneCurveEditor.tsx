@@ -129,8 +129,7 @@ export const ToneCurveEditor = ({
     }
   };
 
-  const shown = Math.round(targets[selected].db * 10) / 10;
-  const readout = `${formatBandHz(TONE_BAND_HZ[selected])}, ${formatToneDb(shown)}`;
+  const readout = `${formatBandHz(TONE_BAND_HZ[selected])}, ${formatToneDb(gain)}`;
 
   return (
     <div className="space-y-2" data-testid="sound-tone-editor">
@@ -173,7 +172,7 @@ export const ToneCurveEditor = ({
           "aria-disabled": disabled,
           "aria-valuemin": -12,
           "aria-valuemax": 12,
-          "aria-valuenow": shown,
+          "aria-valuenow": gain,
           "aria-valuetext": readout,
           "data-key-nav-horizontal": "",
           [VERTICAL_OWNER_ATTR]: editing ? "true" : "false",

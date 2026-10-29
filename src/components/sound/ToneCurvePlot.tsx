@@ -21,6 +21,7 @@ import {
   TONE_BAND_COUNT,
   TONE_BAND_HZ,
   formatBandHz,
+  formatToneDb,
   fractionToDb,
   frequencyToFraction,
   nearestBandAtFraction,
@@ -60,6 +61,7 @@ export interface ToneCurvePlotProps {
 }
 
 const VIEW = 100;
+const DRAG_THRESHOLD_PX = 4;
 const GUTTER_LEFT_PX = 44;
 const GUTTER_RIGHT_PX = 16;
 const PAD_TOP_PX = 14;
@@ -148,7 +150,7 @@ const Grid = ({ width, height }: { width: number; height: number }) => {
 
 /**
  * The presentational tone plot. It draws the given response and handles and reports pointer input as
- * (band, db); it holds no tone logic, so its rendering can be replaced without touching the editor.
+ * (band, db): a press selects the nearest band and only a drag changes its gain, so a stray tap cannot move it; it holds no tone logic, so its rendering can be replaced without touching the editor.
  */
 export const ToneCurvePlot = ({
   targets,
@@ -165,7 +167,7 @@ export const ToneCurvePlot = ({
 }: ToneCurvePlotProps) => {
   const ids = useId();
   const areaRef = useRef<HTMLDivElement | null>(null);
-  const dragging = useRef<number | null>(null);
+  const press = useRef<{ band: number; x: number; y: number; moved: boolean } | null>(null);
   const [dragBand, setDragBand] = useState<number | null>(null);
   const area = useBox(areaRef);
   const labelled = labelledBands(area.width, TONE_BAND_COUNT);
@@ -188,21 +190,24 @@ export const ToneCurvePlot = ({
     const band = disabled ? null : bandAt(event.clientX);
     if (band === null) return;
     onSelect(band);
-    dragging.current = band;
-    setDragBand(band);
+    press.current = { band, x: event.clientX, y: event.clientY, moved: false };
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const db = dbAt(event.clientY);
-    if (db !== null) onChange(band, db);
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (dragging.current === null) return;
+    const current = press.current;
+    if (!current) return;
+    if (!current.moved) {
+      if (Math.hypot(event.clientX - current.x, event.clientY - current.y) < DRAG_THRESHOLD_PX) return;
+      current.moved = true;
+      setDragBand(current.band);
+    }
     const db = dbAt(event.clientY);
-    if (db !== null) onChange(dragging.current, db);
+    if (db !== null) onChange(current.band, db);
   };
 
   const endDrag = () => {
-    dragging.current = null;
+    press.current = null;
     setDragBand(null);
   };
 
@@ -453,7 +458,7 @@ const BandBubble = ({ target }: { target: ToneTarget }) => {
       data-testid="sound-tone-bubble"
     >
       <span>{formatBandHz(target.freq)}</span>
-      <span>{formatBubbleDb(target.db)}</span>
+      <span>{target.setDb === undefined ? formatBubbleDb(target.db) : formatToneDb(Math.round(target.setDb))}</span>
     </span>
   );
 };

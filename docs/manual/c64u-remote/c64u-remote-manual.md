@@ -710,9 +710,9 @@ The **Sound** card on Play changes how the sound from your phone is played, so y
 **The tone curve**
 
 - The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB. The scale on the left shows the gain.
-- Drag a point up or down. The point nearest your finger changes; the others stay. The line runs smoothly through every point.
+- Touch the plot to pick the point nearest your finger; a tap alone changes nothing. Drag up or down to change that point; the others stay. The line runs smoothly through every point.
 - Each point shows the level the sound filters actually reach at its frequency. If a point cannot reach where you dragged it, it stays at the value it reaches.
-- The line above the plot names the point, for example **1 kHz, +3 dB**.
+- The line above the plot names the point and the gain you set, for example **1 kHz, +3 dB**. The arrow buttons below the plot pick the previous or next point, and the minus and plus buttons change its gain by 1 dB.
 - A double tap on a point puts it back to 0 dB. The round-arrow button beside the readout puts the whole curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
 
@@ -1292,9 +1292,9 @@ The **Sound** card on Play changes how the sound from your phone is played, so y
 **The tone curve**
 
 - The curve has ten points, from 31 Hz to 16 kHz, each from -12 dB to +12 dB. The scale on the left shows the gain.
-- Drag a point up or down. The point nearest your finger changes; the others stay. The line runs smoothly through every point.
+- Touch the plot to pick the point nearest your finger; a tap alone changes nothing. Drag up or down to change that point; the others stay. The line runs smoothly through every point.
 - Each point shows the level the sound filters actually reach at its frequency. If a point cannot reach where you dragged it, it stays at the value it reaches.
-- The line above the plot names the point, for example **1 kHz, +3 dB**.
+- The line above the plot names the point and the gain you set, for example **1 kHz, +3 dB**. The arrow buttons below the plot pick the previous or next point, and the minus and plus buttons change its gain by 1 dB.
 - A double tap on a point puts it back to 0 dB. The round-arrow button beside the readout puts the whole curve back to flat.
 - The tone presets **Flat**, **Bass boost**, **Treble boost**, **Vocal presence**, **Loudness**, **Warm** and **Bright** set the whole curve in one tap.
 
@@ -1806,9 +1806,9 @@ The best place to look is listed first, in bold.
 | Create a blank disk | **Disks → New disk** | On by default. Turn it off under **New disk** in Settings → Stable Features. |
 | Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings → Play and disk** | On by default. Turn it off under **Launch Safety** in Settings → Stable Features. |
 | Live View (hear and see the machine) | **Home → Live View**, Play, Remote Input | On by default. Turn it off under **Live View** in Settings → Stable Features. |
-| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Audio Mirror** in Settings → Experimental Features. |
-| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Video Mirror** in Settings → Experimental Features. |
-| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. Turn it off under **A/V sync tests** in Settings → Experimental Features. |
+| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Audio Mirror** in Settings → Stable Features. |
+| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Video Mirror** in Settings → Stable Features. |
+| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. Turn it off under **A/V sync tests** in Settings → Stable Features. |
 | Advanced config file actions | **Home → Config** | Off to begin with. Turn it on under **Home advanced config actions** in Settings → Experimental Features. |
 | Advanced drive shortcuts | **Home → Drives** | Off to begin with. Turn it on under **Home drive shortcut actions** in Settings → Experimental Features. |
 | Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on under **Home printer shortcut actions** in Settings → Experimental Features. |
@@ -1821,7 +1821,7 @@ The best place to look is listed first, in bold.
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
 | Demo Mode | **Settings → Connection** | On by default. Turn it off under **Demo Mode** in Settings → Stable Features. Offered when there is no network (see Starting With No Network), and when no C64 Ultimate answers; **Automatic Demo Mode**, in the same section, turns that second offer off. **Preview Demo Mode**, in the same section, switches to it at any time, and **Use the simulated device** appears behind the connectivity badge whenever the app is offline. |
-| Background playback scheduling | **Play**, Android app permissions | On by default. Turn it off under **Background execution** in Settings → Experimental Features. |
+| Background playback scheduling | **Play**, Android app permissions | On by default. Turn it off under **Background execution** in Settings → Stable Features. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the compact profile, the smallest screen the app supports. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
@@ -1834,7 +1834,7 @@ The best place to look is listed first, in bold.
 
 ### Keyboard and Directional Input Reference
 
-On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
+On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Stable Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
 While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Press, Edit, Select, Toggle, Adjust, Expand, Collapse or Open menu in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 

@@ -10,7 +10,10 @@ import { TONE_MAX_DB, TONE_MIN_DB, frequencyToFraction } from "@/lib/audio/tone/
 export interface ToneTarget {
   band: number;
   freq: number;
+  /** Where the filters reach at this band: the handle and the curve sit here. */
   db: number;
+  /** The gain the person set, which can be further out than the filters reach. */
+  setDb?: number;
 }
 
 export interface Pixel {

@@ -140,5 +140,5 @@ export const reachableTargets = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_
 /** The handles the plot draws for these target points: each at the value the filters reach at its centre. */
 export const plotTargets = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_RATE): ToneTarget[] => {
   const reached = reachableTargets(targetsDb, sampleRate);
-  return TONE_BAND_HZ.map((freq, band) => ({ band, freq, db: reached[band] }));
+  return TONE_BAND_HZ.map((freq, band) => ({ band, freq, db: reached[band], setDb: targetsDb[band] }));
 };

@@ -69,10 +69,14 @@ describe("ToneCurvePlot", () => {
     expect(screen.queryByTestId("sound-tone-spectrum")).not.toBeInTheDocument();
   });
 
-  it("reports a press as the nearest band at the height touched and shows the guide while dragging", () => {
+  it("selects the nearest band on a press, reports the gain only once the pointer has moved, and shows the guide while dragging", () => {
     const { plot, onSelect, onChange } = setup();
-    fireEvent.pointerDown(plot, { clientX: frequencyToFraction(250) * WIDTH, clientY: 14, pointerId: 1 });
+    const x = frequencyToFraction(250) * WIDTH;
+    fireEvent.pointerDown(plot, { clientX: x, clientY: 14, pointerId: 1 });
     expect(onSelect).toHaveBeenCalledWith(3);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("sound-tone-guide")).not.toBeInTheDocument();
+    fireEvent.pointerMove(plot, { clientX: x, clientY: 40, pointerId: 1 });
     expect(onChange).toHaveBeenCalledWith(3, expect.any(Number));
     expect(screen.getByTestId("sound-tone-guide")).toBeInTheDocument();
     fireEvent.pointerUp(plot, { pointerId: 1 });
@@ -82,6 +86,7 @@ describe("ToneCurvePlot", () => {
   it("cancels a drag on pointer cancel", () => {
     const { plot, onChange } = setup();
     fireEvent.pointerDown(plot, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(plot, { clientX: 100, clientY: 60, pointerId: 1 });
     onChange.mockClear();
     fireEvent.pointerCancel(plot, { pointerId: 1 });
     fireEvent.pointerMove(plot, { clientX: 100, clientY: 10, pointerId: 1 });
@@ -125,6 +130,7 @@ describe("ToneCurvePlot", () => {
     setup({ emphasis: true, selectedBand: 7, height: 240 });
     const bubble = screen.getByTestId("sound-tone-bubble");
     expect(bubble).toHaveTextContent("4 kHz");
+    expect(bubble).toHaveTextContent("+12 dB");
     expect(bubble.style.transform).toContain("18px");
     cleanup();
     setup({ emphasis: true, selectedBand: 7, disabled: true });
