@@ -514,6 +514,44 @@ export const gateVerdict = (stageResults) => {
   return { exitCode: 0, message: "" };
 };
 
+/**
+ * An error's message followed by the chain of causes behind it.
+ *
+ * `fetch` reports every network failure as "fetch failed" and keeps the reason (ECONNREFUSED, a
+ * connect timeout, an unresolved host) on `cause`; recording the message alone leaves a preflight
+ * failure undiagnosable. Only messages and error codes are read, never request headers.
+ */
+export const describeError = (error) => {
+  const parts = [];
+  const seen = new Set();
+  for (let current = error; current !== undefined && current !== null && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    const message = current instanceof Error ? current.message : String(current);
+    const code = current?.code ? `${current.code}` : "";
+    parts.push(code && !message.includes(code) ? `${message} (${code})` : message);
+  }
+  return parts.join(": caused by ");
+};
+
+/** What `--json` receives: the table, and why the run ended when it ended early. */
+export const gateReport = ({ host, plan, results, audibleSeconds, exitCode, message }) => ({
+  host,
+  plan,
+  results,
+  audibleSeconds,
+  exitCode,
+  ...(message ? { message } : {}),
+});
+
+/** Write the report to `file` (resolved against `repo`) when one was requested. */
+export const writeGateReport = async (file, repo, report) => {
+  if (!file) return;
+  const target = path.resolve(repo, file);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`wrote ${file}`);
+};
+
 const register = (name) => {
   if (!STAGE_NAMES.includes(name)) throw new Error(`stage "${name}" is missing from STAGE_NAMES`);
   return !ONLY.length || ONLY.includes(name);
@@ -546,8 +584,9 @@ const stage = async (name, audible, body) => {
     });
     console.log(`  PASS ${detail ?? ""}`);
   } catch (error) {
-    results.push({ name, phone: active?.kind, status: "fail", detail: String(error.message ?? error) });
-    console.error(`  FAIL ${error.message ?? error}`);
+    const detail = describeError(error);
+    results.push({ name, phone: active?.kind, status: "fail", detail });
+    console.error(`  FAIL ${detail}`);
   }
   // After EVERY stage, not only the audible ones. `input` loads a probe program and leaves it
   // running, and the stages after it then measured on top of it: `av-clarity` read "0 tone bursts
@@ -1070,6 +1109,23 @@ const resetFoundState = () => {
 };
 
 /**
+ * End the run with `exitCode`, leaving the `--json` report behind first.
+ *
+ * Every way out goes through here, so the file a caller asked for exists whether the gate passed,
+ * failed a stage, stopped at preflight or refused its arguments. A report that cannot be written
+ * is logged and does not replace the exit code the run had already earned.
+ */
+const exitGate = async (exitCode, message = "") => {
+  if (message) console.error(`\n${message}`);
+  try {
+    await writeGateReport(JSON_OUT, REPO, gateReport({ host: HOST, plan, results, audibleSeconds, exitCode, message }));
+  } catch (error) {
+    console.error(`could not write the --json report ${JSON_OUT}: ${describeError(error)}`);
+  }
+  if (exitCode !== 0) process.exit(exitCode);
+};
+
+/**
  * Run each selected stage on the phone placed for it: the handset first, then the Pixel for what
  * the handset cannot run, each phone forwarded, preflighted and put back on its own.
  */
@@ -1110,10 +1166,7 @@ const runPlan = async () => {
       },
     },
   });
-  if (aborted) {
-    console.error(`\npreflight failed on the ${aborted}; nothing after it would mean anything`);
-    process.exit(2);
-  }
+  if (aborted) await exitGate(2, `preflight failed on the ${aborted}; nothing after it would mean anything`);
 };
 
 const main = async () => {
@@ -1121,16 +1174,15 @@ const main = async () => {
     `HIL merge gate — Ultimate ${HOST}, target ${TARGET_MODE}, phone volume ${GATE_VOLUME}/25${QUIET ? ", quiet check" : ""}`,
   );
   if (GATE_VOLUME > MAX_VOLUME || TONE_VOLUME > MAX_VOLUME) {
-    console.error(
+    await exitGate(
+      2,
       `refusing to run at volume ${Math.max(GATE_VOLUME, TONE_VOLUME)}: the ceiling is ${MAX_VOLUME} (see the header)`,
     );
-    process.exit(2);
   }
 
   const unknown = unknownOnlyStages(ONLY);
   if (unknown.length) {
-    console.error(`--only names no such stage: ${unknown.join(", ")}\nstages: ${STAGE_NAMES.join(", ")}`);
-    process.exit(2);
+    await exitGate(2, `--only names no such stage: ${unknown.join(", ")}\nstages: ${STAGE_NAMES.join(", ")}`);
   }
 
   defineStage("input", false, async () => {
@@ -1345,22 +1397,10 @@ return JSON.stringify({samples});})()`);
     console.log(`NOT YET COVERED: ${notCovered.map((r) => r.name).join(", ")} — this run does not clear them`);
   }
 
-  if (JSON_OUT) {
-    await mkdir(path.dirname(path.resolve(REPO, JSON_OUT)), { recursive: true });
-    await writeFile(
-      path.resolve(REPO, JSON_OUT),
-      `${JSON.stringify({ host: HOST, plan, results, audibleSeconds }, null, 2)}\n`,
-    );
-    console.log(`wrote ${JSON_OUT}`);
-  }
-
   await evidence.writeRunSummary({ host: HOST, results, audibleSeconds });
 
   const verdict = gateVerdict(results);
-  if (verdict.exitCode !== 0) {
-    console.error(`\n${verdict.message}`);
-    process.exit(verdict.exitCode);
-  }
+  await exitGate(verdict.exitCode, verdict.message);
 };
 
 /** Run only as a command. Importing this module (the parser test does) must not start a gate. */
@@ -1368,7 +1408,6 @@ const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === fileUR
 
 if (isEntryPoint) {
   main().catch((error) => {
-    console.error(`fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
-    process.exit(2);
+    void exitGate(2, `fatal: ${error instanceof Error ? (error.stack ?? describeError(error)) : String(error)}`);
   });
 }
