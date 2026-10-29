@@ -48,7 +48,9 @@ describe("setPhoneMediaVolume ceiling", () => {
       for (const muted of [false, true]) {
         for (let target = 0; target <= 10; target += 1) {
           const phone = fakePhone(start, muted);
-          await setPhoneMediaVolume({ ...phone, target }).catch(() => undefined);
+          await setPhoneMediaVolume({ ...phone, target }).catch((error: Error) =>
+            expect(error.message).toMatch(/never raised from 10 or above|could not set the media volume/),
+          );
           expect(phone.state.highest, `start ${start} muted ${muted} target ${target}`).toBeLessThanOrEqual(
             Math.max(start, 10),
           );
