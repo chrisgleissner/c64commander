@@ -23,4 +23,16 @@ describe("launch-and-wait Maestro subflow", () => {
     expect(flow).toContain('text: "Not now"');
     expect(flow.indexOf('text: "Not now"')).toBeLessThan(flow.indexOf('visible: "Home"'));
   });
+
+  it("dismisses the delayed first-run tour before asserting the Home search control", () => {
+    const flow = readFileSync(launchFlowPath, "utf8");
+    const searchAssertion = flow.indexOf('assertVisible: "Search the app"');
+    const searchReadinessRetry = flow.lastIndexOf("- retry:", searchAssertion);
+    const tourDismissal = flow.lastIndexOf("runFlow: dismiss-tour.yaml", searchAssertion);
+
+    expect(searchAssertion).toBeGreaterThan(-1);
+    expect(searchReadinessRetry).toBeGreaterThan(flow.indexOf('visible: "Home"'));
+    expect(tourDismissal).toBeGreaterThan(searchReadinessRetry);
+    expect(tourDismissal).toBeLessThan(searchAssertion);
+  });
 });
