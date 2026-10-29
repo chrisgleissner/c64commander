@@ -184,4 +184,48 @@ describe("ToneCurveEditor", () => {
     expect(plot()).toHaveAttribute("tabindex", "-1");
     expect(plot()).toHaveAttribute("data-editing", "false");
   });
+
+  it("picks any band and nudges its gain with 44 px buttons that the keypad ring skips", () => {
+    render(<Harness />);
+    const press = (id: string) => fireEvent.click(screen.getByTestId(id));
+    press("sound-tone-band-prev");
+    press("sound-tone-gain-up");
+    press("sound-tone-gain-up");
+    press("sound-tone-band-next");
+    press("sound-tone-band-next");
+    press("sound-tone-gain-down");
+    expect(bands()).toBe("0,0,0,0,2,0,-1,0,0,0");
+    for (const id of ["band-prev", "band-next", "gain-down", "gain-up"]) {
+      const button = screen.getByTestId(`sound-tone-${id}`);
+      expect(button).toHaveAttribute("data-key-nav-skip", "true");
+      expect(button).toHaveAttribute("tabindex", "-1");
+      expect(button.className).toContain("size-11");
+    }
+  });
+
+  it("stops the nudge buttons at the first and last band and at plus and minus 12 dB", () => {
+    render(<Harness initial={[0, 0, 0, 0, 0, 12, 0, 0, 0, 0]} />);
+    expect(screen.getByTestId("sound-tone-gain-up")).toBeDisabled();
+    expect(screen.getByTestId("sound-tone-gain-down")).toBeEnabled();
+    for (let n = 0; n < 5; n += 1) fireEvent.click(screen.getByTestId("sound-tone-band-prev"));
+    expect(screen.getByTestId("sound-tone-band-prev")).toBeDisabled();
+    expect(screen.getByTestId("sound-tone-readout")).toHaveTextContent("31 Hz, 0 dB");
+    for (let n = 0; n < 9; n += 1) fireEvent.click(screen.getByTestId("sound-tone-band-next"));
+    expect(screen.getByTestId("sound-tone-band-next")).toBeDisabled();
+  });
+
+  it("disables every nudge button while the card is disabled", () => {
+    render(<Harness disabled />);
+    for (const id of ["band-prev", "band-next", "gain-down", "gain-up"]) {
+      expect(screen.getByTestId(`sound-tone-${id}`)).toBeDisabled();
+    }
+  });
+
+  it("labels the gain scale at plus 12, 6, 0, minus 6 and minus 12 dB beside the plot", () => {
+    render(<Harness />);
+    const labels = Array.from(plot().querySelectorAll("span[aria-hidden='true']"))
+      .map((node) => node.textContent)
+      .filter((text) => /^([+−]\d+|0)$/.test(text ?? ""));
+    expect(labels).toEqual(["+12", "+6", "0", "−6", "−12"]);
+  });
 });

@@ -108,9 +108,13 @@ export const solveLinear = (matrix: readonly (readonly number[])[], rhs: readonl
  * Band gains that make the drawn cascade response pass through the target points at the ten centres.
  * Adjacent bands overlap, so a band's own gain is not the response at its centre. A ridge-regularised
  * Newton iteration in dB, clamped to the band range at every step, finds them; a target that cannot be
- * reached inside the clamp ends at the nearest reachable value. All-zero targets return exactly zeros.
+ * reached inside the clamp ends at the nearest reachable value. All-zero targets return exactly zeros;
+ * a missing or non-finite target counts as 0 dB.
  */
-export const compensatedGains = (targetsDb: BandGains, sampleRate = TONE_SAMPLE_RATE): number[] => {
+export const compensatedGains = (requestedDb: BandGains, sampleRate = TONE_SAMPLE_RATE): number[] => {
+  const targetsDb = Array.from({ length: TONE_BAND_COUNT }, (_, band) =>
+    Number.isFinite(requestedDb[band]) ? requestedDb[band] : 0,
+  );
   if (targetsDb.every((db) => db === 0)) return new Array<number>(TONE_BAND_COUNT).fill(0);
   const a = jacobian(sampleRate).map((row, i) => row.map((v, j) => v + (i === j ? SOLVER_RIDGE : 0)));
   let gains = targetsDb.map((db) => clampGain(db));

@@ -149,4 +149,25 @@ describe("tone response", () => {
     );
     expect(worst / best).toBeLessThan(20);
   });
+
+  it("treats missing and non-finite targets as 0 dB and always returns ten finite gains within the range", () => {
+    const hostile = [
+      [Number.NaN, 6, 0, 0, 0, 0, 0, 0, 0, 0],
+      [Infinity, -Infinity, 3, 0, 0, 0, 0, 0, 0, 0],
+      [3, 3, 3],
+      [1e308, -1e308, 1e308, -1e308, 1e308, -1e308, 1e308, -1e308, 1e308, -1e308],
+    ];
+    for (const targets of hostile) {
+      const gains = compensatedGains(targets);
+      expect(gains).toHaveLength(10);
+      for (const gain of gains) {
+        expect(Number.isFinite(gain)).toBe(true);
+        expect(Math.abs(gain)).toBeLessThanOrEqual(12);
+      }
+    }
+    expect(compensatedGains([Number.NaN, 0, 0, 0, 0, 0, 0, 0, 0, 0])).toEqual(new Array(10).fill(0));
+    expect(compensatedGains([0, 4, Number.NaN, 0, 0, 0, 0, 0, 0, 0])).toEqual(
+      compensatedGains([0, 4, 0, 0, 0, 0, 0, 0, 0, 0]),
+    );
+  });
 });

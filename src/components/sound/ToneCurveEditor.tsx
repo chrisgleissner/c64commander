@@ -5,15 +5,17 @@
  * Licensed under the GNU General Public License v3.0 or later.
  * See <https://www.gnu.org/licenses/> for details.
  */
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { RotateCcw } from "lucide-react";
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Minus, Plus, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { VERTICAL_OWNER_ATTR } from "@/lib/input";
+import { SKIP_ATTR, VERTICAL_OWNER_ATTR } from "@/lib/input";
 import { useInputModality } from "@/hooks/useInputModality";
 import {
   TONE_BAND_COUNT,
   TONE_BAND_HZ,
+  TONE_MAX_DB,
+  TONE_MIN_DB,
   flatBands,
   formatBandHz,
   formatToneDb,
@@ -27,6 +29,33 @@ import { ToneCurvePlot } from "@/components/sound/ToneCurvePlot";
 export const TONE_STEP_DB = 1;
 export const TONE_LONG_PRESS_STEP_DB = 3;
 const START_BAND = 5;
+
+const NUDGE_CLASS =
+  "flex size-11 shrink-0 items-center justify-center rounded-full bg-foreground/[0.06] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-40";
+
+interface NudgeProps {
+  label: string;
+  testId: string;
+  disabled: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}
+
+const Nudge = ({ label, testId, disabled, onPress, children }: NudgeProps) => (
+  <button
+    type="button"
+    tabIndex={-1}
+    {...{ [SKIP_ATTR]: "true" }}
+    className={NUDGE_CLASS}
+    disabled={disabled}
+    onClick={onPress}
+    aria-label={label}
+    title={label}
+    data-testid={testId}
+  >
+    {children}
+  </button>
+);
 
 interface ToneCurveEditorProps {
   bandsDb: readonly number[];
@@ -42,7 +71,8 @@ interface ToneCurveEditorProps {
  * The ten-band tone curve: one draggable point per band and a smooth curve through all of them. A touch
  * picks the band nearest to it and a drag changes that band's gain only; a double tap puts it back to 0 dB.
  * With keys, Left and Right pick a band; OK starts and ends gain editing, in which Up and Down change the
- * gain (3 dB while a key is held). The key hint shows only while keys are in use.
+ * gain (3 dB while a key is held). The key hint shows only while keys are in use. Ten bands do not fit
+ * 44 px columns on a phone, so four 44 px buttons pick the band and nudge its gain for a touch.
  */
 export const ToneCurveEditor = ({
   bandsDb,
@@ -160,6 +190,41 @@ export const ToneCurveEditor = ({
           },
         }}
       />
+      <div className="flex items-center gap-2" data-testid="sound-tone-nudges">
+        <Nudge
+          label="Previous band"
+          testId="sound-tone-band-prev"
+          disabled={disabled || selected === 0}
+          onPress={() => setSelected((band) => Math.max(0, band - 1))}
+        >
+          <ChevronLeft className="size-5" aria-hidden />
+        </Nudge>
+        <Nudge
+          label="Next band"
+          testId="sound-tone-band-next"
+          disabled={disabled || selected === TONE_BAND_COUNT - 1}
+          onPress={() => setSelected((band) => Math.min(TONE_BAND_COUNT - 1, band + 1))}
+        >
+          <ChevronRight className="size-5" aria-hidden />
+        </Nudge>
+        <span className="ml-auto" />
+        <Nudge
+          label="Lower gain"
+          testId="sound-tone-gain-down"
+          disabled={disabled || gain <= TONE_MIN_DB}
+          onPress={() => step(-TONE_STEP_DB)}
+        >
+          <Minus className="size-5" aria-hidden />
+        </Nudge>
+        <Nudge
+          label="Raise gain"
+          testId="sound-tone-gain-up"
+          disabled={disabled || gain >= TONE_MAX_DB}
+          onPress={() => step(TONE_STEP_DB)}
+        >
+          <Plus className="size-5" aria-hidden />
+        </Nudge>
+      </div>
       {focused && keypad && !disabled ? (
         <p className="text-sm text-muted-foreground" data-testid="sound-tone-hint">
           {editing ? "Up and down set the gain, OK to finish" : "Left and right pick a band, OK to adjust"}
