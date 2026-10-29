@@ -127,7 +127,7 @@ export const callHzOfTune = (tune: CounterTune) =>
 /** Where `tune` counts its play calls. */
 export const counterAddressOf = (tune: CounterTune) => counterAddressFor(tune.loadAddress ?? 0x1000);
 
-export const counterPsid = (tune: CounterTune): Uint8Array => {
+export const counterPsid = (tune: CounterTune, title = `seek ${tune.name}`): Uint8Array => {
   const counter = counterAddressOf(tune);
   const lo = counter & 0xff;
   const hi = counter >> 8;
@@ -155,7 +155,7 @@ export const counterPsid = (tune: CounterTune): Uint8Array => {
   view.setUint16(16, tune.startSong ?? 1);
   // Every sub tune shares the tune's timing.
   view.setUint32(18, tune.ciaTimer === null ? 0 : songs >= 32 ? 0xffffffff : 2 ** songs - 1);
-  header.set(new TextEncoder().encode(`seek ${tune.name}`.slice(0, 31)), 0x16);
+  header.set(new TextEncoder().encode(title.slice(0, 31)), 0x16);
   view.setUint16(0x76, (tune.video === "PAL" ? 0x04 : 0x08) | (tune.basic ? 0x02 : 0));
   // PSID v3/v4: the second and third SID's address, as the middle byte of $Dxx0.
   if (extraSids[0]) header[0x7a] = (extraSids[0] >> 4) & 0xff;
