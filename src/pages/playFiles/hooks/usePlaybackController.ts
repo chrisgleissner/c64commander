@@ -675,6 +675,8 @@ export function usePlaybackController({
         outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
+        /** Next/Previous: a song that needs the C64 ROMs is passed over (like `auto`), not asked about. */
+        passOverRomDependent?: boolean;
         /** The play generation when the request was made; a request that a later launch or Stop overtook is dropped. */
         expectedPlayGeneration?: number;
         /** Called when the request got past the checks above and the launch begins. */
@@ -873,7 +875,7 @@ export function usePlaybackController({
               selectionNotice: selection.notice,
               noMachineForRoms,
               c64Usable: !noMachineForRoms && !deviceOutOfReach,
-              autoAdvance: options?.origin === "auto",
+              passOver: options?.origin === "auto" || options?.passOverRomDependent === true,
               ask: resolveRomDependencyDecision && (() => resolveRomDependencyDecision(item)),
               notify: emitEngineNotice,
               stopPhone: () => {
@@ -1893,12 +1895,20 @@ export function usePlaybackController({
         const currentItem = activePlaylist[anotherTransitionAdvanced ? activeIndex : originIndex];
         const targetItem = activePlaylist[resolvedTargetIndex];
         if (!targetItem) return;
-        const shouldReboot = currentItem?.category === "disk" || targetItem.category === "disk";
-        await playItem(targetItem, {
-          rebootBeforePlay: shouldReboot,
-          playlistIndex: resolvedTargetIndex,
-          stopsAtRequest: stopsAtSkip,
-        });
+        // Next and Previous choose no song in particular: one that needs the C64 ROMs is passed over, not asked about.
+        const traversal = playlistTraversal(activePlaylist);
+        const played = await playPassingOver(
+          resolvedTargetIndex,
+          (index) =>
+            playItem(activePlaylist[index], {
+              rebootBeforePlay: currentItem?.category === "disk" || activePlaylist[index]?.category === "disk",
+              playlistIndex: index,
+              stopsAtRequest: stopsAtSkip,
+              passOverRomDependent: true,
+            }),
+          pending.operation === "PLAYBACK_NEXT" ? traversal.next : traversal.previous,
+        );
+        if (!played) return finishPlaylistPlayback("user-next-end");
         lastUserSkipTrackInstanceIdRef.current = trackInstanceIdRef.current;
         setIsPaused(false);
       });

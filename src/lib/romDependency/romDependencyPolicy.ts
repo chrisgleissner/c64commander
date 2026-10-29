@@ -37,10 +37,8 @@ export interface RomDependencyRoms {
 export type ActiveRomLane =
   /** All three authentic ROMs: the reference itself, so the list restricts nothing (§10.1). */
   | { kind: "reference" }
-  /** One of the four measured configurations. `approximate` when the engine is a sibling build of the measured one. */
-  | { kind: "lane"; lane: RomDepLaneName; approximate: boolean }
-  /** ROM images that are not the authentic ones: no measurement applies, so nothing is claimed or held back (§10.1). */
-  | { kind: "unmeasured" };
+  /** One of the four measured configurations. `approximate` when the engine or the ROM images are only close to the measured ones. */
+  | { kind: "lane"; lane: RomDepLaneName; approximate: boolean };
 
 export type RomDependencyVerdict =
   /** Nothing to say: unlisted, measured fine, reference configuration, no list, or no measurement. */
@@ -70,8 +68,10 @@ export class RomDependentSongDeclined extends Error {
  * Pick the audited configuration this phone is in (§10.1).
  *
  * The engine is given KERNAL and BASIC only when it has both (`hasCompleteRomSet`), so a lone image
- * counts as none. libSidplayEZ is built on reSIDfp but is not the audited build, so it is read as
- * reSIDfp and marked approximate; the spec lets a consumer use that as a conservative hint.
+ * counts as none. Two cases are not the audited configuration itself and are marked `approximate`,
+ * which the specification allows as a conservative hint: libSidplayEZ (reSIDfp-based but not the
+ * audited build, read as reSIDfp) and KERNAL and BASIC images that are not the authentic ones, for
+ * example JiffyDOS (read as the KERNAL + BASIC configuration).
  */
 export const resolveActiveRomLane = (
   engine: SidEmulationEngine,
@@ -79,15 +79,15 @@ export const resolveActiveRomLane = (
   reference: ReferenceRomHashes,
 ): ActiveRomLane => {
   const family = engine === "sidlite" ? "sidlite" : "residfp";
-  const approximate = engine === "sidplayez";
-  const complete = roms.kernal !== undefined && roms.basic !== undefined;
-  if (!complete) return { kind: "lane", lane: `${family}None`, approximate };
-  const authentic = sha256Hex(roms.kernal!) === reference.kernal && sha256Hex(roms.basic!) === reference.basic;
-  if (!authentic) return { kind: "unmeasured" };
-  if (roms.chargen) {
-    return sha256Hex(roms.chargen) === reference.chargen ? { kind: "reference" } : { kind: "unmeasured" };
+  const engineApproximate = engine === "sidplayez";
+  if (roms.kernal === undefined || roms.basic === undefined) {
+    return { kind: "lane", lane: `${family}None`, approximate: engineApproximate };
   }
-  return { kind: "lane", lane: `${family}KernalBasic`, approximate };
+  const authentic = sha256Hex(roms.kernal) === reference.kernal && sha256Hex(roms.basic) === reference.basic;
+  if (authentic && roms.chargen && sha256Hex(roms.chargen) === reference.chargen) return { kind: "reference" };
+  // A character ROM that is present but not the authentic one makes this no more than an approximation.
+  const exact = authentic && !roms.chargen;
+  return { kind: "lane", lane: `${family}KernalBasic`, approximate: engineApproximate || !exact };
 };
 
 /** SID header fields do not matter here: the list is keyed by the MD5 of the whole file, as played. */

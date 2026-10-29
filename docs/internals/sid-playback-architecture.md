@@ -321,14 +321,15 @@ allow-by-default: a song that is not listed plays. Nothing here proves that an u
 **Which measurement applies** (`resolveActiveRomLane`, `romDependencyPolicy.ts`). The list carries
 one verdict per (engine, ROM configuration):
 
-| Engine in use | KERNAL + BASIC stored and authentic | Otherwise            |
-| ------------- | ----------------------------------- | -------------------- |
-| SIDLite       | SIDLite with KERNAL + BASIC         | SIDLite with no ROMs |
-| reSIDfp       | reSIDfp with KERNAL + BASIC         | reSIDfp with no ROMs |
-| libSidplayEZ  | read as reSIDfp (not the audited build) | read as reSIDfp  |
+| Engine in use | KERNAL + BASIC stored, authentic | KERNAL + BASIC stored, not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
+| ------------- | -------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
+| SIDLite       | SIDLite with KERNAL + BASIC      | the same, as an approximate hint                             | SIDLite with no ROMs                |
+| reSIDfp       | reSIDfp with KERNAL + BASIC      | the same, as an approximate hint                             | reSIDfp with no ROMs                |
+| libSidplayEZ  | read as reSIDfp, approximate     | read as reSIDfp, approximate                                 | read as reSIDfp, approximate        |
 
-"Authentic" means the SHA-256 of both images equals the reference hashes in the pinned manifest; ROM
-images that differ get no verdict at all (the specification forbids claiming one). Commander never
+"Authentic" means the SHA-256 of both images equals the reference hashes in the pinned manifest. Images
+that differ are still KERNAL and BASIC, so the KERNAL + BASIC measurement is applied as the
+conservative hint the specification allows (§10.1) rather than claimed as measured. Commander never
 stores the character ROM, so the reference configuration, where the list restricts nothing, applies
 only to a build that does. Real C64 Ultimate playback never consults the list.
 
@@ -339,9 +340,9 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
   (`romFallbackDecision`, notice `rom-on-c64` or `rom-list-on-c64`) and, if the ROMs are missing,
   reads them from it in the background.
 - No usable C64, **Settings → Play and disk → Skip songs that need the C64 ROMs** on (the default):
-  a playlist, station or auto-advance moving on by itself skips the song (`RomDependentSongSkipped`,
-  one notice per session); a song the listener chose asks first (`RomDependencyDialog`, Play anyway or
-  Cancel).
+  a playlist, station, auto-advance, Next or Previous skips the song (`RomDependentSongSkipped`, one
+  notice per session; `playPassingOver` moves on to the next song that can play); only a direct tap on
+  that song asks first (`RomDependencyDialog`, Play anyway or Cancel).
 - Setting off: the song plays, with a one-time notice.
 - A listed song whose verdict is only _unknown_ is never skipped; choosing one shows a one-time
   "hasn't been checked" notice.

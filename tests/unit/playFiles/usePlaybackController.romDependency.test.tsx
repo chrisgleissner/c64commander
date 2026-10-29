@@ -336,6 +336,47 @@ describe("ROM dependency list in the play path", () => {
     });
   });
 
+  describe("Next and Previous", () => {
+    it("pass over listed songs like auto-advance, without asking, and say why once", async () => {
+      const controller = fakeController();
+      const decide = vi.fn(async () => "cancel" as const);
+      const playlist = [plain("a"), listed("b", 1), listed("c", 1), plain("d")];
+      const { result } = renderController(playlist, controller, { decide });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      await act(async () => {
+        await result.current.handleNext("user");
+      });
+
+      expect(result.current.currentIndex).toBe(3);
+
+      expect(decide).not.toHaveBeenCalled();
+      expect(controller.play).toHaveBeenCalledTimes(2);
+      expect(toastDescriptions().filter((text) => text?.startsWith("Skipped"))).toHaveLength(1);
+    });
+
+    it("pass over a listed song going back, to the previous one that can play", async () => {
+      const controller = fakeController();
+      const decide = vi.fn(async () => "cancel" as const);
+      const playlist = [plain("a"), listed("b", 1), plain("c")];
+      const { result } = renderController(playlist, controller, { decide });
+      await act(async () => {
+        await result.current.playItem(playlist[2], { playlistIndex: 2 });
+      });
+
+      await act(async () => {
+        await result.current.handlePrevious();
+      });
+
+      expect(result.current.currentIndex).toBe(0);
+
+      expect(decide).not.toHaveBeenCalled();
+      expect(controller.play).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("a song the listener chooses", () => {
     it("asks first, and plays it here when the answer is Play anyway", async () => {
       const controller = fakeController();

@@ -54,10 +54,32 @@ describe("resolveActiveRomLane", () => {
     }
   });
 
-  it("claims no measurement for ROM images that are not the authentic ones", () => {
+  it("reads KERNAL and BASIC images that are not the authentic ones (for example JiffyDOS) as the KERNAL + BASIC configuration, approximately", () => {
     const other = new Uint8Array(8192).fill(1);
-    expect(lane("residfp", { kernal: other, basic: FAKE_ROMS.basic })).toEqual({ kind: "unmeasured" });
-    expect(lane("residfp", { ...authentic, chargen: other })).toEqual({ kind: "unmeasured" });
+    expect(lane("residfp", { kernal: other, basic: FAKE_ROMS.basic })).toEqual({
+      kind: "lane",
+      lane: "residfpKernalBasic",
+      approximate: true,
+    });
+    expect(lane("sidlite", { kernal: FAKE_ROMS.kernal, basic: other })).toEqual({
+      kind: "lane",
+      lane: "sidliteKernalBasic",
+      approximate: true,
+    });
+    // A character ROM that is not the authentic one is no better than an approximation either.
+    expect(lane("sidlite", { ...authentic, chargen: other })).toEqual({
+      kind: "lane",
+      lane: "sidliteKernalBasic",
+      approximate: true,
+    });
+  });
+
+  it("keeps a missing or partial ROM set on the no-ROMs configuration, even when the one image is not authentic", () => {
+    expect(lane("sidlite", { kernal: new Uint8Array(8192).fill(1) })).toEqual({
+      kind: "lane",
+      lane: "sidliteNone",
+      approximate: false,
+    });
   });
 });
 
@@ -112,8 +134,14 @@ describe("assessRomDependency", () => {
     expect(await assess("residfp", 3, authentic)).toEqual({ kind: "none" });
   });
 
-  it("restricts nothing in the reference configuration or with unrecognised ROM images", async () => {
+  it("restricts nothing in the reference configuration, and applies the KERNAL + BASIC measurement to unrecognised ROM images", async () => {
     expect(await assess("sidlite", 1, { ...authentic, chargen: FAKE_ROMS.chargen })).toEqual({ kind: "none" });
+    // JiffyDOS-like images: subtune 2 was measured different with KERNAL + BASIC, so it is a conservative hint.
+    expect(await assess("sidlite", 2, { kernal: new Uint8Array(8192), basic: FAKE_ROMS.basic })).toEqual({
+      kind: "incompatible",
+      lane: "sidliteKernalBasic",
+      approximate: true,
+    });
     expect(await assess("sidlite", 1, { kernal: new Uint8Array(8192), basic: FAKE_ROMS.basic })).toEqual({
       kind: "none",
     });

@@ -59,8 +59,11 @@ export interface LocalRouteInput {
   noMachineForRoms: boolean;
   /** A C64 that can play the song is reachable: connected, not Demo Mode, not offline. */
   c64Usable: boolean;
-  /** The playlist or station is moving on by itself, not the listener choosing. */
-  autoAdvance: boolean;
+  /**
+   * The playlist or station is moving on by itself, or the listener pressed Next or Previous: no song
+   * was chosen, so one that needs the C64's ROMs is passed over. False when the listener picked this song.
+   */
+  passOver: boolean;
   /** Asks the listener about a chosen song. Absent, nothing can be asked and the song is not played. */
   ask?: RomDependencyAsk;
   notify: (notice: EngineFallbackNotice) => void;
@@ -94,7 +97,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
         const outcome = decideRomListedPlayback({
           c64Usable: input.c64Usable,
           skipEnabled: loadSkipRomDependentSongs(),
-          autoAdvance: input.autoAdvance,
+          autoAdvance: input.passOver,
         });
         addLog("info", "Song needs the C64 ROMs on this device", {
           service: "rom-dependency",
@@ -131,7 +134,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
     // Where the engine choice was overridden, that is what the listener needs explained.
     const notice = decision.route === "local" && input.selectionNotice ? input.selectionNotice : decision.notice;
     if (later === null && notice) notify(notice);
-    if (later === null && decision.route === "local" && unverified && !input.autoAdvance) {
+    if (later === null && decision.route === "local" && unverified && !input.passOver) {
       notify("rom-list-unverified");
     }
   } catch (error) {
