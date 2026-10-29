@@ -109,17 +109,27 @@ export const setSpectrumEnabled = async (enabled: boolean): Promise<boolean> => 
 };
 
 const spectrumOwners = new Set<string>();
+let spectrumConfirmed = false;
+let spectrumQueue: Promise<boolean> = Promise.resolve(true);
 
 /**
  * One owner's wish for the analyser. It runs while any owner wants it, so the Spectrum card closing does
- * not stop the Sound card's backdrop, and the other way round. Resolves false when the call did not reach it.
+ * not stop the Sound card's backdrop, and the other way round. The native state that was last confirmed is
+ * what a call is compared with, so a call that did not reach the plugin is tried again by the next one.
+ * Resolves false when the call did not reach it.
  */
 export const setSpectrumDemand = (owner: string, wanted: boolean): Promise<boolean> => {
-  const before = spectrumOwners.size > 0;
   if (wanted) spectrumOwners.add(owner);
   else spectrumOwners.delete(owner);
-  const after = spectrumOwners.size > 0;
-  return before === after ? Promise.resolve(true) : setSpectrumEnabled(after);
+  const applied = spectrumQueue.then(async () => {
+    const wantEnabled = spectrumOwners.size > 0;
+    if (wantEnabled === spectrumConfirmed) return true;
+    const reached = await setSpectrumEnabled(wantEnabled);
+    if (reached) spectrumConfirmed = wantEnabled;
+    return reached;
+  });
+  spectrumQueue = applied;
+  return applied;
 };
 
 const isFrame = (value: unknown): value is SpectrumFrame => {
@@ -167,5 +177,7 @@ export const probeAudioFx = (): Promise<boolean> => {
 export const resetAudioFxForTests = () => {
   failureStreaks.clear();
   spectrumOwners.clear();
+  spectrumConfirmed = false;
+  spectrumQueue = Promise.resolve(true);
   probe = null;
 };

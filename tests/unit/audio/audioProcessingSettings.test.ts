@@ -44,7 +44,11 @@ import {
   stepSoundPreset,
   useAudioProcessing,
 } from "@/lib/config/audioProcessingSettings";
-import { AUDIO_PROCESSING_PUSH_DELAY_MS, installAudioProcessingSync } from "@/lib/audio/audioProcessingSync";
+import {
+  AUDIO_PROCESSING_PUSH_DELAY_MS,
+  AUDIO_PROCESSING_RETRY_DELAYS_MS,
+  installAudioProcessingSync,
+} from "@/lib/audio/audioProcessingSync";
 import { compensatedGains } from "@/lib/audio/tone/toneResponse";
 import { AMBIANCE_PRESETS } from "@/lib/audio/tone/ambiancePresets";
 
@@ -353,5 +357,64 @@ describe("audio processing sync", () => {
     saveAudioReverb(55);
     vi.advanceTimersByTime(500);
     expect(setAudioProcessing).not.toHaveBeenCalled();
+  });
+
+  it("pushes again after a start-up push that did not reach the plugin, a bounded number of times", async () => {
+    saveAudioReverb(25);
+    setAudioProcessing.mockResolvedValue(false);
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    for (const delay of AUDIO_PROCESSING_RETRY_DELAYS_MS) await vi.advanceTimersByTimeAsync(delay);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1 + AUDIO_PROCESSING_RETRY_DELAYS_MS.length);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1 + AUDIO_PROCESSING_RETRY_DELAYS_MS.length);
+    stop();
+    setAudioProcessing.mockResolvedValue(true);
+  });
+
+  it("stops retrying once a push is accepted, and not at all when it is stopped", async () => {
+    setAudioProcessing.mockResolvedValueOnce(false).mockResolvedValue(true);
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(AUDIO_PROCESSING_RETRY_DELAYS_MS[0]);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(2);
+    stop();
+
+    setAudioProcessing.mockClear();
+    setAudioProcessing.mockResolvedValue(false);
+    const stopped = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    stopped();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    setAudioProcessing.mockResolvedValue(true);
+  });
+
+  it("pushes the stored state again when the app comes back to the foreground, and not when it goes away", async () => {
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    setAudioProcessing.mockClear();
+    const hidden = vi.spyOn(document, "hidden", "get");
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    hidden.mockRestore();
+    stop();
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+  });
+
+  it("pushes the stored state again when Listen on changes", async () => {
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    setAudioProcessing.mockClear();
+    window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "c64u_playback_engine" } }));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

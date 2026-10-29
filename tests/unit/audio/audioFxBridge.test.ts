@@ -75,6 +75,36 @@ describe("audio fx bridge", () => {
     expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
   });
 
+  it("tries a failed enable again on the next call instead of believing it happened", async () => {
+    plugin.setSpectrumEnabled.mockRejectedValueOnce(new Error("bridge down"));
+    expect(await setSpectrumDemand("sound-card", true)).toBe(false);
+    expect(await setSpectrumDemand("sound-card", true)).toBe(true);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: true }]]);
+    expect(await setSpectrumDemand("sound-card", true)).toBe(true);
+    expect(plugin.setSpectrumEnabled).toHaveBeenCalledTimes(2);
+  });
+
+  it("tries a failed disable again on the next call", async () => {
+    await setSpectrumDemand("sound-card", true);
+    plugin.setSpectrumEnabled.mockRejectedValueOnce(new Error("bridge down"));
+    expect(await setSpectrumDemand("sound-card", false)).toBe(false);
+    expect(await setSpectrumDemand("sound-card", false)).toBe(true);
+    expect(plugin.setSpectrumEnabled.mock.calls.at(-1)).toEqual([{ enabled: false }]);
+  });
+
+  it("ends up off when the last owner leaves while the enabling call is still in flight", async () => {
+    let finish: () => void = () => {};
+    plugin.setSpectrumEnabled.mockImplementationOnce(
+      () => new Promise<object>((resolve) => (finish = () => resolve({}))),
+    );
+    const enabling = setSpectrumDemand("sound-card", true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const disabling = setSpectrumDemand("sound-card", false);
+    finish();
+    await Promise.all([enabling, disabling]);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
+  });
+
   it("passes a look-ahead request to the plugin and keeps the frames ahead", async () => {
     const withAhead = { ...frame, aligned: true, ahead: [{ ...frame, sequence: 8 }] };
     plugin.readSpectrum.mockResolvedValue(withAhead);

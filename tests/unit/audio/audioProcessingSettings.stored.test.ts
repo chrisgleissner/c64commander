@@ -20,6 +20,7 @@ import {
   parseAudioProcessingRecord,
   resetAudioProcessingWarningsForTests,
   saveAudioEnabled,
+  saveAudioReverb,
   saveAudioProcessingRecord,
   defaultAudioProcessingRecord,
 } from "@/lib/config/audioProcessingSettings";
@@ -157,5 +158,34 @@ describe("stored audio processing record", () => {
 
   it("ignores a saved-sounds field that is not a list", () => {
     expect(parseAudioProcessingRecord({ version: 2, sound, userPresets: "none" })?.userPresets).toEqual([]);
+  });
+
+  it("keeps following a change when storage refuses the write: one warning, the event still fires, the value stays", () => {
+    const refuse = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota exceeded");
+    });
+    const events: unknown[] = [];
+    const listen = (event: Event) => events.push((event as CustomEvent).detail?.key);
+    window.addEventListener("c64u-app-settings-updated", listen);
+    try {
+      expect(() => saveAudioReverb(55)).not.toThrow();
+      expect(() => saveAudioReverb(70)).not.toThrow();
+    } finally {
+      window.removeEventListener("c64u-app-settings-updated", listen);
+    }
+    expect(events).toEqual([AUDIO_PROCESSING_KEY, AUDIO_PROCESSING_KEY]);
+    expect(loadAudioProcessingRecord().sound.reverb).toBe(70);
+    expect(loadAudioProcessing().reverb).toBe(70);
+    const warnings = addLog.mock.calls.filter(([, message]) => String(message).includes("could not be stored"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0][2]).toMatchObject({
+      key: AUDIO_PROCESSING_KEY,
+      error: expect.stringContaining("quota exceeded"),
+    });
+
+    refuse.mockRestore();
+    saveAudioReverb(25);
+    expect(JSON.parse(localStorage.getItem(AUDIO_PROCESSING_KEY) ?? "{}").sound.reverb).toBe(25);
+    expect(loadAudioProcessingRecord().sound.reverb).toBe(25);
   });
 });

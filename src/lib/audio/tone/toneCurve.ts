@@ -11,6 +11,7 @@ export const TONE_BAND_COUNT = TONE_BAND_HZ.length;
 export const TONE_MIN_DB = -12;
 export const TONE_MAX_DB = 12;
 export const TONE_BAND_Q = 1.4;
+/** The native pipeline designs its filters at the device output rate, 48 kHz on the supported phones; see toneResponse.test.ts for the error at 44.1 kHz. */
 export const TONE_SAMPLE_RATE = 48000;
 
 export type BandGains = readonly number[];

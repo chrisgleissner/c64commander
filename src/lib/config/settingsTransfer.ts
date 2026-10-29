@@ -60,7 +60,6 @@ import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { variant } from "@/generated/variant";
 import { addLog } from "@/lib/logging";
 import {
-  defaultAudioProcessingRecord,
   loadAudioProcessingRecord,
   parseAudioProcessingRecord,
   saveAudioProcessingRecord,
@@ -234,9 +233,12 @@ const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
 const importAudioProcessing = (value: unknown) => {
   const record = parseAudioProcessingRecord(value);
   if (!record) {
-    addLog("warn", "Settings import: the audio processing section is unusable; using the original sound");
+    addLog("warn", "Settings import: the audio processing section is unusable; keeping the current sound settings", {
+      version: typeof value === "object" && value !== null ? (value as { version?: unknown }).version : typeof value,
+    });
+    return;
   }
-  saveAudioProcessingRecord(record ?? defaultAudioProcessingRecord());
+  saveAudioProcessingRecord(record);
 };
 
 export const exportSettingsSnapshot = async (): Promise<SettingsExportPayload> => {

@@ -176,7 +176,7 @@ class AudioPipelineFxTest {
   }
 
   @Test
-  fun theMasterGainFollowsTheProcessingChain() {
+  fun theMasterGainScalesTheProcessingChainsOutputAfterItsHeadroomLowering() {
     val hub = AudioFxHub()
     hub.setParams(false, doubleArrayOf(0.0, 0.0, 0.0, 0.0, 0.0, 12.0, 0.0, 0.0, 0.0, 0.0), 0.0, 0.0)
     val run = start(hub, TestSignals.sine(5 * rate, rate, 1000.0, 0.4))
@@ -185,7 +185,7 @@ class AudioPipelineFxTest {
       run.playSeconds(3.0, packetFrames)
       val out = run.output()
       val peak = TestSignals.peak(out, 2 * rate, 3 * rate)
-      assertTrue("peak $peak: the chain's boost was clipped before the master gain", peak in 25_500..26_500)
+      assertTrue("peak $peak: the master gain must scale the chain's output (0.4 x 0.5 of full scale)", peak in 6_300..6_800)
     } finally {
       run.pipeline.close()
     }

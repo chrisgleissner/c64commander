@@ -206,4 +206,71 @@ class AudioFxTest {
     assertFalse(fx.prepare(at.toLong()))
     assertArrayEquals(untouched, loud.copyOfRange(at * 4, (at + chunk) * 4))
   }
+
+  private fun clippedFrames(audio: ByteArray, from: Int): Int {
+    var clipped = 0
+    for (frame in from until audio.size / 4) {
+      if (Math.abs(TestSignals.left(audio, frame)) >= 32767) clipped += 1
+    }
+    return clipped
+  }
+
+  @Test
+  fun aBoostedCurveDoesNotClipFullScaleAudioWithLevellingOff() {
+    val hub = AudioFxHub()
+    val bands = DoubleArray(Equalizer.BANDS).also { it[4] = 5.0; it[5] = 12.0; it[6] = 5.0 }
+    hub.setParams(false, bands, 0.0, 0.0)
+    val audio = TestSignals.sine(rate, rate, 1000.0, 0.9)
+    val out = run(hub, audio)
+    assertEquals(0, clippedFrames(out, rate / 2))
+    val peak = TestSignals.peak(out, rate / 2, rate)
+    assertTrue("peak $peak", peak in (0.7 * 32768).toInt() until 32767)
+  }
+
+  @Test
+  fun aBoostedCurveKeepsItsShapeRelativeToTheFlatLevelAfterThePreamp() {
+    val hub = AudioFxHub()
+    val bands = DoubleArray(Equalizer.BANDS).also { it[5] = 6.0 }
+    hub.setParams(false, bands, 0.0, 0.0)
+    val tone = TestSignals.sine(rate, rate, 1000.0, 0.1)
+    val boosted = TestSignals.rms(run(hub, tone), rate / 2, rate)
+    val bassTone = TestSignals.sine(rate, rate, 60.0, 0.1)
+    val away = TestSignals.rms(run(hub, bassTone), rate / 2, rate)
+    assertTrue("boost at 1 kHz is ${TestSignals.linearToDb(boosted / away)} dB above 60 Hz", TestSignals.linearToDb(boosted / away) in 5.5..6.5)
+  }
+
+  @Test
+  fun aFlatCurveAndACutOnlyCurveAreNotLoweredAtAll() {
+    val flatHub = AudioFxHub()
+    val audio = TestSignals.sine(rate, rate, 1000.0, 1.0)
+    assertArrayEquals(audio, run(flatHub, audio))
+    val cutHub = AudioFxHub()
+    cutHub.setParams(false, DoubleArray(Equalizer.BANDS).also { it[2] = -6.0; it[8] = -4.0 }, 0.0, 0.0)
+    val sine = TestSignals.sine(rate, rate, 1000.0, 0.5)
+    val cutLevel = TestSignals.rms(run(cutHub, sine), rate / 2, rate)
+    assertEquals(TestSignals.rms(sine, rate / 2, rate), cutLevel, 0.01 * cutLevel)
+  }
+
+  @Test
+  fun thePreampRampsInAndOutWithoutAStep() {
+    val hub = AudioFxHub()
+    val fx = AudioFx(rate, rate, hub)
+    hub.setParams(false, DoubleArray(Equalizer.BANDS).also { it[0] = 12.0; it[1] = 12.0 }, 0.0, 0.0)
+    val dc = ByteArray(chunk * 4)
+    for (f in 0 until chunk) TestSignals.put(dc, f, 0.0, 0.0)
+    val low = TestSignals.sine(chunk * 400, rate, 3000.0, 0.8)
+    var largestStep = 0
+    var previous = 0
+    for (n in 0 until 400) {
+      assertTrue(fx.prepare(n.toLong() * chunk))
+      val piece = low.copyOfRange(n * chunk * 4, (n + 1) * chunk * 4)
+      fx.process(piece, chunk, n.toLong() * chunk)
+      for (f in 0 until chunk) {
+        val v = TestSignals.left(piece, f)
+        if (n > 0 || f > 0) largestStep = maxOf(largestStep, Math.abs(v - previous))
+        previous = v
+      }
+    }
+    assertTrue("largest sample step $largestStep", largestStep < 0.8 * 32768 * 0.4)
+  }
 }

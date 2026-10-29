@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { TONE_PRESETS } from "@/lib/audio/tone/toneCurve";
+import { TONE_PRESETS, TONE_SAMPLE_RATE } from "@/lib/audio/tone/toneCurve";
 import { AMBIANCE_PRESETS } from "@/lib/audio/tone/ambiancePresets";
 import {
   FREQUENCIES_HZ,
@@ -169,5 +169,20 @@ describe("tone response", () => {
     expect(compensatedGains([0, 4, Number.NaN, 0, 0, 0, 0, 0, 0, 0])).toEqual(
       compensatedGains([0, 4, 0, 0, 0, 0, 0, 0, 0, 0]),
     );
+  });
+
+  it("solves at 48 kHz, and a device that runs its output at 44.1 kHz misses a built-in curve by less than 0.7 dB", () => {
+    expect(TONE_SAMPLE_RATE).toBe(48000);
+    const curves = [
+      ...AMBIANCE_PRESETS.map((preset) => preset.sound.bandsDb),
+      ...TONE_PRESETS.map((preset) => preset.bandsDb),
+    ];
+    let worst = 0;
+    for (const target of curves) {
+      const reached = responseAtCentres(compensatedGains(target), 44100);
+      worst = Math.max(worst, ...reached.map((db, band) => Math.abs(db - target[band])));
+    }
+    expect(worst).toBeGreaterThan(0);
+    expect(worst).toBeLessThan(0.7);
   });
 });

@@ -10,7 +10,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
-import { AUDIO_PROCESSING_KEY, loadAudioProcessingRecord, saveAudioReverb } from "@/lib/config/audioProcessingSettings";
+import {
+  AUDIO_PROCESSING_KEY,
+  loadAudioProcessingRecord,
+  saveAudioReverb,
+  saveUserPreset,
+} from "@/lib/config/audioProcessingSettings";
 
 const { featureFlagManagerMocks, isKnownFeatureFlagIdMock } = vi.hoisted(() => ({
   featureFlagManagerMocks: {
@@ -207,13 +212,20 @@ describe("settingsTransfer", () => {
       expect(loadAudioProcessingRecord().sound.reverb).toBe(25);
     });
 
-    it("replaces an unusable audio section with the original sound", async () => {
+    it.each([
+      ["a future version", { version: 7 }],
+      ["a sound without bands", { version: 2, sound: { levelling: true, reverb: 55 } }],
+      ["null", null],
+      ["text", "loud"],
+    ])("keeps the current sound settings and saved sounds when the audio section is %s", async (_name, section) => {
       localStorage.removeItem(AUDIO_PROCESSING_KEY);
       saveAudioReverb(25);
-      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: { version: 7 } };
+      saveUserPreset("Mine");
+      const before = localStorage.getItem(AUDIO_PROCESSING_KEY);
+      const payload = { ...JSON.parse(JSON.stringify(validPayload)), audioProcessing: section };
       expect(await importSettingsJson(JSON.stringify(payload))).toEqual({ ok: true });
-      expect(loadAudioProcessingRecord().sound.reverb).toBe(0);
-      expect(JSON.parse(localStorage.getItem(AUDIO_PROCESSING_KEY) ?? "{}").version).toBe(2);
+      expect(localStorage.getItem(AUDIO_PROCESSING_KEY)).toBe(before);
+      expect(loadAudioProcessingRecord().userPresets.map((preset) => preset.name)).toEqual(["Mine"]);
     });
 
     it("rejects invalid JSON", async () => {

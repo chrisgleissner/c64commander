@@ -97,6 +97,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
   private var levellerMix = 0.0
   private var levellerGain = 1.0
   private var limiterGain = 1.0
+  private var preampDb = 0.0
 
   /** Reads the settings and reports whether this chunk has to go through [process]. */
   fun prepare(playFrame: Long): Boolean {
@@ -106,7 +107,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     equalizer.setTargets(params.bandsDb)
     widener.setTarget(params.stereoWidth / 100.0)
     reverb.setTarget(params.reverb / 100.0)
-    return levellingOn || levellerMix > 0.0 || !equalizer.isIdle || !widener.isIdle || !reverb.isIdle
+    return levellingOn || levellerMix > 0.0 || preampDb != 0.0 || !equalizer.isIdle || !widener.isIdle || !reverb.isIdle
   }
 
   /** A flush threw the queued audio away: the next audio is a new passage and is levelled afresh. */
@@ -118,6 +119,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     levellerMix = 0.0
     levellerGain = 1.0
     limiterGain = 1.0
+    preampDb = 0.0
   }
 
   val wantsLookahead: Boolean
@@ -141,9 +143,30 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     unpack(data, frames)
     if (wantsLookahead) level(frames, playFrame, seconds)
     if (!equalizer.isIdle) equalizer.process(left, right, frames, seconds)
+    applyPreamp(frames, seconds)
     if (!widener.isIdle) widener.process(left, right, frames, seconds)
     if (!reverb.isIdle) reverb.process(left, right, frames, seconds)
     pack(data, frames, masterStart, masterEnd)
+  }
+
+  /**
+   * Lowers the signal by the equalizer's peak boost so a boosted curve cannot clip. It follows the target
+   * at the equalizer's own ramp rate, so neither turning a boost on nor off steps the level.
+   */
+  private fun applyPreamp(frames: Int, seconds: Double) {
+    val target = -equalizer.peakGainDb
+    val before = preampDb
+    val delta = target - before
+    val maxStep = PREAMP_RAMP_DB_PER_SECOND * seconds
+    preampDb = if (Math.abs(delta) <= maxStep) target else before + Math.copySign(maxStep, delta)
+    if (before == 0.0 && preampDb == 0.0) return
+    val startGain = Math.pow(10.0, before / 20.0)
+    val slope = (Math.pow(10.0, preampDb / 20.0) - startGain) / frames
+    for (i in 0 until frames) {
+      val gain = (startGain + slope * (i + 1)).toFloat()
+      left[i] *= gain
+      right[i] *= gain
+    }
   }
 
   private fun level(frames: Int, playFrame: Long, seconds: Double) {
@@ -208,6 +231,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     const val FULL_SCALE = 32768.0f
     const val INV_FULL_SCALE = 1.0f / 32768.0f
     const val RAMP_SECONDS = 0.05
+    const val PREAMP_RAMP_DB_PER_SECOND = 600.0
     const val LIMITER_RELEASE_SECONDS = 0.1
     const val LIMITER_SETTLE_EPSILON = 1e-6
   }

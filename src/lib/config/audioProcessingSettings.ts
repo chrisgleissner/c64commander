@@ -126,10 +126,6 @@ export const parseAudioProcessingRecord = (value: unknown): AudioProcessingRecor
 
 let invalidReported = false;
 
-export const resetAudioProcessingWarningsForTests = () => {
-  invalidReported = false;
-};
-
 const reportInvalid = (reason: string, detail: Record<string, unknown>) => {
   if (invalidReported) return;
   invalidReported = true;
@@ -165,14 +161,41 @@ const readLegacyRecord = (): AudioProcessingRecord | null => {
   return { ...defaultAudioProcessingRecord(), sound };
 };
 
-const persist = (record: AudioProcessingRecord) => {
+const store = (record: AudioProcessingRecord) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(AUDIO_PROCESSING_KEY, JSON.stringify(record));
 };
 
+let unsavedRecord: AudioProcessingRecord | null = null;
+let storeFailing = false;
+
+export const resetAudioProcessingWarningsForTests = () => {
+  invalidReported = false;
+  unsavedRecord = null;
+  storeFailing = false;
+};
+
+/** Stores the record; when storage refuses it, the record stays in memory so the UI and native chain still follow it. */
+const persist = (record: AudioProcessingRecord) => {
+  try {
+    store(record);
+    unsavedRecord = null;
+    storeFailing = false;
+  } catch (error) {
+    unsavedRecord = record;
+    if (!storeFailing) {
+      storeFailing = true;
+      addLog("warn", "Audio processing settings: could not be stored; they apply until the app closes", {
+        key: AUDIO_PROCESSING_KEY,
+        error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+      });
+    }
+  }
+};
+
 const migrateLegacy = (record: AudioProcessingRecord) => {
   try {
-    persist(record);
+    store(record);
     for (const key of LEGACY_KEYS) localStorage.removeItem(key);
   } catch (error) {
     addLog("warn", "Audio processing settings: migration could not be stored", {
@@ -183,6 +206,7 @@ const migrateLegacy = (record: AudioProcessingRecord) => {
 
 /** Reads the record. The old c64u_audio_ keys are converted once, then removed. */
 export const loadAudioProcessingRecord = (): AudioProcessingRecord => {
+  if (unsavedRecord) return unsavedRecord;
   const raw = readStored(AUDIO_PROCESSING_KEY);
   if (raw === null) {
     const legacy = readLegacyRecord();
