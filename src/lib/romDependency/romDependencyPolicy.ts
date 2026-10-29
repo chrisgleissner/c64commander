@@ -105,7 +105,7 @@ export interface AssessInput {
   songNr: number | null | undefined;
   engine: SidEmulationEngine;
   roms?: RomDependencyRoms;
-  /** Skip threshold, 1..254. Defaults to the list's `recommended_min_grade`; Commander offers no other number. */
+  /** Skip threshold, 1..listing ceiling+1. Defaults to the list's `recommended_min_grade`; Commander offers no other number. */
   threshold?: number;
 }
 
@@ -129,7 +129,7 @@ export const assessRomDependency = async ({
     const found = loaded.list.lookup(await md5Of(sidBytes), subtune);
     if (!found.listed) return { kind: "none" };
     const grade = laneGrade(found, active.lane);
-    // §10.2: a grade below the threshold is skipped; the threshold itself plays, and 254 and 255 never are low.
+    // §10.2: a grade below the threshold is skipped; the threshold itself plays, and a grade above the ceiling (such as 254 or 255) is never below a valid threshold.
     if (grade >= (threshold ?? loaded.list.header.recommendedMinGrade)) return { kind: "none" };
     return { kind: "low", lane: active.lane, grade, approximate: active.approximate };
   } catch (error) {

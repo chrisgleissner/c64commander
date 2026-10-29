@@ -43,6 +43,7 @@ describe("decodeRomDependencyList", () => {
       hvscRelease: 85,
       fileCount: 2,
       decisionCount: 3,
+      listingCeiling: 191,
       recommendedMinGrade: 128,
       incompleteSource: false,
     });
@@ -58,18 +59,18 @@ describe("decodeRomDependencyList", () => {
     expect(list.lookup(a, 3).grades).toEqual({
       sidliteNone: 255,
       sidliteKernalBasic: 255,
-      residfpNone: 200,
+      residfpNone: 150,
       residfpKernalBasic: 255,
     });
-    expect(list.lookup(b, 256).grades.sidliteNone).toBe(253);
+    expect(list.lookup(b, 256).grades.sidliteNone).toBe(191); // exactly the ceiling: listed
     expect(list.lookup("00000000000000000000000000000000", 1).listed).toBe(false);
   });
 
-  it("reports every lane of an unlisted subtune as 254, a lower bound that is never a restriction", () => {
+  it("reports every lane of an unlisted subtune as ceiling+1, a lower bound that is never a restriction", () => {
     const unlisted = decodeRomDependencyList(specExampleBin()).lookup("0123456789abcdef0123456789abcdef", 2);
     expect(unlisted).toEqual({
       listed: false,
-      grades: { sidliteNone: 254, sidliteKernalBasic: 254, residfpNone: 254, residfpKernalBasic: 254 },
+      grades: { sidliteNone: 192, sidliteKernalBasic: 192, residfpNone: 192, residfpKernalBasic: 192 },
     });
   });
 
@@ -118,18 +119,19 @@ describe("decodeRomDependencyList", () => {
     ["a trailing byte", () => corrupt((b) => Uint8Array.from([...b, 0])), /trailing bytes/],
     ["unknown flag bits", () => corrupt((b) => void ((b[12] = 2), reseal(b))), /unknown flag bits/],
     ["a non-zero reserved field", () => corrupt((b) => void ((b[62] = 1), reseal(b))), /reserved field/],
-    ["another listing ceiling", () => corrupt((b) => void ((b[60] = 252), reseal(b))), /listing_ceiling/],
+    ["a listing ceiling of 0", () => corrupt((b) => void ((b[60] = 0), reseal(b))), /listing_ceiling/],
+    ["a listing ceiling above 253", () => corrupt((b) => void ((b[60] = 254), reseal(b))), /listing_ceiling/],
     ["a recommended minimum grade of 0", () => corrupt((b) => void ((b[61] = 0), reseal(b))), /recommended_min_grade/],
     [
-      "a recommended minimum grade above 254",
-      () => corrupt((b) => void ((b[61] = 255), reseal(b))),
+      "a recommended minimum grade above ceiling+1",
+      () => corrupt((b) => void ((b[61] = 193), reseal(b))),
       /recommended_min_grade/,
     ],
     ["a non-canonical section offset", () => corrupt((b) => void ((b[36] = 0xe1), reseal(b))), /canonical/],
     ["unordered files", () => corrupt((b) => void swapFileRecords(b)), /not strictly ascending/],
     [
-      "a record whose lanes are all 254 or 255, which must be unlisted",
-      () => corrupt((b) => void (b.set([254, 255, 254, 255], 259), reseal(b))),
+      "a record whose lanes are all above the ceiling, which must be unlisted",
+      () => corrupt((b) => void (b.set([192, 255, 254, 255], 259), reseal(b))),
       /must be unlisted/,
     ],
     [
@@ -140,6 +142,16 @@ describe("decodeRomDependencyList", () => {
     ["decision counts that do not sum", () => corrupt((b) => void ((b[0xf0] = 0), reseal(b))), /do not sum/],
   ])("rejects %s", (_name, make, message) => {
     expect(() => decodeRomDependencyList(make())).toThrow(message);
+  });
+
+  it("accepts the boundaries: a lane exactly at the ceiling, a threshold of ceiling+1, a ceiling of 253", () => {
+    const atCeiling = corrupt((b) => void (b.set([191, 255, 255, 255], 259), reseal(b)));
+    expect(decodeRomDependencyList(atCeiling).lookup("0123456789abcdef0123456789abcdef", 1).grades.sidliteNone).toBe(
+      191,
+    );
+    expect(() => decodeRomDependencyList(corrupt((b) => void ((b[61] = 192), reseal(b))))).not.toThrow();
+    const wide = decodeRomDependencyList(corrupt((b) => void ((b[60] = 253), reseal(b))));
+    expect(wide.lookup("0123456789abcdef0123456789abcdef", 2).grades.sidliteNone).toBe(254);
   });
 
   it("rejects a truncated file at every length without returning a partial list", () => {
@@ -170,7 +182,7 @@ function emptyList(): Uint8Array {
   view.setUint32(44, 224, true);
   view.setUint16(56, 17, true);
   view.setUint16(58, 5, true);
-  bytes[60] = 253;
+  bytes[60] = 191;
   bytes[61] = 128;
   return reseal(bytes);
 }

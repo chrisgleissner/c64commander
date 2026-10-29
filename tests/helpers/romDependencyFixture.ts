@@ -15,9 +15,9 @@ const FIXTURES = resolve(__dirname, "../fixtures/romDependency");
 
 /**
  * Synthetic list encoded by the sidflow reference encoder (`encodeRomDependencyList`), with
- * `recommended_min_grade` 128. Grades are [sidliteNone, sidliteKernalBasic, residfpNone, residfpKernalBasic]:
- *   0123..cdef  subtune 1: 0, 254, 120, 253    subtune 3: 255, 255, 200, 255
- *   fedc..3210  subtune 256: 253, 255, 254, 255
+ * `listing_ceiling` 191 and `recommended_min_grade` 128. Grades are [sidliteNone, sidliteKernalBasic, residfpNone, residfpKernalBasic]:
+ *   0123..cdef  subtune 1: 0, 254, 120, 253    subtune 3: 255, 255, 150, 255
+ *   fedc..3210  subtune 256: 191, 255, 254, 255
  *   SYNTHETIC_SID_MD5 (the file `synthetic.sid`)
  *               subtune 1: 0, 255, 120, 253
  *               subtune 2: 254, 100, 255, 127    (127 is the threshold minus one)

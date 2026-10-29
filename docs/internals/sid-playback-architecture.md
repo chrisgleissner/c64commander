@@ -321,8 +321,10 @@ allow-by-default: a song that is not listed plays. Nothing here proves that an u
 
 **Which measurement applies** (`resolveActiveRomLane`, `romDependencyPolicy.ts`). The list carries
 one grade per (engine, ROM configuration); a song is passed over when the grade of the configuration
-in use is **below the list's own `recommended_min_grade`** (a grade equal to it plays; 254 and 255 are
-never below it). Commander offers no other number, only the on/off switch below.
+in use is **below the list's own `recommended_min_grade`** (a grade equal to it plays). Only songs with a
+grade at or below the list's `listing_ceiling` (191 in the release) are listed, and the threshold is
+at most ceiling+1, so an unlisted song is never skipped. Commander offers no other number, only the
+on/off switch below.
 
 | Engine in use | KERNAL + BASIC stored, authentic | KERNAL + BASIC stored, not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
 | ------------- | -------------------------------- | ------------------------------------------------------------ | ----------------------------------- |

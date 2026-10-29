@@ -3,7 +3,7 @@
     "bytes": 224,
     "file": "hvsc85-sidromdep-1.bin",
     "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "sha256": "e693068f9e09939763d4996055174ecaa68af2dfe8c872db5354ae7698a95d7c"
+    "sha256": "4a1945cc985ab2fddd5488434d0acef1f5954e21f20344e1dab8432c443fc0b6"
   },
   "complete": true,
   "counts": {
@@ -12,7 +12,7 @@
     "sourceFiles": 0,
     "sourceSubtunes": 0
   },
-  "listingCeiling": 253,
+  "listingCeiling": 191,
   "recommendedMinGrade": 128,
   "format": {
     "id": "sidromdep-1",

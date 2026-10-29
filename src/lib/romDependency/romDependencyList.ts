@@ -27,10 +27,8 @@ const FILE_RECORD_BYTES = 17;
 const DECISION_RECORD_BYTES = 5;
 const FLAG_INCOMPLETE_SOURCE = 0x1;
 const MAX_SUBTUNE = 256;
-/** §7: a subtune is listed iff some lane grade is at most this; unlisted therefore means every lane is 254 or 255. */
-const LISTING_CEILING = 253;
-/** §8: what an unlisted subtune reports for every lane, as a lower bound (the true grade is 254 or 255). */
-const UNLISTED_GRADE = 254;
+/** §5.2: the largest listing ceiling a list may carry; 254 and 255 both mean "same music" and are never listed. */
+const MAX_LISTING_CEILING = 253;
 
 /** §5.5: the order of the four grade bytes of a record. A lane is one (engine, ROM configuration) pair. */
 export const ROM_DEP_LANE_NAMES = ["sidliteNone", "sidliteKernalBasic", "residfpNone", "residfpKernalBasic"] as const;
@@ -39,9 +37,9 @@ export type RomDepLaneName = (typeof ROM_DEP_LANE_NAMES)[number];
 export type RomDepGrades = Record<RomDepLaneName, number>;
 
 export interface RomDepLookup {
-  /** True when the (file, subtune) has a record. Unlisted means every lane is at least 254, not "verified" (§10.3). */
+  /** True when the (file, subtune) has a record. Unlisted means every lane is above the ceiling, not "verified" (§10.3). */
   listed: boolean;
-  /** Exact grades 0..255 when listed. When unlisted every lane reads 254, a lower bound (§8). */
+  /** Exact grades 0..255 when listed. When unlisted every lane reads ceiling+1, a lower bound (§8). */
   grades: RomDepGrades;
 }
 
@@ -51,7 +49,9 @@ export interface RomDepHeader {
   incompleteSource: boolean;
   fileCount: number;
   decisionCount: number;
-  /** §10.1: the generator's calibrated default skip threshold, 1..254. */
+  /** §5.2: a subtune is listed iff some lane grade is at most this; 1..253. */
+  listingCeiling: number;
+  /** §10.1: the generator's calibrated default skip threshold, 1..listingCeiling+1. */
   recommendedMinGrade: number;
   payloadSha256: string;
 }
@@ -113,10 +113,13 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
   const flags = view.getUint32(12, true);
   if (flags & ~FLAG_INCOMPLETE_SOURCE) throw new RomDependencyListError("unknown flag bits set");
   if (view.getUint16(62, true) !== 0) throw new RomDependencyListError("reserved field is not zero");
-  if (bytes[60] !== LISTING_CEILING) throw new RomDependencyListError(`listing_ceiling must be ${LISTING_CEILING}`);
+  const listingCeiling = bytes[60];
+  if (listingCeiling < 1 || listingCeiling > MAX_LISTING_CEILING) {
+    throw new RomDependencyListError(`listing_ceiling must be 1..${MAX_LISTING_CEILING}`);
+  }
   const recommendedMinGrade = bytes[61];
-  if (recommendedMinGrade < 1 || recommendedMinGrade > UNLISTED_GRADE) {
-    throw new RomDependencyListError("recommended_min_grade must be 1..254");
+  if (recommendedMinGrade < 1 || recommendedMinGrade > listingCeiling + 1) {
+    throw new RomDependencyListError("recommended_min_grade must be 1..listing_ceiling+1");
   }
   const hvscRelease = view.getUint32(16, true);
   if (hvscRelease < 1) throw new RomDependencyListError("hvsc_release must be >= 1");
@@ -167,8 +170,10 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
       const at = decisionOffset + d * DECISION_RECORD_BYTES;
       const subtune = bytes[at] + 1;
       if (subtune <= previous) throw new RomDependencyListError(`file ${i}: subtunes are not strictly ascending`);
-      if (Math.min(bytes[at + 1], bytes[at + 2], bytes[at + 3], bytes[at + 4]) > LISTING_CEILING) {
-        throw new RomDependencyListError(`file ${i}: every lane is at least 254, so the subtune must be unlisted`);
+      if (Math.min(bytes[at + 1], bytes[at + 2], bytes[at + 3], bytes[at + 4]) > listingCeiling) {
+        throw new RomDependencyListError(
+          `file ${i}: every lane is above the listing ceiling, so the subtune must be unlisted`,
+        );
       }
       previous = subtune;
     }
@@ -193,18 +198,15 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
       incompleteSource: (flags & FLAG_INCOMPLETE_SOURCE) !== 0,
       fileCount,
       decisionCount,
+      listingCeiling,
       recommendedMinGrade,
       payloadSha256,
     },
     lookup(md5, subtune) {
+      const floor = listingCeiling + 1;
       const unlisted: RomDepLookup = {
         listed: false,
-        grades: {
-          sidliteNone: UNLISTED_GRADE,
-          sidliteKernalBasic: UNLISTED_GRADE,
-          residfpNone: UNLISTED_GRADE,
-          residfpKernalBasic: UNLISTED_GRADE,
-        },
+        grades: { sidliteNone: floor, sidliteKernalBasic: floor, residfpNone: floor, residfpKernalBasic: floor },
       };
       // §8: a subtune outside 1..256 is unlisted; matching is on all 16 bytes, never a prefix.
       if (!Number.isInteger(subtune) || subtune < 1 || subtune > MAX_SUBTUNE) return unlisted;

@@ -139,11 +139,14 @@ describe("assessRomDependency", () => {
     expect(await assess("sidlite", 3)).toEqual({ kind: "none" }); // 128 is not below 128
   });
 
-  it("never reports 254 or 255 as low, however high the threshold", async () => {
-    expect(await assess("sidlite", 2, {}, 254)).toEqual({ kind: "none" }); // 254
-    expect(await assess("residfp", 2, {}, 254)).toEqual({ kind: "none" }); // 255
-    expect(await assess("sidlite", 1, authentic, 254)).toEqual({ kind: "none" }); // 255
-    expect(await assess("residfp", 3, authentic, 254)).toEqual({ kind: "none" }); // 254
+  it("never reports a grade above the ceiling (254, 255, or an unlisted subtune) as low, even at the highest threshold", async () => {
+    // The fixture's ceiling is 191, so the highest threshold a list can carry is 192.
+    expect(await assess("sidlite", 2, {}, 192)).toEqual({ kind: "none" }); // 254
+    expect(await assess("residfp", 2, {}, 192)).toEqual({ kind: "none" }); // 255
+    expect(await assess("sidlite", 1, authentic, 192)).toEqual({ kind: "none" }); // 255
+    expect(await assess("residfp", 3, authentic, 192)).toEqual({ kind: "none" }); // 254
+    expect(await assess("residfp", 1, authentic, 192)).toEqual({ kind: "none" }); // 253
+    expect(await assess("sidlite", 4, {}, 192)).toEqual({ kind: "none" }); // unlisted
   });
 
   it("reports grade 0 (no playback) as low", async () => {
