@@ -2531,6 +2531,7 @@ export default function PlayFilesPage() {
                   hasCurrentItem={Boolean(currentItem)}
                   currentItemLabel={currentDisplay?.title ?? null}
                   currentItemMetadataParts={currentItemMetadataParts}
+                  tuneKey={currentItem ? `${currentItem.id}:${currentSongNr}` : null}
                   stil={stilInfo}
                   onComposerSelected={openSearchForComposer}
                   {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}

@@ -30,6 +30,8 @@ export type PlaybackControlsCardProps = {
    * than one string because the composer and the tune count are controls and the rest is text.
    */
   currentItemMetadataParts?: NowPlayingMetadataSegment[];
+  /** Item and subsong of the current tune; the "About this tune" block shuts when it changes. */
+  tuneKey?: string | null;
   /** What STIL says about this tune; under a third of the archive has an entry, so usually all null. */
   stil?: {
     title: string | null;
@@ -120,6 +122,7 @@ export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemLabel,
   currentItemMetadataParts = [],
+  tuneKey = null,
   stil,
   onComposerSelected,
   onTunesSelected,
@@ -364,6 +367,7 @@ export const PlaybackControlsCard = ({
         <div className="col-span-3 min-w-0">
           <TuneDetails
             available={hasCurrentItem}
+            tuneKey={tuneKey}
             credits={joinedText(creditsParts)}
             facts={joinedText(factsParts)}
             tuneLine={stilTuneLine}

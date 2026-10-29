@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { TuneNotes } from "./TuneNotes";
 
 export type TuneDetailsProps = {
+  /** Identifies the tune (item and subsong); the block shuts only when this changes, not when its text is refined. */
+  tuneKey: string | null;
   /** A tune is current; the toggle is then always present, so changing tunes never adds or removes its row. */
   available: boolean;
   /** The full credits line, which the card clips to two lines. */
@@ -27,14 +29,14 @@ export type TuneDetailsProps = {
 };
 
 /** Everything known about the playing tune in full, folded behind one control below the transport. */
-export const TuneDetails = ({ available, credits, facts, tuneLine, note, className }: TuneDetailsProps) => {
+export const TuneDetails = ({ available, tuneKey, credits, facts, tuneLine, note, className }: TuneDetailsProps) => {
   const [expanded, setExpanded] = useState(false);
   const trimmedNote = note?.trim() ? note : null;
 
   // A new tune closes the block again, so its height never carries over to the next tune.
   useEffect(() => {
     setExpanded(false);
-  }, [credits, facts, tuneLine, trimmedNote]);
+  }, [tuneKey]);
 
   if (!available) return null;
 
@@ -47,7 +49,7 @@ export const TuneDetails = ({ available, credits, facts, tuneLine, note, classNa
         data-testid="tune-details-toggle"
         className="flex min-h-11 w-fit items-center gap-2 pr-2 text-left text-xs font-medium text-muted-foreground"
         aria-expanded={expanded}
-        aria-controls="tune-details-body"
+        aria-controls={expanded ? "tune-details-body" : undefined}
         onClick={() => setExpanded((value) => !value)}
       >
         {expanded ? (

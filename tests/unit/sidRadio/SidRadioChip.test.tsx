@@ -59,6 +59,35 @@ describe("SidRadioChip", () => {
     expect(toggle).toHaveAttribute("aria-controls", why.id);
   });
 
+  it("names the explanation in aria-controls only while it is rendered", () => {
+    const { rerender } = render(<SidRadioChip station={songStation} whyThisTune="similar" onStop={vi.fn()} />);
+    const toggle = screen.getByTestId("sid-radio-chip-toggle");
+    expect(toggle).not.toHaveAttribute("aria-controls");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-controls");
+    rerender(<SidRadioChip station={songStation} whyThisTune={undefined} onStop={vi.fn()} />);
+    expect(toggle).not.toHaveAttribute("aria-controls");
+  });
+
+  it("closes the explanation on a pointer press outside the chip and on a tap on the explanation itself", () => {
+    render(
+      <>
+        <SidRadioChip station={songStation} whyThisTune="similar to Commando" onStop={vi.fn()} />
+        <p data-testid="elsewhere">credits</p>
+      </>,
+    );
+    const toggle = screen.getByTestId("sid-radio-chip-toggle");
+    fireEvent.click(toggle);
+    fireEvent.pointerDown(screen.getByTestId("sid-radio-why"));
+    expect(screen.getByTestId("sid-radio-why")).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByTestId("elsewhere"));
+    expect(screen.queryByTestId("sid-radio-why")).toBeNull();
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId("sid-radio-why"));
+    expect(screen.queryByTestId("sid-radio-why")).toBeNull();
+  });
+
   it("closes the explanation on Escape, so it does not stay laid over controls the focus ring can still reach", () => {
     render(<SidRadioChip station={songStation} whyThisTune="similar to Commando" onStop={vi.fn()} />);
     const toggle = screen.getByTestId("sid-radio-chip-toggle");

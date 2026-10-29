@@ -101,11 +101,15 @@ export const SidRadioChip = ({
 
   useEffect(() => {
     if (!expanded) return;
-    const closeWhenFocusLeaves = (event: FocusEvent) => {
+    const closeWhenOutside = (event: Event) => {
       if (!rootRef.current?.contains(event.target as Node)) setExpanded(false);
     };
-    document.addEventListener("focusin", closeWhenFocusLeaves);
-    return () => document.removeEventListener("focusin", closeWhenFocusLeaves);
+    document.addEventListener("focusin", closeWhenOutside);
+    document.addEventListener("pointerdown", closeWhenOutside);
+    return () => {
+      document.removeEventListener("focusin", closeWhenOutside);
+      document.removeEventListener("pointerdown", closeWhenOutside);
+    };
   }, [expanded]);
   const friendlyNames = useFriendlySidNames();
 
@@ -129,7 +133,7 @@ export const SidRadioChip = ({
               className="flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
               data-testid="sid-radio-chip-toggle"
               aria-expanded={expanded}
-              aria-controls={whyId}
+              aria-controls={expanded && whyThisTune ? whyId : undefined}
               onClick={() => setExpanded((value) => !value)}
             >
               <Radio className="h-4 w-4 shrink-0 text-primary" />
@@ -169,6 +173,7 @@ export const SidRadioChip = ({
           {expanded && whyThisTune ? (
             <p
               id={whyId}
+              onClick={() => setExpanded(false)}
               className="absolute inset-x-0 top-full z-10 rounded-b-md border border-t-0 border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-md"
               data-testid="sid-radio-why"
             >

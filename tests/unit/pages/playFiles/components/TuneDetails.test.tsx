@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { TuneDetails, type TuneDetailsProps } from "@/pages/playFiles/components/TuneDetails";
 
 const details = (overrides: Partial<TuneDetailsProps> = {}) => (
-  <TuneDetails available credits={null} facts={null} tuneLine={null} note={null} {...overrides} />
+  <TuneDetails available tuneKey="a:1" credits={null} facts={null} tuneLine={null} note={null} {...overrides} />
 );
 
 afterEach(cleanup);
@@ -73,8 +73,24 @@ describe("TuneDetails", () => {
     fireEvent.click(screen.getByTestId("tune-details-toggle"));
     expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "true");
 
-    rerender(details({ tuneLine: "BGM2", note: "Another note." }));
+    rerender(details({ tuneKey: "a:2", tuneLine: "BGM2", note: "Another note." }));
     expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("stays open while the facts, credits and notes of the same tune are refined", () => {
+    const { rerender } = render(details({ facts: "6581 · PAL · 3:00" }));
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
+    rerender(details({ facts: "6581 · PAL · 2:12", credits: "Rob Hubbard", tuneLine: "BGM1", note: "A note." }));
+    expect(screen.getByTestId("tune-details-toggle")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("tune-details-facts")).toHaveTextContent("2:12");
+  });
+
+  it("names its body in aria-controls only while the body is rendered", () => {
+    render(details());
+    const toggle = screen.getByTestId("tune-details-toggle");
+    expect(toggle).not.toHaveAttribute("aria-controls");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-controls", screen.getByTestId("tune-details-body").id);
   });
 
   it("names the control for automation that addresses it by resource id", () => {
