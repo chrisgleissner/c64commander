@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { snapCallHz, SYSTEM_MODE_CPU_HZ, type CounterTune } from "../../../tools/hil/remoteSeekHil/tunes";
+import { counterPsid, snapCallHz, SYSTEM_MODE_CPU_HZ, type CounterTune } from "../../../tools/hil/remoteSeekHil/tunes";
+import { playbackParityCounterPsid } from "../../../tools/hil/remoteSeekHil/playbackParityTunes";
 
 const tune = (ciaTimer: number | null = null): CounterTune => ({
   name: "counter",
@@ -22,6 +23,16 @@ describe("SYSTEM_MODE_CPU_HZ", () => {
     expect(Math.abs(SYSTEM_MODE_CPU_HZ.NTSC - 1022727)).toBeLessThan(10);
     expect(SYSTEM_MODE_CPU_HZ["PAL-60/L"]).toBeGreaterThan(SYSTEM_MODE_CPU_HZ["PAL-60"]);
     expect(SYSTEM_MODE_CPU_HZ["NTSC-50/L"]).toBeGreaterThan(SYSTEM_MODE_CPU_HZ["NTSC-50"]);
+  });
+});
+
+describe("counterPsid title", () => {
+  it("uses a caller-supplied playlist identity without changing the default soak prefix", () => {
+    const counter = tune();
+    const titleOf = (bytes: Uint8Array) => new TextDecoder().decode(bytes.subarray(0x16, 0x36)).replace(/\0+$/, "");
+
+    expect(titleOf(playbackParityCounterPsid(counter))).toBe("Seek_Counter");
+    expect(titleOf(counterPsid(counter))).toBe("seek counter");
   });
 });
 

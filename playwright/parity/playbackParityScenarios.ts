@@ -50,6 +50,8 @@ export type ParityDriver = {
   report?: (line: string) => void;
   /** Record both clocks while `during` runs; absent where the C64's clock cannot be read. */
   recordClocks?: (during: () => Promise<void>) => Promise<ClockRecording>;
+  /** Whether the page's elapsed time was last put on the C64's own clock tick, as it is once a landing is re-read. */
+  followsDeviceClock(): Promise<boolean>;
   /** Of every five seconds in a steady window, how many may miss the limit: one on a shared CI runner, whose scheduler can pause either clock. */
   clockLateSecondsPerFive?: number;
   wait(ms: number): Promise<void>;
@@ -245,9 +247,22 @@ export const judgeClockPhase = (perSecond: number[], limit: number, latePerFive:
 
 /** The page turns each second within this long of the C64's clock turning it. */
 export const CLOCK_PHASE_LIMIT_MS = 150;
-/** After a landing the page re-reads the C64's clock and its phase; compared only once that is done. */
-const CLOCK_SETTLE_MS = 3000;
 const CLOCK_STEADY_MS = 10_000;
+/**
+ * The page re-reads the C64's clock after a landing, once the device is given back. On a loaded core that
+ * took up to 7.2 s from the landing, so a steady window starts when it is done, not a fixed time after it.
+ */
+const CLOCK_FOLLOW_LIMIT_MS = 15_000;
+
+const waitForClockFollow = async (driver: ParityDriver, what: string) => {
+  const deadline = Date.now() + CLOCK_FOLLOW_LIMIT_MS;
+  while (!(await driver.followsDeviceClock())) {
+    if (Date.now() >= deadline) {
+      throw new ParityFailure(`${what}: the page did not re-read the C64's clock within ${CLOCK_FOLLOW_LIMIT_MS} ms`);
+    }
+    await driver.wait(100);
+  }
+};
 
 const jumpTo = async (driver: ParityDriver, route: ParityRoute, fraction: number, what: string) => {
   const target = fraction * (await driver.durationSeconds());
@@ -355,10 +370,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     name: "shows the C64's own second, also after fast forward, a jump and a rewind",
     async run(driver, route) {
       if (route !== "c64" || !driver.recordClocks) return;
+      const names = ["playing", "after fast forward", "after a jump", "after a rewind"];
       const windows: Array<[number, number]> = [];
       const steady = async () => {
-        const from = Date.now() + CLOCK_SETTLE_MS;
-        await driver.wait(CLOCK_SETTLE_MS + CLOCK_STEADY_MS);
+        await waitForClockFollow(driver, names[windows.length]);
+        const from = Date.now();
+        await driver.wait(CLOCK_STEADY_MS);
         windows.push([from, Date.now()]);
       };
       const seek = async (gesture: () => Promise<void>) => {
@@ -374,7 +391,6 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         await seek(() => driver.tapBar(0.15));
       });
       await expectMachineAsItWas(driver, route, "after the clock checks");
-      const names = ["playing", "after fast forward", "after a jump", "after a rewind"];
       windows.forEach((window, index) => {
         const pageLag = clockPhaseErrors(recording.device, recording.page, [window]);
         const perSecond = clockPhaseBySecond(recording.device, recording.page, [window]);
