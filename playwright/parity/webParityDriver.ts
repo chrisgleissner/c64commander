@@ -139,6 +139,8 @@ export const webDriver = (page: Page, server: MockC64Server): ChaosDriver => {
       return changed;
     },
     clockLateSecondsPerFive: 1,
+    followsDeviceClock: async () =>
+      (await page.getByTestId("playback-elapsed").getAttribute("data-follows-device-clock")) === "true",
     async recordClocks(during) {
       await page.evaluate(() => {
         const log: Array<{ atMs: number; text: string }> = [];

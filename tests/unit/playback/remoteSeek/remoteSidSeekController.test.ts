@@ -432,6 +432,24 @@ describe("remote SID seek controller", () => {
     expect(Math.abs(mean)).toBeLessThan(0.5);
   });
 
+  it("reports a fast forward's landing within half a second, not carrying the fraction the hold started from", async () => {
+    const errors: number[] = [];
+    for (const startMs of [10_100, 10_300, 10_500, 10_700, 10_900]) {
+      for (const holdMs of [1100, 1350, 1600, 1850]) {
+        const device = createFakeRemoteSeekDevice();
+        const controller = new RemoteSidSeekController(device.api, profile());
+        await vi.advanceTimersByTimeAsync(startMs);
+        const exact = () => device.player.tunePositionSeconds;
+        await settle(controller.beginFastForward(exact, () => undefined));
+        await vi.advanceTimersByTimeAsync(holdMs);
+        const landed = await settle(controller.endFastForward());
+        errors.push(landed!.seconds + (Date.now() - landed!.atMs) / 1000 - exact());
+      }
+    }
+    // The clock shows whole seconds, so half a second past the last one read is off by half a second at most.
+    expect(Math.max(...errors.map(Math.abs))).toBeLessThanOrEqual(0.55);
+  });
+
   it("jumps as quickly on a machine already at 64 MHz as on one at 1 MHz, measuring at the slowest speed first", async () => {
     const tookMs = async (cpuSpeed: string) => {
       const device = createFakeRemoteSeekDevice({ settings: { "CPU Speed": cpuSpeed } });

@@ -27,9 +27,10 @@ import {
 import { locateSidPlayerClock } from "@/lib/playback/remoteSeek/sidPlayerClock";
 import { readClockFromRow, SCREEN_COLUMNS } from "@/lib/playback/remoteSeek/sidPlayerScreen";
 import { connectPage } from "./cdp_page.mjs";
-import { createDroidDevice } from "./droidctl_device.mjs";
+import { createDroidDevice, setPhoneMediaVolume } from "./droidctl_device.mjs";
 import { openMachineJournal, restoreFromMachineJournal } from "./remoteSeekHil/machineJournal";
-import { callHzOfTune, counterPsid, type CounterTune } from "./remoteSeekHil/tunes";
+import { callHzOfTune, type CounterTune } from "./remoteSeekHil/tunes";
+import { playbackParityCounterPsid } from "./remoteSeekHil/playbackParityTunes";
 
 const argv = process.argv.slice(2);
 const arg = (name: string, fallback: string) => {
@@ -101,7 +102,7 @@ const setConfig = (host: string, category: string, item: string, value: string) 
 const prepareTunes = async (host: string) => {
   mkdirSync(SCRATCH, { recursive: true });
   const counter = path.join(SCRATCH, "Seek_Counter.sid");
-  writeFileSync(counter, counterPsid(COUNTER_TUNE));
+  writeFileSync(counter, playbackParityCounterPsid(COUNTER_TUNE));
   const tone = path.join(SCRATCH, "Tone-Low.sid");
   const generated = await run("node", [
     "scripts/generate-test-sid.mjs",
@@ -159,17 +160,12 @@ const readVolume = async () => {
  * Volume up is pressed only on a level just read, and never from 10 of 25 or above.
  */
 const setVolume = async (target: number) => {
-  if (target > 10) throw new Error("the phone's media volume never goes above 10 of 25");
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const { muted, index } = await readVolume();
-    if (index < 0) throw new Error("could not read the phone's media volume, so it was not changed");
-    if (!muted && index === target) return;
-    const up = muted || index < target;
-    if (up && index >= 10) throw new Error(`the media volume is ${index} of 25; it is never raised from 10 or above`);
-    await droid.pressKey(up ? 24 : 25);
-    await sleep(250);
-  }
-  throw new Error(`could not set the media volume to ${target}`);
+  await setPhoneMediaVolume({
+    target,
+    readVolume,
+    pressVolumeKey: (keycode: number) => droid.pressKey(keycode),
+    wait: sleep,
+  });
 };
 
 type Box = { x: number; y: number; w: number; h: number; dpr: number };
@@ -599,6 +595,10 @@ text:document.querySelector('[data-testid="playback-elapsed"]')?.innerText ?? ""
     await relaunch();
   },
   recordClocks: (during) => recordClocks(host, during),
+  followsDeviceClock: () =>
+    js<boolean>(
+      `document.querySelector('[data-testid="playback-elapsed"]')?.getAttribute("data-follows-device-clock") === "true"`,
+    ),
   report: (line) => {
     log(`${host}: ${line}`);
     notes.push(`${host}: ${line}`);

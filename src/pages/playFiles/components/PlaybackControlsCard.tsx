@@ -128,6 +128,8 @@ export type PlaybackControlsCardProps = {
    * with no end in sight is indistinguishable from a fault.
    */
   pendingSeek?: PendingSeekPresentation;
+  /** The elapsed time was last put on the C64's own clock tick rather than on a seek's estimate. */
+  elapsedFollowsDeviceClock?: boolean;
   /**
    * How much of the tune is already rendered, 0-100, or undefined when that is not a thing here.
    *
@@ -358,6 +360,7 @@ export const PlaybackControlsCard = ({
   timeline,
   renderedPercent,
   pendingSeek,
+  elapsedFollowsDeviceClock = false,
   outputSelector,
   volumeControls,
   shuffleSeed,
@@ -695,6 +698,7 @@ export const PlaybackControlsCard = ({
                 // clock ticking on through that silence is the single thing this whole state exists
                 // to prevent — it is indistinguishable from playback that has died.
                 data-elapsed-held={pendingSeek ? "true" : undefined}
+                data-follows-device-clock={elapsedFollowsDeviceClock ? "true" : undefined}
               >
                 {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
                 <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
