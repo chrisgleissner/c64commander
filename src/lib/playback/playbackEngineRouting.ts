@@ -20,7 +20,6 @@ export type EngineFallbackNotice =
   | "local-unavailable"
   | "rom-lite-engine"
   | "rom-list-on-c64"
-  | "rom-list-unverified"
   | "rom-list-played-anyway"
   | "simulated-device-local-sid"
   | "no-device-local-sid"
@@ -103,8 +102,6 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
     "connected to. Ordinary tunes sound the same either way; only the few that use the C64\u2019s own " +
     "routines need them.",
   "rom-list-on-c64": "This tune needs more of the C64\u2019s own ROMs than this device has, so it plays on the C64.",
-  "rom-list-unverified":
-    "This tune hasn\u2019t been checked without the C64\u2019s ROMs. If it sounds wrong, it needs them.",
   "rom-list-played-anyway":
     "This tune needs the C64\u2019s ROMs to sound right. Playing it anyway, as set in Settings \u2192 Play and disk.",
   "simulated-device-local-sid":

@@ -14,6 +14,7 @@ import {
   setRomDependencyAssetsForTests,
   validateRomDependencyAssets,
 } from "@/lib/romDependency/embeddedRomDependencyList";
+import { decodeRomDependencyList } from "@/lib/romDependency/romDependencyList";
 import { assessRomDependency, resolveActiveRomLane } from "@/lib/romDependency/romDependencyPolicy";
 import {
   FAKE_REFERENCE_ROMS,
@@ -84,11 +85,14 @@ describe("resolveActiveRomLane", () => {
 });
 
 describe("assessRomDependency", () => {
+  // Fixture grades [sidliteNone, sidliteKernalBasic, residfpNone, residfpKernalBasic], threshold 128:
+  //   subtune 1: 0, 255, 120, 253    subtune 2: 254, 100, 255, 127    subtune 3: 128, 255, 129, 254
   const assess = (
     engine: Parameters<typeof assessRomDependency>[0]["engine"],
     songNr: number | null | undefined,
     roms: Parameters<typeof assessRomDependency>[0]["roms"] = {},
-  ) => assessRomDependency({ sidBytes: syntheticSid(), songNr, engine, roms });
+    threshold?: number,
+  ) => assessRomDependency({ sidBytes: syntheticSid(), songNr, engine, roms, threshold });
 
   beforeEach(() => {
     const { assets, pin } = syntheticAssets();
@@ -96,22 +100,58 @@ describe("assessRomDependency", () => {
   });
   afterEach(() => setRomDependencyAssetsForTests(null));
 
-  it("reports a song incompatible only in the lane it was measured incompatible in", async () => {
-    expect(await assess("sidlite", 1)).toEqual({ kind: "incompatible", lane: "sidliteNone", approximate: false });
-    expect(await assess("residfp", 1)).toEqual({ kind: "incompatible", lane: "residfpNone", approximate: false });
-    // Subtune 1 was measured fine once KERNAL and BASIC are supplied.
+  it("reports a song as low only in the lane where its grade is below the threshold", async () => {
+    expect(await assess("sidlite", 1)).toEqual({ kind: "low", lane: "sidliteNone", grade: 0, approximate: false });
+    expect(await assess("residfp", 1)).toEqual({ kind: "low", lane: "residfpNone", grade: 120, approximate: false });
+    // Subtune 1 grades 255 and 253 once KERNAL and BASIC are supplied.
+    expect(await assess("sidlite", 1, authentic)).toEqual({ kind: "none" });
     expect(await assess("residfp", 1, authentic)).toEqual({ kind: "none" });
     // Subtune 2 is the other way round.
     expect(await assess("sidlite", 2)).toEqual({ kind: "none" });
     expect(await assess("sidlite", 2, authentic)).toEqual({
-      kind: "incompatible",
+      kind: "low",
       lane: "sidliteKernalBasic",
+      grade: 100,
       approximate: false,
     });
   });
 
-  it("reads libSidplayEZ as reSIDfp", async () => {
-    expect(await assess("sidplayez", 1)).toEqual({ kind: "incompatible", lane: "residfpNone", approximate: true });
+  it("treats a grade equal to the threshold as playable and one below it as low", async () => {
+    // residfp + KERNAL/BASIC grades 127 on subtune 2: threshold 128 is one above, so low.
+    expect(await assess("residfp", 2, authentic)).toEqual({
+      kind: "low",
+      lane: "residfpKernalBasic",
+      grade: 127,
+      approximate: false,
+    });
+    expect(await assess("residfp", 2, authentic, 127)).toEqual({ kind: "none" });
+    expect(await assess("residfp", 2, authentic, 128)).toMatchObject({ kind: "low", grade: 127 });
+    // Subtune 3 grades exactly 128 in sidliteNone: it plays at the list's own threshold.
+    expect(await assess("sidlite", 3)).toEqual({ kind: "none" });
+    expect(await assess("sidlite", 3, {}, 129)).toMatchObject({ kind: "low", grade: 128 });
+    expect(await assess("residfp", 3)).toEqual({ kind: "none" }); // 129
+  });
+
+  it("uses the list's recommended minimum grade when no threshold is given", async () => {
+    const { assets, pin } = syntheticAssets();
+    expect(decodeRomDependencyList(assets.bin).header.recommendedMinGrade).toBe(128);
+    expect(pin).toHaveLength(64);
+    expect(await assess("sidlite", 3)).toEqual({ kind: "none" }); // 128 is not below 128
+  });
+
+  it("never reports 254 or 255 as low, however high the threshold", async () => {
+    expect(await assess("sidlite", 2, {}, 254)).toEqual({ kind: "none" }); // 254
+    expect(await assess("residfp", 2, {}, 254)).toEqual({ kind: "none" }); // 255
+    expect(await assess("sidlite", 1, authentic, 254)).toEqual({ kind: "none" }); // 255
+    expect(await assess("residfp", 3, authentic, 254)).toEqual({ kind: "none" }); // 254
+  });
+
+  it("reports grade 0 (no playback) as low", async () => {
+    expect(await assess("sidlite", 1)).toMatchObject({ kind: "low", grade: 0 });
+  });
+
+  it("reads libSidplayEZ as reSIDfp, approximately", async () => {
+    expect(await assess("sidplayez", 1)).toEqual({ kind: "low", lane: "residfpNone", grade: 120, approximate: true });
   });
 
   it("applies the list per subtune: an unlisted subtune of a listed file plays", async () => {
@@ -119,32 +159,22 @@ describe("assessRomDependency", () => {
   });
 
   it("defaults to the first tune when the item names none", async () => {
-    expect(await assess("sidlite", null)).toEqual({ kind: "incompatible", lane: "sidliteNone", approximate: false });
-    expect(await assess("sidlite", undefined)).toEqual({
-      kind: "incompatible",
-      lane: "sidliteNone",
-      approximate: false,
-    });
+    expect(await assess("sidlite", null)).toMatchObject({ kind: "low", lane: "sidliteNone" });
+    expect(await assess("sidlite", undefined)).toMatchObject({ kind: "low", lane: "sidliteNone" });
   });
 
-  it("reports unknown as unknown, never as incompatible", async () => {
-    expect(await assess("sidlite", 3)).toEqual({ kind: "unknown", lane: "sidliteNone" });
-    expect(await assess("residfp", 3)).toEqual({ kind: "unknown", lane: "residfpNone" });
-    // Subtune 3 says nothing about the KERNAL + BASIC lanes.
-    expect(await assess("residfp", 3, authentic)).toEqual({ kind: "none" });
-  });
-
-  it("restricts nothing in the reference configuration, and applies the KERNAL + BASIC measurement to unrecognised ROM images", async () => {
+  it("restricts nothing in the reference configuration, and applies the KERNAL + BASIC grade to unrecognised ROM images", async () => {
     expect(await assess("sidlite", 1, { ...authentic, chargen: FAKE_ROMS.chargen })).toEqual({ kind: "none" });
-    // JiffyDOS-like images: subtune 2 was measured different with KERNAL + BASIC, so it is a conservative hint.
-    expect(await assess("sidlite", 2, { kernal: new Uint8Array(8192), basic: FAKE_ROMS.basic })).toEqual({
-      kind: "incompatible",
+    expect(await assess("sidlite", 2, { ...authentic, chargen: FAKE_ROMS.chargen })).toEqual({ kind: "none" });
+    // JiffyDOS-like images: subtune 2 grades 100 with KERNAL + BASIC, so it is a conservative hint.
+    const jiffy = { kernal: new Uint8Array(8192), basic: FAKE_ROMS.basic };
+    expect(await assess("sidlite", 2, jiffy)).toEqual({
+      kind: "low",
       lane: "sidliteKernalBasic",
+      grade: 100,
       approximate: true,
     });
-    expect(await assess("sidlite", 1, { kernal: new Uint8Array(8192), basic: FAKE_ROMS.basic })).toEqual({
-      kind: "none",
-    });
+    expect(await assess("sidlite", 1, jiffy)).toEqual({ kind: "none" });
   });
 
   it("leaves an unlisted file alone", async () => {
@@ -253,7 +283,7 @@ describe("loading and failure degradation", () => {
     bin[12] = 1;
     return import("@/lib/romDependency/digest").then(({ crc32 }) => {
       new DataView(bin.buffer).setUint32(52, 0, true);
-      new DataView(bin.buffer).setUint32(52, crc32(bin.subarray(0, 192)), true);
+      new DataView(bin.buffer).setUint32(52, crc32(bin.subarray(0, 224)), true);
       const { assets, pin } = syntheticAssets({ bin });
       expect(() => validateRomDependencyAssets(assets, pin)).toThrow(/incomplete audit/);
     });

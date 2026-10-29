@@ -14,13 +14,14 @@ import type { RomDependencyAssets } from "@/lib/romDependency/embeddedRomDepende
 const FIXTURES = resolve(__dirname, "../fixtures/romDependency");
 
 /**
- * Synthetic list encoded by the sidflow reference encoder (`encodeRomDependencyList`). Three files:
- *   0123..cdef  subtune 1 incompatible {sidliteNone, residfpNone}, subtune 3 unknown {residfpKernalBasic}
- *   fedc..3210  subtune 256 incompatible {sidliteNone, sidliteKernalBasic}
+ * Synthetic list encoded by the sidflow reference encoder (`encodeRomDependencyList`), with
+ * `recommended_min_grade` 128. Grades are [sidliteNone, sidliteKernalBasic, residfpNone, residfpKernalBasic]:
+ *   0123..cdef  subtune 1: 0, 254, 120, 253    subtune 3: 255, 255, 200, 255
+ *   fedc..3210  subtune 256: 253, 255, 254, 255
  *   SYNTHETIC_SID_MD5 (the file `synthetic.sid`)
- *               subtune 1 incompatible {sidliteNone, residfpNone}
- *               subtune 2 incompatible {sidliteKernalBasic, residfpKernalBasic}
- *               subtune 3 unknown {sidliteNone, residfpNone}
+ *               subtune 1: 0, 255, 120, 253
+ *               subtune 2: 254, 100, 255, 127    (127 is the threshold minus one)
+ *               subtune 3: 128, 255, 129, 254    (128 is the threshold itself)
  */
 export const SYNTHETIC_SID_MD5 = "788728f8e8eb6f7e2c5918b28383a1d6";
 

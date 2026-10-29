@@ -29,7 +29,7 @@ import { sha256Hex } from "./digest";
 import { decodeRomDependencyList, type RomDependencyList } from "./romDependencyList";
 
 /** SHA-256 of `./data/hvsc85-sidromdep-1.manifest.json` (spec §10.2 item 5, §13.3). The one line to update. */
-export const PINNED_MANIFEST_SHA256 = "1cc01b764642a52014b4244f754598a4fe4ee8c6f24a50098178f97049b9c60f";
+export const PINNED_MANIFEST_SHA256 = "bd744adf3c34115cabe8b6e29204a8976b9b2f8444640130b14534741c37513c";
 
 export interface ReferenceRomHashes {
   kernal: string;

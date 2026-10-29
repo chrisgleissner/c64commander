@@ -311,15 +311,18 @@ Settings (`SidRadioSettingsSection.tsx`) offers Fast & accurate only where libSi
 
 ## Songs that need the C64 ROMs
 
-An embedded list names the HVSC songs that were measured to sound different on a phone that has not
-been given the C64's ROMs. The format is `sidromdep-1`, specified in
+An embedded list grades, from 0 to 255, how faithfully the HVSC songs that suffer without the C64's
+ROMs still play on a phone (255 bit-exact, 254 same music re-timed, 1-253 degraded, 0 no playback),
+one grade per engine and ROM configuration. The format is `sidromdep-1`, specified in
 [`doc/rom-dependency-list.md`](https://github.com/chrisgleissner/sidflow/blob/main/doc/rom-dependency-list.md)
 in the sidflow repository; `src/lib/romDependency/romDependencyList.ts` ports its reference decoder
 (the reading half only; section numbers in its comments are the specification's). The list is
 allow-by-default: a song that is not listed plays. Nothing here proves that an unlisted song is fine.
 
 **Which measurement applies** (`resolveActiveRomLane`, `romDependencyPolicy.ts`). The list carries
-one verdict per (engine, ROM configuration):
+one grade per (engine, ROM configuration); a song is passed over when the grade of the configuration
+in use is **below the list's own `recommended_min_grade`** (a grade equal to it plays; 254 and 255 are
+never below it). Commander offers no other number, only the on/off switch below.
 
 | Engine in use | KERNAL + BASIC stored, authentic | KERNAL + BASIC stored, not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
 | ------------- | -------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
@@ -344,8 +347,8 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
   notice per session; `playPassingOver` moves on to the next song that can play); only a direct tap on
   that song asks first (`RomDependencyDialog`, Play anyway or Cancel).
 - Setting off: the song plays, with a one-time notice.
-- A listed song whose verdict is only _unknown_ is never skipped; choosing one shows a one-time
-  "hasn't been checked" notice.
+- A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
+  no "unknown" grade: a lane that was not measured cannot be encoded.
 
 **The embedded files** live in `src/lib/romDependency/data/`. The files there now are a placeholder:
 a valid list with no entries, which changes no behaviour. To ship the real list, copy the release's

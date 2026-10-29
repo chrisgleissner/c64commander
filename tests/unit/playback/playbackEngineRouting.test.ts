@@ -135,7 +135,7 @@ describe("playbackEngineRouting", () => {
       });
 
       it("keeps the plain-language wording free of internals", () => {
-        for (const notice of ["rom-list-on-c64", "rom-list-unverified", "rom-list-played-anyway"] as const) {
+        for (const notice of ["rom-list-on-c64", "rom-list-played-anyway"] as const) {
           expect(ENGINE_FALLBACK_MESSAGES[notice]).toMatch(/ROM/);
           expect(ENGINE_FALLBACK_MESSAGES[notice]).not.toMatch(/lane|mask|sidromdep|incompatible/i);
         }

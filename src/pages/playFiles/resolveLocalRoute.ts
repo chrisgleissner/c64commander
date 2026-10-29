@@ -86,14 +86,12 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
     const romsReady = hasCompleteRomSet();
     const romRequired = detectRomRequired(sidBytes);
     let different = false;
-    let unverified = false;
     // A declared requirement that the missing images cannot satisfy already goes to the C64.
     if (!romRequired || romsReady) {
       await probeSidRenderers();
       const verdict = await assessRomDependency({ sidBytes, songNr: input.songNr, engine: playbackSidEmulation() });
-      unverified = verdict.kind === "unknown";
-      different = verdict.kind === "incompatible";
-      if (verdict.kind === "incompatible") {
+      different = verdict.kind === "low";
+      if (verdict.kind === "low") {
         const outcome = decideRomListedPlayback({
           c64Usable: input.c64Usable,
           skipEnabled: loadSkipRomDependentSongs(),
@@ -104,6 +102,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
           item: input.label,
           songNr: input.songNr ?? null,
           lane: verdict.lane,
+          grade: verdict.grade,
           outcome,
         });
         if (outcome === "c64") {
@@ -134,9 +133,6 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
     // Where the engine choice was overridden, that is what the listener needs explained.
     const notice = decision.route === "local" && input.selectionNotice ? input.selectionNotice : decision.notice;
     if (later === null && notice) notify(notice);
-    if (later === null && decision.route === "local" && unverified && !input.passOver) {
-      notify("rom-list-unverified");
-    }
   } catch (error) {
     addErrorLog("Local engine could not read the SID; using the C64", {
       error: (error as Error).message,

@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { crc32, sha256Hex } from "@/lib/romDependency/digest";
-import { decodeRomDependencyList, laneState, RomDependencyListError } from "@/lib/romDependency/romDependencyList";
+import { decodeRomDependencyList, laneGrade, RomDependencyListError } from "@/lib/romDependency/romDependencyList";
 import { readFixture, specExampleBin, SYNTHETIC_SID_MD5 } from "../../helpers/romDependencyFixture";
 
 const ascii = (text: string) => new TextEncoder().encode(text);
@@ -16,9 +16,9 @@ const ascii = (text: string) => new TextEncoder().encode(text);
 /** Rewrite the header CRC (and optionally the payload hash) so a test can break exactly one rule. */
 const reseal = (bytes: Uint8Array, { payload = true } = {}): Uint8Array => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (payload) bytes.set(Uint8Array.from(Buffer.from(sha256Hex(bytes.subarray(192)), "hex")), 64);
+  if (payload) bytes.set(Uint8Array.from(Buffer.from(sha256Hex(bytes.subarray(224)), "hex")), 64);
   view.setUint32(52, 0, true);
-  view.setUint32(52, crc32(bytes.subarray(0, 192)), true);
+  view.setUint32(52, crc32(bytes.subarray(0, 224)), true);
   return bytes;
 };
 
@@ -39,22 +39,38 @@ describe("digest", () => {
 describe("decodeRomDependencyList", () => {
   it("decodes the specification's worked example and answers its lookup table (§14)", () => {
     const list = decodeRomDependencyList(specExampleBin());
-    expect(list.header).toMatchObject({ hvscRelease: 85, fileCount: 2, decisionCount: 3, incompleteSource: false });
-    expect(specExampleBin().length).toBe(232);
+    expect(list.header).toMatchObject({
+      hvscRelease: 85,
+      fileCount: 2,
+      decisionCount: 3,
+      recommendedMinGrade: 128,
+      incompleteSource: false,
+    });
+    expect(specExampleBin().length).toBe(273);
 
     const a = "0123456789abcdef0123456789abcdef";
     const b = "fedcba9876543210fedcba9876543210";
     const one = list.lookup(a, 1);
-    expect(one).toEqual({ listed: true, incompatibleMask: 5, unknownMask: 0 });
-    expect(laneState(one, "sidliteNone")).toBe("incompatible");
-    expect(laneState(one, "residfpNone")).toBe("incompatible");
-    expect(laneState(one, "sidliteKernalBasic")).toBe("allowed");
+    expect(one.listed).toBe(true);
+    expect(one.grades).toEqual({ sidliteNone: 0, sidliteKernalBasic: 254, residfpNone: 120, residfpKernalBasic: 253 });
+    expect(laneGrade(one, "residfpNone")).toBe(120);
     expect(list.lookup(a, 2).listed).toBe(false);
-    const three = list.lookup(a, 3);
-    expect(three).toEqual({ listed: true, incompatibleMask: 0, unknownMask: 8 });
-    expect(laneState(three, "residfpKernalBasic")).toBe("unknown");
-    expect(list.lookup(b, 256)).toEqual({ listed: true, incompatibleMask: 3, unknownMask: 0 });
+    expect(list.lookup(a, 3).grades).toEqual({
+      sidliteNone: 255,
+      sidliteKernalBasic: 255,
+      residfpNone: 200,
+      residfpKernalBasic: 255,
+    });
+    expect(list.lookup(b, 256).grades.sidliteNone).toBe(253);
     expect(list.lookup("00000000000000000000000000000000", 1).listed).toBe(false);
+  });
+
+  it("reports every lane of an unlisted subtune as 254, a lower bound that is never a restriction", () => {
+    const unlisted = decodeRomDependencyList(specExampleBin()).lookup("0123456789abcdef0123456789abcdef", 2);
+    expect(unlisted).toEqual({
+      listed: false,
+      grades: { sidliteNone: 254, sidliteKernalBasic: 254, residfpNone: 254, residfpKernalBasic: 254 },
+    });
   });
 
   it("matches the full MD5 only, never a prefix, and treats subtunes outside 1..256 as unlisted", () => {
@@ -69,7 +85,12 @@ describe("decodeRomDependencyList", () => {
   it("decodes the reference-encoded synthetic list", () => {
     const list = decodeRomDependencyList(readFixture("synthetic-sidromdep-1.bin"));
     expect(list.header.fileCount).toBe(3);
-    expect(list.lookup(SYNTHETIC_SID_MD5, 2)).toEqual({ listed: true, incompatibleMask: 10, unknownMask: 0 });
+    expect(list.lookup(SYNTHETIC_SID_MD5, 2).grades).toEqual({
+      sidliteNone: 254,
+      sidliteKernalBasic: 100,
+      residfpNone: 255,
+      residfpKernalBasic: 127,
+    });
   });
 
   it("decodes a list with no entries", () => {
@@ -92,20 +113,31 @@ describe("decodeRomDependencyList", () => {
       /unsupported format version 2/,
     ],
     ["a damaged header", () => corrupt((b) => void (b[20] ^= 0xff)), /header CRC-32 mismatch/],
-    ["a damaged payload", () => corrupt((b) => void (b[200] ^= 0x01)), /payload SHA-256 mismatch/],
+    ["a damaged payload", () => corrupt((b) => void (b[270] ^= 0x01)), /payload SHA-256 mismatch/],
     ["a missing last byte", () => corrupt((b) => b.subarray(0, b.length - 1)), /truncated payload/],
     ["a trailing byte", () => corrupt((b) => Uint8Array.from([...b, 0])), /trailing bytes/],
     ["unknown flag bits", () => corrupt((b) => void ((b[12] = 2), reseal(b))), /unknown flag bits/],
-    ["a non-zero reserved field", () => corrupt((b) => void ((b[60] = 1), reseal(b))), /reserved field/],
-    ["a non-canonical section offset", () => corrupt((b) => void ((b[36] = 0xc1), reseal(b))), /canonical/],
+    ["a non-zero reserved field", () => corrupt((b) => void ((b[62] = 1), reseal(b))), /reserved field/],
+    ["another listing ceiling", () => corrupt((b) => void ((b[60] = 252), reseal(b))), /listing_ceiling/],
+    ["a recommended minimum grade of 0", () => corrupt((b) => void ((b[61] = 0), reseal(b))), /recommended_min_grade/],
+    [
+      "a recommended minimum grade above 254",
+      () => corrupt((b) => void ((b[61] = 255), reseal(b))),
+      /recommended_min_grade/,
+    ],
+    ["a non-canonical section offset", () => corrupt((b) => void ((b[36] = 0xe1), reseal(b))), /canonical/],
     ["unordered files", () => corrupt((b) => void swapFileRecords(b)), /not strictly ascending/],
     [
-      "a lane that is both incompatible and unknown",
-      () => corrupt((b) => void ((b[0xe2 + 1] = 0x15), reseal(b))),
-      /both incompatible and unknown/,
+      "a record whose lanes are all 254 or 255, which must be unlisted",
+      () => corrupt((b) => void (b.set([254, 255, 254, 255], 259), reseal(b))),
+      /must be unlisted/,
     ],
-    ["a record that says nothing", () => corrupt((b) => void ((b[0xe2 + 1] = 0), reseal(b))), /no non-default lane/],
-    ["decision counts that do not sum", () => corrupt((b) => void ((b[0xd0] = 0), reseal(b))), /do not sum/],
+    [
+      "subtunes that are not ascending",
+      () => corrupt((b) => void ((b[258 + 5] = 0), reseal(b))),
+      /not strictly ascending/,
+    ],
+    ["decision counts that do not sum", () => corrupt((b) => void ((b[0xf0] = 0), reseal(b))), /do not sum/],
   ])("rejects %s", (_name, make, message) => {
     expect(() => decodeRomDependencyList(make())).toThrow(message);
   });
@@ -120,23 +152,25 @@ describe("decodeRomDependencyList", () => {
 
 /** Exchange the two 17-byte FILE_TABLE records and reseal, so only the ordering rule is broken. */
 function swapFileRecords(bytes: Uint8Array) {
-  const first = bytes.slice(192, 209);
-  bytes.set(bytes.slice(209, 226), 192);
-  bytes.set(first, 209);
+  const first = bytes.slice(224, 241);
+  bytes.set(bytes.slice(241, 258), 224);
+  bytes.set(first, 241);
   reseal(bytes);
 }
 
 /** A valid empty list, built by hand: a header with zero counts and a payload hash of nothing. */
 function emptyList(): Uint8Array {
-  const bytes = new Uint8Array(192);
+  const bytes = new Uint8Array(224);
   const view = new DataView(bytes.buffer);
   bytes.set(ascii("SIDROMDP"), 0);
   view.setUint16(8, 1, true);
-  view.setUint16(10, 192, true);
+  view.setUint16(10, 224, true);
   view.setUint32(16, 85, true);
-  view.setUint32(36, 192, true);
-  view.setUint32(44, 192, true);
+  view.setUint32(36, 224, true);
+  view.setUint32(44, 224, true);
   view.setUint16(56, 17, true);
-  view.setUint16(58, 2, true);
+  view.setUint16(58, 5, true);
+  bytes[60] = 253;
+  bytes[61] = 128;
   return reseal(bytes);
 }

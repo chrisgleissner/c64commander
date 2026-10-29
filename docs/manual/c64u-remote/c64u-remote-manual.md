@@ -524,7 +524,7 @@ The ROMs are under copyright and cannot be shipped with an app, so C64U Remote r
 
 The copies stay on your phone. They are never uploaded, never shared, and never put in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
-A few songs do not sound right on your phone, because they lean on parts of the real C64 that it cannot supply. C64 Commander carries a list of them, made by playing every HVSC tune with and without the ROMs and comparing the sound. These songs need the real machine.
+A few songs do not sound right on your phone, because they lean on parts of the real C64 that it cannot supply. C64 Commander carries a list of them, made by playing every HVSC tune with and without the ROMs and grading how close the sound comes to the real thing. Songs that fall clearly short need the real machine.
 
 - With your C64 connected, such a song plays on the C64, as it would for any tune that needs the ROMs.
 - With no C64 to play it on, a playlist or station that moves on by itself **skips** the song and says so once. If you tap the song yourself, you are asked first: **Play anyway** plays it here, and it may sound wrong; **Cancel** leaves it.

@@ -9,8 +9,9 @@
 /**
  * Reader for the SID ROM dependency list, format `sidromdep-1`.
  *
- * The list names the HVSC tunes that were measured to sound different when the C64's own ROMs are
- * missing. It is allow-by-default: a tune that is not listed is simply playable. The specification
+ * The list grades, per engine and ROM configuration, how faithfully the HVSC tunes that suffer
+ * without the C64's own ROMs still play (255 bit-exact, 254 same music re-timed, 1-253 degraded,
+ * 0 no playback). It is allow-by-default: a tune that is not listed is simply playable. The specification
  * is `doc/rom-dependency-list.md` in https://github.com/chrisgleissner/sidflow; section numbers in
  * the comments below refer to it. The reference decoder is
  * `packages/sidflow-common/src/rom-dependency-list.ts` in the same repository. This is a port of
@@ -21,29 +22,27 @@ import { crc32, sha256Hex } from "./digest";
 
 const MAGIC = "SIDROMDP";
 const VERSION = 1;
-const HEADER_BYTES = 192;
+const HEADER_BYTES = 224;
 const FILE_RECORD_BYTES = 17;
-const DECISION_RECORD_BYTES = 2;
+const DECISION_RECORD_BYTES = 5;
 const FLAG_INCOMPLETE_SOURCE = 0x1;
 const MAX_SUBTUNE = 256;
+/** §7: a subtune is listed iff some lane grade is at most this; unlisted therefore means every lane is 254 or 255. */
+const LISTING_CEILING = 253;
+/** §8: what an unlisted subtune reports for every lane, as a lower bound (the true grade is 254 or 255). */
+const UNLISTED_GRADE = 254;
 
-/** §5.5: lane bits. A lane is one (engine, ROM configuration) pair. */
-export const ROM_DEP_LANE_BITS = {
-  sidliteNone: 1,
-  sidliteKernalBasic: 2,
-  residfpNone: 4,
-  residfpKernalBasic: 8,
-} as const;
-export type RomDepLaneName = keyof typeof ROM_DEP_LANE_BITS;
+/** §5.5: the order of the four grade bytes of a record. A lane is one (engine, ROM configuration) pair. */
+export const ROM_DEP_LANE_NAMES = ["sidliteNone", "sidliteKernalBasic", "residfpNone", "residfpKernalBasic"] as const;
+export type RomDepLaneName = (typeof ROM_DEP_LANE_NAMES)[number];
 
-/** `allowed` is the default for a lane that is neither incompatible nor unknown. It is not a compatibility proof. */
-export type RomDepLaneState = "allowed" | "incompatible" | "unknown";
+export type RomDepGrades = Record<RomDepLaneName, number>;
 
 export interface RomDepLookup {
-  /** True when the (file, subtune) has a record. Unlisted means "no objection", not "compatible" (§10.3). */
+  /** True when the (file, subtune) has a record. Unlisted means every lane is at least 254, not "verified" (§10.3). */
   listed: boolean;
-  incompatibleMask: number;
-  unknownMask: number;
+  /** Exact grades 0..255 when listed. When unlisted every lane reads 254, a lower bound (§8). */
+  grades: RomDepGrades;
 }
 
 export interface RomDepHeader {
@@ -52,6 +51,8 @@ export interface RomDepHeader {
   incompleteSource: boolean;
   fileCount: number;
   decisionCount: number;
+  /** §10.1: the generator's calibrated default skip threshold, 1..254. */
+  recommendedMinGrade: number;
   payloadSha256: string;
 }
 
@@ -68,13 +69,8 @@ export class RomDependencyListError extends Error {
   }
 }
 
-/** The state of one lane in a lookup result (§7: a lane has exactly one state). */
-export const laneState = (lookup: RomDepLookup, lane: RomDepLaneName): RomDepLaneState => {
-  const bit = ROM_DEP_LANE_BITS[lane];
-  if (lookup.incompatibleMask & bit) return "incompatible";
-  if (lookup.unknownMask & bit) return "unknown";
-  return "allowed";
-};
+/** The grade of one lane in a lookup result. */
+export const laneGrade = (lookup: RomDepLookup, lane: RomDepLaneName): number => lookup.grades[lane];
 
 const HEX_MD5 = /^[0-9a-f]{32}$/;
 
@@ -98,7 +94,7 @@ const compareMd5 = (bytes: Uint8Array, offset: number, key: Uint8Array): number 
 /**
  * Decode and fully validate (§13.1). Any deviation throws: bad magic or version, header or payload
  * checksum, unknown flags, non-canonical layout, truncation, trailing bytes, unordered records,
- * impossible masks. A caller never receives a partial list.
+ * records no lane of which is below the listing ceiling. A caller never receives a partial list.
  */
 export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
   if (bytes.length < HEADER_BYTES) throw new RomDependencyListError("truncated header");
@@ -116,7 +112,12 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
 
   const flags = view.getUint32(12, true);
   if (flags & ~FLAG_INCOMPLETE_SOURCE) throw new RomDependencyListError("unknown flag bits set");
-  if (view.getUint32(60, true) !== 0) throw new RomDependencyListError("reserved field is not zero");
+  if (view.getUint16(62, true) !== 0) throw new RomDependencyListError("reserved field is not zero");
+  if (bytes[60] !== LISTING_CEILING) throw new RomDependencyListError(`listing_ceiling must be ${LISTING_CEILING}`);
+  const recommendedMinGrade = bytes[61];
+  if (recommendedMinGrade < 1 || recommendedMinGrade > UNLISTED_GRADE) {
+    throw new RomDependencyListError("recommended_min_grade must be 1..254");
+  }
   const hvscRelease = view.getUint32(16, true);
   if (hvscRelease < 1) throw new RomDependencyListError("hvsc_release must be >= 1");
   if (view.getUint16(56, true) !== FILE_RECORD_BYTES || view.getUint16(58, true) !== DECISION_RECORD_BYTES) {
@@ -159,19 +160,16 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
   if (running !== decisionCount)
     throw new RomDependencyListError("per-file decision counts do not sum to decision_count");
 
-  // §7: ascending subtunes per file; a lane has exactly one state; a record must say something.
+  // §7: ascending subtunes per file; every record must have a lane at or below the listing ceiling.
   for (let i = 0; i < fileCount; i++) {
     let previous = 0;
     for (let d = firstDecision[i]; d < firstDecision[i + 1]; d++) {
       const at = decisionOffset + d * DECISION_RECORD_BYTES;
       const subtune = bytes[at] + 1;
-      const incompatible = bytes[at + 1] & 0xf;
-      const unknown = bytes[at + 1] >> 4;
       if (subtune <= previous) throw new RomDependencyListError(`file ${i}: subtunes are not strictly ascending`);
-      if (incompatible & unknown)
-        throw new RomDependencyListError(`file ${i}: a lane cannot be both incompatible and unknown`);
-      if ((incompatible | unknown) === 0)
-        throw new RomDependencyListError(`file ${i}: record carries no non-default lane`);
+      if (Math.min(bytes[at + 1], bytes[at + 2], bytes[at + 3], bytes[at + 4]) > LISTING_CEILING) {
+        throw new RomDependencyListError(`file ${i}: every lane is at least 254, so the subtune must be unlisted`);
+      }
       previous = subtune;
     }
   }
@@ -195,10 +193,19 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
       incompleteSource: (flags & FLAG_INCOMPLETE_SOURCE) !== 0,
       fileCount,
       decisionCount,
+      recommendedMinGrade,
       payloadSha256,
     },
     lookup(md5, subtune) {
-      const unlisted: RomDepLookup = { listed: false, incompatibleMask: 0, unknownMask: 0 };
+      const unlisted: RomDepLookup = {
+        listed: false,
+        grades: {
+          sidliteNone: UNLISTED_GRADE,
+          sidliteKernalBasic: UNLISTED_GRADE,
+          residfpNone: UNLISTED_GRADE,
+          residfpKernalBasic: UNLISTED_GRADE,
+        },
+      };
       // §8: a subtune outside 1..256 is unlisted; matching is on all 16 bytes, never a prefix.
       if (!Number.isInteger(subtune) || subtune < 1 || subtune > MAX_SUBTUNE) return unlisted;
       const index = find(md5ToBytes(md5));
@@ -206,7 +213,15 @@ export function decodeRomDependencyList(bytes: Uint8Array): RomDependencyList {
       for (let d = firstDecision[index]; d < firstDecision[index + 1]; d++) {
         const at = decisionOffset + d * DECISION_RECORD_BYTES;
         if (bytes[at] + 1 === subtune) {
-          return { listed: true, incompatibleMask: bytes[at + 1] & 0xf, unknownMask: bytes[at + 1] >> 4 };
+          return {
+            listed: true,
+            grades: {
+              sidliteNone: bytes[at + 1],
+              sidliteKernalBasic: bytes[at + 2],
+              residfpNone: bytes[at + 3],
+              residfpKernalBasic: bytes[at + 4],
+            },
+          };
         }
       }
       return unlisted;

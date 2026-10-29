@@ -1,9 +1,9 @@
 {
   "binary": {
-    "bytes": 255,
+    "bytes": 305,
     "file": "synthetic-sidromdep-1.bin",
-    "payloadSha256": "cba00696fd1fb41e7ee078b72c24133edadba4b19e2c1a1819dce9142c47e5a7",
-    "sha256": "398560ec7ffb4cb3c180899ade6839441166db1b595d0de437b61b2714fb51dd"
+    "payloadSha256": "9669db0eb36662cd9cd56a41a1e58d0029de8d1454887a746fe32a385b23f66e",
+    "sha256": "a04c32d4972965c824efab5c2831012f342e8912c09a19421b258b617dff5c9b"
   },
   "complete": true,
   "counts": {
@@ -12,18 +12,20 @@
     "sourceFiles": 61157,
     "sourceSubtunes": 87868
   },
+  "listingCeiling": 253,
+  "recommendedMinGrade": 128,
   "format": {
     "id": "sidromdep-1",
     "specification": "doc/rom-dependency-list.md",
     "version": 1
   },
   "hvscRelease": 85,
-  "laneBits": {
-    "sidliteNone": 1,
-    "sidliteKernalBasic": 2,
-    "residfpNone": 4,
-    "residfpKernalBasic": 8
-  },
+  "lanes": [
+    "sidliteNone",
+    "sidliteKernalBasic",
+    "residfpNone",
+    "residfpKernalBasic"
+  ],
   "measuredProfile": {
     "referenceRoms": {
       "kernal": "83c60d47047d7beab8e5b7bf6f67f80daa088b7a6a27de0d7e016f6484042721",

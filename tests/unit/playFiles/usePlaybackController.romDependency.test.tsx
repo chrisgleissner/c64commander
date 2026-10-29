@@ -9,8 +9,8 @@
 /**
  * Songs the ROM dependency list says sound different on this phone: what the play path does with
  * them. The list is the synthetic fixture (see tests/helpers/romDependencyFixture.ts); in it
- * `synthetic.sid` is incompatible in subtune 1 without ROMs, in subtune 2 with KERNAL and BASIC, and
- * unknown in subtune 3 without ROMs.
+ * `synthetic.sid` grades below the threshold (128) in subtune 1 without ROMs, in subtune 2 with KERNAL
+ * and BASIC, and exactly at the threshold (so it plays) in subtune 3 without ROMs.
  */
 
 import { act, renderHook } from "@testing-library/react";
@@ -586,7 +586,8 @@ describe("ROM dependency list in the play path", () => {
       expect(controller.play).toHaveBeenCalledTimes(1);
     });
 
-    it("never skips a song that is only unknown, and says so only when the listener chose it", async () => {
+    it("plays a song graded exactly at the threshold, with no skip, question or notice, however it is started", async () => {
+      // synthetic.sid subtune 3 grades 128 in the SIDLite no-ROMs configuration; the list's threshold is 128.
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);
       const playlist = [listed("b3", 3)];
@@ -594,15 +595,12 @@ describe("ROM dependency list in the play path", () => {
 
       await act(async () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
-      });
-      expect(toastDescriptions()).not.toContain(ENGINE_FALLBACK_MESSAGES["rom-list-unverified"]);
-
-      await act(async () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
+
       expect(controller.play).toHaveBeenCalledTimes(2);
       expect(decide).not.toHaveBeenCalled();
-      expect(toastDescriptions()).toContain(ENGINE_FALLBACK_MESSAGES["rom-list-unverified"]);
+      expect(toastDescriptions().filter((text) => text?.includes("ROM"))).toEqual([]);
     });
   });
 

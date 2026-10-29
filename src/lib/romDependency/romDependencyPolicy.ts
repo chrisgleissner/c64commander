@@ -14,15 +14,16 @@
  * and which of the C64's ROMs it was given. Specification: `doc/rom-dependency-list.md` in
  * https://github.com/chrisgleissner/sidflow, section 10.
  *
- * The list is allow-by-default. Only a song the audit found to differ, in this configuration, is
- * reported as `incompatible`; everything else (unlisted, measured fine, not measured, or a
- * configuration the audit did not cover) is `none` or `unknown` and is never held back.
+ * The list is allow-by-default and grades each listed song 0..255 per configuration. A song is
+ * reported as `low` only when its grade in this configuration is below the skip threshold (the
+ * list's own `recommended_min_grade`); everything else (unlisted, graded at or above the threshold,
+ * the reference configuration) is `none` and is never held back. There is no "unknown" grade.
  */
 
 import { loadStoredRoms } from "@/lib/roms/romStore";
 import { sha256Hex } from "./digest";
 import { loadEmbeddedRomDependencyList, type ReferenceRomHashes } from "./embeddedRomDependencyList";
-import { laneState, type RomDepLaneName } from "./romDependencyList";
+import { laneGrade, type RomDepLaneName } from "./romDependencyList";
 import { addLog } from "@/lib/logging";
 import type { SidEmulationEngine } from "@/lib/config/appSettings";
 
@@ -41,12 +42,10 @@ export type ActiveRomLane =
   | { kind: "lane"; lane: RomDepLaneName; approximate: boolean };
 
 export type RomDependencyVerdict =
-  /** Nothing to say: unlisted, measured fine, reference configuration, no list, or no measurement. */
+  /** Nothing to say: unlisted, graded at or above the threshold, reference configuration, or no list. */
   | { kind: "none" }
-  /** Measured to sound different in this configuration (§10.2). */
-  | { kind: "incompatible"; lane: RomDepLaneName; approximate: boolean }
-  /** The audit could not resolve this configuration. Never treated as incompatible (§10.2). */
-  | { kind: "unknown"; lane: RomDepLaneName };
+  /** Graded below the skip threshold in this configuration (§10.2); 0 means no playback at all. */
+  | { kind: "low"; lane: RomDepLaneName; grade: number; approximate: boolean };
 
 /** Thrown from the play path when a song is passed over because it needs the C64's ROMs. */
 export class RomDependentSongSkipped extends Error {
@@ -106,6 +105,8 @@ export interface AssessInput {
   songNr: number | null | undefined;
   engine: SidEmulationEngine;
   roms?: RomDependencyRoms;
+  /** Skip threshold, 1..254. Defaults to the list's `recommended_min_grade`; Commander offers no other number. */
+  threshold?: number;
 }
 
 /**
@@ -117,6 +118,7 @@ export const assessRomDependency = async ({
   songNr,
   engine,
   roms = loadStoredRoms(),
+  threshold,
 }: AssessInput): Promise<RomDependencyVerdict> => {
   try {
     const loaded = await loadEmbeddedRomDependencyList();
@@ -126,10 +128,10 @@ export const assessRomDependency = async ({
     const subtune = typeof songNr === "number" && Number.isFinite(songNr) ? Math.max(1, Math.trunc(songNr)) : 1;
     const found = loaded.list.lookup(await md5Of(sidBytes), subtune);
     if (!found.listed) return { kind: "none" };
-    const state = laneState(found, active.lane);
-    if (state === "incompatible") return { kind: "incompatible", lane: active.lane, approximate: active.approximate };
-    if (state === "unknown") return { kind: "unknown", lane: active.lane };
-    return { kind: "none" };
+    const grade = laneGrade(found, active.lane);
+    // §10.2: a grade below the threshold is skipped; the threshold itself plays, and 254 and 255 never are low.
+    if (grade >= (threshold ?? loaded.list.header.recommendedMinGrade)) return { kind: "none" };
+    return { kind: "low", lane: active.lane, grade, approximate: active.approximate };
   } catch (error) {
     addLog("warn", "SID ROM dependency check failed; playing the song normally", {
       service: "rom-dependency",
