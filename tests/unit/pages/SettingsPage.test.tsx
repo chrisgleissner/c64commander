@@ -1719,6 +1719,19 @@ describe("SettingsPage", () => {
     expect(vi.mocked(saveFriendlySidNames)).toHaveBeenCalledWith(false);
   });
 
+  it("offers Skip songs that need the C64 ROMs in Play and disk, on by default, and writes the choice back", () => {
+    renderSettingsPage();
+
+    const toggle = screen.getByTestId("settings-skip-rom-dependent-songs");
+    expect(toggle).toHaveAttribute("data-state", "checked");
+    expect(screen.getByText("Skip songs that need the C64 ROMs")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("data-state", "unchecked");
+    expect(localStorage.getItem("c64u_skip_rom_dependent_songs")).toBe("0");
+  });
+
   it("persists HTTP, FTP, and Telnet ports when saving connection settings", async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 

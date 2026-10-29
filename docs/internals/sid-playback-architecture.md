@@ -33,12 +33,13 @@ Known limitations are listed in [Limitations](#limitations).
 4. [The native audio feed](#the-native-audio-feed)
 5. [libSidplayEZ: build, wrapper and semantics](#libsidplayez-build-wrapper-and-semantics)
 6. [Renderer selection and fallback](#renderer-selection-and-fallback)
-7. [Platform support](#platform-support)
-8. [Equivalence of the renderers](#equivalence-of-the-renderers)
-9. [Performance](#performance)
-10. [Testing](#testing)
-11. [Limitations](#limitations)
-12. [Troubleshooting](#troubleshooting)
+7. [Songs that need the C64 ROMs](#songs-that-need-the-c64-roms)
+8. [Platform support](#platform-support)
+9. [Equivalence of the renderers](#equivalence-of-the-renderers)
+10. [Performance](#performance)
+11. [Testing](#testing)
+12. [Limitations](#limitations)
+13. [Troubleshooting](#troubleshooting)
 
 ## Components
 
@@ -307,6 +308,53 @@ first tune uses. A stored
 preference for an unavailable renderer is kept, and Settings shows what will play here.
 
 Settings (`SidRadioSettingsSection.tsx`) offers Fast & accurate only where libSidplayEZ runs.
+
+## Songs that need the C64 ROMs
+
+An embedded list names the HVSC songs that were measured to sound different on a phone that has not
+been given the C64's ROMs. The format is `sidromdep-1`, specified in
+[`doc/rom-dependency-list.md`](https://github.com/chrisgleissner/sidflow/blob/main/doc/rom-dependency-list.md)
+in the sidflow repository; `src/lib/romDependency/romDependencyList.ts` ports its reference decoder
+(the reading half only; section numbers in its comments are the specification's). The list is
+allow-by-default: a song that is not listed plays. Nothing here proves that an unlisted song is fine.
+
+**Which measurement applies** (`resolveActiveRomLane`, `romDependencyPolicy.ts`). The list carries
+one verdict per (engine, ROM configuration):
+
+| Engine in use | KERNAL + BASIC stored and authentic | Otherwise            |
+| ------------- | ----------------------------------- | -------------------- |
+| SIDLite       | SIDLite with KERNAL + BASIC         | SIDLite with no ROMs |
+| reSIDfp       | reSIDfp with KERNAL + BASIC         | reSIDfp with no ROMs |
+| libSidplayEZ  | read as reSIDfp (not the audited build) | read as reSIDfp  |
+
+"Authentic" means the SHA-256 of both images equals the reference hashes in the pinned manifest; ROM
+images that differ get no verdict at all (the specification forbids claiming one). Commander never
+stores the character ROM, so the reference configuration, where the list restricts nothing, applies
+only to a build that does. Real C64 Ultimate playback never consults the list.
+
+**What happens** (`usePlaybackController.playItem`, `romDependencyGate.ts`). The check runs once the
+tune's bytes are read and the route is known, so it costs one MD5 of the file as played.
+
+- A C64 can play it (connected, not Demo Mode): the existing ROM fallback sends it there
+  (`romFallbackDecision`, notice `rom-on-c64` or `rom-list-on-c64`) and, if the ROMs are missing,
+  reads them from it in the background.
+- No usable C64, **Settings → Play and disk → Skip songs that need the C64 ROMs** on (the default):
+  a playlist, station or auto-advance moving on by itself skips the song (`RomDependentSongSkipped`,
+  one notice per session); a song the listener chose asks first (`RomDependencyDialog`, Play anyway or
+  Cancel).
+- Setting off: the song plays, with a one-time notice.
+- A listed song whose verdict is only _unknown_ is never skipped; choosing one shows a one-time
+  "hasn't been checked" notice.
+
+**The embedded files** live in `src/lib/romDependency/data/`. The files there now are a placeholder:
+a valid list with no entries, which changes no behaviour. To ship the real list, copy the release's
+`hvsc<N>-sidromdep-1.bin` and `.manifest.json` over `hvsc85-sidromdep-1.bin` and
+`hvsc85-sidromdep-1.manifest.json` (or change the two import names in `embeddedRomDependencyList.ts`)
+and set `PINNED_MANIFEST_SHA256` to the manifest SHA-256 printed by the sidflow
+`scripts/rom-dependency-list/verify.ts`. At load the manifest is checked against that pin, the binary
+against the manifest, and the binary against every rule of the specification (§13.1); a list that
+fails, or was made from an incomplete audit, is logged as an error and ignored. Tests use a synthetic
+list encoded by the reference encoder (`tests/fixtures/romDependency/`).
 
 ## Platform support
 

@@ -121,6 +121,8 @@ import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
+import { RomDependencyDialog } from "@/pages/playFiles/components/RomDependencyDialog";
+import { useRomDependencyPrompt } from "@/pages/playFiles/hooks/useRomDependencyPrompt";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
@@ -567,6 +569,8 @@ export default function PlayFilesPage() {
     [gameModeAvailable],
   );
 
+  const romDependencyPrompt = useRomDependencyPrompt();
+
   const resolveUnavailableConfigDecision = useCallback(
     (item: PlaylistItem, context: { configFileName: string | null; reason: string }) =>
       new Promise<"play-without-config" | "cancel">((resolve) => {
@@ -659,6 +663,7 @@ export default function PlayFilesPage() {
     ensureUnmuted,
     isManualMuteHeld,
     resolveUnavailableConfigDecision,
+    resolveRomDependencyDecision: romDependencyPrompt.ask,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
   const { stopPending, stopping, stopPlayback } = useLaunchStopGuard({
@@ -3154,6 +3159,8 @@ export default function PlayFilesPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <RomDependencyDialog label={romDependencyPrompt.label} onChoose={romDependencyPrompt.choose} />
 
           <StationQueueEditedDialog {...stationHandover.editedPrompt} />
 

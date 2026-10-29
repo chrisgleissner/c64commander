@@ -526,6 +526,14 @@ The ROMs are under copyright and cannot be shipped with an app, so C64 Commander
 
 The copies stay on your phone or tablet. They are never uploaded, never shared, and never put in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
+A few songs do not sound right on your phone or tablet, because they lean on parts of the real C64 that it cannot supply. C64 Commander carries a list of them, made by playing every HVSC tune with and without the ROMs and comparing the sound. These songs need the real machine.
+
+- With your C64 connected, such a song plays on the C64, as it would for any tune that needs the ROMs.
+- With no C64 to play it on, a playlist or station that moves on by itself **skips** the song and says so once. If you tap the song yourself, you are asked first: **Play anyway** plays it here, and it may sound wrong; **Cancel** leaves it.
+- Prefer to hear them regardless? Turn off **Settings → Play and disk → Skip songs that need the C64 ROMs**. They then play here without asking.
+
+Songs that are not on the list play as always. Being off the list is not a promise that a song sounds right. The list follows the [SID ROM dependency list specification](https://github.com/chrisgleissner/sidflow/blob/main/doc/rom-dependency-list.md).
+
 #### Moving around inside a tune
 
 The same gestures work wherever the tune plays. A short tap on next or previous still skips to the next or previous tune.

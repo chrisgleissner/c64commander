@@ -1,0 +1,36 @@
+{
+  "binary": {
+    "bytes": 192,
+    "file": "hvsc85-sidromdep-1.bin",
+    "payloadSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha256": "125203a46f57f57f8c010c1ffae363dec835cc0270ae674765a2b1e7037dcbfe"
+  },
+  "complete": true,
+  "counts": {
+    "listedFiles": 0,
+    "listedSubtunes": 0,
+    "sourceFiles": 0,
+    "sourceSubtunes": 0
+  },
+  "format": {
+    "id": "sidromdep-1",
+    "specification": "doc/rom-dependency-list.md",
+    "version": 1
+  },
+  "hvscRelease": 85,
+  "laneBits": {
+    "sidliteNone": 1,
+    "sidliteKernalBasic": 2,
+    "residfpNone": 4,
+    "residfpKernalBasic": 8
+  },
+  "measuredProfile": {
+    "referenceRoms": {
+      "kernal": "83c60d47047d7beab8e5b7bf6f67f80daa088b7a6a27de0d7e016f6484042721",
+      "basic": "89878cea0a268734696de11c4bae593eaaa506465d2029d619c0e0cbccdfa62d",
+      "chargen": "fd0d53b8480e86163ac98998976c72cc58d5dd8eb824ed7b829774e74213b420"
+    }
+  },
+  "releasable": true,
+  "status": "placeholder-empty-NOT-A-RELEASE"
+}

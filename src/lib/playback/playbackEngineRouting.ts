@@ -19,6 +19,9 @@ export type EngineFallbackNotice =
   | "rom-on-c64"
   | "local-unavailable"
   | "rom-lite-engine"
+  | "rom-list-on-c64"
+  | "rom-list-unverified"
+  | "rom-list-played-anyway"
   | "simulated-device-local-sid"
   | "no-device-local-sid"
   | "sid-unreadable-on-c64";
@@ -70,9 +73,21 @@ export function shouldAttemptLocalEngine(input: EngineRouteInput): boolean {
   return preRouteEngine(input).route === "local";
 }
 
-/** Decide whether a tune with the stored ROM images may play on this device. */
-export function romFallbackDecision(romRequired: boolean, romsAvailable = true): PreRouteDecision {
+/**
+ * Decide whether a tune with the stored ROM images may play on this device.
+ *
+ * A tune "requires ROMs" when its header declares a BASIC requirement (`romRequired`, which only the
+ * missing images can satisfy) or when the ROM dependency list says it sounds different on this phone
+ * in its current configuration (`listedDifferent`, which holds even with KERNAL and BASIC stored,
+ * because the audit's reference also has the character ROM). Either way the real C64 is the answer.
+ */
+export function romFallbackDecision(
+  romRequired: boolean,
+  romsAvailable = true,
+  listedDifferent = false,
+): PreRouteDecision {
   if (romRequired && !romsAvailable) return { route: "c64", notice: "rom-on-c64" };
+  if (listedDifferent) return { route: "c64", notice: romsAvailable ? "rom-list-on-c64" : "rom-on-c64" };
   return romsAvailable ? { route: "local", notice: null } : { route: "local", notice: "rom-lite-engine" };
 }
 
@@ -87,6 +102,11 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
     "Playing without the C64\u2019s ROMs \u2014 they\u2019re being read from the machine you\u2019re " +
     "connected to. Ordinary tunes sound the same either way; only the few that use the C64\u2019s own " +
     "routines need them.",
+  "rom-list-on-c64": "This tune needs more of the C64\u2019s own ROMs than this device has, so it plays on the C64.",
+  "rom-list-unverified":
+    "This tune hasn\u2019t been checked without the C64\u2019s ROMs. If it sounds wrong, it needs them.",
+  "rom-list-played-anyway":
+    "This tune needs the C64\u2019s ROMs to sound right. Playing it anyway, as set in Settings \u2192 Play and disk.",
   "simulated-device-local-sid":
     "The simulated device has no SID chip, so this tune is playing on your phone. Everything else " +
     "behaves as it does against a real C64 Ultimate.",

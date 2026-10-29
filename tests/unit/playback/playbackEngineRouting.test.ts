@@ -119,6 +119,28 @@ describe("playbackEngineRouting", () => {
     it("falls a ROM-dependent SID back to the C64 when its ROMs are unavailable", () => {
       expect(romFallbackDecision(true, false)).toEqual({ route: "c64", notice: "rom-on-c64" });
     });
+
+    describe("a tune the ROM dependency list says sounds different on this device", () => {
+      it("goes to the C64 with the existing ROM notice when the ROMs are missing", () => {
+        expect(romFallbackDecision(false, false, true)).toEqual({ route: "c64", notice: "rom-on-c64" });
+      });
+
+      it("goes to the C64 even with KERNAL and BASIC stored, because the list says they are not enough", () => {
+        expect(romFallbackDecision(false, true, true)).toEqual({ route: "c64", notice: "rom-list-on-c64" });
+      });
+
+      it("leaves a header-declared requirement exactly as it was", () => {
+        expect(romFallbackDecision(true, false, false)).toEqual({ route: "c64", notice: "rom-on-c64" });
+        expect(romFallbackDecision(true, true, false)).toEqual({ route: "local", notice: null });
+      });
+
+      it("keeps the plain-language wording free of internals", () => {
+        for (const notice of ["rom-list-on-c64", "rom-list-unverified", "rom-list-played-anyway"] as const) {
+          expect(ENGINE_FALLBACK_MESSAGES[notice]).toMatch(/ROM/);
+          expect(ENGINE_FALLBACK_MESSAGES[notice]).not.toMatch(/lane|mask|sidromdep|incompatible/i);
+        }
+      });
+    });
   });
 
   it("has a message for every fallback notice", () => {

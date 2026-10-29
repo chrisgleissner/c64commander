@@ -24,3 +24,5 @@ test-results/**
 .venv/**
 Logs/**
 tmp/**
+src/lib/romDependency/data/**
+tests/fixtures/romDependency/**
