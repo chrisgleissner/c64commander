@@ -122,7 +122,10 @@ const mainThreadTaskCpuMs = async (page: Page, action: () => Promise<void>): Pro
     ).toBeGreaterThan(0);
     return tasks.filter((event) => event.tdur !== undefined).map((event) => event.tdur! / 1000);
   } finally {
-    if (!stopped) await browser.stopTracing().catch(() => undefined);
+    if (!stopped)
+      await browser
+        .stopTracing()
+        .catch((error) => console.warn("Could not stop the trace after the traced action failed", error));
   }
 };
 
