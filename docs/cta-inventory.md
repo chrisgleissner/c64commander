@@ -791,7 +791,8 @@ when SID Radio is on]` ;
   group — `settings-crossfade-0|600|1500|3000|4000` (`settings-crossfade`) — R✅ I✅
   `[disabled: Listen on is not Local — two tunes cannot sound at once on the C64's
 single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
-  button — `settings-roms-fetch` — R✅ I✅ ; Remove — button —
+  button — `settings-roms-fetch` — R✅ I✅ _(also copies the optional character ROM by
+  briefly running a routine on the C64)_ ; Remove — button —
   `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
   automatically — switch — `settings-roms-auto` — on by default, because without the
   ROMs accurate local playback is silent

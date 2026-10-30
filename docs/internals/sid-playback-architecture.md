@@ -334,9 +334,11 @@ on/off switch below.
 
 "Authentic" means the SHA-256 of both images equals the reference hashes in the pinned manifest. Images
 that differ are still KERNAL and BASIC, so the KERNAL + BASIC measurement is applied as the
-conservative hint the specification allows (§10.1) rather than claimed as measured. Commander never
-stores the character ROM, so the reference configuration, where the list restricts nothing, applies
-only to a build that does. Real C64 Ultimate playback never consults the list.
+conservative hint the specification allows (§10.1) rather than claimed as measured. The character
+ROM is stored only after **Read from C64** in Settings has copied it, by briefly running a short
+routine on the C64 (`characterRomReader.ts`; the background read takes KERNAL and BASIC only). With
+all three images authentic this is the reference configuration, where the list restricts nothing.
+Real C64 Ultimate playback never consults the list.
 
 **What happens** (`usePlaybackController.playItem`, `romDependencyGate.ts`). The check runs once the
 tune's bytes are read and the route is known, so it costs one MD5 of the file as played.

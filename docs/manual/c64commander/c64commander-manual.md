@@ -524,6 +524,8 @@ To play music by itself, your phone or tablet needs copies of two programs built
 
 The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine. It does this by itself, the first time you play a tune here while the C64 is connected. There is nothing to set up.
 
+A third ROM, the character set, makes no difference to the sound and is never read by itself, because reading it means briefly pausing your C64 to run a small routine on it.
+
 The copies stay on your phone or tablet. They are never uploaded, never shared, and never put in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
 A few songs do not sound right on your phone or tablet, because they lean on parts of the real C64 that it cannot supply. C64 Commander carries a list of them, made by playing every HVSC tune with and without the ROMs and grading how close the sound comes to the real thing. Songs that fall clearly short need the real machine.
@@ -1113,6 +1115,8 @@ The output button is for SID tunes only. Programs and disks always run on the C6
 To play music by itself, your phone or tablet needs copies of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them; without them, those tunes start and then play nothing.
 
 The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine. It does this by itself, the first time you play a tune here while the C64 is connected. There is nothing to set up.
+
+A third ROM, the character set, makes no difference to the sound and is never read by itself, because reading it means briefly pausing your C64 to run a small routine on it.
 
 The copies stay on your phone or tablet. They are never uploaded, never shared, and never put in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
