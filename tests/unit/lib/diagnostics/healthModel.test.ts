@@ -76,6 +76,28 @@ describe("deriveConnectivityState", () => {
   it("maps unknown string → Not yet connected", () => {
     expect(deriveConnectivityState("WHATEVER")).toBe("Not yet connected");
   });
+
+  it("SPM-ERR-02 SID Player maps offline to the SID Player state", () => {
+    expect(deriveConnectivityState("OFFLINE_NO_DEMO", false, false, true)).toBe("SID Player");
+    expect(deriveConnectivityState("OFFLINE_NO_DEMO", true, false, true)).toBe("SID Player");
+    expect(deriveConnectivityState("OFFLINE_NO_DEMO", false, false, false)).toBe("Offline");
+  });
+
+  it("SPM-ERR-02 rollUpHealth reports Idle in SID Player whatever the contributors say", () => {
+    const failing = { state: "Unhealthy", problemCount: 5, totalOperations: 5, failedOperations: 5 } as const;
+    expect(rollUpHealth({ App: failing, REST: failing, FTP: failing, TELNET: failing } as never, "SID Player")).toBe(
+      "Idle",
+    );
+  });
+
+  it("SPM-ERR-02 the SID Player badge reads SID Player with no severity glyph, count or status word", () => {
+    for (const profile of ["compact", "medium", "expanded"] as const) {
+      const contract = getBadgeTextContract("Unhealthy", "SID Player", 4, profile, "◆");
+      expect(contract).toEqual({ leadingLabel: "SID Player", glyph: "", countLabel: null, trailingLabel: null });
+    }
+    expect(getBadgeLabel("Idle", "SID Player", 0, "compact", "○")).toBe("SID Player");
+    expect(getBadgeAriaLabel("Idle", "SID Player", 0)).toBe("SID Player");
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
