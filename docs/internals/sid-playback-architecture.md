@@ -326,15 +326,18 @@ grade at or below the list's `listing_ceiling` (191 in the release) are listed, 
 at most ceiling+1, so an unlisted song is never skipped. Commander offers no other number, only the
 on/off switch below.
 
-| Engine in use | KERNAL + BASIC stored, authentic | KERNAL + BASIC stored, not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
-| ------------- | -------------------------------- | ------------------------------------------------------------ | ----------------------------------- |
-| SIDLite       | SIDLite with KERNAL + BASIC      | the same, as an approximate hint                             | SIDLite with no ROMs                |
-| reSIDfp       | reSIDfp with KERNAL + BASIC      | the same, as an approximate hint                             | reSIDfp with no ROMs                |
-| libSidplayEZ  | read as reSIDfp, approximate     | read as reSIDfp, approximate                                 | read as reSIDfp, approximate        |
+| Engine in use | KERNAL + BASIC stored, authentic, no character ROM | Any stored image not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
+| ------------- | -------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| SIDLite       | SIDLite with KERNAL + BASIC                        | lowest of the four lanes, approximate                 | SIDLite with no ROMs                |
+| reSIDfp       | reSIDfp with KERNAL + BASIC                        | lowest of the four lanes, approximate                 | reSIDfp with no ROMs                |
+| libSidplayEZ  | read as reSIDfp, approximate                       | lowest of the four lanes, approximate                 | read as reSIDfp, approximate        |
 
-"Authentic" means the SHA-256 of both images equals the reference hashes in the pinned manifest. Images
-that differ are still KERNAL and BASIC, so the KERNAL + BASIC measurement is applied as the
-conservative hint the specification allows (§10.1) rather than claimed as measured. The character
+"Authentic" means the SHA-256 of the image equals the reference hash in the pinned manifest. A ROM set
+that matches neither the reference nor a measured configuration (KERNAL or BASIC not authentic, or a
+character ROM that is not) has no applicable measurement, so the lowest grade of the four lanes is
+used: the conservative hint the specification allows (§10.1). libSidplayEZ is not one of the measured
+engine builds either; reading it as reSIDfp, the engine it is built on, is a judgement, not a
+measurement. Either way the verdict is marked `approximate` in the log line. The character
 ROM is stored only after **Read from C64** in Settings has copied it, by briefly running a short
 routine on the C64 (`characterRomReader.ts`; the background read takes KERNAL and BASIC only). With
 all three images authentic this is the reference configuration, where the list restricts nothing.
@@ -343,16 +346,29 @@ Real C64 Ultimate playback never consults the list.
 **What happens** (`usePlaybackController.playItem`, `romDependencyGate.ts`). The check runs once the
 tune's bytes are read and the route is known, so it costs one MD5 of the file as played.
 
-- A C64 can play it (connected, not Demo Mode): the existing ROM fallback sends it there
+- A C64 can play it (connected, not Demo Mode, in reach): the existing ROM fallback sends it there
   (`romFallbackDecision`, notice `rom-on-c64` or `rom-list-on-c64`) and, if the ROMs are missing,
-  reads them from it in the background.
+  reads them from it in the background. A connection still being discovered counts as usable, because
+  the C64 route discovers on demand (`isC64UsableForSid`).
 - No usable C64, **Settings → Play and disk → Skip songs that need the C64 ROMs** on (the default):
   a playlist, station, auto-advance, Next or Previous skips the song (`RomDependentSongSkipped`, one
-  notice per session; `playPassingOver` moves on to the next song that can play); only a direct tap on
-  that song asks first (`RomDependencyDialog`, Play anyway or Cancel).
+  notice per session; `playPassingOver` moves on to the next song that can play, skipping tracks only
+  a C64 can play as well). So does the first song of a station, or of Play pressed with no song
+  chosen. Only a song the listener picked asks first (`RomDependencyDialog`, Play anyway or Cancel).
+  The question comes before anything playing is stopped: Cancel leaves the current tune playing with
+  its auto-advance armed, and a Stop, skip or other launch while the question is open wins over a late
+  Play anyway.
+- The song already playing, started again (Repeat one, a move between engines, carrying a C64 tune on
+  here when the C64 goes), was accepted once and plays on without a question or a skip.
 - Setting off: the song plays, with a one-time notice.
+- A tune whose header declares BASIC, with BASIC not stored and no usable C64, is judged by the list's
+  grade for the lane in use; when the list has none, the declared requirement itself counts as low
+  fidelity (that is the header's verdict, not a missing grade read as low).
 - A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
   no "unknown" grade: a lane that was not measured cannot be encoded.
+- The opening of the next and previous tracks is warmed past songs the playlist would skip
+  (`wouldPassOver`). The prefetch of a tune's bytes from the Ultimate needs a ready C64, which plays
+  such a song itself, so it needs no such check.
 
 **The embedded files** live in `src/lib/romDependency/data/`. They are the HVSC #85 release list
 from the sidflow-data release `rom-audit-hvsc85-20261030`: 19,836 bytes listing 696 files and 1,556
