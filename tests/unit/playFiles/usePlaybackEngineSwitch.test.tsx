@@ -168,6 +168,11 @@ describe("usePlaybackEngineSwitch", () => {
     expect(h.soundsHere()).toBe(false);
     expect(isRemotePlaybackActive()).toBe(true);
     expect(h.playItem).toHaveBeenCalledTimes(1);
+    // The tune the listener is hearing, moved: one that needs the C64 ROMs is not passed over on the way.
+    expect(h.playItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ origin: "auto", romDependencyAccepted: true }),
+    );
   });
 
   it("does not restart a tune that a burst of switches leaves where it already plays", async () => {

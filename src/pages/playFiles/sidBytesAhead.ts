@@ -69,6 +69,9 @@ export const resolveUltimateSidDurationByMd5 = async (path: string, songNr?: num
   }
 };
 
+/** How many songs in a row that a playlist would pass over the warming looks past, in each direction. */
+const MAX_PASSED_OVER = 4;
+
 /**
  * Render the opening of the next and previous tracks, so skipping to either starts instantly.
  *
@@ -78,6 +81,9 @@ export const resolveUltimateSidDurationByMd5 = async (path: string, songNr?: num
  * Skipped for tracks whose bytes are not already to hand, except those `prefetchedBytes` holds:
  * the prefetcher reads those from the Ultimate under its own limits (one request, background
  * priority, only while the device is idle), so warming them costs the device nothing more.
+ *
+ * A track that `passedOver` says the playlist would skip (it needs the C64 ROMs) is not the one that
+ * plays next, so the warming moves on to the one after it.
  */
 export const warmNeighbouringLeadIns = async (
   playlist: PlaylistItem[],
@@ -85,40 +91,45 @@ export const warmNeighbouringLeadIns = async (
   resolveHvscRuntimeRequest: (item: PlaylistItem) => Promise<{ request: PlayRequest } | null>,
   controller: LocalSidPlaybackController,
   prefetchedBytes?: (item: PlaylistItem) => Blob | null,
+  passedOver?: (sidBytes: Uint8Array, songNr: number | undefined) => Promise<boolean>,
 ) => {
-  for (const offset of [1, -1]) {
-    const neighbour = playlist[index + offset];
-    if (!neighbour) continue;
-    // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
-    // library, which is local and cheap. Anything still without a file after that is coming over
-    // the network, and is left alone rather than fetched on a guess.
-    const resolved = neighbour.request.file
-      ? neighbour.request
-      : ((
-          await resolveHvscRuntimeRequest(neighbour).catch((error: unknown) => {
-            // Falling back to the unresolved request is right — this is speculative warming and
-            // must never disturb what is playing — but a resolution that always fails means every
-            // skip starts cold, which is a silent, permanent loss of the feature.
-            addLog("debug", "Playback: could not resolve a neighbouring track for lead-in warming", {
-              error: (error as Error)?.message ?? String(error),
-            });
-            return null;
-          })
-        )?.request ?? neighbour.request);
-    const file: { arrayBuffer: () => Promise<ArrayBuffer> } | undefined =
-      resolved.file ?? prefetchedBytes?.(neighbour) ?? undefined;
-    if (!file) continue;
-    try {
-      const bytes = await file.arrayBuffer();
-      const tuneIndex = toEngineTuneIndex(resolved.songNr);
-      controller.warmLeadIn(buildRenderedTuneKey(neighbour.id, tuneIndex), bytes, tuneIndex, LEAD_IN_SECONDS);
-    } catch (error) {
-      // A track that cannot be read now is simply not warmed; it will be read when it is played.
-      addLog("debug", "Lead-in warm skipped", {
-        service: "local-sid",
-        item: neighbour.label,
-        error: (error as Error)?.message ?? String(error),
-      });
+  for (const step of [1, -1]) {
+    for (let hops = 1; hops <= MAX_PASSED_OVER + 1; hops += 1) {
+      const neighbour = playlist[index + step * hops];
+      if (!neighbour) break;
+      // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
+      // library, which is local and cheap. Anything still without a file after that is coming over
+      // the network, and is left alone rather than fetched on a guess.
+      const resolved = neighbour.request.file
+        ? neighbour.request
+        : ((
+            await resolveHvscRuntimeRequest(neighbour).catch((error: unknown) => {
+              // Falling back to the unresolved request is right — this is speculative warming and
+              // must never disturb what is playing — but a resolution that always fails means every
+              // skip starts cold, which is a silent, permanent loss of the feature.
+              addLog("debug", "Playback: could not resolve a neighbouring track for lead-in warming", {
+                error: (error as Error)?.message ?? String(error),
+              });
+              return null;
+            })
+          )?.request ?? neighbour.request);
+      const file: { arrayBuffer: () => Promise<ArrayBuffer> } | undefined =
+        resolved.file ?? prefetchedBytes?.(neighbour) ?? undefined;
+      if (!file) break;
+      try {
+        const bytes = await file.arrayBuffer();
+        if (await passedOver?.(new Uint8Array(bytes), resolved.songNr)) continue;
+        const tuneIndex = toEngineTuneIndex(resolved.songNr);
+        controller.warmLeadIn(buildRenderedTuneKey(neighbour.id, tuneIndex), bytes, tuneIndex, LEAD_IN_SECONDS);
+      } catch (error) {
+        // A track that cannot be read now is simply not warmed; it will be read when it is played.
+        addLog("debug", "Lead-in warm skipped", {
+          service: "local-sid",
+          item: neighbour.label,
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+      break;
     }
   }
 };

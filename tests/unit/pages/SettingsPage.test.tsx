@@ -1424,7 +1424,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const hostInput = screen.getByTestId("settings-device-host");
-    const discoverButton = screen.getByRole("button", { name: /discover devices/i });
+    const discoverButton = screen.getByTestId("settings-discover-devices");
 
     expect(hostInput).not.toBeDisabled();
     fireEvent.click(discoverButton);
@@ -1483,7 +1483,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    fireEvent.click(screen.getByTestId("settings-use-discovered-device-id:38c1ba"));
 
     await waitFor(() => {
       expect(mockPersistDiscoveredDevice).toHaveBeenCalledWith(candidate, { select: true, passwordPresent: false });
@@ -1522,10 +1522,16 @@ describe("SettingsPage", () => {
     };
 
     renderSettingsPage();
-    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    fireEvent.click(screen.getByTestId("settings-use-discovered-device-id:38c1ba"));
 
     await waitFor(() => expect(mockSwitchSavedDevice).toHaveBeenCalledWith("discovered-device"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Use" })).not.toBeDisabled());
+    // Query by test id: a role + accessible-name lookup walks the whole (large) Settings tree and
+    // takes seconds on a loaded machine, which alone can exhaust waitFor's 1 s budget.
+    await waitFor(() => {
+      const useButton = screen.getByTestId("settings-use-discovered-device-id:38c1ba");
+      expect(useButton).toHaveTextContent(/^Use$/);
+      expect(useButton).not.toBeDisabled();
+    });
     expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Discovered device selected" }));
     expect(reportUserError).not.toHaveBeenCalled();
   });
@@ -1575,12 +1581,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    fireEvent.click(screen.getByTestId("settings-use-discovered-device-id:busy"));
 
     // While the switch is pending the control shows progress and is disabled, so a second
     // tap cannot race a second persist+switch at the (overload-prone) device.
-    await waitFor(() => expect(screen.getByRole("button", { name: "Connecting" })).toBeDisabled());
-    fireEvent.click(screen.getByRole("button", { name: "Connecting" }));
+    await waitFor(() => expect(screen.getByTestId("settings-use-discovered-device-id:busy")).toBeDisabled());
+    expect(screen.getByTestId("settings-use-discovered-device-id:busy")).toHaveTextContent("Connecting");
+    fireEvent.click(screen.getByTestId("settings-use-discovered-device-id:busy"));
     expect(mockSwitchSavedDevice).toHaveBeenCalledTimes(1);
 
     resolveSwitch?.(undefined);
@@ -1615,7 +1622,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Use" }));
+    fireEvent.click(screen.getByTestId("settings-use-discovered-device-address:192.0.2.14"));
 
     expect(screen.getByTestId("settings-device-password-input")).toBeInTheDocument();
     expect(mockPersistDiscoveredDevice).not.toHaveBeenCalled();
@@ -1717,6 +1724,19 @@ describe("SettingsPage", () => {
 
     expect(toggle).toHaveAttribute("data-state", "unchecked");
     expect(vi.mocked(saveFriendlySidNames)).toHaveBeenCalledWith(false);
+  });
+
+  it("offers Skip songs that need the C64 ROMs in Play and disk, on by default, and writes the choice back", () => {
+    renderSettingsPage();
+
+    const toggle = screen.getByTestId("settings-skip-rom-dependent-songs");
+    expect(toggle).toHaveAttribute("data-state", "checked");
+    expect(screen.getByText("Skip songs that need the C64 ROMs")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("data-state", "unchecked");
+    expect(localStorage.getItem("c64u_skip_rom_dependent_songs")).toBe("0");
   });
 
   it("persists HTTP, FTP, and Telnet ports when saving connection settings", async () => {

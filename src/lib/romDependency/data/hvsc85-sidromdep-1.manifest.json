@@ -1,0 +1,192 @@
+{
+  "binary": {
+    "bytes": 19836,
+    "decisionRecordBytes": 5,
+    "file": "hvsc85-sidromdep-1.bin",
+    "fileRecordBytes": 17,
+    "headerBytes": 224,
+    "payloadSha256": "ecdf519d1ce41f14d7d0b47dc50cf031145687fcdd3bd5fd9b2a1d32f5c4060a",
+    "sections": {
+      "decision": {
+        "bytes": 7780,
+        "offset": 12056
+      },
+      "file": {
+        "bytes": 11832,
+        "offset": 224
+      }
+    },
+    "sha256": "cc1ede22deb7268cd5f0d56c00a13c3b8b0a5ec2f9d25b94f3f17d32b80437a7"
+  },
+  "complete": true,
+  "counts": {
+    "excludedUnmeasuredSubtunes": 0,
+    "listedFiles": 696,
+    "listedSubtunes": 1556,
+    "perLane": {
+      "residfpKernalBasic": {
+        "bands": {
+          "0": 0,
+          "1-63": 0,
+          "128-191": 0,
+          "192-253": 0,
+          "64-127": 0
+        },
+        "belowRecommended": 0
+      },
+      "residfpNone": {
+        "bands": {
+          "0": 1432,
+          "1-63": 23,
+          "128-191": 68,
+          "192-253": 22,
+          "64-127": 11
+        },
+        "belowRecommended": 1466
+      },
+      "sidliteKernalBasic": {
+        "bands": {
+          "0": 0,
+          "1-63": 0,
+          "128-191": 0,
+          "192-253": 0,
+          "64-127": 0
+        },
+        "belowRecommended": 0
+      },
+      "sidliteNone": {
+        "bands": {
+          "0": 1436,
+          "1-63": 20,
+          "128-191": 83,
+          "192-253": 4,
+          "64-127": 12
+        },
+        "belowRecommended": 1468
+      }
+    },
+    "sourceFiles": 61157,
+    "sourceSubtunes": 87868,
+    "subtunesBelowRecommended": 1469
+  },
+  "format": {
+    "id": "sidromdep-1",
+    "specification": "doc/rom-dependency-list.md",
+    "version": 1
+  },
+  "humanReadable": {
+    "file": "hvsc85-sidromdep-1.json",
+    "sha256": "2815df1cc3cb0f0f80a573798e9004f9e5f95024a86d77f241fc450b12da8f08"
+  },
+  "hvscRelease": 85,
+  "lanes": [
+    "sidliteNone",
+    "sidliteKernalBasic",
+    "residfpNone",
+    "residfpKernalBasic"
+  ],
+  "listingCeiling": 191,
+  "measuredProfile": {
+    "configurations": {
+      "kernalBasic": "KERNAL + BASIC supplied, CHARGEN not supplied",
+      "none": "no ROMs supplied"
+    },
+    "gradingDesign": "doc/research/hvsc-rom-fidelity-grading.md",
+    "observationHorizon": {
+      "fallbackMs": 300000,
+      "marginMs": 5000,
+      "minimumMs": 10000,
+      "rule": "max(10 s, Songlengths.md5 duration + 5 s); 300 s when the subtune has no valid Songlengths entry",
+      "source": "Songlengths.md5"
+    },
+    "reference": "the same engine with the authentic KERNAL, BASIC and CHARGEN",
+    "referenceRoms": {
+      "basic": "89878cea0a268734696de11c4bae593eaaa506465d2029d619c0e0cbccdfa62d",
+      "chargen": "fd0d53b8480e86163ac98998976c72cc58d5dd8eb824ed7b829774e74213b420",
+      "kernal": "83c60d47047d7beab8e5b7bf6f67f80daa088b7a6a27de0d7e016f6484042721"
+    },
+    "romSetId": "9da2060d53120801f1b36be918b74ae7f95ca80a7d4fb99b3b2b2684909a2eed",
+    "songlengthsFileVerified": true,
+    "sourceProfile": {
+      "binaries": {
+        "residfp": "a17689d98bb2ad0a17bf69e7f2631253c89b24d697a162cb9c87c68e46544e47",
+        "sidlite": "114751fe5aafcfa1048629caf8acc2ba2f2acddf4c1628e1c0c25598b142fa04"
+      },
+      "engines": [
+        "sidlite",
+        "residfp"
+      ],
+      "frozen": {
+        "alignment": {
+          "blockMaxD": 3000,
+          "blockWrites": 1500,
+          "globalMaxD": 2000,
+          "workBudget": 250000000
+        },
+        "clocks": {
+          "NTSC": 1022727,
+          "PAL": 985248
+        },
+        "consumer": {
+          "listCeiling": 191,
+          "recommendedMinGrade": 128
+        },
+        "digi": {
+          "minWrites": 100,
+          "windowCycles": 100000
+        },
+        "gamma": 1,
+        "horizonRule": "Songlengths.md5 duration + 5 s, minimum 10 s; 300 s when the length is absent (scripts/rom-audit/methodology.ts observationHorizon)",
+        "lateDivergenceFraction": 0.5,
+        "maxAlignableOffsetCycles": 20000,
+        "maxInitWrites": 32,
+        "minSimilarMusic": 0.5,
+        "nativeProfile": {
+          "chargenUnreadShortcut": true,
+          "lanes": [
+            "none=mask0",
+            "kernal+basic=mask3"
+          ],
+          "powerOnDelay": 8191,
+          "pullEvents": 256,
+          "reference": "mask7",
+          "sampleRate": 48000
+        },
+        "nearEqualCountRatio": 0.9,
+        "severity": {
+          "bandRatio": 1.26,
+          "deadZoneDb": 3,
+          "fftSize": 1024,
+          "noPlaybackQ": 0.001976284584980237,
+          "quiet": 0.001,
+          "saturationDb": 15,
+          "windowFrames": 2048
+        },
+        "tempoDriftMs": 10,
+        "toleranceMs": 2
+      },
+      "gradedSubtunes": 87868,
+      "lanes": [
+        "none",
+        "kernal+basic"
+      ],
+      "romSetId": "9da2060d53120801f1b36be918b74ae7f95ca80a7d4fb99b3b2b2684909a2eed",
+      "romSha256": {
+        "basic": "89878cea0a268734696de11c4bae593eaaa506465d2029d619c0e0cbccdfa62d",
+        "chargen": "fd0d53b8480e86163ac98998976c72cc58d5dd8eb824ed7b829774e74213b420",
+        "kernal": "83c60d47047d7beab8e5b7bf6f67f80daa088b7a6a27de0d7e016f6484042721"
+      },
+      "scope": "full"
+    }
+  },
+  "provenance": {
+    "corpusId": "4b66fe03e72e18155ee4e14a0a7fd3f2c4de2ed1a467296156d5642e716f132e",
+    "gradingMethodologySha256": "bf3b3efffe4cbe69c538b7d81aa1b84b5b8aa98a8dc312b00500062f57f7c90c",
+    "songlengthsSha256": "3f2bb5c14e3396fb20979cb017421386dc9e32162999974ad1e4f0a230dc397e",
+    "sourceSha256": "47fd683f67895f18ba1192aa92aec4827c28db2fa0166f1b6cbf6f1d8aa49e86"
+  },
+  "recommendedMinGrade": 128,
+  "releasable": true,
+  "semantics": "allow-by-default: only listed file/subtune records (some lane graded <= 191) are recorded; unlisted means every lane > 191",
+  "status": "release"
+}

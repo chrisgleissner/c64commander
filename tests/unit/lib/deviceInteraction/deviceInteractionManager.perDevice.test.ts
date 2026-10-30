@@ -95,7 +95,8 @@ describe("withRestInteraction per-device REST slot", () => {
 
     await flushTimersAndMicrotasks();
 
-    expect(events).toEqual(["u2-info-start", "c64u-readmem-start"]);
+    // Separate slots start independently, so only that both started counts, not in which order.
+    expect([...events].sort()).toEqual(["c64u-readmem-start", "u2-info-start"]);
     await expect(raster).resolves.toBe("c64u");
     unreachable.release();
     await expect(unreachableInfo).resolves.toBe("u2");
@@ -117,7 +118,8 @@ describe("withRestInteraction per-device REST slot", () => {
 
     await flushTimersAndMicrotasks();
 
-    expect(events).toEqual(["u2-start", "c64u-start"]);
+    // Separate slots start independently, so only that both started counts, not in which order.
+    expect([...events].sort()).toEqual(["c64u-start", "u2-start"]);
     await expect(reachableInfo).resolves.toBe("c64u");
     unreachable.release();
     await unreachableInfo;
@@ -257,7 +259,8 @@ describe("withRestInteraction per-device REST slot", () => {
 
     await flushTimersAndMicrotasks();
 
-    expect(events).toEqual(["u2-start", "c64u-start"]);
+    // Separate slots start independently, so only that both started counts, not in which order.
+    expect([...events].sort()).toEqual(["c64u-start", "u2-start"]);
     await expect(reachableSession).resolves.toBe("c64u");
     unreachable.release();
     await expect(unreachableSession).resolves.toBe("u2");

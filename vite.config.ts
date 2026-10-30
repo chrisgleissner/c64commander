@@ -135,7 +135,8 @@ export default defineConfig(() => ({
       overlay: false,
     },
   },
-  assetsInclude: ["**/*.yaml", "**/*.yml"],
+  // `.bin` so the embedded ROM dependency list can be imported with `?inline` (src/lib/romDependency).
+  assetsInclude: ["**/*.yaml", "**/*.yml", "**/*.bin"],
   build: {
     outDir: "dist",
     // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.

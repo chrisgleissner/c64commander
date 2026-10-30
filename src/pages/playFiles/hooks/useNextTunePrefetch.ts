@@ -13,6 +13,7 @@ import { getDiagnosticsActivitySnapshot } from "@/lib/diagnostics/diagnosticsAct
 import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
 import { NextTunePrefetcher } from "@/pages/playFiles/nextTunePrefetch";
+import { wouldPassOver } from "@/pages/playFiles/resolveLocalRoute";
 import { warmNeighbouringLeadIns } from "@/pages/playFiles/sidBytesAhead";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
@@ -52,6 +53,7 @@ export const useNextTunePrefetch = (input: NextTunePrefetchInput) => {
         resolveHvscRuntimeRequest,
         getLocalSidPlayback(),
         (item) => ref.current?.prefetcher.peek(item.id) ?? null,
+        wouldPassOver,
       );
     };
     const prefetcher = new NextTunePrefetcher({

@@ -22,17 +22,17 @@
  *
  * Storage is `localStorage`, matching the rest of the app's settings; on Android
  * and iOS the WebView's local storage lives inside the app's private data
- * directory. Two 8 KiB images base64-encode to ~22 KiB, comfortably inside the
- * quota.
+ * directory. Two 8 KiB images and the 4 KiB character ROM base64-encode to
+ * ~28 KiB, comfortably inside the quota.
  */
 
 import { addLog } from "@/lib/logging";
-import { C64_ROM_BYTES, romFingerprint, validateRomImage, type C64RomKind } from "./c64SystemRoms";
+import { C64_ROM_KINDS, romBytes, romFingerprint, validateRomImage, type C64RomKind } from "./c64SystemRoms";
 
 const STORAGE_KEY = "c64commander.localEngine.systemRoms.v1";
 
 export interface StoredRom {
-  /** Base64 of the raw 8 KiB image. */
+  /** Base64 of the raw image. */
   data: string;
   fingerprint: string;
   description: string;
@@ -93,12 +93,12 @@ function readRaw(): StoredRomSet {
 export function loadStoredRoms(): Partial<Record<C64RomKind, Uint8Array>> {
   const stored = readRaw();
   const result: Partial<Record<C64RomKind, Uint8Array>> = {};
-  for (const kind of ["kernal", "basic"] as const) {
+  for (const kind of C64_ROM_KINDS) {
     const entry = stored[kind];
     if (!entry) continue;
     try {
       const bytes = fromBase64(entry.data);
-      if (bytes.length !== C64_ROM_BYTES) continue;
+      if (bytes.length !== romBytes(kind)) continue;
       if (romFingerprint(bytes) !== entry.fingerprint) {
         addLog("warn", "Stored C64 ROM failed its fingerprint check; ignoring it", { kind });
         continue;
@@ -115,20 +115,18 @@ export function loadStoredRoms(): Partial<Record<C64RomKind, Uint8Array>> {
 /** Descriptions only — never the bytes. Safe to render and to log. */
 export function loadRomSummaries(): RomSummary[] {
   const stored = readRaw();
-  return (["kernal", "basic"] as const)
-    .map((kind) => {
-      const entry = stored[kind];
-      return entry
-        ? {
-            kind,
-            description: entry.description,
-            fingerprint: entry.fingerprint,
-            capturedAt: entry.capturedAt,
-            capturedFrom: entry.capturedFrom,
-          }
-        : null;
-    })
-    .filter((summary): summary is RomSummary => summary !== null);
+  return C64_ROM_KINDS.map((kind) => {
+    const entry = stored[kind];
+    return entry
+      ? {
+          kind,
+          description: entry.description,
+          fingerprint: entry.fingerprint,
+          capturedAt: entry.capturedAt,
+          capturedFrom: entry.capturedFrom,
+        }
+      : null;
+  }).filter((summary): summary is RomSummary => summary !== null);
 }
 
 /** True when both images the engine needs are present and valid. */

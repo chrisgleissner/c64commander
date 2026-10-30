@@ -23,6 +23,7 @@ internal class EzTuneRequest(
     val sampleRate: Int,
     val kernal: ByteArray?,
     val basic: ByteArray?,
+    val chargen: ByteArray?,
     /** [SidplayEzNative.MODEL_6581] or [SidplayEzNative.MODEL_8580]: the fallback, never forced. */
     val fallbackModel: Int,
 )
@@ -114,7 +115,7 @@ internal class SidplayEzRenderer(
   }
 
   private fun loadInto(target: Long, request: EzTuneRequest) {
-    native.nativeSetRoms(target, request.kernal, request.basic, null)
+    native.nativeSetRoms(target, request.kernal, request.basic, request.chargen)
     val error = native.nativeLoad(target, request.sid, request.songIndex, request.fallbackModel)
     if (error != null) throw IllegalArgumentException(error)
   }

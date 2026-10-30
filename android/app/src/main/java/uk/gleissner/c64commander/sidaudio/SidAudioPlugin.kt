@@ -365,6 +365,7 @@ class SidAudioPlugin : Plugin() {
         sampleRate = getInt("sampleRate") ?: 48000,
         kernal = getString("kernal")?.let { Base64.decode(it, Base64.NO_WRAP) },
         basic = getString("basic")?.let { Base64.decode(it, Base64.NO_WRAP) },
+        chargen = getString("chargen")?.let { Base64.decode(it, Base64.NO_WRAP) },
         fallbackModel = if (getString("sidModel") == "MOS6581") SidplayEzNative.MODEL_6581 else SidplayEzNative.MODEL_8580,
     )
   }

@@ -33,12 +33,13 @@ Known limitations are listed in [Limitations](#limitations).
 4. [The native audio feed](#the-native-audio-feed)
 5. [libSidplayEZ: build, wrapper and semantics](#libsidplayez-build-wrapper-and-semantics)
 6. [Renderer selection and fallback](#renderer-selection-and-fallback)
-7. [Platform support](#platform-support)
-8. [Equivalence of the renderers](#equivalence-of-the-renderers)
-9. [Performance](#performance)
-10. [Testing](#testing)
-11. [Limitations](#limitations)
-12. [Troubleshooting](#troubleshooting)
+7. [Songs that need the C64 ROMs](#songs-that-need-the-c64-roms)
+8. [Platform support](#platform-support)
+9. [Equivalence of the renderers](#equivalence-of-the-renderers)
+10. [Performance](#performance)
+11. [Testing](#testing)
+12. [Limitations](#limitations)
+13. [Troubleshooting](#troubleshooting)
 
 ## Components
 
@@ -307,6 +308,79 @@ first tune uses. A stored
 preference for an unavailable renderer is kept, and Settings shows what will play here.
 
 Settings (`SidRadioSettingsSection.tsx`) offers Fast & accurate only where libSidplayEZ runs.
+
+## Songs that need the C64 ROMs
+
+An embedded list grades, from 0 to 255, how faithfully the HVSC songs that suffer without the C64's
+ROMs still play on a phone (255 bit-exact, 254 same music re-timed, 1-253 degraded, 0 no playback),
+one grade per engine and ROM configuration. The format is `sidromdep-1`, specified in
+[`doc/rom-dependency-list.md`](https://github.com/chrisgleissner/sidflow/blob/main/doc/rom-dependency-list.md)
+in the sidflow repository; `src/lib/romDependency/romDependencyList.ts` ports its reference decoder
+(the reading half only; section numbers in its comments are the specification's). The list is
+allow-by-default: a song that is not listed plays. Nothing here proves that an unlisted song is fine.
+
+**Which measurement applies** (`resolveActiveRomLane`, `romDependencyPolicy.ts`). The list carries
+one grade per (engine, ROM configuration); a song is passed over when the grade of the configuration
+in use is **below the list's own `recommended_min_grade`** (a grade equal to it plays). Only songs with a
+grade at or below the list's `listing_ceiling` (191 in the release) are listed, and the threshold is
+at most ceiling+1, so an unlisted song is never skipped. Commander offers no other number, only the
+on/off switch below.
+
+| Engine in use | KERNAL + BASIC stored, authentic, no character ROM | Any stored image not authentic (for example JiffyDOS) | Otherwise (none, or only one image) |
+| ------------- | -------------------------------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| SIDLite       | SIDLite with KERNAL + BASIC                        | lowest of the four lanes, approximate                 | SIDLite with no ROMs                |
+| reSIDfp       | reSIDfp with KERNAL + BASIC                        | lowest of the four lanes, approximate                 | reSIDfp with no ROMs                |
+| libSidplayEZ  | read as reSIDfp, approximate                       | lowest of the four lanes, approximate                 | read as reSIDfp, approximate        |
+
+"Authentic" means the SHA-256 of the image equals the reference hash in the pinned manifest. A ROM set
+that matches neither the reference nor a measured configuration (KERNAL or BASIC not authentic, or a
+character ROM that is not) has no applicable measurement, so the lowest grade of the four lanes is
+used: the conservative hint the specification allows (§10.1). libSidplayEZ is not one of the measured
+engine builds either; reading it as reSIDfp, the engine it is built on, is a judgement, not a
+measurement. Either way the verdict is marked `approximate` in the log line. The character
+ROM is stored only after **Read from C64** in Settings has copied it, by briefly running a short
+routine on the C64 (`characterRomReader.ts`; the background read takes KERNAL and BASIC only). With
+all three images authentic this is the reference configuration, where the list restricts nothing.
+Real C64 Ultimate playback never consults the list.
+
+**What happens** (`usePlaybackController.playItem`, `romDependencyGate.ts`). The check runs once the
+tune's bytes are read and the route is known, so it costs one MD5 of the file as played.
+
+- A C64 can play it (connected, not Demo Mode, in reach): the existing ROM fallback sends it there
+  (`romFallbackDecision`, notice `rom-on-c64` or `rom-list-on-c64`) and, if the ROMs are missing,
+  reads them from it in the background. A connection still being discovered counts as usable, because
+  the C64 route discovers on demand (`isC64UsableForSid`).
+- No usable C64, **Settings → Play and disk → Skip songs that need the C64 ROMs** on (the default):
+  a playlist, station, auto-advance, Next or Previous skips the song (`RomDependentSongSkipped`, one
+  notice per session; `playPassingOver` moves on to the next song that can play, skipping tracks only
+  a C64 can play as well). So does the first song of a station, or of Play pressed with no song
+  chosen. Only a song the listener picked asks first (`RomDependencyDialog`, Play anyway or Cancel).
+  The question comes before anything playing is stopped: Cancel leaves the current tune playing with
+  its auto-advance armed, and a Stop, skip or other launch while the question is open wins over a late
+  Play anyway.
+- The song already playing, started again (Repeat one, a move between engines, carrying a C64 tune on
+  here when the C64 goes), was accepted once and plays on without a question or a skip.
+- Setting off: the song plays, with a one-time notice.
+- A tune whose header declares BASIC, with BASIC not stored and no usable C64, is judged by the list's
+  grade for the lane in use; when the list has none, the declared requirement itself counts as low
+  fidelity (that is the header's verdict, not a missing grade read as low).
+- A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
+  no "unknown" grade: a lane that was not measured cannot be encoded.
+- The opening of the next and previous tracks is warmed past songs the playlist would skip
+  (`wouldPassOver`). The prefetch of a tune's bytes from the Ultimate needs a ready C64, which plays
+  such a song itself, so it needs no such check.
+
+**The embedded files** live in `src/lib/romDependency/data/`. They are the HVSC #85 release list
+from the sidflow-data release `rom-audit-hvsc85-20261030`: 19,836 bytes listing 696 files and 1,556
+subtunes, of which 1,469 grade below the threshold of 128 in at least one lane (nearly all BASIC
+tunes, about 1% of RSIDs and 28 PSIDs without ROMs). To ship a newer list, copy the release's
+`hvsc<N>-sidromdep-1.bin` and `.manifest.json` over `hvsc85-sidromdep-1.bin` and
+`hvsc85-sidromdep-1.manifest.json` (or change the two import names in `embeddedRomDependencyList.ts`)
+and set `PINNED_MANIFEST_SHA256` to the manifest SHA-256 printed by the sidflow
+`scripts/rom-dependency-list/verify.ts`. At load the manifest is checked against that pin, the binary
+against the manifest, and the binary against every rule of the specification (§13.1); a list that
+fails, or was made from an incomplete audit, is logged as an error and ignored. Tests use a synthetic
+list encoded by the reference encoder (`tests/fixtures/romDependency/`).
 
 ## Platform support
 
