@@ -8,7 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "@/lib/playback/playbackActivitySignal";
-import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroundExecution";
+import { BackgroundExecution, type NowPlayingInfo, type PlaybackPositionInfo } from "@/lib/native/backgroundExecution";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { getPlatform } from "@/lib/native/platform";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -27,6 +27,8 @@ let publishedPaused = false;
 let currentNowPlaying: NowPlayingInfo | null = null;
 /** The last tune the bridge accepted, so an unchanged track costs no bridge call. */
 let publishedNowPlaying: NowPlayingInfo | null = null;
+let currentPosition: PlaybackPositionInfo | null = null;
+let publishedPosition: PlaybackPositionInfo | null = null;
 
 // Loaded when a session first plays rather than with the startup bundle. Each load applies the latest wish, so
 // a stop that lands before an earlier start's load has resolved still wins.
@@ -84,13 +86,22 @@ const buildFailureDetails = (error: unknown, logContext: BackgroundExecutionLogC
   };
 };
 
-const buildOperationError = (operation: "start" | "stop" | "playback-state" | "now-playing", error: unknown) => {
+const buildOperationError = (
+  operation: "start" | "stop" | "playback-state" | "now-playing" | "playback-position",
+  error: unknown,
+) => {
   const normalizedError = toError(error);
   return new Error(`Background execution ${operation} failed: ${normalizedError.message}`);
 };
 
 const sameNowPlaying = (left: NowPlayingInfo | null, right: NowPlayingInfo | null) =>
-  left?.title === right?.title && left?.artist === right?.artist && left?.durationMs === right?.durationMs;
+  left?.title === right?.title &&
+  left?.artist === right?.artist &&
+  left?.durationMs === right?.durationMs &&
+  left?.album === right?.album;
+
+const samePosition = (left: PlaybackPositionInfo | null, right: PlaybackPositionInfo | null) =>
+  left?.positionMs === right?.positionMs && left?.playing === right?.playing && left?.seekable === right?.seekable;
 
 /**
  * Hands the current tune to the native session. Separated from the page-facing entry point because
@@ -113,11 +124,28 @@ const publishNowPlaying = async (logContext: BackgroundExecutionLogContext) => {
   }
 };
 
+/** Same shape as [publishNowPlaying]: remembered, deduped, and retryable after a failure. */
+const publishPosition = async (logContext: BackgroundExecutionLogContext) => {
+  if (!currentPosition) return;
+  if (samePosition(currentPosition, publishedPosition)) return;
+  const previouslyPublished = publishedPosition;
+  const info = currentPosition;
+  publishedPosition = info;
+  try {
+    await BackgroundExecution.setPlaybackPosition(info);
+  } catch (error) {
+    publishedPosition = previouslyPublished;
+    addLog("error", "Background execution playback position update failed", buildFailureDetails(error, logContext));
+    throw buildOperationError("playback-position", error);
+  }
+};
+
 export const startBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
   activeCount += 1;
   if (activeCount > 1) return;
   publishedPaused = false;
   publishedNowPlaying = null;
+  publishedPosition = null;
   try {
     await BackgroundExecution.start();
   } catch (error) {
@@ -136,6 +164,7 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
   // names the wrong thing is not a reason to fail the start the user asked for.
   publishedNowPlaying = null;
   await publishNowPlaying(logContext).catch(() => undefined);
+  await publishPosition(logContext).catch(() => undefined);
 };
 
 export const stopBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
@@ -145,6 +174,8 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   publishedPaused = false;
   currentNowPlaying = null;
   publishedNowPlaying = null;
+  currentPosition = null;
+  publishedPosition = null;
   stopHeartbeat();
   keepPageAwake(false);
   // A playlist that ends on its own stops only this service; audio kept for it while hidden must hear that.
@@ -199,6 +230,20 @@ export const setBackgroundExecutionNowPlaying = async (
   await publishNowPlaying(logContext);
 };
 
+/**
+ * Publishes where the lock-screen position marker stands. Called on the edges that move it (a tune
+ * starts, playback pauses or resumes, a seek lands, the length becomes known) and never on a timer:
+ * Android advances the marker itself. Remembered without a live session, like the tune.
+ */
+export const setBackgroundExecutionPosition = async (
+  info: PlaybackPositionInfo,
+  logContext: BackgroundExecutionLogContext,
+) => {
+  currentPosition = info;
+  if (activeCount <= 0) return;
+  await publishPosition(logContext);
+};
+
 export const resetBackgroundExecutionState = () => {
   stopHeartbeat();
   if (keepAliveWanted) keepPageAwake(false);
@@ -206,6 +251,8 @@ export const resetBackgroundExecutionState = () => {
   publishedPaused = false;
   currentNowPlaying = null;
   publishedNowPlaying = null;
+  currentPosition = null;
+  publishedPosition = null;
 };
 
 // True while this JS manager believes background execution is active. The Play

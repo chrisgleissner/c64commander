@@ -31,7 +31,15 @@ class MediaSessionPublisherTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val relayed = mutableListOf<String>()
-    private val publisher = MediaSessionPublisher(context) { relayed += it }
+    private val seeks = mutableListOf<Long>()
+    private var nowMs = 1_000L
+    private val publisher =
+            MediaSessionPublisher(
+                    context,
+                    relayTransportCommand = { relayed += it },
+                    relaySeekRequest = { seeks += it },
+                    elapsedRealtimeMs = { nowMs },
+            )
 
     @Before
     fun setUp() {
@@ -87,9 +95,133 @@ class MediaSessionPublisherTest {
     @Test
     fun nowPlayingIsNormalisedAndARepeatReportsNoChange() {
         assertTrue(publisher.updateNowPlaying(null, "  Commando ", "", 0L))
-        assertEquals(NowPlayingMetadata(title = "Commando", artist = null, durationMs = null), publisher.nowPlaying)
+        assertEquals(
+                NowPlayingMetadata(title = "Commando", artist = null, durationMs = null, album = null),
+                publisher.nowPlaying,
+        )
 
         assertFalse(publisher.updateNowPlaying(null, "Commando", "   ", -5L))
+    }
+
+    @Test
+    fun albumIsPartOfTheNowPlayingIdentity() {
+        assertTrue(publisher.updateNowPlaying(null, "Commando", null, null, "Tune 3 of 19"))
+        assertFalse(publisher.updateNowPlaying(null, "Commando", null, null, " Tune 3 of 19 "))
+        assertTrue(publisher.updateNowPlaying(null, "Commando", null, null, "Tune 4 of 19"))
+        assertTrue(publisher.updateNowPlaying(null, "Commando", null, null, "  "))
+        assertNull(publisher.nowPlaying.album)
+    }
+
+    @Test
+    fun metadataCarriesTheAlbumOnlyWhenThereIsOne() {
+        val session = MediaSession(context, "test")
+
+        publisher.updateNowPlaying(session, "Commando", null, null, "Tune 3 of 19")
+        assertEquals("Tune 3 of 19", RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_ALBUM))
+
+        publisher.updateNowPlaying(session, "Commando", null, null, null)
+        assertFalse(RecordingMediaSessionShadow.lastMetadata?.containsKey(MediaMetadata.METADATA_KEY_ALBUM) ?: true)
+    }
+
+    @Test
+    fun theLockScreenHasNoPositionUntilTheWebLayerReportsOne() {
+        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(PlaybackState.PLAYBACK_POSITION_UNKNOWN, state.position)
+    }
+
+    @Test
+    fun aReportedPositionAdvancesAtSpeedOneWhilePlaying() {
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 61_000L, playing = true, seekable = false)
+
+        nowMs += 2_000L
+        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(63_000L, state.position)
+        assertEquals(1.0f, state.playbackSpeed)
+        assertEquals(nowMs, state.lastPositionUpdateTime)
+    }
+
+    @Test
+    fun aReportedPausedPositionHasSpeedZeroAndStandsStill() {
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 61_000L, playing = false, seekable = false)
+
+        nowMs += 30_000L
+        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(61_000L, state.position)
+        assertEquals(0.0f, state.playbackSpeed)
+    }
+
+    @Test
+    fun theServicePausingFreezesThePositionWhereItWasAndResumingContinuesFromThere() {
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 10_000L, playing = true, seekable = false)
+
+        nowMs += 3_000L
+        val paused = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
+        nowMs += 60_000L
+        val stillPaused = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
+        val resumed = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        nowMs += 2_000L
+        val running = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(13_000L, paused.position)
+        assertEquals(0.0f, paused.playbackSpeed)
+        assertEquals(13_000L, stillPaused.position)
+        assertEquals(13_000L, resumed.position)
+        assertEquals(1.0f, resumed.playbackSpeed)
+        assertEquals(15_000L, running.position)
+    }
+
+    @Test
+    fun aStaleSessionFreezesThePositionAndContinuesWhenTheWebLayerReturns() {
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 10_000L, playing = true, seekable = true)
+
+        nowMs += 4_000L
+        val stale = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = true)
+        nowMs += 20_000L
+        val back = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(14_000L, stale.position)
+        assertEquals(0.0f, stale.playbackSpeed)
+        assertEquals(14_000L, back.position)
+    }
+
+    @Test
+    fun aPositionReportedWhileFrozenRestartsFromTheReportedValue() {
+        publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
+        nowMs += 5_000L
+        publisher.updatePosition(null, PlaybackState.STATE_PAUSED, false, 70_000L, playing = true, seekable = true)
+        nowMs += 1_000L
+
+        val resumed = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+
+        assertEquals(70_000L, resumed.position)
+    }
+
+    @Test
+    fun seekToIsOfferedOnlyToASeekableLiveSession() {
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 0L, playing = true, seekable = false)
+        assertEquals(
+                0L,
+                publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, false).actions and PlaybackState.ACTION_SEEK_TO,
+        )
+
+        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 0L, playing = true, seekable = true)
+        val live = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, false)
+        assertEquals(PlaybackState.ACTION_SEEK_TO, live.actions and PlaybackState.ACTION_SEEK_TO)
+        assertEquals(liveActions or PlaybackState.ACTION_SEEK_TO, live.actions)
+
+        val stale = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = true)
+        assertEquals(PlaybackState.ACTION_STOP, stale.actions)
+    }
+
+    @Test
+    fun callbackRelaysASeekWithItsPosition() {
+        publisher.callback.onSeekTo(93_000L)
+
+        assertEquals(listOf(93_000L), seeks)
+        assertTrue(relayed.isEmpty())
     }
 
     @Test

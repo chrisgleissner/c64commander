@@ -54,6 +54,13 @@ class BackgroundExecutionService : Service() {
         const val EXTRA_NOW_PLAYING_TITLE = "nowPlayingTitle"
         const val EXTRA_NOW_PLAYING_ARTIST = "nowPlayingArtist"
         const val EXTRA_NOW_PLAYING_DURATION_MS = "nowPlayingDurationMs"
+        const val EXTRA_NOW_PLAYING_ALBUM = "nowPlayingAlbum"
+        const val ACTION_SET_PLAYBACK_POSITION = "uk.gleissner.c64commander.action.SET_PLAYBACK_POSITION"
+        const val EXTRA_POSITION_MS = "positionMs"
+        const val EXTRA_POSITION_PLAYING = "positionPlaying"
+        const val EXTRA_POSITION_SEEKABLE = "positionSeekable"
+        const val ACTION_SEEK_REQUEST = "uk.gleissner.c64commander.action.SEEK_REQUEST"
+        const val EXTRA_SEEK_POSITION_MS = "seekPositionMs"
 
         /**
          * HARD27-007: how long a paused session keeps its notification and MediaSession alive so a
@@ -172,29 +179,60 @@ class BackgroundExecutionService : Service() {
          * live (or starting) session has anywhere to put it, so an update that arrives without one
          * is dropped rather than starting a service the web layer did not ask for.
          */
-        fun setNowPlaying(context: Context, title: String?, artist: String?, durationMs: Long?) {
+        fun setNowPlaying(
+                context: Context,
+                title: String?,
+                artist: String?,
+                durationMs: Long?,
+                album: String? = null,
+        ) =
+                forwardToSession(
+                        context,
+                        ACTION_SET_NOW_PLAYING,
+                        "now-playing update",
+                        { it.applyNowPlayingUpdate(title, artist, durationMs, album) },
+                ) { intent ->
+                    intent.putExtra(EXTRA_NOW_PLAYING_TITLE, title)
+                    intent.putExtra(EXTRA_NOW_PLAYING_ARTIST, artist)
+                    intent.putExtra(EXTRA_NOW_PLAYING_ALBUM, album)
+                    if (durationMs != null) {
+                        intent.putExtra(EXTRA_NOW_PLAYING_DURATION_MS, durationMs)
+                    }
+                }
+
+        /** Where the lock-screen position marker stands; dropped, like the tune, without a session. */
+        fun setPlaybackPosition(context: Context, positionMs: Long, playing: Boolean, seekable: Boolean) =
+                forwardToSession(
+                        context,
+                        ACTION_SET_PLAYBACK_POSITION,
+                        "playback position update",
+                        { it.applyPositionUpdate(positionMs, playing, seekable) },
+                ) { intent ->
+                    intent.putExtra(EXTRA_POSITION_MS, positionMs)
+                    intent.putExtra(EXTRA_POSITION_PLAYING, playing)
+                    intent.putExtra(EXTRA_POSITION_SEEKABLE, seekable)
+                }
+
+        private fun forwardToSession(
+                context: Context,
+                action: String,
+                what: String,
+                applyToRunning: (BackgroundExecutionService) -> Unit,
+                fillIntent: (Intent) -> Unit,
+        ) {
             val activeService = runningInstance
             if (isRunning && activeService != null) {
-                activeService.applyNowPlayingUpdate(title, artist, durationMs)
+                applyToRunning(activeService)
                 return
             }
             val pendingGeneration = startPendingGeneration
             if (pendingGeneration == null) {
-                AppLogger.debug(
-                        context,
-                        TAG,
-                        "Not running — ignoring now-playing update",
-                        "BackgroundExecutionService"
-                )
+                AppLogger.debug(context, TAG, "Not running — ignoring $what", "BackgroundExecutionService")
                 return
             }
             val intent = Intent(context, BackgroundExecutionService::class.java)
-            intent.action = ACTION_SET_NOW_PLAYING
-            intent.putExtra(EXTRA_NOW_PLAYING_TITLE, title)
-            intent.putExtra(EXTRA_NOW_PLAYING_ARTIST, artist)
-            if (durationMs != null) {
-                intent.putExtra(EXTRA_NOW_PLAYING_DURATION_MS, durationMs)
-            }
+            intent.action = action
+            fillIntent(intent)
             intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -261,7 +299,7 @@ class BackgroundExecutionService : Service() {
      * it opens and closes the only audio sink either source plays through (HARD27-006).
      */
 
-    private val mediaSessionPublisher = MediaSessionPublisher(this, ::relayTransportCommand)
+    private val mediaSessionPublisher = MediaSessionPublisher(this, ::relayTransportCommand, ::relaySeekRequest)
     internal val mediaSessionCallback: MediaSession.Callback
         get() = mediaSessionPublisher.callback
 
@@ -346,6 +384,16 @@ class BackgroundExecutionService : Service() {
                     intent.getStringExtra(EXTRA_NOW_PLAYING_TITLE),
                     intent.getStringExtra(EXTRA_NOW_PLAYING_ARTIST),
                     if (duration > 0L) duration else null,
+                    intent.getStringExtra(EXTRA_NOW_PLAYING_ALBUM),
+            )
+            return START_STICKY
+        }
+
+        if (action == ACTION_SET_PLAYBACK_POSITION) {
+            updatePositionInternal(
+                    intent.getLongExtra(EXTRA_POSITION_MS, 0L),
+                    intent.getBooleanExtra(EXTRA_POSITION_PLAYING, false),
+                    intent.getBooleanExtra(EXTRA_POSITION_SEEKABLE, false),
             )
             return START_STICKY
         }
@@ -472,13 +520,30 @@ class BackgroundExecutionService : Service() {
         )
     }
 
-    private fun applyNowPlayingUpdate(title: String?, artist: String?, durationMs: Long?) {
-        handler.post { updateNowPlayingInternal(title, artist, durationMs) }
+    private fun applyNowPlayingUpdate(title: String?, artist: String?, durationMs: Long?, album: String?) {
+        handler.post { updateNowPlayingInternal(title, artist, durationMs, album) }
     }
 
+    private fun applyPositionUpdate(positionMs: Long, playing: Boolean, seekable: Boolean) {
+        handler.post { updatePositionInternal(positionMs, playing, seekable) }
+    }
+
+    private fun updatePositionInternal(positionMs: Long, playing: Boolean, seekable: Boolean) =
+            mediaSessionPublisher.updatePosition(
+                    mediaSession,
+                    sessionPlaybackState(),
+                    livenessStale,
+                    positionMs,
+                    playing,
+                    seekable,
+            )
+
+    private fun sessionPlaybackState() =
+            if (showsPaused()) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING
+
     /** The tune the notification and the session name. */
-    private fun updateNowPlayingInternal(title: String?, artist: String?, durationMs: Long?) {
-        if (!mediaSessionPublisher.updateNowPlaying(mediaSession, title, artist, durationMs)) return
+    private fun updateNowPlayingInternal(title: String?, artist: String?, durationMs: Long?, album: String?) {
+        if (!mediaSessionPublisher.updateNowPlaying(mediaSession, title, artist, durationMs, album)) return
         refreshNotification()
         val nowPlaying = mediaSessionPublisher.nowPlaying
         AppLogger.debug(
@@ -751,10 +816,7 @@ class BackgroundExecutionService : Service() {
     private fun initializeMediaSession() {
         if (mediaSession != null) return
         mediaSession =
-                mediaSessionPublisher.createSession(
-                        if (showsPaused()) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING,
-                        livenessStale,
-                )
+                mediaSessionPublisher.createSession(sessionPlaybackState(), livenessStale)
     }
 
     /**
@@ -801,6 +863,18 @@ class BackgroundExecutionService : Service() {
                     e
             )
         }
+    }
+
+    private fun relaySeekRequest(positionMs: Long) {
+        if (livenessStale) {
+            AppLogger.debug(this, TAG, "Ignoring a seek while the web layer is gone", "BackgroundExecutionService")
+            return
+        }
+        val broadcast = Intent(ACTION_SEEK_REQUEST)
+        broadcast.setPackage(packageName)
+        broadcast.putExtra(EXTRA_SEEK_POSITION_MS, positionMs)
+        sendBroadcast(broadcast)
+        AppLogger.info(this, TAG, "Lock-screen seek request ($positionMs ms)", "BackgroundExecutionService")
     }
 
     private fun broadcastTransportCommand(command: String) {

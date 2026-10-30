@@ -73,7 +73,6 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   isBackgroundExecutionActive,
-  setBackgroundExecutionNowPlaying,
   setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
@@ -101,7 +100,9 @@ import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheetHost } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useExternalOpenState } from "@/hooks/useExternalOpenState";
 import { PlayDeepLinks, type PlayDeepLinkHandlers } from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { useLockScreenPlayback } from "@/pages/playFiles/hooks/useLockScreenPlayback";
 import { usePlayTransportCommands } from "@/pages/playFiles/hooks/usePlayTransportCommands";
+import { resolveSeekToFraction } from "@/pages/playFiles/resolveSeekToFraction";
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
@@ -1848,28 +1849,6 @@ export default function PlayFilesPage() {
    */
   const nowPlayingTitle = currentDisplay?.title ?? shownItem?.label ?? null;
   const nowPlayingArtist = currentItemCredits.author;
-  useEffect(() => {
-    void setBackgroundExecutionNowPlaying(
-      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: shownNowPlaying.durationMs ?? null },
-      {
-        source: "playback-controller",
-        reason: "now-playing",
-        context: { trackInstanceId },
-      },
-    ).catch((error) => {
-      reportUserError({
-        operation: "setBackgroundExecutionNowPlaying",
-        title: "Now-playing metadata update failed",
-        description: "The lock-screen media control may not name the current tune.",
-        error,
-        context: { trackInstanceId },
-        // The tune plays either way; a media control naming the wrong thing is
-        // diagnostics material, never a toast (ERROR_POLICY §3).
-        background: true,
-      });
-    });
-  }, [shownNowPlaying.durationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
-
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
   const remoteSeek = useRemoteSidSeek({
@@ -1881,6 +1860,13 @@ export default function PlayFilesPage() {
     playbackTime,
     durationMs: currentDurationMs,
     rebasePlaybackPosition,
+  });
+  const onSeekToFraction = resolveSeekToFraction({
+    category: currentItem?.category,
+    remoteHandlers: remoteSeek.handlers,
+    localEngineActive,
+    durationMs: currentDurationMs,
+    seekLocal: seekToFraction,
   });
   const shownScrubTargetMs = remoteSeek.targetMs ?? scrubTargetMs;
   const isScrubbing = shownScrubTargetMs !== null;
@@ -2084,6 +2070,18 @@ export default function PlayFilesPage() {
         lengthLabel: currentDurationLabel,
       })
     : [];
+
+  useLockScreenPlayback({
+    title: nowPlayingTitle,
+    artist: nowPlayingArtist,
+    durationMs: shownNowPlaying.durationMs ?? null,
+    tuneNumber: clampedSongNr,
+    tuneCount: knownSubsongCount,
+    trackInstanceId,
+    playing: isPlaying && !isPaused,
+    playbackTime,
+    onSeekToFraction,
+  });
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -2523,12 +2521,9 @@ export default function PlayFilesPage() {
                         ? () => beginScrub(currentDurationMs)
                         : undefined,
                     onScrubStep: scrubBy,
-                    onSeekToFraction:
-                      localEngineActive && currentItem?.category === "sid" && currentDurationMs
-                        ? (fraction: number) => seekToFraction(fraction, currentDurationMs)
-                        : undefined,
                     onScrubEnd: () => void endScrub(),
                   })}
+                  onSeekToFraction={onSeekToFraction}
                   isScrubbing={isScrubbing}
                   timeline={timeline}
                   seekDurationMs={currentDurationMs}

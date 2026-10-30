@@ -1006,6 +1006,20 @@ class BackgroundExecutionServiceTest {
         service.onStartCommand(intent, 0, startId)
     }
 
+    private fun setPlaybackPosition(positionMs: Long, playing: Boolean, seekable: Boolean, startId: Int = 1) {
+        val intent = Intent(BackgroundExecutionService.ACTION_SET_PLAYBACK_POSITION)
+        intent.putExtra(BackgroundExecutionService.EXTRA_POSITION_MS, positionMs)
+        intent.putExtra(BackgroundExecutionService.EXTRA_POSITION_PLAYING, playing)
+        intent.putExtra(BackgroundExecutionService.EXTRA_POSITION_SEEKABLE, seekable)
+        service.onStartCommand(intent, 0, startId)
+    }
+
+    private fun publishedPlaybackState(session: MediaSession?): android.media.session.PlaybackState {
+        val field = MediaSession::class.java.getDeclaredField("mPlaybackState")
+        field.isAccessible = true
+        return field.get(session) as android.media.session.PlaybackState
+    }
+
     private fun currentNotification(flushCoalesceWindow: Boolean = true): android.app.Notification? {
         if (flushCoalesceWindow) flushNotificationCoalesceWindow()
         val manager = service.getSystemService(android.app.NotificationManager::class.java)
@@ -1228,5 +1242,132 @@ class BackgroundExecutionServiceTest {
                 "Metadata must never start a foreground service the web layer did not ask for",
                 shadowApp.nextStartedService,
         )
+    }
+
+    @Test
+    fun aPositionReportReachesTheSessionAndEnablesSeeking() {
+        controller.create()
+        startService()
+        val session = getPrivateField("mediaSession") as MediaSession?
+
+        setPlaybackPosition(61_000L, playing = true, seekable = true)
+
+        val state = publishedPlaybackState(session)
+        assertEquals(61_000L, state.position)
+        assertEquals(1.0f, state.playbackSpeed)
+        assertEquals(
+                android.media.session.PlaybackState.ACTION_SEEK_TO,
+                state.actions and android.media.session.PlaybackState.ACTION_SEEK_TO,
+        )
+    }
+
+    @Test
+    fun pausingFreezesThePositionTheWebLayerLastReported() {
+        controller.create()
+        startService()
+        val session = getPrivateField("mediaSession") as MediaSession?
+        setPlaybackPosition(61_000L, playing = true, seekable = true)
+
+        setPlaybackState(paused = true, startId = 2)
+
+        val state = publishedPlaybackState(session)
+        assertEquals(android.media.session.PlaybackState.STATE_PAUSED, state.state)
+        assertEquals(0.0f, state.playbackSpeed)
+        assertTrue("Frozen at or just after the reported position", state.position in 61_000L..62_000L)
+    }
+
+    @Test
+    fun aSeekFromTheLockScreenIsBroadcastWithItsPosition() {
+        controller.create()
+        startService()
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.clearBroadcastIntents()
+
+        service.mediaSessionCallback.onSeekTo(93_000L)
+
+        val relayed = shadowApp.broadcastIntents.lastOrNull { it.action == BackgroundExecutionService.ACTION_SEEK_REQUEST }
+        assertNotNull("Expected the seek to be relayed to the web layer", relayed)
+        assertEquals(93_000L, relayed?.getLongExtra(BackgroundExecutionService.EXTRA_SEEK_POSITION_MS, -1L))
+        assertEquals(appContext.packageName, relayed?.`package`)
+    }
+
+    @Test
+    fun aSeekWhileTheSessionIsStaleIsNotBroadcast() {
+        controller.create()
+        startService()
+        setPlaybackState(paused = false, startId = 2)
+        ShadowLooper.shadowMainLooper().idleFor(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS)
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.clearBroadcastIntents()
+
+        service.mediaSessionCallback.onSeekTo(93_000L)
+
+        assertTrue(shadowApp.broadcastIntents.none { it.action == BackgroundExecutionService.ACTION_SEEK_REQUEST })
+    }
+
+    @Test
+    fun anAlbumReachesTheSessionMetadata() {
+        controller.create()
+        startService()
+        val intent = Intent(BackgroundExecutionService.ACTION_SET_NOW_PLAYING)
+        intent.putExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_TITLE, "Nightshift")
+        intent.putExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_ALBUM, "Tune 3 of 19")
+
+        service.onStartCommand(intent, 0, 1)
+
+        assertEquals(
+                "Tune 3 of 19",
+                RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_ALBUM),
+        )
+    }
+
+    @Test
+    fun positionDuringAPendingStartIsForwardedWithThatStartsGeneration() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        val startGeneration =
+                shadowApp.nextStartedService?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L)
+
+        BackgroundExecutionService.setPlaybackPosition(appContext, 61_000L, playing = true, seekable = true)
+
+        val queued = shadowApp.nextStartedService
+        assertNotNull("Expected the position to be forwarded while a start is pending", queued)
+        assertEquals(BackgroundExecutionService.ACTION_SET_PLAYBACK_POSITION, queued?.action)
+        assertEquals(61_000L, queued?.getLongExtra(BackgroundExecutionService.EXTRA_POSITION_MS, -1L))
+        assertTrue(queued?.getBooleanExtra(BackgroundExecutionService.EXTRA_POSITION_PLAYING, false) == true)
+        assertTrue(queued?.getBooleanExtra(BackgroundExecutionService.EXTRA_POSITION_SEEKABLE, false) == true)
+        assertEquals(
+                startGeneration,
+                queued?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L),
+        )
+    }
+
+    @Test
+    fun anAlbumDuringAPendingStartIsForwarded() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.nextStartedService
+
+        BackgroundExecutionService.setNowPlaying(appContext, "Nightshift", null, null, "Tune 3 of 19")
+
+        assertEquals(
+                "Tune 3 of 19",
+                shadowApp.nextStartedService?.getStringExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_ALBUM),
+        )
+    }
+
+    @Test
+    fun positionWithoutASessionIsDroppedRatherThanStartingOne() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.clearStartedServices()
+
+        BackgroundExecutionService.setPlaybackPosition(appContext, 61_000L, playing = true, seekable = true)
+
+        assertNull(shadowApp.nextStartedService)
     }
 }
