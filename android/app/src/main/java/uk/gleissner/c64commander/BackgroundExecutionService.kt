@@ -16,7 +16,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
-import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -260,27 +259,12 @@ class BackgroundExecutionService : Service() {
      * it opens and closes the only audio sink either source plays through (HARD27-006).
      */
 
-    /**
-     * A MediaSession with no callback is never made the platform's media-button session, so a
-     * headset, lock-screen or Bluetooth transport press reaches nothing at all. This service knows
-     * nothing about playback, so each press is forwarded to the web layer, which owns the transport.
-     */
-    internal val mediaSessionCallback =
-            object : MediaSession.Callback() {
-                override fun onPlay() = relayTransportCommand(TRANSPORT_COMMAND_PLAY)
-
-                override fun onPause() = relayTransportCommand(TRANSPORT_COMMAND_PLAY_PAUSE)
-
-                override fun onStop() = relayTransportCommand(TRANSPORT_COMMAND_STOP)
-
-                override fun onSkipToNext() = relayTransportCommand(TRANSPORT_COMMAND_NEXT)
-            }
+    private val mediaSessionPublisher = MediaSessionPublisher(this, ::relayTransportCommand)
+    internal val mediaSessionCallback: MediaSession.Callback
+        get() = mediaSessionPublisher.callback
 
     private val handler = Handler(Looper.getMainLooper())
     private var isPausedState = false
-    private var nowPlayingTitle: String? = null
-    private var nowPlayingArtist: String? = null
-    private var nowPlayingDurationMs: Long? = null
     private var pausedExpiryRunnable: Runnable? = null
     /** The paused session's deadline on the monotonic clock; see [schedulePausedExpiry]. */
     private var pausedExpiryElapsedMs: Long? = null
@@ -490,60 +474,17 @@ class BackgroundExecutionService : Service() {
         handler.post { updateNowPlayingInternal(title, artist, durationMs) }
     }
 
-    /**
-     * The tune the notification and the session name. Blank fields are normalised to null so an
-     * empty title falls back to the app name rather than showing an empty lock-screen control.
-     */
+    /** The tune the notification and the session name. */
     private fun updateNowPlayingInternal(title: String?, artist: String?, durationMs: Long?) {
-        val nextTitle = title?.trim()?.ifEmpty { null }
-        val nextArtist = artist?.trim()?.ifEmpty { null }
-        val nextDuration = durationMs?.takeIf { it > 0L }
-        if (nextTitle == nowPlayingTitle &&
-                        nextArtist == nowPlayingArtist &&
-                        nextDuration == nowPlayingDurationMs
-        ) {
-            return
-        }
-        nowPlayingTitle = nextTitle
-        nowPlayingArtist = nextArtist
-        nowPlayingDurationMs = nextDuration
-        publishNowPlayingMetadata()
+        if (!mediaSessionPublisher.updateNowPlaying(mediaSession, title, artist, durationMs)) return
         refreshNotification()
+        val nowPlaying = mediaSessionPublisher.nowPlaying
         AppLogger.debug(
                 this,
                 TAG,
-                "Now playing updated (hasTitle=${nextTitle != null}, hasArtist=${nextArtist != null})",
+                "Now playing updated (hasTitle=${nowPlaying.title != null}, hasArtist=${nowPlaying.artist != null})",
                 "BackgroundExecutionService"
         )
-    }
-
-    /**
-     * What the lock screen reads. Published even before the web layer names a tune, so the control
-     * carries the app name rather than an empty title.
-     */
-    private fun publishNowPlayingMetadata() {
-        val session = mediaSession ?: return
-        try {
-            val metadata =
-                    MediaMetadata.Builder()
-                            .putString(
-                                    MediaMetadata.METADATA_KEY_TITLE,
-                                    nowPlayingTitle ?: getString(R.string.app_name)
-                            )
-            nowPlayingArtist?.let { metadata.putString(MediaMetadata.METADATA_KEY_ARTIST, it) }
-            nowPlayingDurationMs?.let {
-                metadata.putLong(MediaMetadata.METADATA_KEY_DURATION, it)
-            }
-            session.setMetadata(metadata.build())
-        } catch (e: Exception) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "Failed to publish now-playing metadata",
-                    "BackgroundExecutionService",
-                    e
-            )
-        }
     }
 
     /**
@@ -605,37 +546,8 @@ class BackgroundExecutionService : Service() {
         handler.postDelayed(notificationRefreshRunnable, NOTIFICATION_COALESCE_MS)
     }
 
-    private fun publishPlaybackState(state: Int) {
-        val session = mediaSession ?: return
-        try {
-            session.setPlaybackState(buildPlaybackState(state))
-        } catch (e: Exception) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "Failed to publish playback state",
-                    "BackgroundExecutionService",
-                    e
-            )
-        }
-    }
-
-    private fun buildPlaybackState(state: Int): PlaybackState =
-            PlaybackState.Builder()
-                    .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                    .setActions(
-                            if (livenessStale) {
-                                // A Play the system will not let us act on is worse than none.
-                                PlaybackState.ACTION_STOP
-                            } else {
-                                PlaybackState.ACTION_PLAY or
-                                        PlaybackState.ACTION_PAUSE or
-                                        PlaybackState.ACTION_PLAY_PAUSE or
-                                        PlaybackState.ACTION_STOP or
-                                        PlaybackState.ACTION_SKIP_TO_NEXT
-                            },
-                    )
-                    .build()
+    private fun publishPlaybackState(state: Int) =
+            mediaSessionPublisher.publishPlaybackState(mediaSession, state, livenessStale)
 
     private fun applyDueAtUpdate(nextDueAtMs: Long?) {
         handler.post { updateDueAtInternal(nextDueAtMs) }
@@ -701,8 +613,8 @@ class BackgroundExecutionService : Service() {
                     Notification.Builder(this).setPriority(Notification.PRIORITY_LOW)
                 }
 
-        builder.setContentTitle(nowPlayingTitle ?: getString(R.string.app_name))
-                .setContentText(nowPlayingArtist ?: playbackStateText())
+        builder.setContentTitle(mediaSessionPublisher.nowPlaying.title ?: getString(R.string.app_name))
+                .setContentText(mediaSessionPublisher.nowPlaying.artist ?: playbackStateText())
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)
                 .setContentIntent(pendingIntent)
@@ -828,28 +740,11 @@ class BackgroundExecutionService : Service() {
 
     private fun initializeMediaSession() {
         if (mediaSession != null) return
-        try {
-            val session = MediaSession(this, "C64CommanderBackgroundExecution")
-            session.setCallback(mediaSessionCallback)
-            session.setPlaybackState(
-                    buildPlaybackState(
-                            if (showsPaused()) PlaybackState.STATE_PAUSED
-                            else PlaybackState.STATE_PLAYING
-                    )
-            )
-            session.isActive = true
-            mediaSession = session
-            publishNowPlayingMetadata()
-            AppLogger.debug(this, TAG, "MediaSession initialized", "BackgroundExecutionService")
-        } catch (e: Exception) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "Failed to initialize MediaSession",
-                    "BackgroundExecutionService",
-                    e
-            )
-        }
+        mediaSession =
+                mediaSessionPublisher.createSession(
+                        if (showsPaused()) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING,
+                        livenessStale,
+                )
     }
 
     /**
@@ -912,21 +807,7 @@ class BackgroundExecutionService : Service() {
     }
 
     private fun releaseMediaSession() {
-        mediaSession?.let { session ->
-            try {
-                session.isActive = false
-                session.release()
-                AppLogger.debug(this, TAG, "MediaSession released", "BackgroundExecutionService")
-            } catch (e: Exception) {
-                AppLogger.warn(
-                        this,
-                        TAG,
-                        "Failed to release MediaSession",
-                        "BackgroundExecutionService",
-                        e
-                )
-            }
-        }
+        mediaSession?.let(mediaSessionPublisher::releaseSession)
         mediaSession = null
     }
 
