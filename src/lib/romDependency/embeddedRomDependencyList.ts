@@ -142,6 +142,7 @@ export const loadEmbeddedRomDependencyList = (): Promise<LoadedRomDependencyList
       addErrorLog("SID ROM dependency list rejected; playing without it", {
         service: "rom-dependency",
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
       return null;
     }

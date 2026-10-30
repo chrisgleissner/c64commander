@@ -16,14 +16,14 @@
  *
  * The list is allow-by-default and grades each listed song 0..255 per configuration. A song is
  * reported as `low` only when its grade in this configuration is below the skip threshold (the
- * list's own `recommended_min_grade`); everything else (unlisted, graded at or above the threshold,
- * the reference configuration) is `none` and is never held back. There is no "unknown" grade.
+ * list's own `recommended_min_grade`); a listed song graded at or above it is `graded`, and an unlisted
+ * song or the reference configuration is `none`. Neither is held back. There is no "unknown" grade.
  */
 
 import { loadStoredRoms } from "@/lib/roms/romStore";
 import { sha256Hex } from "./digest";
 import { loadEmbeddedRomDependencyList, type ReferenceRomHashes } from "./embeddedRomDependencyList";
-import { laneGrade, type RomDepLaneName } from "./romDependencyList";
+import { laneGrade, ROM_DEP_LANE_NAMES, type RomDepLaneName, type RomDepLookup } from "./romDependencyList";
 import { addLog } from "@/lib/logging";
 import type { SidEmulationEngine } from "@/lib/config/appSettings";
 
@@ -38,12 +38,19 @@ export interface RomDependencyRoms {
 export type ActiveRomLane =
   /** All three authentic ROMs: the reference itself, so the list restricts nothing (§10.1). */
   | { kind: "reference" }
-  /** One of the four measured configurations. `approximate` when the engine or the ROM images are only close to the measured ones. */
-  | { kind: "lane"; lane: RomDepLaneName; approximate: boolean };
+  /** One of the four measured configurations. `approximate` when the engine is only close to the measured ones. */
+  | { kind: "lane"; lane: RomDepLaneName; approximate: boolean }
+  /**
+   * ROM images that match neither the reference nor a measured configuration, such as JiffyDOS: no measurement
+   * applies, so the lowest grade of the four lanes stands in as the conservative hint §10.1 allows.
+   */
+  | { kind: "lowest" };
 
 export type RomDependencyVerdict =
-  /** Nothing to say: unlisted, graded at or above the threshold, reference configuration, or no list. */
+  /** Nothing to say: unlisted, reference configuration, or no list. */
   | { kind: "none" }
+  /** Listed, and graded at or above the threshold in this configuration: the list says it plays here. */
+  | { kind: "graded"; lane: RomDepLaneName; grade: number; approximate: boolean }
   /** Graded below the skip threshold in this configuration (§10.2); 0 means no playback at all. */
   | { kind: "low"; lane: RomDepLaneName; grade: number; approximate: boolean };
 
@@ -55,22 +62,14 @@ export class RomDependentSongSkipped extends Error {
   }
 }
 
-/** Thrown when the listener declines to play such a song. */
-export class RomDependentSongDeclined extends Error {
-  constructor(readonly label: string) {
-    super(`${label} needs the C64 ROMs; playback cancelled`);
-    this.name = "RomDependentSongDeclined";
-  }
-}
-
 /**
  * Pick the audited configuration this phone is in (§10.1).
  *
  * The engine is given KERNAL and BASIC only when it has both (`hasCompleteRomSet`), so a lone image
- * counts as none. Two cases are not the audited configuration itself and are marked `approximate`,
- * which the specification allows as a conservative hint: libSidplayEZ (reSIDfp-based but not the
- * audited build, read as reSIDfp) and KERNAL and BASIC images that are not the authentic ones, for
- * example JiffyDOS (read as the KERNAL + BASIC configuration).
+ * counts as none. libSidplayEZ is reSIDfp-based but not the audited build: it is read as reSIDfp and
+ * marked `approximate`, a judgement rather than a measurement. Stored images that are not the authentic
+ * ones (for example JiffyDOS), or a character ROM that is not, match no measured configuration, so the
+ * lowest grade of the four lanes is used instead.
  */
 export const resolveActiveRomLane = (
   engine: SidEmulationEngine,
@@ -78,15 +77,22 @@ export const resolveActiveRomLane = (
   reference: ReferenceRomHashes,
 ): ActiveRomLane => {
   const family = engine === "sidlite" ? "sidlite" : "residfp";
-  const engineApproximate = engine === "sidplayez";
+  const approximate = engine === "sidplayez";
   if (roms.kernal === undefined || roms.basic === undefined) {
-    return { kind: "lane", lane: `${family}None`, approximate: engineApproximate };
+    return { kind: "lane", lane: `${family}None`, approximate };
   }
   const authentic = sha256Hex(roms.kernal) === reference.kernal && sha256Hex(roms.basic) === reference.basic;
-  if (authentic && roms.chargen && sha256Hex(roms.chargen) === reference.chargen) return { kind: "reference" };
-  // A character ROM that is present but not the authentic one makes this no more than an approximation.
-  const exact = authentic && !roms.chargen;
-  return { kind: "lane", lane: `${family}KernalBasic`, approximate: engineApproximate || !exact };
+  if (!authentic) return { kind: "lowest" };
+  if (!roms.chargen) return { kind: "lane", lane: `${family}KernalBasic`, approximate };
+  return sha256Hex(roms.chargen) === reference.chargen ? { kind: "reference" } : { kind: "lowest" };
+};
+
+/** The grade that applies in `active`, and the lane it was read from. */
+const applicableGrade = (found: RomDepLookup, active: Exclude<ActiveRomLane, { kind: "reference" }>) => {
+  if (active.kind === "lane")
+    return { lane: active.lane, grade: laneGrade(found, active.lane), approximate: active.approximate };
+  const lane = ROM_DEP_LANE_NAMES.reduce((low, name) => (laneGrade(found, name) < laneGrade(found, low) ? name : low));
+  return { lane, grade: laneGrade(found, lane), approximate: true };
 };
 
 /** SID header fields do not matter here: the list is keyed by the MD5 of the whole file, as played. */
@@ -124,18 +130,19 @@ export const assessRomDependency = async ({
     const loaded = await loadEmbeddedRomDependencyList();
     if (!loaded || loaded.list.header.fileCount === 0) return { kind: "none" };
     const active = resolveActiveRomLane(engine, roms, loaded.referenceRoms);
-    if (active.kind !== "lane") return { kind: "none" };
+    if (active.kind === "reference") return { kind: "none" };
     const subtune = typeof songNr === "number" && Number.isFinite(songNr) ? Math.max(1, Math.trunc(songNr)) : 1;
     const found = loaded.list.lookup(await md5Of(sidBytes), subtune);
     if (!found.listed) return { kind: "none" };
-    const grade = laneGrade(found, active.lane);
+    const applicable = applicableGrade(found, active);
     // §10.2: a grade below the threshold is skipped; the threshold itself plays, and a grade above the ceiling (such as 254 or 255) is never below a valid threshold.
-    if (grade >= (threshold ?? loaded.list.header.recommendedMinGrade)) return { kind: "none" };
-    return { kind: "low", lane: active.lane, grade, approximate: active.approximate };
+    const low = applicable.grade < (threshold ?? loaded.list.header.recommendedMinGrade);
+    return { kind: low ? "low" : "graded", ...applicable };
   } catch (error) {
     addLog("warn", "SID ROM dependency check failed; playing the song normally", {
       service: "rom-dependency",
       error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     return { kind: "none" };
   }
