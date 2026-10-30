@@ -147,6 +147,7 @@ import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListIte
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
+import { usePlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
 import { useC64MuteFollowsRoute } from "@/pages/playFiles/hooks/useC64MuteFollowsRoute";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
@@ -250,6 +251,7 @@ export default function PlayFilesPage() {
   // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
   const stationActiveRef = useRef(false);
   const stationFinishingRef = useRef(false);
+  const playlistManager = usePlaylistManager();
   const {
     playlist,
     setPlaylist,
@@ -271,7 +273,7 @@ export default function PlayFilesPage() {
     setSelectedPlaylistIds,
     isPlaylistLoading,
     setIsPlaylistLoading,
-  } = usePlaylistManager();
+  } = playlistManager;
   const hasPlaylistRef = useRef(false);
   const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2395,6 +2397,7 @@ export default function PlayFilesPage() {
   );
   const handleOpenConfig = useCallback((item: PlaylistItem) => setActiveConfigItemId(item.id), []);
 
+  const queueActions = usePlaylistQueueActions(playlistManager, playlistFilterText, currentPlayingItemId);
   const playlistPreviewListItems = usePlaylistListItems({
     filteredPlaylist: previewFilteredPlaylist,
     playlist,
@@ -2413,6 +2416,7 @@ export default function PlayFilesPage() {
     formatDate,
     getParentPath,
     currentPlayingItemId,
+    queueActions,
   });
 
   const playlistViewAllListItems = usePlaylistListItems({
@@ -2433,6 +2437,7 @@ export default function PlayFilesPage() {
     formatDate,
     getParentPath,
     currentPlayingItemId,
+    queueActions,
   });
   const pageShellClassName = usePrimaryPageShellClassName("bg-gradient-to-b from-background to-background/95");
 

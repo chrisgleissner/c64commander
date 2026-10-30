@@ -33,6 +33,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 export type ActionListMenuItem =
   | { type: "label"; label: string }
   | { type: "info"; label: string; value: string }
+  | { type: "note"; text: string }
   | { type: "separator" }
   | {
       type: "action";

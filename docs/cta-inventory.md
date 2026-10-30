@@ -438,7 +438,8 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
 - Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — on the compact profile it opens
   the **Item actions sheet** (`action-list-item-sheet`), a bottom sheet titled with the item's name; on other
   profiles it opens the same entries as a menu beside the row. The sheet holds, in order: Play — button —
-  `action-list-item-sheet-primary` (plays the item and closes the sheet); then the actions (Review playback config,
+  `action-list-item-sheet-primary` (plays the item and closes the sheet); then the queue actions (below); then the
+  other actions (Review playback config,
   Attach or Change local / C64U .cfg, and Remove config association `[only with a config attached]`); then the
   **Details** and **Config** blocks (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then
   Attached, Status, Origin, Candidates, Overrides, and Location when a config is attached). Each detail row
@@ -446,6 +447,17 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
   The sheet opens on the play button, or on its first action when play is unavailable. Back closes the sheet and returns focus and the selection to ⋮. In the menu
   the actions come first and the detail rows follow as menu items the arrow keys stop on; OK on one does nothing and
   leaves the menu open.
+  - Play next — action — code-verified — moves the row directly after the playing tune, or to the top when nothing plays.
+    `[disabled: Shuffle on, playlist loading, the row is the playing tune, the row is already directly after it,
+    or nothing plays and the row is already first]`
+  - Move up — action — code-verified — moves the row one place up.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
+  - Move down — action — code-verified — moves the row one place down.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
+  - Above the three, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
+    menu; not a keypad stop) gives the reason: "Turn off Shuffle to change the order" while Shuffle is on, otherwise
+    "Clear the filter to change the order" while a filter is active. After a move the ring stays on the moved
+    row's ⋮ and the row is scrolled into view.
 - Clear playlist — button (danger) — no testid — `[shown only while the playlist has items]` — opens the
   **Clear playlist confirmation** (`clear-playlist-dialog`) instead of clearing at once. The dialog names
   how many items go and is an overlay scope, so it adds nothing to the page count in §3. Code-verified,

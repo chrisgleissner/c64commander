@@ -616,6 +616,83 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(trigger).toHaveAttribute(SELECTED, "true");
   });
 
+  /*
+   * Reordering the playlist from a row's menu, with no pointer: Move down twice walks the first tune
+   * to the end, the ring stays on that tune's ⋮ and the tune stays on screen, and the order is still
+   * there after the page is loaded again.
+   */
+  test("a playlist row's Move down, pressed twice from the keypad, reorders the playlist and the order survives a reload @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("playlist-seeded")) return;
+      sessionStorage.setItem("playlist-seeded", "1");
+      const items = Array.from({ length: 3 }, (_, index) => ({
+        source: "ultimate",
+        path: `/Usb0/Demos/Reorder_Tune_${index + 1}.sid`,
+        name: `Reorder_Tune_${index + 1}.sid`,
+        durationMs: 214_000,
+        songNr: 1,
+        sourceId: null,
+      }));
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify({ items, currentIndex: 0 }));
+    });
+    const rowTitles = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"] [data-row-title="true"]')
+        .evaluateAll((titles) => titles.map((title) => (title.textContent ?? "").trim()));
+    const expectOrder = (order: number[]) =>
+      expect.poll(async () => (await rowTitles()).map((title) => title.match(/\d+/)?.[0])).toEqual(order.map(String));
+
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    const firstRowTrigger = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]')
+        .first()
+        .getByRole("button", { name: "Item actions" });
+    await expect(firstRowTrigger()).toBeAttached({ timeout: 15_000 });
+    await expectOrder([1, 2, 3]);
+    expect(await ringFocus(page, firstRowTrigger()), "the ring could not reach the first row's menu button").toBe(true);
+
+    const moveDownFromTheKeypad = async () => {
+      await page.keyboard.press("Enter");
+      const sheet = page.getByTestId("action-list-item-sheet");
+      await expect(sheet).toBeVisible();
+      await waitForAnimations(page);
+      const moveDown = sheet.getByRole("button", { name: "Move down" });
+      for (let step = 0; step < 8 && !(await moveDown.evaluate((el) => el === document.activeElement)); step += 1) {
+        await page.keyboard.press("ArrowDown");
+      }
+      await expect(moveDown).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(sheet).toBeHidden();
+    };
+
+    await moveDownFromTheKeypad();
+    await expectOrder([2, 1, 3]);
+
+    const movedRow = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]', { hasText: "Reorder Tune 1" })
+        .getByRole("button", { name: "Item actions" });
+    await expect(movedRow()).toHaveAttribute(SELECTED, "true");
+    await expect.poll(() => isOnScreen(movedRow())).toBe(true);
+
+    await moveDownFromTheKeypad();
+    await expectOrder([2, 3, 1]);
+    await expect(movedRow()).toHaveAttribute(SELECTED, "true");
+    await expect.poll(() => isOnScreen(movedRow())).toBe(true);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await settle(page);
+    await expectOrder([2, 3, 1]);
+  });
+
   test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
