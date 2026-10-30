@@ -62,6 +62,7 @@ export const installNativeMediaButtons = (options: TransportShortcutOptions): ((
       addLog("warn", "Failed to register native seek request listener", {
         source: "native-media-buttons",
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
     });
 

@@ -40,6 +40,7 @@ export const createSeekRequestChannel = (): SeekRequestChannel => {
             source: "lock-screen-seek",
             positionMs,
             error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
           });
         }
       });
