@@ -68,6 +68,7 @@ import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
+import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
@@ -2453,6 +2454,7 @@ export default function PlayFilesPage() {
                   currentItemLabel={currentDisplay?.title ?? null}
                   currentItemMetadataParts={currentItemMetadataParts}
                   tuneKey={currentItem ? `${currentItem.id}:${currentSongNr}` : null}
+                  tuneShare={tuneShareForItem(shownItem, currentItemCredits, knownSubsongCount, currentDisplay?.title)}
                   stil={stilInfo}
                   onComposerSelected={openSearchForComposer}
                   {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}

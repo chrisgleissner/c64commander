@@ -14,6 +14,7 @@ import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { KEY_SELECTED_ATTRIBUTE as SELECTED, enableKeypad, ringFocus } from "./focusRing";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 import { installAudioFxMock } from "./audioFxMock";
+import { PLAYBACK_SESSION_KEY, SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/playFiles/playFilesUtils";
 
 /**
  * The app driven by keys alone, on the smallest screen it supports.
@@ -65,6 +66,40 @@ const waitForAnimations = (page: Page) =>
         .map((animation) => animation.finished),
     ),
   );
+
+/** Four Rob Hubbard tunes in the HVSC browse index, enough for "Find a tune" to search and play. */
+const seedHubbardBrowseIndex = (page: Page) =>
+  page.addInitScript(() => {
+    const tunes = ["Commando", "Monty on the Run", "Crazy Comets", "Delta"].map((title) => ({
+      virtualPath: `/MUSICIANS/H/Hubbard_Rob/${title.replaceAll(" ", "_")}.sid`,
+      fileName: `${title.replaceAll(" ", "_")}.sid`,
+      canonicalTitle: title,
+      canonicalAuthor: "Rob Hubbard",
+      durationSeconds: 120,
+      durationsSeconds: [120],
+      subsongCount: 1,
+      defaultSong: 1,
+      metadataStatus: "hydrated",
+    }));
+    localStorage.setItem(
+      "c64u_hvsc_browse_index:v1",
+      JSON.stringify({
+        schemaVersion: 2,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        songs: Object.fromEntries(tunes.map((tune) => [tune.virtualPath, tune])),
+        folders: {
+          "/": { path: "/", folders: ["/MUSICIANS"], songs: [] },
+          "/MUSICIANS": { path: "/MUSICIANS", folders: ["/MUSICIANS/H"], songs: [] },
+          "/MUSICIANS/H": { path: "/MUSICIANS/H", folders: ["/MUSICIANS/H/Hubbard_Rob"], songs: [] },
+          "/MUSICIANS/H/Hubbard_Rob": {
+            path: "/MUSICIANS/H/Hubbard_Rob",
+            folders: [],
+            songs: tunes.map((tune) => tune.virtualPath),
+          },
+        },
+      }),
+    );
+  });
 
 test.describe("Keypad-only navigation on the smallest screen", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -376,37 +411,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
   test("the keypad reaches Play all in Find a tune from the search box and activates it with OK @layout", async ({
     page,
   }) => {
-    await page.addInitScript(() => {
-      const tunes = ["Commando", "Monty on the Run", "Crazy Comets", "Delta"].map((title) => ({
-        virtualPath: `/MUSICIANS/H/Hubbard_Rob/${title.replaceAll(" ", "_")}.sid`,
-        fileName: `${title.replaceAll(" ", "_")}.sid`,
-        canonicalTitle: title,
-        canonicalAuthor: "Rob Hubbard",
-        durationSeconds: 120,
-        durationsSeconds: [120],
-        subsongCount: 1,
-        defaultSong: 1,
-        metadataStatus: "hydrated",
-      }));
-      localStorage.setItem(
-        "c64u_hvsc_browse_index:v1",
-        JSON.stringify({
-          schemaVersion: 2,
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          songs: Object.fromEntries(tunes.map((tune) => [tune.virtualPath, tune])),
-          folders: {
-            "/": { path: "/", folders: ["/MUSICIANS"], songs: [] },
-            "/MUSICIANS": { path: "/MUSICIANS", folders: ["/MUSICIANS/H"], songs: [] },
-            "/MUSICIANS/H": { path: "/MUSICIANS/H", folders: ["/MUSICIANS/H/Hubbard_Rob"], songs: [] },
-            "/MUSICIANS/H/Hubbard_Rob": {
-              path: "/MUSICIANS/H/Hubbard_Rob",
-              folders: [],
-              songs: tunes.map((tune) => tune.virtualPath),
-            },
-          },
-        }),
-      );
-    });
+    await seedHubbardBrowseIndex(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await settle(page);
     await page.keyboard.press("ArrowDown");
@@ -431,6 +436,84 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await page.keyboard.press("Enter");
     await expect(sheet).toHaveCount(0);
     await expect(page.getByTestId("playlist-item")).toHaveCount(4);
+  });
+
+  test("the keypad reaches Share from the About this tune toggle with Right, on the same line at 320 px @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ playlistKey, sessionKey }) => {
+        const items = [
+          { source: "hvsc", path: "/MUSICIANS/B/Barlow_Kit/Blue Screen Waltz 2.sid", name: "Blue Screen Waltz 2.sid" },
+        ].map((item) => ({ ...item, durationMs: 120_000, songNr: 1 }));
+        const payload = JSON.stringify({ items, currentIndex: 0 });
+        localStorage.setItem(playlistKey, payload);
+        localStorage.setItem("c64u_playlist:v1:default", payload);
+        sessionStorage.setItem(
+          sessionKey,
+          JSON.stringify({
+            playlistKey,
+            currentItemId: null,
+            currentItemLabel: items[0].name,
+            currentIndex: 0,
+            isPlaying: false,
+            isPaused: false,
+            elapsedMs: 0,
+            playedMs: 0,
+            durationMs: 120_000,
+            autoAdvanceDueAtMs: null,
+            shuffleEnabled: false,
+            repeatEnabled: false,
+            randomSeed: 1,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+        (window as unknown as { __shared: unknown[] }).__shared = [];
+        Object.defineProperty(navigator, "share", {
+          configurable: true,
+          value: (data: unknown) => {
+            (window as unknown as { __shared: unknown[] }).__shared.push(data);
+            return Promise.resolve();
+          },
+        });
+      },
+      { playlistKey: SHARED_PLAYLIST_STORAGE_KEY, sessionKey: PLAYBACK_SESSION_KEY },
+    );
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+
+    const toggle = page.getByTestId("tune-details-toggle");
+    const share = page.getByTestId("tune-share");
+    await expect(share).toBeVisible();
+    await expect(share).toHaveAccessibleName(/^Share /);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const [toggleBox, shareBox] = await Promise.all([toggle.boundingBox(), share.boundingBox()]);
+    if (!toggleBox || !shareBox) throw new Error("The toggle or Share has no box");
+    expect(shareBox.height, "Share target height").toBeGreaterThanOrEqual(44);
+    expect(shareBox.width, "Share target width").toBeGreaterThanOrEqual(44);
+    expect(shareBox.x, "Share starts after the toggle ends").toBeGreaterThanOrEqual(toggleBox.x + toggleBox.width);
+    expect(Math.abs(shareBox.y - toggleBox.y), "Share and the toggle share one line").toBeLessThanOrEqual(1);
+    expect(shareBox.x + shareBox.width, "Share ends inside the 320 px viewport").toBeLessThanOrEqual(320);
+    const fontPx = await share.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    expect(fontPx, "Share text size").toBeGreaterThanOrEqual(14);
+
+    expect(await ringFocus(page, toggle), "the ring could not reach the About this tune toggle").toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await expect(share).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(share), "Share is selected but not on screen").toBe(true);
+    await page.keyboard.press("ArrowLeft");
+    await expect(toggle).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowRight");
+
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared.length))
+      .toBe(1);
+    const [shared] = await page.evaluate(() => (window as unknown as { __shared: Record<string, string>[] }).__shared);
+    expect(shared.url).toBe("https://deepsid.chordian.net/?file=/MUSICIANS/B/Barlow_Kit/Blue%20Screen%20Waltz%202.sid");
+    expect(shared.title).toBe("Blue Screen Waltz 2");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 
   /*
