@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_SKIP_ROM_DEPENDENT_SONGS,
   loadSkipRomDependentSongs,
@@ -36,5 +36,25 @@ describe("skipRomDependentSongs", () => {
     const spy = vi.spyOn(window, "dispatchEvent");
     saveSkipRomDependentSongs(false);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "c64u-app-settings-updated" }));
+    spy.mockRestore();
+  });
+
+  describe("without browser storage", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    it("reads as the default", () => {
+      vi.stubGlobal("localStorage", undefined);
+      expect(loadSkipRomDependentSongs()).toBe(DEFAULT_SKIP_ROM_DEPENDENT_SONGS);
+    });
+
+    it("saves nothing and announces nothing", () => {
+      vi.stubGlobal("localStorage", undefined);
+      const spy = vi.spyOn(window, "dispatchEvent");
+      saveSkipRomDependentSongs(false);
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 });

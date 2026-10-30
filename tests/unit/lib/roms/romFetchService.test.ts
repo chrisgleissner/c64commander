@@ -124,6 +124,36 @@ describe("fetchSystemRomsFromDevice", () => {
     expect(loadStoredRoms()).toEqual({ kernal: kernal(), basic: basic() });
   });
 
+  it("names the character ROM as unsupported when the device gives no reason", async () => {
+    const capabilityModule = await import("@/lib/snapshot/cpu/capability");
+    vi.spyOn(capabilityModule, "detectSnapshotCapability").mockResolvedValueOnce({
+      firmware: {},
+      cpuSnapshotSupported: false,
+    });
+
+    const result = await fetchSystemRomsFromDevice(fakeApi({ e000: kernal(), a000: basic() }), "c64u.local", {
+      includeCharacterRom: true,
+    });
+
+    expect(readCharacterRomViaIrq).not.toHaveBeenCalled();
+    expect(result.outcomes.at(-1)).toEqual({
+      kind: "chargen",
+      ok: false,
+      reason: "skipped: this device cannot run the copy routine (unsupported)",
+    });
+  });
+
+  it("reports a character ROM read that fails with something other than an Error by its text", async () => {
+    vi.mocked(readCharacterRomViaIrq).mockRejectedValueOnce("connection reset");
+
+    const result = await fetchSystemRomsFromDevice(fakeApi({ e000: kernal(), a000: basic() }), "c64u.local", {
+      includeCharacterRom: true,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.outcomes.at(-1)).toEqual({ kind: "chargen", ok: false, reason: "connection reset" });
+  });
+
   it("does not run the routine when KERNAL or BASIC did not read back valid", async () => {
     const api = fakeApi({ e000: kernal(), a000: new Uint8Array(C64_ROM_BYTES) });
 

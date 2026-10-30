@@ -7,7 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import {
   loadEmbeddedRomDependencyList,
   PINNED_MANIFEST_SHA256,
@@ -192,6 +192,47 @@ describe("assessRomDependency", () => {
     expect(await stored({ ...authentic, chargen: FAKE_ROMS.chargen })).toEqual({ kind: "none" });
   });
 
+  it("hashes exactly the file's bytes when they are a view into a larger buffer", async () => {
+    const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
+    const file = syntheticSid();
+    const padded = new Uint8Array(file.length + 5);
+    padded.set(file, 3);
+    const view = padded.subarray(3, 3 + file.length);
+
+    expect(await assessRomDependency({ sidBytes: view, songNr: 1, engine: "sidlite", roms: {} })).toMatchObject({
+      kind: "low",
+    });
+
+    const hashed = vi.mocked(computeSidMd5).mock.calls.at(-1)![0] as ArrayBuffer;
+    expect(hashed.byteLength).toBe(file.length);
+    expect(Array.from(new Uint8Array(hashed))).toEqual(Array.from(file));
+  });
+
+  it("plays the song normally, and logs a warning, when the file cannot be hashed", async () => {
+    const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
+    vi.mocked(computeSidMd5).mockRejectedValueOnce(new Error("digest unavailable"));
+
+    expect(await assess("sidlite", 1)).toEqual({ kind: "none" });
+
+    expect(addLog).toHaveBeenCalledWith("warn", "SID ROM dependency check failed; playing the song normally", {
+      service: "rom-dependency",
+      error: "digest unavailable",
+    });
+  });
+
+  it("logs a failure that is not an Error by its text", async () => {
+    const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
+    vi.mocked(computeSidMd5).mockRejectedValueOnce("plain failure");
+
+    expect(await assess("sidlite", 1)).toEqual({ kind: "none" });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.any(String),
+      expect.objectContaining({ error: "plain failure" }),
+    );
+  });
+
   it("leaves an unlisted file alone", async () => {
     const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
     vi.mocked(computeSidMd5).mockResolvedValueOnce("ffffffffffffffffffffffffffffffff");
@@ -290,6 +331,13 @@ describe("loading and failure degradation", () => {
   ])("refuses a manifest that is %s", (_name, mutate, message) => {
     const { assets, pin } = syntheticAssets({ manifest: mutate });
     expect(() => validateRomDependencyAssets(assets, pin)).toThrow(message);
+  });
+
+  it("refuses a binary whose payload hash differs from the one in the manifest", () => {
+    const { assets, pin } = syntheticAssets({
+      manifest: (m) => ((m.binary as { payloadSha256: string }).payloadSha256 = "b".repeat(64)),
+    });
+    expect(() => validateRomDependencyAssets(assets, pin)).toThrow(/payload SHA-256 differs/);
   });
 
   it("refuses a list flagged as made from an incomplete audit", () => {

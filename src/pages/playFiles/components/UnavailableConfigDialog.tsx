@@ -59,12 +59,7 @@ export type UnavailableConfigDialogProps = {
 
 /** Shown when a song's selected config file cannot be loaded. Dismissing it any other way counts as Cancel. */
 export const UnavailableConfigDialog = ({ prompt, onChoose }: UnavailableConfigDialogProps) => (
-  <AlertDialog
-    open={Boolean(prompt)}
-    onOpenChange={(open) => {
-      if (!open) onChoose("cancel");
-    }}
-  >
+  <AlertDialog open={Boolean(prompt)} onOpenChange={() => onChoose("cancel")}>
     <AlertDialogContent>
       <AlertDialogHeader hideClose>
         <AlertDialogTitle>Config unavailable</AlertDialogTitle>
