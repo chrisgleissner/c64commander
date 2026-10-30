@@ -7,13 +7,9 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 
-import {
-  loadLocalEngineEnabled,
-  loadPlaybackEngine,
-  savePlaybackEngine,
-  type PlaybackEngine,
-} from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled, savePlaybackEngine, type PlaybackEngine } from "@/lib/config/appSettings";
 
 export interface PlaybackEngineState {
   /** The persisted playback engine (`c64` | `local`). */
@@ -25,7 +21,7 @@ export interface PlaybackEngineState {
 }
 
 const read = () => ({
-  engine: loadPlaybackEngine(),
+  engine: effectivePlaybackEngine(),
   localEngineEnabled: loadLocalEngineEnabled(),
 });
 

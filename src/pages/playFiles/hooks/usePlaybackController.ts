@@ -47,11 +47,12 @@ import {
   tryAcquireSingleFlight,
   releaseSingleFlight,
 } from "@/pages/playFiles/playFilesUtils";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { endPlayLaunchMounts } from "@/lib/playback/playLaunchMounts";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
-import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadMirrorC64Audio } from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -358,7 +359,7 @@ export function usePlaybackController({
   const [localEngineActive, setLocalEngineActive] = useState(false);
   const localEngineStatsRef = useRef(new LocalEngineStatsAccumulator());
   /** Last engine seen, to tell an engine change from any other settings change. */
-  const selectedEngineRef = useRef(loadPlaybackEngine());
+  const selectedEngineRef = useRef(effectivePlaybackEngine());
   /** Keep the ref (read synchronously mid-transition) and the state in sync. */
   const setCurrentPlaybackIsLocal = useCallback((isLocal: boolean) => {
     currentPlaybackIsLocalRef.current = isLocal;

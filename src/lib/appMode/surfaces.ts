@@ -57,6 +57,7 @@ const SECTION_CLASSIFICATIONS = {
 } as const satisfies Record<string, SurfaceClassification>;
 
 const PART_CLASSIFICATIONS = {
+  "settings:play-and-disk-machine-rows": "needs-device",
   "play:c64u-source": "needs-device",
   "play:engine-choice": "needs-device",
   "play:item-config": "needs-device",

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
@@ -2622,6 +2623,29 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-section-connection")).toHaveAttribute("data-open", "true");
       for (const id of ["appearance", "diagnostics", "play-and-disk", "device-safety", "notifications", "about"]) {
         expect(screen.getByTestId(`settings-section-${id}`)).toHaveAttribute("data-open", "false");
+      }
+    });
+
+    it("SPM-SET-01 SID Player shows only standalone sections", () => {
+      saveStartupModeByUser("sid-player");
+      try {
+        render(
+          <RouterProvider
+            router={buildRouter(<SettingsPage />)}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          />,
+        );
+
+        for (const id of ["appearance", "diagnostics", "play-and-disk", "notifications", "about"]) {
+          expect(screen.getByTestId(`settings-section-${id}`), id).toBeInTheDocument();
+        }
+        for (const id of ["connection", "device-safety"]) {
+          expect(screen.queryByTestId(`settings-section-${id}`), id).toBeNull();
+        }
+        expect(screen.getByTestId("settings-section-play-and-disk")).toHaveTextContent("Play");
+        expect(screen.queryByRole("button", { name: /save & connect/i })).toBeNull();
+      } finally {
+        saveStartupModeByUser("default");
       }
     });
 

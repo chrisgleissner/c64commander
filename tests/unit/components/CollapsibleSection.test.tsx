@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -628,6 +630,59 @@ describe("CollapsibleSection", () => {
         ),
       );
       expect(seen.size).toBe(1);
+    });
+  });
+
+  describe("in SID Player", () => {
+    afterEach(() => saveStartupModeByUser("default"));
+
+    const Probe = ({ onEffect }: { onEffect: () => void }) => {
+      useEffect(onEffect, [onEffect]);
+      return <p>probe body</p>;
+    };
+
+    it("SPM-HOME-02 a section hidden by the app mode renders nothing and runs no body effect", () => {
+      saveStartupModeByUser("sid-player");
+      const onEffect = vi.fn();
+      render(
+        <CollapsibleSection scope="settings" id="connection" title="Connection" icon={Radio}>
+          <Probe onEffect={onEffect} />
+        </CollapsibleSection>,
+      );
+      expect(screen.queryByTestId("settings-section-connection")).toBeNull();
+      expect(screen.queryByText("probe body")).toBeNull();
+      expect(onEffect).not.toHaveBeenCalled();
+    });
+
+    it("SPM-HOME-02 a section the mode keeps still renders", () => {
+      saveStartupModeByUser("sid-player");
+      render(
+        <CollapsibleSection scope="settings" id="hvsc" title="HVSC" icon={Radio} defaultOpen>
+          <p>kept body</p>
+        </CollapsibleSection>,
+      );
+      expect(screen.getByTestId("settings-section-hvsc")).toBeInTheDocument();
+    });
+
+    it("SPM-HOME-02 the Full App renders the same hidden section", () => {
+      render(
+        <CollapsibleSection scope="settings" id="connection" title="Connection" icon={Radio} defaultOpen>
+          <p>full body</p>
+        </CollapsibleSection>,
+      );
+      expect(screen.getByTestId("settings-section-connection")).toBeInTheDocument();
+    });
+
+    it("SPM-HOME-02 a section appears when the mode changes back to the Full App", () => {
+      saveStartupModeByUser("sid-player");
+      render(
+        <CollapsibleSection scope="settings" id="connection" title="Connection" icon={Radio} defaultOpen>
+          <p>body</p>
+        </CollapsibleSection>,
+      );
+      expect(screen.queryByTestId("settings-section-connection")).toBeNull();
+      act(() => saveStartupModeByUser("default"));
+      expect(screen.getByTestId("settings-section-connection")).toBeInTheDocument();
     });
   });
 });

@@ -7,7 +7,8 @@
  */
 
 import { useEffect, useRef, type MutableRefObject } from "react";
-import { loadPlaybackEngine, type PlaybackEngine } from "@/lib/config/appSettings";
+import type { PlaybackEngine } from "@/lib/config/appSettings";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
 import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { addLog } from "@/lib/logging";
@@ -70,7 +71,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
         const item = current.playlistRef.current[index];
         // Only a playing SID can move between engines; anything else changes engine from the next track.
         if (!current.isPlayingRef.current || !item || item.category !== "sid") return;
-        const wantsHere = loadPlaybackEngine() === "local";
+        const wantsHere = effectivePlaybackEngine() === "local";
         // From the engine, not this page's record: the phone's engine is shared, so a remounted page plays on it
         // without having started it, and the C64's streamed audio can take the speaker from it without telling us.
         const soundsHere = current.getLocalSidPlayback().isActive();
@@ -119,7 +120,7 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
 
     const onSettingsUpdated = () => {
       const current = optionsRef.current;
-      const nextEngine = loadPlaybackEngine();
+      const nextEngine = effectivePlaybackEngine();
       if (nextEngine === current.selectedEngineRef.current) return;
       current.selectedEngineRef.current = nextEngine;
       latestMoveRef.current += 1;

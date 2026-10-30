@@ -25,6 +25,8 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useHeaderActionsFit } from "@/components/useHeaderActionsFit";
 import { useProgressiveMount } from "@/lib/ui/progressiveMount";
 import { rememberedCardHeight } from "@/lib/navigation/pagePositions";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSectionVisible } from "@/lib/appMode/surfaces";
 
 export interface CollapsibleSectionProps {
   /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
@@ -105,7 +107,7 @@ export interface CollapsibleSectionProps {
  * on one page is not made to open it again on every visit - and touching any section on
  * a page you have not touched before does not disturb a different page's defaults.
  */
-export const CollapsibleSection = ({
+const CollapsibleSectionBody = ({
   scope,
   id,
   title,
@@ -529,4 +531,11 @@ export const CollapsibleSection = ({
       </AnimatePresence>
     </motion.section>
   );
+};
+
+/** A section the app mode hides renders nothing, so its body and the hooks inside it never run. */
+export const CollapsibleSection = (props: CollapsibleSectionProps) => {
+  const appMode = useAppMode();
+  if (!isSectionVisible(props.scope, props.id, appMode)) return null;
+  return <CollapsibleSectionBody {...props} />;
 };
