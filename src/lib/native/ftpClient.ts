@@ -9,6 +9,7 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import type { NativeTraceContext } from "@/lib/native/nativeTraceContext";
 import { getRuntimeFtpPasswordOverride } from "@/lib/ftp/ftpConfig";
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 
 export type FtpEntry = {
   name: string;
@@ -145,7 +146,8 @@ const rawFtpClient = registerPlugin<FtpClientPlugin>("FtpClient", {
 // passes through, so injecting it here authenticates all callers without each
 // needing to know about the token (HARD10-005). No-op in normal operation
 // (override null): the caller's real device password flows through untouched.
-const withRuntimeFtpAuth = <T extends { password?: string }>(options: T): T => {
+const withRuntimeFtpAuth = <T extends { password?: string; host?: string }>(options: T): T => {
+  assertDeviceTrafficAllowed("ftp", { host: options.host });
   const override = getRuntimeFtpPasswordOverride();
   return override === null ? options : { ...options, password: override };
 };

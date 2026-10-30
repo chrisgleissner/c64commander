@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 import { Capacitor } from "@capacitor/core";
 import { C64API, getC64API } from "@/lib/c64api";
 import { buildBaseUrlFromDeviceHost } from "@/lib/c64api/hostConfig";
@@ -34,6 +35,7 @@ export interface SenderIdentityDeps {
 export type SenderVerdict = "same" | "different" | "unknown";
 
 const identityWithoutPassword: FetchIdentity = async (host) => {
+  assertDeviceTrafficAllowed("udp", { host });
   if (Capacitor.isPluginAvailable("StreamUdp")) {
     const reply = await StreamUdp.identify({ host, timeoutMs: IDENT_TIMEOUT_MS });
     const identity = deviceInfoMachineIdentity({ unique_id: reply.uniqueId, hostname: reply.hostname });

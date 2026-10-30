@@ -9,6 +9,7 @@
 import { DeviceDiscovery, type NativeDeviceDiscoveryCandidate } from "@/lib/native/deviceDiscovery";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
 import { C64API } from "@/lib/c64api";
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 import {
   buildBaseUrlFromDeviceHost,
   buildDeviceHostWithHttpPort,
@@ -266,6 +267,7 @@ const scanAndResolveCandidates = async (
   // - Web: the registered web facade resolves `unsupported`.
   // So callers always get a well-formed result with `unsupported` set rather than a
   // rejected promise; no JS-side platform gate is needed here.
+  assertDeviceTrafficAllowed("discovery", { trigger: options.trigger });
   const result = await DeviceDiscovery.discover({
     knownHosts: buildKnownHosts(),
     includeLanScan: options.includeLanScan ?? true,
