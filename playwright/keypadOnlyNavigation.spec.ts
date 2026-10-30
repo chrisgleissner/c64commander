@@ -13,6 +13,7 @@ import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { KEY_SELECTED_ATTRIBUTE as SELECTED, enableKeypad, ringFocus } from "./focusRing";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
+import { installAudioFxMock } from "./audioFxMock";
 
 /**
  * The app driven by keys alone, on the smallest screen it supports.
@@ -147,6 +148,38 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       await inventory.dispose();
       await page.keyboard.press("Escape");
     }
+  });
+
+  test("the Spectrum card's Bars and Wave buttons are reached and switched by keys alone @layout", async ({ page }) => {
+    await installAudioFxMock(page);
+    await page.goto("/play");
+    await settle(page);
+    const card = page.getByTestId("play-section-spectrum");
+    await expect(card).toBeVisible();
+    expect(await ringFocus(page, card)).toBe(true);
+    if ((await card.getAttribute("data-open")) !== "true") await page.keyboard.press("Enter");
+    await expect(card).toHaveAttribute("data-open", "true");
+    const bars = page.getByTestId("spectrum-view-bars");
+    const wave = page.getByTestId("spectrum-view-wave");
+    await expect(bars).toBeVisible();
+
+    expect(await ringFocus(page, bars)).toBe(true);
+    expect(await isOnScreen(bars)).toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await expect(wave).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(wave)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(wave).toHaveAttribute("aria-pressed", "true");
+    await expect(bars).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("spectrum-canvas")).toHaveAttribute(
+      "aria-label",
+      "Audio channel meters, with the waveform of the sound below",
+    );
+    await page.keyboard.press("ArrowLeft");
+    await expect(bars).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Enter");
+    await expect(bars).toHaveAttribute("aria-pressed", "true");
+    await expect(wave).toHaveAttribute("aria-pressed", "false");
   });
 
   test("every primary page is reachable using only the keypad @layout", async ({ page }) => {

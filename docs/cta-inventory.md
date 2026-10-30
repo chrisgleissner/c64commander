@@ -559,7 +559,13 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
   growing from left to right toward 0 dBFS, with a red block when that channel clips. Matching stereo
   levels do not collapse the rows. Older bridges show one aggregate Mix meter. The body holds only
   display elements (`spectrum-canvas`, `spectrum-channel-readout`, `spectrum-rms`, `spectrum-peak`,
-  `spectrum-clip`, `spectrum-message`; the readout elements are screen-reader only), so it adds one control to the page.
+  `spectrum-clip`, `spectrum-message`; the readout elements are screen-reader only), so the body adds no control.
+- Bars / Wave — two buttons in a group labeled "Spectrum view" (`spectrum-view-group`) — `spectrum-view-bars`,
+  `spectrum-view-wave` — R✅ I✅ — in the card's header, between the title and the chevron, and only while the
+  card is open, so the closed card stays one row with no extra control. Each is 44 px tall and carries
+  `aria-pressed`; the pressed one is filled with the accent color. Left and Right move between the two, OK selects,
+  and the canvas switches at once: Bars draws the frequency spectrum under the meters, Wave draws the waveform of
+  the last 21 ms in the same space, with the meters unchanged. The choice is remembered on this phone.
 
 **Sound card** _(Android only, like the Spectrum card; mounted by `PlaybackSoundCard` beside it)_
 

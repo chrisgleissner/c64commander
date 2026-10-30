@@ -176,6 +176,10 @@ export interface StreamUdpSpectrumRequest {
   /** How many frames to return, [stepNanos] apart, starting at the target. Fewer come back when none are ahead. */
   count?: number;
   stepNanos?: number;
+  /** Ask for the waveform window in each frame. */
+  wave?: boolean;
+  /** False skips the spectrum analysis, so a frame carries the level meters and the waveform only. Default true. */
+  bands?: boolean;
 }
 
 /** One analysis frame of the sound leaving the phone, from {@link StreamUdpPlugin.readSpectrum}. */
@@ -198,6 +202,10 @@ export interface StreamUdpSpectrumFrame {
   aligned?: boolean;
   /** Frames after this one, one step apart, when more than one was asked for and the path can look ahead. */
   ahead?: StreamUdpSpectrumFrame[];
+  /** Base64 of 256 signed bytes (full scale is 127), the mean of four mono samples each. Only when `wave` was requested. */
+  wave?: string;
+  /** False when no rising zero crossing was found, so the window is simply the newest samples. */
+  waveTriggered?: boolean;
   peakDb: number;
   rmsDb: number;
   /** True when a sample reached full scale within the last second. */

@@ -7,18 +7,24 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
+import { addLog } from "@/lib/logging";
 import {
   applyStoredTextScale,
   clampListPreviewLimit,
   DEFAULT_LIST_PREVIEW_LIMIT,
   getDisplayProfileOverride,
   getListPreviewLimit,
+  getSpectrumViewMode,
   getTextScaleId,
   MAX_LIST_PREVIEW_LIMIT,
   MIN_LIST_PREVIEW_LIMIT,
   resolveCurrentDisplayProfile,
   setDisplayProfileOverride,
   setListPreviewLimit,
+  setSpectrumViewMode,
   setTextScaleId,
 } from "@/lib/uiPreferences";
 import { DEFAULT_TEXT_SCALE_ID, TEXT_SCALE_VARIABLE } from "@/lib/textScale";
@@ -229,5 +235,62 @@ describe("resolveCurrentDisplayProfile", () => {
 
     setDisplayProfileOverride("auto");
     expect(resolveCurrentDisplayProfile()).toBe("expanded");
+  });
+});
+
+describe("spectrum view preference", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(addLog).mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("shows the bars until the wave is chosen", () => {
+    expect(getSpectrumViewMode()).toBe("bars");
+  });
+
+  it("remembers the chosen view", () => {
+    setSpectrumViewMode("wave");
+    expect(getSpectrumViewMode()).toBe("wave");
+    expect(localStorage.getItem("c64u_spectrum_view")).toBe("wave");
+    setSpectrumViewMode("bars");
+    expect(getSpectrumViewMode()).toBe("bars");
+  });
+
+  it("falls back to the bars for a stored value it does not know", () => {
+    localStorage.setItem("c64u_spectrum_view", "spiral");
+    expect(getSpectrumViewMode()).toBe("bars");
+  });
+
+  it("logs a warning and shows the bars when storage cannot be read", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    expect(getSpectrumViewMode()).toBe("bars");
+    expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("spectrum view"), expect.any(Object));
+  });
+
+  it("logs a warning and carries on when storage cannot be written", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota exceeded");
+    });
+    expect(() => setSpectrumViewMode("wave")).not.toThrow();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("spectrum view"),
+      expect.objectContaining({ mode: "wave" }),
+    );
+  });
+
+  it("works without any storage", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { value: undefined, configurable: true });
+    expect(getSpectrumViewMode()).toBe("bars");
+    expect(() => setSpectrumViewMode("wave")).not.toThrow();
+    if (original) Object.defineProperty(globalThis, "localStorage", original);
   });
 });
