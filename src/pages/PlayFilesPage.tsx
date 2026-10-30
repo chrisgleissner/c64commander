@@ -667,6 +667,7 @@ export default function PlayFilesPage() {
       play: () => void handlePlay(),
       pauseResume: () => void handlePauseResume(),
       next: () => void handleNext(),
+      previous: () => void handlePrevious(),
       stop: stopPlayback,
     },
     playlist.length > 0 && sessionRestoreSettled,

@@ -76,6 +76,7 @@ class BackgroundExecutionService : Service() {
         const val TRANSPORT_COMMAND_PLAY_PAUSE = "playPause"
         const val TRANSPORT_COMMAND_STOP = "stop"
         const val TRANSPORT_COMMAND_NEXT = "next"
+        const val TRANSPORT_COMMAND_PREVIOUS = "previous"
 
         /** One PendingIntent request code per notification action; see [transportAction]. */
         private const val TRANSPORT_REQUEST_PLAY = 1
@@ -83,6 +84,7 @@ class BackgroundExecutionService : Service() {
         private const val TRANSPORT_REQUEST_NEXT = 3
         private const val TRANSPORT_REQUEST_STOP = 4
         private const val REQUEST_RESUME_CONTENT = 6
+        private const val TRANSPORT_REQUEST_PREVIOUS = 8
 
         @Volatile
         var isRunning = false
@@ -627,7 +629,15 @@ class BackgroundExecutionService : Service() {
             return finishMediaNotification(builder, compactActions = intArrayOf(0, 1))
         }
 
-        // Play or Pause is first, because a collapsed control shows the leading actions.
+        // The compact view shows the first three actions: Previous, Play or Pause, Next.
+        builder.addAction(
+                transportAction(
+                        android.R.drawable.ic_media_previous,
+                        "Previous",
+                        TRANSPORT_COMMAND_PREVIOUS,
+                        TRANSPORT_REQUEST_PREVIOUS,
+                )
+        )
         if (isPausedState) {
             builder.addAction(
                     transportAction(

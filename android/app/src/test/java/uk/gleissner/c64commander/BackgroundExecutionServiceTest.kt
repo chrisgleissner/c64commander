@@ -905,6 +905,27 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun aStaleSessionOffersNeitherPreviousNorNextOnTheSessionAndRelaysNoPrevious() {
+        controller.create()
+        startService()
+        setPlaybackState(paused = false, startId = 2)
+        ShadowLooper.shadowMainLooper().idleFor(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS)
+        val session = getPrivateField("mediaSession") as MediaSession?
+
+        assertEquals(android.media.session.PlaybackState.ACTION_STOP, playbackStateActionsOf(session))
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.clearBroadcastIntents()
+
+        service.mediaSessionCallback.onSkipToPrevious()
+
+        assertTrue(
+                "Previous has no web layer to reach while the session is stale",
+                shadowApp.broadcastIntents.none { it.action == BackgroundExecutionService.ACTION_TRANSPORT_COMMAND },
+        )
+    }
+
+    @Test
     fun companionPauseUpdatesTheRunningServiceWithoutRestartingIt() {
         controller.create()
         startService()
@@ -1087,7 +1108,7 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
-    fun notificationOffersPauseNextAndStop() {
+    fun notificationOffersPreviousPauseNextAndStop() {
         // HARD27-040: the notification had no actions, so the only way to stop a playing session
         // was to unlock the phone and open the app.
         controller.create()
@@ -1095,12 +1116,35 @@ class BackgroundExecutionServiceTest {
 
         assertEquals(
                 listOf(
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS,
                         BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
                         BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
                         BackgroundExecutionService.TRANSPORT_COMMAND_STOP,
                 ),
                 transportCommandsOfNotificationActions(),
         )
+    }
+
+    @Test
+    fun theCompactNotificationShowsPreviousPlayPauseAndNextButNotStop() {
+        controller.create()
+        startService()
+
+        val compact =
+                currentNotification()?.extras?.getIntArray(android.app.Notification.EXTRA_COMPACT_ACTIONS)
+
+        assertArrayEquals(intArrayOf(0, 1, 2), compact)
+    }
+
+    @Test
+    fun everyNotificationActionHasItsOwnRequestCode() {
+        controller.create()
+        startService()
+
+        val requestCodes =
+                currentNotification()!!.actions.map { Shadows.shadowOf(it.actionIntent).requestCode }
+
+        assertEquals("Colliding request codes make two buttons one PendingIntent", requestCodes.size, requestCodes.toSet().size)
     }
 
     @Test
@@ -1112,6 +1156,7 @@ class BackgroundExecutionServiceTest {
 
         assertEquals(
                 listOf(
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS,
                         BackgroundExecutionService.TRANSPORT_COMMAND_PLAY,
                         BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
                         BackgroundExecutionService.TRANSPORT_COMMAND_STOP,

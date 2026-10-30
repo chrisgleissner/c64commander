@@ -72,6 +72,18 @@ describe("native media buttons", () => {
     cleanup();
   });
 
+  it("QW-LS-01: publishes a relayed previous press on the transport bus", async () => {
+    const received: TransportCommand[] = [];
+    const unsubscribe = transportCommandBus.subscribe((command) => received.push(command));
+    const { cleanup, invoke } = await installAndCaptureListener(vi.fn(), () => "/play");
+
+    invoke("previous");
+
+    expect(received).toEqual(["previous"]);
+    unsubscribe();
+    cleanup();
+  });
+
   it("navigates to the transport when the press arrives on another page, and latches the command", async () => {
     const navigate = vi.fn();
     const { cleanup, invoke } = await installAndCaptureListener(navigate, () => "/settings");

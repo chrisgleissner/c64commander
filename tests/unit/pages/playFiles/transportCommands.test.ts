@@ -15,6 +15,7 @@ const handlers = {
   play: vi.fn(),
   pauseResume: vi.fn(),
   next: vi.fn(),
+  previous: vi.fn(),
   stop: vi.fn(),
 };
 
@@ -28,6 +29,16 @@ describe("what a transport command does on the Play page", () => {
   it("advances on next", () => {
     runTransportCommand("next", handlers);
     expect(handlers.next).toHaveBeenCalledTimes(1);
+  });
+
+  it("QW-LS-01: goes to the previous tune on previous, and does nothing else", () => {
+    handlers.isPlaying = true;
+    runTransportCommand("previous", handlers);
+    expect(handlers.previous).toHaveBeenCalledTimes(1);
+    expect(handlers.next).not.toHaveBeenCalled();
+    expect(handlers.play).not.toHaveBeenCalled();
+    expect(handlers.pauseResume).not.toHaveBeenCalled();
+    expect(handlers.stop).not.toHaveBeenCalled();
   });
 
   it("stops on stop, which a media session's STOP action can send", () => {

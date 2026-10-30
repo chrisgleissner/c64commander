@@ -43,7 +43,8 @@ class MediaSessionPublisherTest {
                     PlaybackState.ACTION_PAUSE or
                     PlaybackState.ACTION_PLAY_PAUSE or
                     PlaybackState.ACTION_STOP or
-                    PlaybackState.ACTION_SKIP_TO_NEXT
+                    PlaybackState.ACTION_SKIP_TO_NEXT or
+                    PlaybackState.ACTION_SKIP_TO_PREVIOUS
 
     @Test
     fun liveSessionOffersTheFullTransport() {
@@ -60,6 +61,7 @@ class MediaSessionPublisherTest {
 
         assertEquals(PlaybackState.STATE_PAUSED, state.state)
         assertEquals(PlaybackState.ACTION_STOP, state.actions)
+        assertEquals(0L, state.actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS)
     }
 
     @Test
@@ -68,6 +70,7 @@ class MediaSessionPublisherTest {
         publisher.callback.onPause()
         publisher.callback.onStop()
         publisher.callback.onSkipToNext()
+        publisher.callback.onSkipToPrevious()
 
         assertEquals(
                 listOf(
@@ -75,6 +78,7 @@ class MediaSessionPublisherTest {
                         BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
                         BackgroundExecutionService.TRANSPORT_COMMAND_STOP,
                         BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS,
                 ),
                 relayed,
         )

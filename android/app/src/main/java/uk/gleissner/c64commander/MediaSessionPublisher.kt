@@ -42,6 +42,9 @@ internal class MediaSessionPublisher(
                 override fun onStop() = relayTransportCommand(BackgroundExecutionService.TRANSPORT_COMMAND_STOP)
 
                 override fun onSkipToNext() = relayTransportCommand(BackgroundExecutionService.TRANSPORT_COMMAND_NEXT)
+
+                override fun onSkipToPrevious() =
+                        relayTransportCommand(BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS)
             }
 
     fun createSession(state: Int, stale: Boolean): MediaSession? =
@@ -106,7 +109,8 @@ internal class MediaSessionPublisher(
                                         PlaybackState.ACTION_PAUSE or
                                         PlaybackState.ACTION_PLAY_PAUSE or
                                         PlaybackState.ACTION_STOP or
-                                        PlaybackState.ACTION_SKIP_TO_NEXT
+                                        PlaybackState.ACTION_SKIP_TO_NEXT or
+                                        PlaybackState.ACTION_SKIP_TO_PREVIOUS
                             },
                     )
                     .build()

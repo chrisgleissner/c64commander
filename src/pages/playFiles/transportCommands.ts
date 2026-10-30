@@ -14,6 +14,7 @@ export interface TransportCommandHandlers {
   play: () => void;
   pauseResume: () => void;
   next: () => void;
+  previous: () => void;
   stop: () => void;
 }
 
@@ -23,6 +24,7 @@ export interface TransportCommandHandlers {
  */
 export const runTransportCommand = (command: TransportCommand, handlers: TransportCommandHandlers): void => {
   if (command === "next") handlers.next();
+  else if (command === "previous") handlers.previous();
   else if (command === "stop") handlers.stop();
   else if (command === "play") {
     // HARD27-007: a paused session still has isPlaying true, so the old "start only when nothing is
