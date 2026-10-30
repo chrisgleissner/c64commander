@@ -693,6 +693,73 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expectOrder([2, 3, 1]);
   });
 
+  test("a playlist row's menu offers Share after Move down for an archive tune only, and OK on it shares the encoded link @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const items = [
+        { source: "ultimate", path: "/Usb0/Demos/Share_Plain.sid", name: "Share_Plain.sid", sourceId: null },
+        { source: "hvsc", path: "/MUSICIANS/B/Barlow_Kit/Blue Screen Waltz 2.sid", name: "Blue Screen Waltz 2.sid" },
+      ].map((item) => ({ ...item, durationMs: 120_000, songNr: 1 }));
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify({ items, currentIndex: 0 }));
+      (window as unknown as { __shared: unknown[] }).__shared = [];
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: (data: unknown) => {
+          (window as unknown as { __shared: unknown[] }).__shared.push(data);
+          return Promise.resolve();
+        },
+      });
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const rowTrigger = (text: string) =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]', { hasText: text })
+        .getByRole("button", { name: "Item actions" });
+    const sheet = page.getByTestId("action-list-item-sheet");
+    const shareButton = sheet.getByRole("button", { name: "Share", exact: true });
+
+    await expect(rowTrigger("Share Plain")).toBeAttached({ timeout: 15_000 });
+    expect(await ringFocus(page, rowTrigger("Share Plain")), "the ring could not reach the first row").toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    await expect(sheet.getByRole("button", { name: "Move down" })).toBeVisible();
+    await expect(shareButton, "a file on the Ultimate has no public link").toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    expect(await ringFocus(page, rowTrigger("Blue Screen")), "the ring could not reach the archive row").toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    await expect(shareButton).toBeVisible();
+    const [moveDownBox, shareBox] = await Promise.all([
+      sheet.getByRole("button", { name: "Move down" }).boundingBox(),
+      shareButton.boundingBox(),
+    ]);
+    expect(shareBox!.y, "Share follows Move down").toBeGreaterThan(moveDownBox!.y);
+    expect(shareBox!.height, "Share target height").toBeGreaterThanOrEqual(44);
+    for (let step = 0; step < 8 && !(await shareButton.evaluate((el) => el === document.activeElement)); step += 1) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(shareButton).toBeFocused();
+    expect(await isOnScreen(shareButton), "Share is focused but not on screen").toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared.length))
+      .toBe(1);
+    const [shared] = await page.evaluate(() => (window as unknown as { __shared: Record<string, string>[] }).__shared);
+    expect(shared.url).toBe("https://deepsid.chordian.net/?file=/MUSICIANS/B/Barlow_Kit/Blue%20Screen%20Waltz%202.sid");
+    expect(shared.title).toBe("Blue Screen Waltz 2");
+    await expect(sheet).toBeHidden();
+  });
+
   test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {
     test.setTimeout(120_000);
     await page.goto("/settings", { waitUntil: "domcontentloaded" });

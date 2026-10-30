@@ -7,7 +7,7 @@
  */
 
 import { render, renderHook, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import type { PlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
 import type { ActionListMenuItem } from "@/components/lists/SelectableActionList";
@@ -39,6 +39,10 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
 vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot,
 }));
+
+const { shareTune } = vi.hoisted(() => ({ shareTune: vi.fn() }));
+
+vi.mock("@/lib/playback/shareTune", () => ({ shareTune }));
 
 const buildItem = (
   source: "local" | "ultimate" | "hvsc",
@@ -587,5 +591,115 @@ describe("usePlaylistListItems queue actions", () => {
     rerender({ playingId: playlist[1].id });
 
     expect(thirdRowPlayNext().disabled).toBe(true);
+  });
+});
+
+describe("usePlaylistListItems share", () => {
+  const COMMANDO = "/MUSICIANS/H/Hubbard_Rob/Commando.sid";
+  const playlist = [
+    buildItem("local", "/Music/one.sid"),
+    buildItem("hvsc", COMMANDO),
+    buildItem("ultimate", "/USB0/two.sid"),
+    {
+      ...buildItem("hvsc", "/MUSICIANS/G/Galway_Martin/Arkanoid.sid"),
+      subsongCount: 3,
+      request: { source: "hvsc", path: "/MUSICIANS/G/Galway_Martin/Arkanoid.sid", songNr: 2 },
+    } as PlaylistItem,
+  ];
+
+  const queueActions = (overrides: Partial<PlaylistQueueActions> = {}): PlaylistQueueActions => ({
+    shuffleEnabled: false,
+    filterHidesRows: false,
+    playNext: vi.fn(),
+    moveUp: vi.fn(),
+    moveDown: vi.fn(),
+    ...overrides,
+  });
+
+  const menuOf = (
+    rowIndex: number,
+    { actions = queueActions() as PlaylistQueueActions | null, isPlaylistLoading = false } = {},
+  ): ActionListMenuItem[] => {
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onOpenConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+        ...(actions ? { queueActions: actions } : {}),
+      }),
+    );
+    return result.current.filter((entry) => entry.variant !== "header")[rowIndex].menuItems ?? [];
+  };
+
+  const kinds = (menu: ActionListMenuItem[], count: number) =>
+    menu.slice(0, count).map((entry) => (entry.type === "action" ? entry.label : entry.type));
+
+  const shareEntry = (menu: ActionListMenuItem[]) =>
+    menu.find((entry) => entry.type === "action" && entry.label === "Share") as
+      Extract<ActionListMenuItem, { type: "action" }> | undefined;
+
+  beforeEach(() => shareTune.mockReset());
+
+  it("puts Share after the three queue actions and keeps one separator before the details", () => {
+    expect(kinds(menuOf(1), 6)).toEqual(["Play next", "Move up", "Move down", "Share", "separator", "label"]);
+    expect(menuOf(1)[5]).toEqual({ type: "label", label: "Details" });
+  });
+
+  it("offers Share only for a tune whose archive path is known", () => {
+    expect(shareEntry(menuOf(0))).toBeUndefined();
+    expect(shareEntry(menuOf(2))).toBeUndefined();
+    expect(kinds(menuOf(0), 5)).toEqual(["Play next", "Move up", "Move down", "separator", "label"]);
+    expect(shareEntry(menuOf(1))).toBeDefined();
+  });
+
+  it("offers Share on its own, still followed by one separator, when the page supplies no queue actions", () => {
+    expect(kinds(menuOf(1, { actions: null }), 3)).toEqual(["Share", "separator", "label"]);
+  });
+
+  it("hands the row's text and link to the share function, and nothing else", () => {
+    shareEntry(menuOf(1))?.onSelect();
+
+    expect(shareTune).toHaveBeenCalledTimes(1);
+    expect(shareTune).toHaveBeenCalledWith({
+      title: "Commando",
+      text: "Commando",
+      url: "https://deepsid.chordian.net/?file=/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      path: COMMANDO,
+    });
+  });
+
+  it("shares the tune the row holds when its file has several", () => {
+    shareEntry(menuOf(3))?.onSelect();
+
+    expect(shareTune).toHaveBeenCalledWith({
+      title: "Arkanoid",
+      text: "Arkanoid\nTune 2 of 3",
+      url: "https://deepsid.chordian.net/?file=/MUSICIANS/G/Galway_Martin/Arkanoid.sid&subtune=2",
+      path: "/MUSICIANS/G/Galway_Martin/Arkanoid.sid",
+    });
+  });
+
+  it.each([
+    ["Shuffle is on", { shuffleEnabled: true }, false],
+    ["a filter hides rows", { filterHidesRows: true }, false],
+    ["the playlist is loading", {}, true],
+  ])("leaves Share enabled while %s, because it does not change the order", (_name, overrides, loading) => {
+    const menu = menuOf(1, { actions: queueActions(overrides), isPlaylistLoading: loading });
+    expect(shareEntry(menu)).toBeDefined();
+    expect(shareEntry(menu)?.disabled).toBeFalsy();
   });
 });

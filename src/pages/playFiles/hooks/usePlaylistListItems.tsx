@@ -11,6 +11,8 @@ import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { shareTune } from "@/lib/playback/shareTune";
+import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { describeConfigOrigin, describeConfigOutcome, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
@@ -78,7 +80,7 @@ const resolveQueueAvailability = (
 const describeQueueAvailability = (availability: QueueAvailability) =>
   `${availability.playNext}${availability.moveUp}${availability.moveDown}${availability.note}`;
 
-/** The row menu's reorder actions; a later action such as Share is appended to this block. */
+/** The row menu's reorder actions, with the note that says why they are unavailable. */
 const buildQueueMenuItems = (
   queueActions: PlaylistQueueActions,
   availability: QueueAvailability,
@@ -98,8 +100,13 @@ const buildQueueMenuItems = (
     onSelect: () => queueActions.moveDown(itemId),
     disabled: !availability.moveDown,
   },
-  { type: "separator" },
 ];
+
+/** Not disabled while loading or reordering is locked: it reads the row and never changes the playlist. */
+const buildShareMenuItems = (item: PlaylistItem, title: string): ActionListMenuItem[] => {
+  const payload = tuneShareForItem(item, undefined, undefined, title);
+  return payload ? [{ type: "action", label: "Share", onSelect: () => void shareTune(payload) }] : [];
+};
 
 const sameInputs = (left: readonly unknown[], right: readonly unknown[]) =>
   left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
@@ -240,8 +247,13 @@ export const usePlaylistListItems = ({
       ]
         .filter(Boolean)
         .join(" ");
-      const menuItems: ActionListMenuItem[] = [
+      const actionItems = [
         ...(queueActions && availability ? buildQueueMenuItems(queueActions, availability, item.id) : []),
+        ...buildShareMenuItems(item, display.title),
+      ];
+      const menuItems: ActionListMenuItem[] = [
+        ...actionItems,
+        ...(actionItems.length ? [{ type: "separator" as const }] : []),
         { type: "label", label: "Details" },
         {
           type: "info",

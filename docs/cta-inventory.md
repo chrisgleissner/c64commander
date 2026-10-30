@@ -438,7 +438,7 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
 - Item actions (⋮) — button — `playlist-item-actions-<title>` — R✅ I✅ — on the compact profile it opens
   the **Item actions sheet** (`action-list-item-sheet`), a bottom sheet titled with the item's name; on other
   profiles it opens the same entries as a menu beside the row. The sheet holds, in order: Play — button —
-  `action-list-item-sheet-primary` (plays the item and closes the sheet); then the queue actions (below); then the
+  `action-list-item-sheet-primary` (plays the item and closes the sheet); then the queue actions and Share (below); then the
   other actions (Review playback config,
   Attach or Change local / C64U .cfg, and Remove config association `[only with a config attached]`); then the
   **Details** and **Config** blocks (`action-list-item-sheet-details`: Type, Duration, Path, Status, Size, Date, then
@@ -454,7 +454,14 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
   - Move down — action — code-verified — moves the row one place down.
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
-  - Above the three, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
+  - Share — action — code-verified — directly after Move down, for a tune whose HVSC path is known (found, recent or
+    played from the archive); not rendered for a file from the phone, the Ultimate or CommoServe, so no private path
+    can leave the app. OK opens the system share sheet on a phone (a browser uses `navigator.share`, else copies
+    the text and DeepSID link and toasts **Link copied**). The text is the tune's name and, for a multi-tune file,
+    `Tune N of M`; the row has no composer or year to add. Not disabled while the playlist loads,
+    while Shuffle is on or while a filter is active: it reads the row and changes nothing. The separator after the
+    action block is kept, and is also present when Share is the only action.
+  - Above the three reorder actions, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
     menu; not a keypad stop) gives the reason: "Turn off Shuffle to change the order" while Shuffle is on, otherwise
     "Clear the filter to change the order" while a filter is active. After a move the ring stays on the moved
     row's ⋮ and the row is scrolled into view.
