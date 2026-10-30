@@ -20,7 +20,12 @@ import {
 } from "@/lib/savedDevices/store";
 import { clearPasswordForDevice, setPasswordForDevice } from "@/lib/secureStorage";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
-import { isConnectionSaveInFlight, saveConnection, type SaveConnectionContext } from "@/pages/settings/saveConnection";
+import {
+  __resetConnectionSaveStateForTests,
+  isConnectionSaveInFlight,
+  saveConnection,
+  type SaveConnectionContext,
+} from "@/pages/settings/saveConnection";
 
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
@@ -202,6 +207,19 @@ describe("saveConnection against the real saved devices store", () => {
         expect.any(Error),
         "192.0.2.50",
       );
+      expect(isConnectionSaveInFlight()).toBe(false);
+    });
+
+    it("does not report a timeout later for a save the test reset while it was waiting", async () => {
+      vi.useFakeTimers();
+      const context = buildContext({ switchSavedDevice: vi.fn(() => new Promise<never>(() => undefined)) });
+      void saveConnection(context);
+      expect(isConnectionSaveInFlight()).toBe(true);
+
+      __resetConnectionSaveStateForTests();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(context.report.failed).not.toHaveBeenCalled();
       expect(isConnectionSaveInFlight()).toBe(false);
     });
 

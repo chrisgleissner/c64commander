@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
@@ -251,7 +251,17 @@ const defaultProps: DiagnosticsDialogProps = {
   liveHealthCheckProbes: null,
 };
 
+const preloadLazyDiagnosticsPanels = () =>
+  Promise.all([
+    import("@/components/diagnostics/LatencyAnalysisPopup"),
+    import("@/components/diagnostics/KeyExplorerPopup"),
+    import("@/components/diagnostics/HealthHistoryPopup"),
+    import("@/components/diagnostics/HeatMapPopup"),
+  ]);
+
 describe("DiagnosticsDialog", () => {
+  beforeAll(preloadLazyDiagnosticsPanels, 60_000);
+
   beforeEach(async () => {
     localStorage.clear();
     localStorage.setItem(

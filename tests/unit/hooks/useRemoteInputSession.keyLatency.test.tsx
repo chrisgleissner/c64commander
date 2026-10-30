@@ -25,13 +25,11 @@ import { useRemoteInputSession } from "@/hooks/useRemoteInputSession";
 import { clearInputLatencySamples, getInputLatencySamples, getInputLatencyStats } from "@/lib/remoteInput/inputLatency";
 
 /**
- * Software press-to-dispatch latency + exhaustive key-combination coverage,
- * run against REAL timers (not fake) so `performance.now()` reflects actual
- * event-loop overhead — this is the "does the code path itself add delay"
- * budget (<10ms from the gesture to the REST call being issued). It cannot
- * measure real network/device round-trip time; that is covered by the
- * Playwright wire-level test (mock server, real browser event loop) and the
- * real-hardware HIL verification (Pixel 4 + real U64/C64U over Wi-Fi).
+ * Software press-to-dispatch latency + exhaustive key-combination coverage.
+ * The p95 budget (<10ms from the gesture to the REST call being issued) runs on a fake clock, so it measures
+ * the delay the hook schedules rather than how busy the host is. It cannot measure real network/device
+ * round-trip time; that is covered by the Playwright wire-level test (mock server, real browser event loop)
+ * and the real-hardware HIL verification (Pixel 4 + real U64/C64U over Wi-Fi).
  */
 
 const LATENCY_BUDGET_MS = 10;
@@ -44,6 +42,21 @@ const waitForCallCount = async (count: number, timeoutMs = 500) => {
       throw new Error(`Timed out waiting for ${count} calls (got ${sendMachineInputBatchMock.mock.calls.length})`);
     }
     await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+};
+
+/**
+ * Advances the fake clock one millisecond at a time until the dispatch happens, so the recorded latency is the
+ * delay the hook scheduled between the gesture and the REST call, independent of how busy the host machine is.
+ */
+const advanceFakeClockUntilCallCount = async (count: number, maxMs = 200) => {
+  for (let elapsed = 0; sendMachineInputBatchMock.mock.calls.length < count; elapsed += 1) {
+    if (elapsed >= maxMs) {
+      throw new Error(
+        `No dispatch ${count} within ${maxMs} fake ms (got ${sendMachineInputBatchMock.mock.calls.length})`,
+      );
+    }
+    await vi.advanceTimersByTimeAsync(1);
   }
 };
 
@@ -74,15 +87,16 @@ describe("useRemoteInputSession key-press latency and combinatorial coverage", (
   });
 
   it(`keeps p95 press-to-dispatch latency under ${LATENCY_BUDGET_MS}ms across 30 rapid discrete presses`, async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     const keys = ["a", "b", "c", "d", "e"] as const;
 
     for (let i = 0; i < 30; i += 1) {
       const key = keys[i % keys.length];
       act(() => result.current.setHeldKeyboardInputs(new Set([key])));
-      await waitForCallCount(i * 2 + 1);
+      await advanceFakeClockUntilCallCount(i * 2 + 1);
       act(() => result.current.setHeldKeyboardInputs(new Set()));
-      await waitForCallCount(i * 2 + 2);
+      await advanceFakeClockUntilCallCount(i * 2 + 2);
     }
 
     const stats = getInputLatencyStats();
