@@ -7,7 +7,6 @@
  */
 
 import {
-  C64API,
   type DeviceInfo,
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
@@ -48,6 +47,13 @@ import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/
 import { addLog } from "@/lib/logging";
 import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
 import {
+  isProbePayloadHealthy,
+  loadSwitchConnectionConfig,
+  probeInfoWithConnectionConfig,
+  runProbeInfo,
+  type ProbeInfoResult,
+} from "@/lib/connection/probeInfo";
+import {
   DEMO_INTERSTITIAL_SESSION_KEY,
   DEMO_MODE_CHOSEN_SESSION_KEY,
   DEMO_MODE_DECLINED_SESSION_KEY,
@@ -60,7 +66,6 @@ import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteraction
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 import { prepareForDeviceRetarget, restartAvMirrorAfterDeviceRetarget } from "@/lib/connection/deviceRetarget";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
-import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
 import { clearConnectivityErrorToastsForHost } from "@/lib/uiErrors";
 import { registerReachabilityListener, type ReachabilitySource } from "@/lib/connection/reachabilityEvents";
@@ -86,21 +91,14 @@ import {
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
-import { clearProbeFailureLog, isNewProbeFailure, noteProbeAnswered } from "@/lib/connection/probeFailureLog";
+import { clearProbeFailureLog } from "@/lib/connection/probeFailureLog";
 import { setConnectedDeviceIdentity } from "@/lib/connection/connectedDeviceIdentity";
 import { savedEntryIsMachine } from "@/lib/savedDevices/sameDevice";
 import { deviceInfoMachineIdentity } from "@/lib/savedDevices/machineIdentity";
 
+export type { ProbeInfoResult } from "@/lib/connection/probeInfo";
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
-
-export type ProbeInfoResult = {
-  ok: boolean;
-  deviceInfo: DeviceInfo | null;
-  error: string | null;
-  /** Set when the failure was a 401/403 — the device answered, it rejected the password. */
-  authRequired?: boolean;
-};
 
 /**
  * Why the Demo Mode interstitial is up. `discovery-failed` means a device was looked for and not
@@ -223,114 +221,6 @@ const loadPersistedConnectionConfig = async () => {
     password: password ?? undefined,
     deviceHost,
   };
-};
-
-const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: string | null }) => {
-  const deviceHost = options.deviceHost;
-  return {
-    baseUrl: buildBaseUrlFromDeviceHost(deviceHost),
-    password: options.password ?? undefined,
-    deviceHost,
-  };
-};
-
-const PROBE_REQUEST_OPTIONS = {
-  // A probe exists to find out whether the device answers; "no" is a result, not a fault to count.
-  __c64uExpectedFailure: true,
-  __c64uIntent: "system",
-  __c64uAllowDuringDiscovery: true,
-  __c64uAllowDuringError: true,
-  __c64uBypassCache: true,
-  // Self-healing: recovery/discovery probes must NEVER be suppressed by an
-  // open circuit breaker. Backing off from an unhealthy device is exactly
-  // what would stop us noticing it has recovered, leaving the app wedged
-  // offline. These probes carry their own timeout + rediscovery backoff, so
-  // the gateway bypasses the circuit for them, keeping a recovery path
-  // permanently open (the low-level circuit bypass stays inside the gateway).
-  __c64uRecoveryProbe: true,
-} as const;
-
-type ProbeConnectionConfig = ReturnType<typeof loadSwitchConnectionConfig>;
-
-/**
- * How a probe ended, so each entry point can attach its own side effects
- * without re-deriving the classification from the error message. Every probe
- * shares one classification (HARD27-024); only the side effects differ.
- */
-type ProbeOutcome = {
-  result: ProbeInfoResult;
-  kind: "ok" | "payload" | "auth" | "http" | "transport";
-};
-
-const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): ProbeOutcome => {
-  // getHttpStatusFromError is the app-wide chokepoint for 401/403 and reads the
-  // annotated status, not the message text. A message regex would miss the
-  // throw sites that prefix the status ("getInfo failed: HTTP 401").
-  const authRequired = isAuthRequiredError(error);
-  const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-  if (authRequired || /^HTTP\s+\d+/.test(message)) {
-    noteProbeAnswered(config.deviceHost);
-    return {
-      kind: authRequired ? "auth" : "http",
-      result: { ok: false, deviceInfo: null, error: message, authRequired },
-    };
-  }
-  // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
-  // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
-  // see a user-friendly message instead of the raw fetch error text.
-  const failure = normalizeTransportError(error, { host: config.deviceHost });
-  if (isNewProbeFailure(config.deviceHost, failure.class)) {
-    addLog("info", "Probe request failed", {
-      baseUrl: config.baseUrl,
-      deviceHost: config.deviceHost,
-      class: failure.class,
-      userMessage: failure.userMessage,
-      error: failure.rawMessage,
-    });
-  }
-  return {
-    kind: "transport",
-    result: { ok: false, deviceInfo: null, error: failure.userMessage, authRequired: false },
-  };
-};
-
-const runProbeInfo = async (
-  config: ProbeConnectionConfig,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<ProbeOutcome> => {
-  try {
-    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
-    const response = await api.getInfo({
-      timeoutMs: options.timeoutMs ?? loadDiscoveryProbeTimeoutMs(),
-      signal: options.signal,
-      ...PROBE_REQUEST_OPTIONS,
-    });
-    noteProbeAnswered(config.deviceHost);
-    const healthy = isProbePayloadHealthy(response);
-    return {
-      kind: healthy ? "ok" : "payload",
-      result: {
-        ok: healthy,
-        deviceInfo: response,
-        error: healthy ? null : "Probe payload missing required identity",
-      },
-    };
-  } catch (error) {
-    return classifyProbeFailure(error, config);
-  }
-};
-
-const probeInfoWithConnectionConfig = async (
-  config: ProbeConnectionConfig,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<ProbeInfoResult> => (await runProbeInfo(config, options)).result;
-
-const isProbePayloadHealthy = (payload: unknown) => {
-  if (!payload || typeof payload !== "object") return false;
-  const maybeErrors = (payload as { errors?: unknown }).errors;
-  if (Array.isArray(maybeErrors) && maybeErrors.length > 0) return false;
-  const product = (payload as { product?: unknown }).product;
-  return typeof product === "string" && product.trim().length > 0;
 };
 
 const reportAuthRequiredProbe = (config: Awaited<ReturnType<typeof loadPersistedConnectionConfig>>): void => {

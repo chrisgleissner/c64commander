@@ -83,7 +83,7 @@ export const GRANDFATHERED = new Map([
   ["src/lib/diagnostics/healthCheckEngine.ts", 2153],
   ["src/components/diagnostics/DiagnosticsDialog.tsx", 1990],
   ["src/components/lighting/LightingStudioDialog.tsx", 1611],
-  ["src/lib/connection/connectionManager.ts", 1497],
+  ["src/lib/connection/connectionManager.ts", 1411],
   ["src/pages/playFiles/hooks/useHvscLibrary.ts", 1488],
   ["src/lib/hvsc/hvscIngestionRuntime.ts", 1410],
   ["src/pages/playFiles/hooks/useVolumeOverride.ts", 1387],
