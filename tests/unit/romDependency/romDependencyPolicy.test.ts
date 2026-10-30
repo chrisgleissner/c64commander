@@ -228,6 +228,7 @@ describe("assessRomDependency", () => {
     expect(addLog).toHaveBeenCalledWith("warn", "SID ROM dependency check failed; playing the song normally", {
       service: "rom-dependency",
       error: "digest unavailable",
+      stack: expect.stringContaining("digest unavailable"),
     });
   });
 
@@ -313,18 +314,6 @@ describe("loading and failure degradation", () => {
         error: "chunk failed to load",
         stack: expect.stringContaining("chunk failed to load"),
       }),
-    );
-  });
-
-  it("plays normally, and logs the failure with its stack, when the check itself fails", async () => {
-    const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-    vi.mocked(computeSidMd5).mockRejectedValueOnce(new Error("digest unavailable"));
-    const { assets, pin } = syntheticAssets();
-    expect(await assessWith(async () => assets, pin)).toEqual({ kind: "none" });
-    expect(addLog).toHaveBeenCalledWith(
-      "warn",
-      "SID ROM dependency check failed; playing the song normally",
-      expect.objectContaining({ error: "digest unavailable", stack: expect.stringContaining("digest unavailable") }),
     );
   });
 
