@@ -8,6 +8,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { FeatureFlags } from "@/lib/config/featureFlags";
+import type { AppMode } from "@/lib/appMode/appModeStore";
 
 /**
  * Guide text marks an on-screen label as `**Label**` and a key as `` `key` ``; nothing else is
@@ -39,4 +40,6 @@ export interface GuideChapter {
 export interface GuideContext {
   readonly variantId: string;
   readonly flags: Partial<FeatureFlags>;
+  /** Absent means the Full App. */
+  readonly appMode?: AppMode;
 }

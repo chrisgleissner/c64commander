@@ -13,7 +13,31 @@ import type { GuideBlock, GuideChapter, GuideContext } from "@/lib/docs/guide/ty
 import { OK_KEY_WORDS } from "@/lib/input/guidance";
 import { getKeyLabels } from "@/lib/variant/keyLabels";
 
-export const gettingStartedChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
+const sidPlayerGettingStarted = (variantId: string): GuideChapter => ({
+  id: "getting-started",
+  title: "Get started",
+  navLabel: "Get started",
+  icon: Wifi,
+  blocks: [
+    {
+      kind: "text",
+      text: "SID Player plays C64 music on this phone. Open **Play** to start listening: add tunes, or start a **SID Radio** station.",
+    },
+    {
+      kind: "text",
+      text: `The three pages are **Play**, **Settings** and **Docs**. Number keys \`1\` to \`3\` open them in that order. The ${menuKeyName(variantId)} opens the Quick menu.`,
+    },
+    {
+      kind: "tip",
+      text: "**Take the tour**, at the top of this page, walks through each page in a minute.",
+    },
+  ],
+});
+
+export const gettingStartedChapter = ({ variantId, flags, appMode }: GuideContext): GuideChapter =>
+  appMode === "sid-player" ? sidPlayerGettingStarted(variantId) : fullGettingStartedChapter({ variantId, flags });
+
+const fullGettingStartedChapter = ({ variantId, flags }: GuideContext): GuideChapter => ({
   id: "getting-started",
   title: "Get started",
   navLabel: "Get started",
@@ -177,8 +201,9 @@ const keypadSoftKeysBlock = (variantId: string): GuideBlock => {
   };
 };
 
-export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
+export const keypadChapter = ({ variantId, appMode }: GuideContext): GuideChapter => {
   const keypad = isKeypadEdition(variantId);
+  const sidPlayer = appMode === "sid-player";
   return {
     id: "keypad",
     title: "Keypad cheat sheet",
@@ -214,17 +239,25 @@ export const keypadChapter = ({ variantId }: GuideContext): GuideChapter => {
         kind: "keys",
         heading: "Keys",
         items: [
-          { key: "`1` to `6`", action: "Home, Play, Disks, Config, Settings, Docs" },
+          sidPlayer
+            ? { key: "`1` to `3`", action: "Play, Settings, Docs" }
+            : { key: "`1` to `6`", action: "Home, Play, Disks, Config, Settings, Docs" },
           { key: "`7`", action: "Search" },
-          { key: "`8`", action: "Pause or resume the machine" },
-          { key: "`9`", action: "Reset the machine, after you confirm" },
-          { key: "`0`", action: "Game Mode" },
+          ...(sidPlayer
+            ? []
+            : [
+                { key: "`8`", action: "Pause or resume the machine" },
+                { key: "`9`", action: "Reset the machine, after you confirm" },
+                { key: "`0`", action: "Game Mode" },
+              ]),
           { key: "`*`", action: "Diagnostics" },
-          { key: "`#`", action: "Switch device, when more than one is saved" },
+          ...(sidPlayer ? [] : [{ key: "`#`", action: "Switch device, when more than one is saved" }]),
           keypad
             ? {
                 key: "F1 and F3",
-                action: "Play/Pause and Next tune; change them in Settings → **Remote function keys**",
+                action: sidPlayer
+                  ? "Play/Pause and Next tune"
+                  : "Play/Pause and Next tune; change them in Settings → **Remote function keys**",
               }
             : { key: "F1 and F3", action: "Play or pause, and the next tune, on the Play page" },
         ],

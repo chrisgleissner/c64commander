@@ -31,6 +31,7 @@ vi.mock("@/generated/variant", async (importOriginal) => {
 });
 
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { requestQuickMenuOpen, subscribeMachineCommand, type MachineCommand } from "@/lib/input/keypadCommands";
 
 const renderMenu = () =>
@@ -403,5 +404,67 @@ describe("KeypadQuickMenu function-key summary", () => {
     } finally {
       pages.remove();
     }
+  });
+});
+
+const KEYPAD_EDITION_ID = ["c64u", "remote"].join("-");
+
+describe("KeypadQuickMenu in SID Player", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    devices.mockReturnValue({ devices: [{ id: "a" }, { id: "b" }] });
+    mirror.anyLive = true;
+    saveStartupModeByUser("sid-player");
+  });
+  afterEach(() => {
+    mirror.anyLive = false;
+    saveStartupModeByUser("default");
+    variantId.current = "c64commander";
+    vi.clearAllMocks();
+  });
+
+  const open = async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+  };
+
+  it("SPM-QM-01 SID Player lists the visible tabs under keys 1 to 3", async () => {
+    await open();
+
+    const tabs = Array.from(document.querySelectorAll('[data-testid^="keypad-quick-menu-tab-"]'));
+    expect(tabs.map((tab) => [tab.getAttribute("data-testid"), tab.getAttribute("data-quick-menu-key")])).toEqual([
+      ["keypad-quick-menu-tab-play", "1"],
+      ["keypad-quick-menu-tab-settings", "2"],
+      ["keypad-quick-menu-tab-docs", "3"],
+    ]);
+  });
+
+  it("SPM-QM-01 SID Player hides machine pause, reset, Game Mode, switch device and Stop Live View", async () => {
+    await open();
+
+    for (const id of ["machine-pause", "machine-reset", "game-mode", "switch-device", "stop-live-view"]) {
+      expect(screen.queryByTestId(`keypad-quick-menu-${id}`), id).toBeNull();
+    }
+    expect(screen.getByTestId("keypad-quick-menu-search")).toBeInTheDocument();
+    expect(screen.getByTestId("keypad-quick-menu-diagnostics")).toBeInTheDocument();
+  });
+
+  it("SPM-QM-01 the Full App keeps all of them", async () => {
+    saveStartupModeByUser("default");
+    await open();
+
+    for (const id of ["machine-pause", "machine-reset", "switch-device", "stop-live-view"]) {
+      expect(screen.getByTestId(`keypad-quick-menu-${id}`), id).toBeInTheDocument();
+    }
+    expect(screen.getAllByTestId(/^keypad-quick-menu-tab-/)).toHaveLength(6);
+  });
+
+  it("SPM-QM-01 the function-key summary stays but offers no link to the hidden machine settings", async () => {
+    variantId.current = KEYPAD_EDITION_ID;
+    await open();
+
+    expect(screen.getByTestId("keypad-quick-menu-function-summary")).toBeInTheDocument();
+    expect(screen.queryByTestId("keypad-quick-menu-configure-function-keys")).toBeNull();
   });
 });

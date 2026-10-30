@@ -17,6 +17,8 @@ import { t } from "@/lib/i18n";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { loadPickedEntryIds } from "@/lib/search/history";
 import { getSearchEntries, subscribeSearchEntries } from "@/lib/search/registry";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSearchEntryShown } from "@/lib/appMode/searchVisibility";
 import { resolveEntry, type RequirementContext } from "@/lib/search/requirements";
 import { rank, toScorableText, type ScorableEntry, type ScoredEntry } from "@/lib/search/score";
 import type { SearchEntry } from "@/lib/search/types";
@@ -72,7 +74,12 @@ export interface SearchResultsState {
  * overlay separately and never blocks these.
  */
 export const useSearchResults = (query: string, ctx: RequirementContext): SearchResultsState => {
-  const entries = useRegisteredEntries();
+  const registered = useRegisteredEntries();
+  const appMode = useAppMode();
+  const entries = useMemo(
+    () => registered.filter((entry) => isSearchEntryShown(entry, appMode)),
+    [registered, appMode],
+  );
   const [pickedIds, setPickedIds] = useState<readonly string[]>(loadPickedEntryIds);
 
   // Re-read once per query the user starts, not per keystroke: the list only changes when a result

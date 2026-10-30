@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { buildGuideChapters } from "@/lib/docs/guide/chapters";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { FEATURE_FLAG_IDS } from "@/lib/config/featureFlagsRegistry.generated";
 import {
@@ -52,6 +53,15 @@ describe("surface classification coverage", () => {
       return !SURFACE_CLASSIFIED_SECTION_IDS.includes(key);
     });
     expect(unclassified).toEqual([]);
+  });
+
+  it("SPM-ARCH-03 every guide chapter has a surface classification", () => {
+    const chapters = buildGuideChapters({ variantId: "c64commander", flags: {}, appMode: "full" });
+    const unclassified = chapters
+      .map((chapter) => `docs:${chapter.id}`)
+      .filter((key) => !SURFACE_CLASSIFIED_SECTION_IDS.includes(key));
+    expect(unclassified).toEqual([]);
+    expect(chapters.length).toBeGreaterThan(10);
   });
 
   it("SPM-ARCH-03 the source scan finds the sections it is meant to guard", () => {
