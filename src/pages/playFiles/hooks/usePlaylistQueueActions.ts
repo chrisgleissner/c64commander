@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import { revealListRow } from "@/components/lists/listRowReveal";
 import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { getInputModality } from "@/lib/input/inputModality";
 import { focusRingElement, revealRingElementAfterLayout } from "@/lib/input/ringDom";
@@ -30,13 +31,6 @@ export type PlaylistQueueActions = {
   moveDown: (id: string) => void;
 };
 
-const findMenuButton = (rowId: string): HTMLElement | null => {
-  const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-row-id]")).filter(
-    (row) => row.dataset.rowId === rowId,
-  );
-  return rows.at(-1)?.querySelector<HTMLElement>('button[aria-label="Item actions"]') ?? null;
-};
-
 /**
  * Reorders the playlist from a row's menu. The moved row's menu button keeps the keypad ring and is
  * scrolled into view once the new order is on screen, using the same ring helpers as every other control.
@@ -54,10 +48,15 @@ export const usePlaylistQueueActions = (
     if (rowId === null) return;
     movedRowIdRef.current = null;
     if (getInputModality() !== "key-navigation") return;
-    const button = findMenuButton(rowId);
-    if (!button) return;
-    focusRingElement(button);
-    revealRingElementAfterLayout(button);
+    let cancelled = false;
+    void revealListRow(rowId).then((button) => {
+      if (cancelled || !button) return;
+      focusRingElement(button);
+      revealRingElementAfterLayout(button);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [playlist]);
 
   const apply = (rowId: string, result: ReorderResult<PlaylistItem>) => {

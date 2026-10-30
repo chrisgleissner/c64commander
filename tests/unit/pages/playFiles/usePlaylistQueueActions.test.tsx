@@ -8,6 +8,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerListRowScroller } from "@/components/lists/listRowReveal";
 import { usePlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
 import { CATEGORY_OPTIONS } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -155,7 +156,7 @@ describe("usePlaylistQueueActions", () => {
     expect(hook.result.current).toBe(first);
   });
 
-  it("puts the keypad ring back on the moved row's menu button after the playlist changes", () => {
+  it("puts the keypad ring back on the moved row's menu button after the playlist changes", async () => {
     document.body.innerHTML = `<div data-row-id="${playlist[1].id}"><button aria-label="Item actions"></button></div>`;
     const button = document.querySelector("button")!;
     const setPlaylist = vi.fn();
@@ -180,12 +181,13 @@ describe("usePlaylistQueueActions", () => {
     expect(ring.focusRingElement).not.toHaveBeenCalled();
 
     hook.rerender({ list: setPlaylist.mock.calls[0][0] });
+    await act(async () => {});
 
     expect(ring.focusRingElement).toHaveBeenCalledWith(button);
     expect(ring.revealRingElementAfterLayout).toHaveBeenCalledWith(button);
   });
 
-  it("leaves focus alone for a touch user", () => {
+  it("leaves focus alone for a touch user", async () => {
     modality.current = "pointer";
     document.body.innerHTML = `<div data-row-id="${playlist[1].id}"><button aria-label="Item actions"></button></div>`;
     const setPlaylist = vi.fn();
@@ -208,7 +210,42 @@ describe("usePlaylistQueueActions", () => {
 
     act(() => hook.result.current.moveDown(playlist[1].id));
     hook.rerender({ list: setPlaylist.mock.calls[0][0] });
+    await act(async () => {});
 
     expect(ring.focusRingElement).not.toHaveBeenCalled();
+  });
+
+  it("asks a virtualized list to render a row moved out of its range, then focuses it", async () => {
+    const scroller = vi.fn((rowId: string) => {
+      document.body.innerHTML = `<div data-row-id="${rowId}"><button aria-label="Item actions"></button></div>`;
+      return true;
+    });
+    const unregister = registerListRowScroller(scroller);
+    document.body.innerHTML = "";
+    const setPlaylist = vi.fn();
+    const hook = renderHook(
+      ({ list }: { list: PlaylistItem[] }) =>
+        usePlaylistQueueActions(
+          {
+            playlist: list,
+            setPlaylist,
+            currentIndex: 0,
+            setCurrentIndex: vi.fn(),
+            shuffleEnabled: false,
+            playlistTypeFilters: CATEGORY_OPTIONS,
+          },
+          "",
+          playlist[0].id,
+        ),
+      { initialProps: { list: playlist } },
+    );
+
+    act(() => hook.result.current.playNext(playlist[3].id));
+    hook.rerender({ list: setPlaylist.mock.calls[0][0] });
+    await vi.waitFor(() => expect(ring.focusRingElement).toHaveBeenCalled());
+
+    expect(scroller).toHaveBeenCalledWith(playlist[3].id);
+    expect(ring.focusRingElement).toHaveBeenCalledWith(document.querySelector("button"));
+    unregister();
   });
 });
