@@ -46,6 +46,7 @@ import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
+import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
 import {
   DEMO_INTERSTITIAL_SESSION_KEY,
   DEMO_MODE_CHOSEN_SESSION_KEY,
@@ -560,7 +561,7 @@ export function subscribeConnection(listener: () => void) {
 
 export const noteReachable = (host: string, source: ReachabilitySource, deviceInfo: DeviceInfo | null = null): void => {
   const normalizedHost = normalizeReachabilityHost(host);
-  if (!normalizedHost) return;
+  if (!normalizedHost || isSidPlayerActive()) return;
 
   // The simulated device is reachable by construction, so its answers are no evidence
   // about a real one: counting them made Settings report a real device found on a
@@ -653,6 +654,10 @@ const clearPinnedDemoMode = () => {
  * and it lifts an earlier decline.
  */
 export async function pinDemoModeByUserChoice() {
+  if (isSidPlayerActive()) {
+    addLog("warn", "Demo Mode cannot be pinned while SID Player is active");
+    return;
+  }
   // A discovery still running would otherwise finish by going offline and clear this choice.
   discoveryRunToken += 1;
   demoModePinnedByUser = true;
@@ -801,6 +806,7 @@ const transitionToRealConnected = async (
   runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
   probedDeviceInfo: DeviceInfo | null = null,
 ) => {
+  if (isSidPlayerActive()) return;
   // Leaving Demo Mode swaps the simulated device's identity for the one the probe just read from real hardware.
   const leavingDemoMode = snapshot.state === "DEMO_ACTIVE";
   clearPinnedDemoMode();
@@ -1193,6 +1199,10 @@ const noteBackgroundProbeSuppressedWhileOffline = (suppressed: boolean) => {
 
 /** Centralized discovery entry point: startup, manual (badge), background and settings triggers. */
 async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+  if (isSidPlayerActive()) {
+    if (trigger !== "background") await transitionToOfflineNoDemo(trigger);
+    return;
+  }
   if (trigger !== "background") {
     clearPinnedDemoMode();
   }

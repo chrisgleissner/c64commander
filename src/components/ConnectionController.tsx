@@ -14,6 +14,8 @@ import {
   getConnectionSnapshot,
   initializeConnectionManager,
 } from "@/lib/connection/connectionManager";
+import { startForStartupMode } from "@/lib/appMode/appModeTransitions";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { APP_SETTINGS_KEYS, loadBackgroundRediscoveryIntervalMs } from "@/lib/config/appSettings";
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
@@ -83,6 +85,7 @@ export function ConnectionController() {
     password: string;
     deviceHost: string;
   } | null>(null);
+  const appMode = useAppMode();
   const previousStateRef = useRef(state);
   const hiddenAtMsRef = useRef<number | null>(null);
   const [backgroundScheduleVersion, setBackgroundScheduleVersion] = useState(0);
@@ -90,7 +93,7 @@ export function ConnectionController() {
 
   useEffect(() => {
     void initializeConnectionManager().then(() => {
-      void discoverConnection("startup");
+      void startForStartupMode();
     });
   }, []);
 
@@ -162,7 +165,7 @@ export function ConnectionController() {
       offlineSweepsRef.current = NO_OFFLINE_SWEEPS;
       backgroundFailureCountRef.current = 0;
     }
-    if (state !== "DEMO_ACTIVE" && state !== "OFFLINE_NO_DEMO") {
+    if ((state !== "DEMO_ACTIVE" && state !== "OFFLINE_NO_DEMO") || appMode === "sid-player") {
       clearTimer();
       return;
     }
@@ -248,7 +251,7 @@ export function ConnectionController() {
     scheduleNextProbe(backgroundFailureCountRef.current);
 
     return clearTimer;
-  }, [backgroundScheduleVersion, state]);
+  }, [appMode, backgroundScheduleVersion, state]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
