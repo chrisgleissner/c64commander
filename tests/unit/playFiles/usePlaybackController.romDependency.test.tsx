@@ -199,6 +199,25 @@ describe("ROM dependency list in the play path", () => {
       expect(toastDescriptions().filter((text) => text?.startsWith("Skipped"))).toHaveLength(1);
     });
 
+    it("end the playlist when every song after the current one is passed over", async () => {
+      const controller = fakeController();
+      const decide = vi.fn(async () => "cancel" as const);
+      const playlist = [plain("a"), listed("b", 1), listed("c", 1)];
+      const { result } = renderController(playlist, controller, { decide });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      await act(async () => {
+        await result.current.handleNext("user");
+      });
+
+      expect(decide).not.toHaveBeenCalled();
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(result.current.isPlaying).toBe(false);
+      expect(toastDescriptions().filter((text) => text?.startsWith("Skipped"))).toHaveLength(1);
+    });
+
     it("pass over a listed song going back, to the previous one that can play", async () => {
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);

@@ -128,6 +128,17 @@ describe("romStore", () => {
     expect(loadStoredRoms().basic).toBeUndefined();
   });
 
+  it("ignores an entry whose bytes are not the length of that ROM", () => {
+    store("kernal", kernal());
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    const truncated = kernal().subarray(0, 4096);
+    raw.kernal.data = btoa(String.fromCharCode(...truncated));
+    raw.kernal.fingerprint = romFingerprint(truncated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+
+    expect(loadStoredRoms().kernal).toBeUndefined();
+  });
+
   it("survives unreadable storage rather than throwing", () => {
     localStorage.setItem(STORAGE_KEY, "{not json");
     expect(loadStoredRoms()).toEqual({});

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
 
@@ -174,5 +174,85 @@ describe("readCharacterRomViaIrq", () => {
     await expect(readCharacterRomViaIrq(machine.api, clock())).rejects.toThrow("write $0314 failed");
 
     expect(addErrorLog).toHaveBeenCalledWith(expect.stringContaining("Could not put the C64 back"), expect.anything());
+  });
+
+  it("puts back the vector and the saved region when the handler could not be written", async () => {
+    const machine = new FakeMachine("on-resume");
+    let handlerWrites = 0;
+    machine.failOn = (op, address) => op === "write" && address === layout.base && ++handlerWrites === 1;
+
+    await expect(readCharacterRomViaIrq(machine.api, clock())).rejects.toThrow("write $033C failed");
+
+    expectRestored(machine);
+    expect(machine.log.at(-1)).toBe("resume");
+    expect(addErrorLog).not.toHaveBeenCalled();
+  });
+
+  it("logs both the original failure and the failed undo, and still throws the original", async () => {
+    const machine = new FakeMachine("on-resume");
+    let failedAfterHook = false;
+    machine.failOn = (op, address, count) => {
+      if (op === "read" && address === layout.buffer && count === 2) {
+        failedAfterHook = true;
+        return true;
+      }
+      return failedAfterHook && op === "write" && address === VECTOR;
+    };
+
+    await expect(readCharacterRomViaIrq(machine.api, clock())).rejects.toThrow("read $C000 failed");
+
+    expect(addErrorLog).toHaveBeenCalledWith("Could not put the C64 back after a failed character ROM read", {
+      cause: "read $C000 failed",
+      error: "write $0314 failed",
+    });
+  });
+
+  it("reports failures that are not Error objects by their text", async () => {
+    const machine = new FakeMachine("on-resume");
+    const readMemory = machine.api.readMemory;
+    machine.api.readMemory = async (address, length) => {
+      if (parseInt(address, 16) === layout.base) throw "region unreadable";
+      return readMemory(address, length);
+    };
+    machine.api.machineResume = async () => {
+      throw "resume refused";
+    };
+
+    await expect(readCharacterRomViaIrq(machine.api, clock())).rejects.toBe("region unreadable");
+
+    expect(addErrorLog).toHaveBeenCalledWith("Could not put the C64 back after a failed character ROM read", {
+      cause: "region unreadable",
+      error: "resume refused",
+    });
+  });
+
+  describe("with the real clock", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("waits two seconds by default before giving up, and names that time in the error", async () => {
+      const machine = new FakeMachine("never");
+      const outcome = readCharacterRomViaIrq(machine.api).catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(2100);
+
+      const error = await outcome;
+      expect(error).toBeInstanceOf(CharacterRomReadTimeoutError);
+      expect((error as Error).message).toContain("within 2000 ms");
+      expectRestored(machine);
+    });
+
+    it("polls every 50 ms by default, so an interrupt that arrives later is still taken", async () => {
+      const machine = new FakeMachine("never");
+      const outcome = readCharacterRomViaIrq(machine.api);
+
+      await vi.advanceTimersByTimeAsync(500);
+      machine.ram[layout.armed] = 0;
+      machine.ram.set(machine.chargen, layout.buffer);
+      machine.ram[layout.done] = 1;
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(await outcome).toEqual(machine.chargen);
+    });
   });
 });

@@ -33,7 +33,7 @@ export type RomDependencyDialogProps = {
  * Dismissing it any other way counts as Cancel.
  */
 export const RomDependencyDialog = ({ label, onChoose }: RomDependencyDialogProps) => (
-  <AlertDialog open={label !== null} onOpenChange={(open) => (open ? undefined : onChoose("cancel"))}>
+  <AlertDialog open={label !== null} onOpenChange={() => onChoose("cancel")}>
     <AlertDialogContent data-testid="rom-dependency-dialog">
       <AlertDialogHeader hideClose>
         <AlertDialogTitle>{ROM_LISTED_DIALOG_TITLE}</AlertDialogTitle>
