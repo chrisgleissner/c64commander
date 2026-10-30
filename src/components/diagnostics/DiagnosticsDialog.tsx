@@ -20,7 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { DiagnosticsConnectionActions } from "@/components/diagnostics/DiagnosticsConnectionActions";
 
 import {
   AlertDialog,
@@ -1040,7 +1040,6 @@ export function DiagnosticsDialog({
   repairRunning = false,
   onRepair,
 }: Props) {
-  const navigate = useNavigate();
   const { profile } = useDisplayProfile();
   const savedDevices = useSavedDevices();
   const [headerExpanded, setHeaderExpanded] = useState(false);
@@ -1509,36 +1508,14 @@ export function DiagnosticsDialog({
     void onShareFiltered(filteredEntries.map((entry) => entry.payload));
   };
 
-  const handleManageDevices = useCallback(() => {
-    onOpenChange(false);
-    navigate("/settings");
-  }, [navigate, onOpenChange]);
-
   const overflowPanelContent = (
     <>
       <p className="px-3 pb-1 pt-1.5 text-xs font-semibold text-muted-foreground">Views</p>
-      <button
-        type="button"
-        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-        onClick={() => {
-          setOverflowOpen(false);
-          openConnectionView();
-        }}
-        data-testid="diagnostics-connection-details-action"
-      >
-        Connection details
-      </button>
-      <button
-        type="button"
-        className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
-        onClick={() => {
-          setOverflowOpen(false);
-          handleManageDevices();
-        }}
-        data-testid="diagnostics-manage-devices-action"
-      >
-        Manage devices
-      </button>
+      <DiagnosticsConnectionActions
+        onCloseOverflow={() => setOverflowOpen(false)}
+        onOpenConnectionDetails={openConnectionView}
+        onOpenChange={onOpenChange}
+      />
       <div className="my-1 border-t border-border" />
       <button
         type="button"

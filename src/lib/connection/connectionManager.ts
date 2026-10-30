@@ -46,6 +46,14 @@ import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
+import {
+  DEMO_INTERSTITIAL_SESSION_KEY,
+  DEMO_MODE_CHOSEN_SESSION_KEY,
+  DEMO_MODE_DECLINED_SESSION_KEY,
+  DEMO_MODE_PINNED_SESSION_KEY,
+  persistDemoModeSessionFlag,
+  restoreDemoModeSessionFlags,
+} from "@/lib/connection/demoModeSession";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -444,10 +452,6 @@ const listeners = new Set<() => void>();
 let activeDiscovery: { abort: AbortController; cancel: () => void } | null = null;
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
-const DEMO_INTERSTITIAL_SESSION_KEY = "c64u_demo_interstitial_shown";
-const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
-const DEMO_MODE_DECLINED_SESSION_KEY = "c64u_demo_mode_declined";
-const DEMO_MODE_CHOSEN_SESSION_KEY = "c64u_demo_mode_chosen";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
@@ -637,19 +641,6 @@ export function dismissDemoInterstitial() {
   persistDemoModeSessionFlag(DEMO_INTERSTITIAL_SESSION_KEY, true);
   setSnapshot({ demoInterstitialVisible: false, demoInterstitialReason: null });
 }
-
-const persistDemoModeSessionFlag = (key: string, on: boolean) => {
-  if (typeof sessionStorage === "undefined") return;
-  try {
-    if (on) {
-      sessionStorage.setItem(key, "1");
-    } else {
-      sessionStorage.removeItem(key);
-    }
-  } catch (error) {
-    addLog("warn", "Failed to persist demo mode session flag", { error: (error as Error).message, key, on });
-  }
-};
 
 const clearPinnedDemoMode = () => {
   demoModePinnedByUser = false;
@@ -1047,7 +1038,7 @@ const transitionToDemoActive = async (
   // server is still starting up.
   if (shouldShowDemoInterstitial(trigger)) {
     demoInterstitialShownThisSession = true;
-    sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
+    persistDemoModeSessionFlag(DEMO_INTERSTITIAL_SESSION_KEY, true);
     noteDemoOfferShown();
     setSnapshot({
       demoInterstitialVisible: true,
@@ -1470,12 +1461,11 @@ export async function initializeConnectionManager() {
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();
-  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === "1";
-  demoModePinnedByUser = sessionStorage.getItem(DEMO_MODE_PINNED_SESSION_KEY) === "1";
+  const restored = restoreDemoModeSessionFlags();
+  demoInterstitialShownThisSession = restored.interstitialShown;
+  demoModePinnedByUser = restored.pinned;
   // Somebody who has seen the offer and has used a real device is most likely just away from it: no offer unasked.
-  const chosenThisSession = sessionStorage.getItem(DEMO_MODE_CHOSEN_SESSION_KEY) === "1";
-  demoModeDeclinedByUser =
-    sessionStorage.getItem(DEMO_MODE_DECLINED_SESSION_KEY) === "1" || (!chosenThisSession && isAwayFromKnownDevice());
+  demoModeDeclinedByUser = restored.declined || (!restored.chosen && isAwayFromKnownDevice());
   stickyRealDeviceLock = false;
   setSnapshot({
     state: "UNKNOWN",
