@@ -35,9 +35,21 @@ function basic(): Uint8Array {
   return bytes;
 }
 
+function chargen(): Uint8Array {
+  const glyphs = noisyImage(0x9abc);
+  const bytes = new Uint8Array(4096);
+  for (const set of [0, 2048]) {
+    for (let i = 0; i < 1024; i++) {
+      bytes[set + i] = glyphs[set + i];
+      bytes[set + 1024 + i] = ~glyphs[set + i] & 0xff;
+    }
+  }
+  return bytes;
+}
+
 const STORAGE_KEY = "c64commander.localEngine.systemRoms.v1";
 
-const store = (kind: "kernal" | "basic", bytes: Uint8Array) =>
+const store = (kind: "kernal" | "basic" | "chargen", bytes: Uint8Array) =>
   saveRom(kind, bytes, { description: `test ${kind}`, fingerprint: romFingerprint(bytes), capturedFrom: "c64u.local" });
 
 describe("romStore", () => {
@@ -53,6 +65,17 @@ describe("romStore", () => {
     expect(loaded.kernal).toEqual(kernal());
     expect(loaded.basic).toEqual(basic());
     expect(hasCompleteRomSet()).toBe(true);
+  });
+
+  it("keeps the character ROM alongside, without making it part of the complete set", () => {
+    store("chargen", chargen());
+    expect(loadStoredRoms()).toEqual({ chargen: chargen() });
+    expect(hasCompleteRomSet()).toBe(false);
+
+    store("kernal", kernal());
+    store("basic", basic());
+    expect(hasCompleteRomSet()).toBe(true);
+    expect(loadRomSummaries().map((summary) => summary.kind)).toEqual(["kernal", "basic", "chargen"]);
   });
 
   it("reports an incomplete set when only one image is present", () => {

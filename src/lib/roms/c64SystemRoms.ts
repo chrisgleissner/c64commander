@@ -7,7 +7,7 @@
  */
 
 /**
- * Validation and identification of C64 KERNAL/BASIC ROM images (spec §12, Track B).
+ * Validation and identification of C64 KERNAL, BASIC and character ROM images (spec §12, Track B).
  *
  * **Why these images exist at all.** On-device SID playback needs the C64's own
  * ROMs. Measured against real hardware, libsidplayfp without them initialises a
@@ -18,10 +18,11 @@
  *
  * **Where they come from.** They are read at the user's explicit request from
  * the C64 the app is connected to, over `GET /v1/machine:readmem` — documented
- * as a DMA read on the cartridge bus. The app never bundles, ships or
- * distributes ROM images; they stay in that user's own app-private storage.
- * The user is responsible for only connecting to devices they own or have
- * permission to use.
+ * as a DMA read on the cartridge bus; the character ROM once a short routine on
+ * the C64's CPU has copied it into RAM (`characterRomReader.ts`). The app never
+ * bundles, ships or distributes ROM images; they stay in that user's own
+ * app-private storage. The user is responsible for only connecting to devices
+ * they own or have permission to use.
  *
  * **Why validation is not optional.** A DMA read reflects the machine's *current
  * banking*. If a cartridge is active, or a program has banked ROM out, the read
@@ -31,11 +32,20 @@
  * dump that fails is rejected rather than stored.
  */
 
-/** The system ROM images the local engine can use. Chargen is not needed for audio. */
-export type C64RomKind = "kernal" | "basic";
+/**
+ * The system ROM images the local engine can use. KERNAL and BASIC are required; the character ROM
+ * is optional, since no tune's audio depends on it, but with all three authentic images the engine
+ * is the configuration the SID ROM dependency list was measured against.
+ */
+export type C64RomKind = "kernal" | "basic" | "chargen";
 
-/** Both C64 system ROMs are 8 KiB. */
+export const C64_ROM_KINDS: readonly C64RomKind[] = ["kernal", "basic", "chargen"];
+
+/** KERNAL and BASIC are 8 KiB. */
 export const C64_ROM_BYTES = 8192;
+export const C64_CHARGEN_BYTES = 4096;
+
+export const romBytes = (kind: C64RomKind): number => (kind === "chargen" ? C64_CHARGEN_BYTES : C64_ROM_BYTES);
 
 /**
  * Fingerprints of the images verified byte-for-byte against the canonical dumps
@@ -47,6 +57,7 @@ export const C64_ROM_BYTES = 8192;
 const KNOWN_FINGERPRINTS: Record<string, string> = {
   "0d9b7e21": "C64 KERNAL rev 3 (901227-03)",
   "3dd934ed": "C64 BASIC V2 (901226-01)",
+  "2ac82275": "C64 character ROM (901225-01)",
 };
 
 /** KERNAL revision marker at $FF80. */
@@ -71,6 +82,15 @@ const BASIC_SIGNATURE_OFFSET = 4;
  * legitimate variant.
  */
 const MIN_DISTINCT_BYTES = 64;
+/** Glyph data uses fewer values: the 901225-01 image has 76. */
+const MIN_DISTINCT_CHARGEN_BYTES = 32;
+
+/**
+ * Each 1 KiB of glyphs is followed by its reverse-video copy, the bitwise inverse. The 901225-01
+ * image breaks that in exactly one byte per character set (row 5 of the reversed "@"), so a few
+ * mismatches are tolerated; RAM and the I/O area mismatch almost everywhere.
+ */
+const CHARGEN_MAX_REVERSE_MISMATCHES = 16;
 
 export interface C64RomImage {
   kind: C64RomKind;
@@ -119,6 +139,25 @@ function describeBasic(fingerprint: string): string {
   return KNOWN_FINGERPRINTS[fingerprint] ?? "C64 BASIC (unrecognised variant)";
 }
 
+function describeChargen(fingerprint: string): string {
+  return KNOWN_FINGERPRINTS[fingerprint] ?? "C64 character ROM (unrecognised variant)";
+}
+
+function countReverseVideoMismatches(bytes: Uint8Array): number {
+  let mismatches = 0;
+  for (const set of [0, 2048]) {
+    for (let i = 0; i < 1024; i++) {
+      if (bytes[set + 1024 + i] !== (~bytes[set + i] & 0xff)) mismatches++;
+    }
+  }
+  return mismatches;
+}
+
+function describe(kind: C64RomKind, bytes: Uint8Array, fingerprint: string): string {
+  if (kind === "kernal") return describeKernal(bytes, fingerprint);
+  return kind === "basic" ? describeBasic(fingerprint) : describeChargen(fingerprint);
+}
+
 /**
  * Accept a dump only if it is structurally a ROM of the requested kind.
  *
@@ -126,8 +165,8 @@ function describeBasic(fingerprint: string): string {
  * about *whether* it is one (a RAM read must never be stored as a ROM).
  */
 export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomValidation {
-  if (bytes.length !== C64_ROM_BYTES) {
-    return { ok: false, reason: `expected ${C64_ROM_BYTES} bytes, got ${bytes.length}` };
+  if (bytes.length !== romBytes(kind)) {
+    return { ok: false, reason: `expected ${romBytes(kind)} bytes, got ${bytes.length}` };
   }
 
   const first = bytes[0];
@@ -143,7 +182,7 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
   }
 
   const distinct = countDistinctBytes(bytes);
-  if (distinct < MIN_DISTINCT_BYTES) {
+  if (distinct < (kind === "chargen" ? MIN_DISTINCT_CHARGEN_BYTES : MIN_DISTINCT_BYTES)) {
     return {
       ok: false,
       reason:
@@ -162,7 +201,7 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
           `KERNAL — the machine was not in its default banking when this was read.`,
       };
     }
-  } else {
+  } else if (kind === "basic") {
     const signature = Array.from(bytes.slice(BASIC_SIGNATURE_OFFSET, BASIC_SIGNATURE_OFFSET + BASIC_SIGNATURE.length))
       .map((byte) => String.fromCharCode(byte))
       .join("");
@@ -174,6 +213,16 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
           `banking when this was read.`,
       };
     }
+  } else {
+    const mismatches = countReverseVideoMismatches(bytes);
+    if (mismatches > CHARGEN_MAX_REVERSE_MISMATCHES) {
+      return {
+        ok: false,
+        reason:
+          `${mismatches} bytes break the reverse-video pattern of a character ROM — the character ROM ` +
+          `was not banked in when this was read.`,
+      };
+    }
   }
 
   const fingerprint = romFingerprint(bytes);
@@ -183,14 +232,17 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
       kind,
       bytes,
       fingerprint,
-      description: kind === "kernal" ? describeKernal(bytes, fingerprint) : describeBasic(fingerprint),
+      description: describe(kind, bytes, fingerprint),
       known: KNOWN_FINGERPRINTS[fingerprint] !== undefined,
     },
   };
 }
 
-/** Where each ROM lives in the C64 address space, for `machine:readmem`. */
-export const ROM_SOURCE_ADDRESS: Record<C64RomKind, string> = {
+/**
+ * Where KERNAL and BASIC live in the C64 address space, for `machine:readmem`. The character ROM
+ * has no entry: under default banking its address shows I/O (see `characterRomReader.ts`).
+ */
+export const ROM_SOURCE_ADDRESS: Record<Exclude<C64RomKind, "chargen">, string> = {
   kernal: "e000",
   basic: "a000",
 };
