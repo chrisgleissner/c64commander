@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
+import { tourStepsFor } from "@/lib/tour/steps";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -189,6 +191,27 @@ describe("TourDriver", () => {
       renderDriver();
       await startTour();
       expect(screen.getByTestId("tour-progress").textContent).toContain(`Step 1 of ${TOUR_STEPS.length}`);
+    });
+
+    it("SPM-TOUR-01 SID Player walks only the steps it keeps, and device steps are never offered afterwards", async () => {
+      saveStartupModeByUser("sid-player");
+      try {
+        const sidPlayerSteps = tourStepsFor("sid-player");
+        renderDriver();
+        await startTour();
+        expect(screen.getByTestId("tour-progress").textContent).toContain(`Step 1 of ${sidPlayerSteps.length}`);
+        for (let index = 1; index < sidPlayerSteps.length; index += 1) {
+          fireEvent.click(screen.getByTestId("tour-next"));
+          await waitFor(() =>
+            expect(screen.getByTestId("tour-progress").textContent).toContain(
+              `Step ${index + 1} of ${sidPlayerSteps.length}`,
+            ),
+          );
+        }
+        expect(sidPlayerSteps.length).toBeLessThan(TOUR_STEPS.length);
+      } finally {
+        saveStartupModeByUser("default");
+      }
     });
 
     it("walks forward and back through every step", async () => {

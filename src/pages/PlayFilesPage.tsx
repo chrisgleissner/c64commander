@@ -92,6 +92,7 @@ import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backg
 import { runTransportCommand } from "@/pages/playFiles/transportCommands";
 
 import { AppBar } from "@/components/AppBar";
+import { PlayListeningShortcuts } from "@/pages/playFiles/components/PlayListeningShortcuts";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
@@ -2510,6 +2511,7 @@ export default function PlayFilesPage() {
       <AppBar title="Play" />
       <PageContainer>
         <PageStack>
+          <PlayListeningShortcuts playlistEmpty={playlist.length === 0} />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div className="flex flex-col gap-4" data-testid="play-primary-column">
               <div

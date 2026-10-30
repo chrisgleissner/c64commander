@@ -76,6 +76,7 @@ const SECTION_CLASSIFICATIONS = {
 
 const PART_CLASSIFICATIONS = {
   "settings:play-and-disk-machine-rows": "needs-device",
+  "play:listening-shortcuts": "sid-player-only",
   "play:c64u-source": "needs-device",
   "play:engine-choice": "needs-device",
   "play:item-config": "needs-device",
