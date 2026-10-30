@@ -54,3 +54,11 @@ APP_KEY_LABELS_FILE=$PWD/brand/key-labels.yaml npm run manuals:build
 ```
 
 The file is validated by the same rules as `variants.yaml`. A variant id that does not exist fails.
+
+## Start-up mode (`runtime.startup_mode`)
+
+`runtime.startup_mode` selects what the app does at launch: `default` (search for a device, as always), `demo`
+(Demo Mode without a search) or `sid-player` (SID Player, no device traffic). Absent means `default`. The value
+is only the initial one: a choice the user makes in the app is stored on the phone and wins. The field is
+independent of the edition, so any edition can start in any mode. It is read in one place,
+`src/lib/appMode/appModeStore.ts`.

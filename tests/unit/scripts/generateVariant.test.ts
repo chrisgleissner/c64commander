@@ -298,14 +298,20 @@ const writeRepoFixtures = (repoRoot: string) => {
       "    enabled: true",
       "    visible_to_user: true",
       "    developer_only: false",
+      "    requires_device: false",
       "    group: stable",
+      "    owner: maintainers",
+      "    removal_condition: Remove when permanent.",
       "    title: HVSC",
       "    description: HVSC support.",
       "  - id: commoserve_enabled",
       "    enabled: true",
       "    visible_to_user: true",
       "    developer_only: false",
+      "    requires_device: false",
       "    group: stable",
+      "    owner: maintainers",
+      "    removal_condition: Remove when permanent.",
       "    title: CommoServe",
       "    description: CommoServe support.",
       "",
@@ -394,6 +400,26 @@ describe("generate-variant", () => {
         { repoRoot },
       ),
     ).toThrow(/default_game_mode_joystick must be one of/);
+  });
+
+  describe("runtime.startup_mode", () => {
+    const parseWithStartupMode = (lines: string[]) => {
+      const repoRoot = createTempDir("variant-config-");
+      writeRepoFixtures(repoRoot);
+      return parseVariantSource(buildVariantsYaml({ runtimeExtras: { c64commander: lines } }), { repoRoot }) as any;
+    };
+
+    it("SPM-VAR-01 startup_mode defaults to default", () => {
+      expect(parseWithStartupMode([]).variants.c64commander.runtime.startupMode).toBe("default");
+    });
+
+    it.each(["default", "demo", "sid-player"])("SPM-VAR-01 accepts the %s start-up mode", (mode) => {
+      expect(parseWithStartupMode([`startup_mode: ${mode}`]).variants.c64commander.runtime.startupMode).toBe(mode);
+    });
+
+    it("SPM-VAR-01 rejects an unknown start-up mode", () => {
+      expect(() => parseWithStartupMode(["startup_mode: karaoke"])).toThrow(/startup_mode must be one of/);
+    });
   });
 
   describe("runtime.key_labels", () => {
