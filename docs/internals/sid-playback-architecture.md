@@ -352,8 +352,10 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
 - A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
   no "unknown" grade: a lane that was not measured cannot be encoded.
 
-**The embedded files** live in `src/lib/romDependency/data/`. The files there now are a placeholder:
-a valid list with no entries, which changes no behaviour. To ship the real list, copy the release's
+**The embedded files** live in `src/lib/romDependency/data/`. They are the HVSC #85 release list
+from the sidflow-data release `rom-audit-hvsc85-20261030`: 19,836 bytes listing 696 files and 1,556
+subtunes, of which 1,469 grade below the threshold of 128 in at least one lane (nearly all BASIC
+tunes, about 1% of RSIDs and 28 PSIDs without ROMs). To ship a newer list, copy the release's
 `hvsc<N>-sidromdep-1.bin` and `.manifest.json` over `hvsc85-sidromdep-1.bin` and
 `hvsc85-sidromdep-1.manifest.json` (or change the two import names in `embeddedRomDependencyList.ts`)
 and set `PINNED_MANIFEST_SHA256` to the manifest SHA-256 printed by the sidflow

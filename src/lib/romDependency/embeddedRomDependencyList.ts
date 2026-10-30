@@ -16,8 +16,9 @@
  * The files are byte-exact (`.prettierignore` keeps them out of formatting) because the pin is a
  * hash of the manifest's bytes.
  *
- * The file in `./data/` today is a **placeholder**: a valid list with no entries, so it changes no
- * behaviour. See https://github.com/chrisgleissner/sidflow, `doc/rom-dependency-list.md`.
+ * The files in `./data/` are the HVSC #85 release list (696 files, 1,556 subtunes, 19,836 bytes),
+ * published as sidflow-data release `rom-audit-hvsc85-20261030`. Format: `doc/rom-dependency-list.md`
+ * in https://github.com/chrisgleissner/sidflow.
  *
  * **If the list cannot be trusted** (pin mismatch, bad checksum, truncated, an incomplete-source
  * development file) the error is logged and the app plays as if there were no list. A list is a
@@ -29,7 +30,7 @@ import { sha256Hex } from "./digest";
 import { decodeRomDependencyList, type RomDependencyList } from "./romDependencyList";
 
 /** SHA-256 of `./data/hvsc85-sidromdep-1.manifest.json` (spec §10.2 item 5, §13.3). The one line to update. */
-export const PINNED_MANIFEST_SHA256 = "9459eafbf5a93bfb46c1a4e97d06e6be92cf0a8dcb45107f66ae6cb8d2d746a1";
+export const PINNED_MANIFEST_SHA256 = "712dcbd2f6aab4c1f39ad774f472b6f9c97cc73ea9b44d6d5bbe97968d77f9c0";
 
 export interface ReferenceRomHashes {
   kernal: string;

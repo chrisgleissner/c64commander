@@ -292,12 +292,12 @@ describe("loading and failure degradation", () => {
     });
   });
 
-  it("ships a placeholder that validates against its pin and lists nothing", async () => {
+  it("loads the shipped HVSC #85 list through the embedded asset imports and validates it against its pin", async () => {
     setRomDependencyAssetsForTests(null, PINNED_MANIFEST_SHA256);
     const loaded = await loadEmbeddedRomDependencyList();
     expect(vi.mocked(addErrorLog).mock.calls).toEqual([]);
     expect(loaded).not.toBeNull();
-    expect(loaded?.list.header).toMatchObject({ hvscRelease: 85, fileCount: 0, decisionCount: 0 });
+    expect(loaded?.list.header).toMatchObject({ hvscRelease: 85, fileCount: 696, decisionCount: 1556 });
     expect(addErrorLog).not.toHaveBeenCalled();
   });
 });
