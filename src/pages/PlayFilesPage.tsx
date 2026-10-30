@@ -123,6 +123,10 @@ import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRes
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
 import { RomDependencyDialog } from "@/pages/playFiles/components/RomDependencyDialog";
+import {
+  UnavailableConfigDialog,
+  useUnavailableConfigPrompt,
+} from "@/pages/playFiles/components/UnavailableConfigDialog";
 import { useRomDependencyPrompt } from "@/pages/playFiles/hooks/useRomDependencyPrompt";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
@@ -259,13 +263,6 @@ export default function PlayFilesPage() {
     configRef: PlaylistItem["configRef"];
     origin?: PlaylistItem["configOrigin"];
     candidates?: PlaylistItem["configCandidates"];
-  };
-
-  type UnavailableConfigPromptState = {
-    item: PlaylistItem;
-    configFileName: string | null;
-    reason: string;
-    resolve: (choice: "play-without-config" | "cancel") => void;
   };
 
   const { status } = useC64Connection();
@@ -476,7 +473,6 @@ export default function PlayFilesPage() {
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
   const [pendingConfigChange, setPendingConfigChange] = useState<PendingConfigChangeState | null>(null);
-  const [unavailableConfigPrompt, setUnavailableConfigPrompt] = useState<UnavailableConfigPromptState | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -571,19 +567,7 @@ export default function PlayFilesPage() {
   );
 
   const romDependencyPrompt = useRomDependencyPrompt();
-
-  const resolveUnavailableConfigDecision = useCallback(
-    (item: PlaylistItem, context: { configFileName: string | null; reason: string }) =>
-      new Promise<"play-without-config" | "cancel">((resolve) => {
-        setUnavailableConfigPrompt({
-          item,
-          configFileName: context.configFileName,
-          reason: context.reason,
-          resolve,
-        });
-      }),
-    [],
-  );
+  const unavailableConfigPrompt = useUnavailableConfigPrompt();
 
   const {
     playItem,
@@ -663,7 +647,7 @@ export default function PlayFilesPage() {
     resumingFromPauseRef,
     ensureUnmuted,
     isManualMuteHeld,
-    resolveUnavailableConfigDecision,
+    resolveUnavailableConfigDecision: unavailableConfigPrompt.ask,
     resolveRomDependencyDecision: romDependencyPrompt.ask,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
@@ -3126,50 +3110,7 @@ export default function PlayFilesPage() {
             </AlertDialogContent>
           </AlertDialog>
 
-          <AlertDialog
-            open={Boolean(unavailableConfigPrompt)}
-            onOpenChange={(open) => {
-              if (!open && unavailableConfigPrompt) {
-                unavailableConfigPrompt.resolve("cancel");
-                setUnavailableConfigPrompt(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader hideClose>
-                <AlertDialogTitle>Config unavailable</AlertDialogTitle>
-                <AlertDialogDescription>
-                  {unavailableConfigPrompt
-                    ? `${unavailableConfigPrompt.configFileName ?? "The selected config"} is unavailable for ${unavailableConfigPrompt.item.label}. Play without config, or cancel?`
-                    : "The selected config is unavailable."}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              {unavailableConfigPrompt ? (
-                <div className="text-sm text-muted-foreground">{unavailableConfigPrompt.reason}</div>
-              ) : null}
-              <AlertDialogFooter>
-                <AlertDialogCancel
-                  onClick={() => {
-                    if (!unavailableConfigPrompt) return;
-                    unavailableConfigPrompt.resolve("cancel");
-                    setUnavailableConfigPrompt(null);
-                  }}
-                >
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    if (!unavailableConfigPrompt) return;
-                    unavailableConfigPrompt.resolve("play-without-config");
-                    setUnavailableConfigPrompt(null);
-                  }}
-                >
-                  Play without config
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
+          <UnavailableConfigDialog prompt={unavailableConfigPrompt.prompt} onChoose={unavailableConfigPrompt.choose} />
           <RomDependencyDialog label={romDependencyPrompt.label} onChoose={romDependencyPrompt.choose} />
 
           <StationQueueEditedDialog {...stationHandover.editedPrompt} />
