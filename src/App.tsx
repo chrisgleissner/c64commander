@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { HiddenRouteRedirect } from "@/components/HiddenRouteRedirect";
 import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
@@ -377,6 +378,7 @@ const AppRoutes = () => {
             ) : null}
             <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
             <Suspense fallback={<PageLoadingFallback />}>
+              <HiddenRouteRedirect />
               <SwipeNavigationLayer />
               <Routes>
                 {coverageProbeEnabled && CoverageProbePage ? (

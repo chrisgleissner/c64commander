@@ -81,7 +81,7 @@ import {
   stepFocusWithinOverlay,
 } from "@/lib/input/ringDom";
 import { pickRegistration, type DescriptorRegistration } from "@/lib/input/descriptorRegistration";
-import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { TAB_ROUTES, digitOpensTab } from "@/lib/navigation/tabRoutes";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import { mountAllWaiting } from "@/lib/ui/progressiveMount";
 
@@ -636,10 +636,12 @@ export const FocusNavigationProvider = ({
       // already excluded above, so digits/✱/# here mean "command", not T9 entry.
       // Digits 1–N jump to a tab; ✱ opens Diagnostics; # opens the Device Switcher.
       if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
-        // The tab bar stays in the ring across routes, so a ring standing on it would stay there;
-        // a jump lands on the page it opened instead.
-        controller.focus.resetToDefault();
-        defaultStop.arm();
+        // The tab bar stays in the ring across routes, so a ring standing on it would stay there; a jump lands
+        // on the page it opened instead. A digit past the visible tabs opens nothing, so the ring stays.
+        if (digitOpensTab(shortcutDigit)) {
+          controller.focus.resetToDefault();
+          defaultStop.arm();
+        }
         shortcuts.jumpToTab(shortcutDigit - 1);
         setInputModality("key-navigation");
         notifyRing();

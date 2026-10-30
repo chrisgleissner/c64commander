@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState } from "react";
@@ -1020,6 +1021,29 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(jumpToTab).toHaveBeenCalledWith(3);
     await waitFor(() => expect(button("Page first").getAttribute(SELECTED)).toBe("true"));
     resetInputModality();
+  });
+
+  it("SPM-NAV-03 a digit past the visible tabs in SID Player keeps the ring where it is", async () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      const jumpToTab = vi.fn();
+      render(
+        <FocusNavigationProvider shortcuts={{ jumpToTab }}>
+          <button type="button">Page first</button>
+          <button type="button">Page second</button>
+        </FocusNavigationProvider>,
+      );
+      setInputModality("key-navigation");
+      button("Page second").focus();
+      await waitFor(() => expect(button("Page second").getAttribute(SELECTED)).toBe("true"));
+
+      fireEvent.keyDown(document.body, { code: "Digit4" });
+
+      expect(jumpToTab).toHaveBeenCalledWith(3);
+      expect(button("Page second").getAttribute(SELECTED)).toBe("true");
+    } finally {
+      saveStartupModeByUser("default");
+    }
   });
 
   /*

@@ -25,6 +25,8 @@ type ToasterToast = ToastProps & {
   onToastDismiss?: () => void;
   /** Shown even when notifications are set to errors only: the one answer to an action that could not run. */
   alwaysVisible?: boolean;
+  /** A hint with nothing to open or close: no Details and no Close button, so the keypad ring has nothing to move to. */
+  informational?: boolean;
 };
 
 let count = 0;

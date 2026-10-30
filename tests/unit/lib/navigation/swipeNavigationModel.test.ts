@@ -109,3 +109,23 @@ describe("swipeNavigationModel", () => {
     });
   });
 });
+
+describe("swipe model with hidden tabs", () => {
+  const visible = [1, 4, 5];
+
+  it("SPM-NAV-02 adjacent pages skip hidden tabs", () => {
+    expect(resolveAdjacentIndexes(4, visible)).toEqual([1, 4, 5]);
+    expect(resolveAdjacentIndexes(1, visible)).toEqual([5, 1, 4]);
+  });
+
+  it("SPM-NAV-02 swipe wraps within the visible tabs", () => {
+    expect(resolveAdjacentIndexes(5, visible)).toEqual([4, 5, 1]);
+    expect(resolveNavigationDirection(5, 1, visible)).toBe(1);
+    expect(resolveNavigationDirection(1, 5, visible)).toBe(-1);
+    expect(buildRunwayPanelIndexes(5, 1, visible)).toEqual([4, 5, 1]);
+  });
+
+  it("SPM-NAV-02 a current page outside the visible set falls back to every page", () => {
+    expect(resolveAdjacentIndexes(0, visible)).toEqual(resolveAdjacentIndexes(0));
+  });
+});

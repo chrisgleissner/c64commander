@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { TabBar } from "@/components/TabBar";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { subscribePageReset } from "@/lib/navigation/pageReset";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 const InterstitialRegistrar = ({ active }: { active: boolean }) => {
   useRegisterInterstitial("modal", active);
@@ -154,5 +155,44 @@ describe("TabBar", () => {
     // No provider → no global key listener → keypad codes do nothing and never throw.
     expect(fireEvent.keyDown(document.body, { code: "DpadCenter" })).toBe(true);
     expect(screen.getByTestId("location")).toHaveTextContent("/");
+  });
+
+  describe("in SID Player", () => {
+    afterEach(() => saveStartupModeByUser("default"));
+
+    it("SPM-NAV-01 renders only the visible tabs in SID Player", () => {
+      saveStartupModeByUser("sid-player");
+      render(
+        <MemoryRouter initialEntries={["/play"]}>
+          <TabBar />
+        </MemoryRouter>,
+      );
+      const labels = Array.from(screen.getByTestId("tab-bar").querySelectorAll("button")).map((button) =>
+        button.getAttribute("aria-label"),
+      );
+      expect(labels).toEqual(["Play", "Settings", "Docs"]);
+      expect(screen.queryByTestId("tab-disks")).toBeNull();
+      expect(screen.queryByTestId("tab-home")).toBeNull();
+    });
+
+    it("SPM-NAV-01 the Full App renders all six tabs", () => {
+      render(
+        <MemoryRouter initialEntries={["/play"]}>
+          <TabBar />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId("tab-bar").querySelectorAll("button")).toHaveLength(6);
+    });
+
+    it("SPM-NAV-01 switching the mode changes the tab bar without a reload", () => {
+      render(
+        <MemoryRouter initialEntries={["/play"]}>
+          <TabBar />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId("tab-bar").querySelectorAll("button")).toHaveLength(6);
+      act(() => saveStartupModeByUser("sid-player"));
+      expect(screen.getByTestId("tab-bar").querySelectorAll("button")).toHaveLength(3);
+    });
   });
 });
