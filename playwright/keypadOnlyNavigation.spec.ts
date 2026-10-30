@@ -340,6 +340,66 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     expect(rowBottom, "the selected row is partly under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
   });
 
+  test("the keypad reaches Play all in Find a tune from the search box and activates it with OK @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const tunes = ["Commando", "Monty on the Run", "Crazy Comets", "Delta"].map((title) => ({
+        virtualPath: `/MUSICIANS/H/Hubbard_Rob/${title.replaceAll(" ", "_")}.sid`,
+        fileName: `${title.replaceAll(" ", "_")}.sid`,
+        canonicalTitle: title,
+        canonicalAuthor: "Rob Hubbard",
+        durationSeconds: 120,
+        durationsSeconds: [120],
+        subsongCount: 1,
+        defaultSong: 1,
+        metadataStatus: "hydrated",
+      }));
+      localStorage.setItem(
+        "c64u_hvsc_browse_index:v1",
+        JSON.stringify({
+          schemaVersion: 2,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          songs: Object.fromEntries(tunes.map((tune) => [tune.virtualPath, tune])),
+          folders: {
+            "/": { path: "/", folders: ["/MUSICIANS"], songs: [] },
+            "/MUSICIANS": { path: "/MUSICIANS", folders: ["/MUSICIANS/H"], songs: [] },
+            "/MUSICIANS/H": { path: "/MUSICIANS/H", folders: ["/MUSICIANS/H/Hubbard_Rob"], songs: [] },
+            "/MUSICIANS/H/Hubbard_Rob": {
+              path: "/MUSICIANS/H/Hubbard_Rob",
+              folders: [],
+              songs: tunes.map((tune) => tune.virtualPath),
+            },
+          },
+        }),
+      );
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const opener = page.locator('[data-slot-active="true"]').getByTestId("hvsc-search-open");
+    expect(await ringFocus(page, opener), "the ring could not reach Find a tune").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("hvsc-search-sheet");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+
+    await sheet.getByTestId("hvsc-search-input").fill("hubbard");
+    const playAll = sheet.getByTestId("hvsc-search-play-all");
+    await expect(playAll).toHaveText("Play all 4");
+    expect(await playAll.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+
+    await expect(sheet.getByTestId("hvsc-search-input")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(playAll).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(playAll), "Play all is selected but not on screen").toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByTestId("playlist-item")).toHaveCount(4);
+  });
+
   /*
    * A playlist row's menu lists eleven detail rows above its actions. They were disabled menu items,
    * which a menu's arrow keys skip, so a keypad opened the menu on its first action with the details

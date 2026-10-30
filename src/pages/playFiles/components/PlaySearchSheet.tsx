@@ -12,7 +12,12 @@ import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import type { RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
-import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import {
+  buildFoundTuneItem,
+  buildRecentPlaylistItem,
+  insertAfterCurrent,
+  insertAllAfterCurrent,
+} from "@/pages/playFiles/insertTuneNext";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 export type PlaySearchSheetProps = {
@@ -55,6 +60,18 @@ export const PlaySearchSheet = ({
     [currentIndex, playlist, startPlaylist],
   );
 
+  const playAllFoundTunes = useCallback(
+    (hits: readonly HvscSearchHit[]) => {
+      const { items, index } = insertAllAfterCurrent(
+        playlist,
+        currentIndex,
+        hits.map((hit) => buildFoundTuneItem(hit)),
+      );
+      void startPlaylist(items, index, { replaceQueue: true });
+    },
+    [currentIndex, playlist, startPlaylist],
+  );
+
   // The same path for a disk or a program out of Recent: its stored source kind and id are what
   // turn a remembered path back into something the router can dispatch.
   const playRecentItem = useCallback(
@@ -87,6 +104,7 @@ export const PlaySearchSheet = ({
       open={open}
       onOpenChange={onOpenChange}
       onPlay={playFoundTune}
+      onPlayAll={playAllFoundTunes}
       onPlayRecent={playRecentItem}
       onStartStation={startStationFromFoundTune}
       canSeedStation={canSeedStationFrom}
