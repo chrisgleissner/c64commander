@@ -82,17 +82,52 @@ const firstTitleOf = (word: string) => {
   return names[0].replace(/_/g, " ");
 };
 
-const observeLongTasks = (page: Page) =>
-  page.addInitScript(() => {
-    const tasks: number[] = [];
-    Object.assign(window, { __longTasks: tasks });
-    new PerformanceObserver((list) => list.getEntries().forEach((entry) => tasks.push(entry.duration))).observe({
-      type: "longtask",
-      buffered: true,
-    });
-  });
+type TraceEvent = {
+  name: string;
+  ph: string;
+  dur?: number;
+  tdur?: number;
+  pid: number;
+  tid: number;
+  args?: { name?: string };
+};
 
-const longTaskCount = (page: Page) => page.evaluate(() => (window as unknown as { __longTasks: number[] }).__longTasks);
+/**
+ * Main-thread CPU time of every task that ran while `action` did, in milliseconds. The browser's own trace records
+ * each task's thread time next to its wall time, so a task that waited for a CPU the host had given to another
+ * process counts only for the work it did. The long-task observer reports wall time, which on a loaded runner is
+ * several times the work: a 107 ms wall task measured 23 ms of thread time.
+ */
+const mainThreadTaskCpuMs = async (page: Page, action: () => Promise<void>): Promise<number[]> => {
+  const browser = page.context().browser();
+  if (!browser) throw new Error("mainThreadTaskCpuMs needs a Chromium browser handle to record a trace");
+  await browser.startTracing(page, { categories: ["toplevel", "disabled-by-default-devtools.timeline"] });
+  let stopped = false;
+  try {
+    await action();
+    const events = (JSON.parse((await browser.stopTracing()).toString()) as { traceEvents: TraceEvent[] }).traceEvents;
+    stopped = true;
+    const mainThreads = new Set(
+      events
+        .filter((event) => event.ph === "M" && event.name === "thread_name" && event.args?.name === "CrRendererMain")
+        .map((event) => `${event.pid}:${event.tid}`),
+    );
+    const tasks = events.filter(
+      (event) => event.ph === "X" && event.name === "RunTask" && mainThreads.has(`${event.pid}:${event.tid}`),
+    );
+    expect(tasks.length, "the trace recorded no main-thread tasks").toBeGreaterThan(0);
+    expect(
+      tasks.filter((event) => event.tdur !== undefined).length,
+      "the trace recorded no thread time, so CPU cost cannot be told from waiting",
+    ).toBeGreaterThan(0);
+    return tasks.filter((event) => event.tdur !== undefined).map((event) => event.tdur! / 1000);
+  } finally {
+    if (!stopped)
+      await browser
+        .stopTracing()
+        .catch((error) => console.warn("Could not stop the trace after the traced action failed", error));
+  }
+};
 
 const scroller = (page: Page) => page.locator('[data-virtuoso-scroller="true"]');
 
@@ -164,8 +199,8 @@ const overlapArea = (a: { x: number; y: number; width: number; height: number },
 const indicator = (page: Page, within?: Locator) =>
   (within ?? page.locator("body")).locator('[data-testid="scroll-position-indicator"]');
 
-// 50 ms is the long-task definition; the shared CI runner adds about 10 ms of jitter to a task that measures 40 ms locally.
-const LONG_TASK_BUDGET_MS = 60;
+// 50 ms of main-thread work is the long-task definition; the rail's tasks measure about 25 ms of thread time.
+const LONG_TASK_BUDGET_MS = 50;
 
 test.describe("List navigation affordances on the smallest screen", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -175,7 +210,6 @@ test.describe("List navigation affordances on the smallest screen", () => {
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
     await enableKeypad(page);
-    await observeLongTasks(page);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
     await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
   });
@@ -303,26 +337,27 @@ test.describe("List navigation affordances on the smallest screen", () => {
     await page.keyboard.press("z");
     await expect.poll(() => focusedTitle(page), { timeout: 15_000 }).toBe(firstTitleOf("Zoids"));
     await page.waitForTimeout(1_000);
-    const longTasksSince = async (count: number) =>
-      (await longTaskCount(page)).slice(count).filter((ms) => ms > LONG_TASK_BUDGET_MS);
+    const heavyTasks = (cpuMs: number[]) => cpuMs.filter((ms) => ms > LONG_TASK_BUDGET_MS);
 
-    let seen = (await longTaskCount(page)).length;
-    for (const key of ["2", "5", "8", "3"]) {
-      await page.keyboard.press(key);
-      await page.waitForTimeout(150);
-    }
-    await expect.poll(() => focusedTitle(page)).toBe(firstTitleOf("Delta"));
-    await expect(page.getByTestId("alphabet-badge")).toHaveAttribute("data-visible", "false");
-    expect(await longTasksSince(seen), "long tasks while jumping by key").toEqual([]);
+    const jumpCpuMs = await mainThreadTaskCpuMs(page, async () => {
+      for (const key of ["2", "5", "8", "3"]) {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(150);
+      }
+      await expect.poll(() => focusedTitle(page)).toBe(firstTitleOf("Delta"));
+      await expect(page.getByTestId("alphabet-badge")).toHaveAttribute("data-visible", "false");
+    });
+    expect(heavyTasks(jumpCpuMs), "main-thread tasks over budget while jumping by key").toEqual([]);
 
     // A touch ends keypad mode, which re-lays the page out once; that is not the rail's cost.
     await page.getByRole("dialog").getByRole("heading", { name: "Playlist" }).click();
     await page.waitForTimeout(500);
-    seen = (await longTaskCount(page)).length;
-    await dragRailTo(page, "M", RAIL_LETTERS);
-    await expect.poll(() => focusedTitle(page)).toBe(firstTitleOf("Monty"));
-    await expect(page.getByTestId("alphabet-badge")).toHaveAttribute("data-visible", "false");
-    expect(await longTasksSince(seen), "long tasks while dragging the rail").toEqual([]);
+    const dragCpuMs = await mainThreadTaskCpuMs(page, async () => {
+      await dragRailTo(page, "M", RAIL_LETTERS);
+      await expect.poll(() => focusedTitle(page)).toBe(firstTitleOf("Monty"));
+      await expect(page.getByTestId("alphabet-badge")).toHaveAttribute("data-visible", "false");
+    });
+    expect(heavyTasks(dragCpuMs), "main-thread tasks over budget while dragging the rail").toEqual([]);
   });
 
   test("entering and returning to a page shows its marker without scrolling @layout", async ({ page }) => {

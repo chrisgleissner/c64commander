@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
@@ -222,7 +222,17 @@ const expandDiagnosticsHeader = () => {
  */
 let uninstallDeviceBackButton: (() => void) | null = null;
 
+const preloadLazyDiagnosticsPanels = () =>
+  Promise.all([
+    import("@/components/diagnostics/LatencyAnalysisPopup"),
+    import("@/components/diagnostics/KeyExplorerPopup"),
+    import("@/components/diagnostics/HealthHistoryPopup"),
+    import("@/components/diagnostics/HeatMapPopup"),
+  ]);
+
 describe("GlobalDiagnosticsOverlay", () => {
+  beforeAll(preloadLazyDiagnosticsPanels, 60_000);
+
   it("does not copy closed diagnostics stores again when unrelated health state rerenders the host", () => {
     consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
     renderOverlay();

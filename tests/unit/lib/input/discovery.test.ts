@@ -13,6 +13,7 @@ import {
   discoverInteractiveElements,
   isFocusDisabled,
   isFocusVisible,
+  controlOwnsDirection,
   isHorizontalKeyOwner,
   isNativelyFocusable,
   resolveActiveScope,
@@ -184,6 +185,26 @@ describe("predicates", () => {
     expect(isHorizontalKeyOwner(host.querySelector("#seg-item"))).toBe(true);
     expect(isHorizontalKeyOwner(host.querySelector("#plain"))).toBe(false);
     expect(isHorizontalKeyOwner(null)).toBe(false);
+  });
+
+  it("controlOwnsDirection gives Left/Right to value controls and Up/Down only while one is being edited", () => {
+    const host = mount(`
+      <span id="thumb" role="slider"></span>
+      <div id="editing" tabindex="0" data-key-nav-vertical="true"></div>
+      <div id="idle" tabindex="0" data-key-nav-vertical="false"></div>
+    `);
+    const thumb = host.querySelector("#thumb")!;
+    const editing = host.querySelector("#editing")!;
+    const idle = host.querySelector("#idle")!;
+    expect(controlOwnsDirection("dpadLeft", thumb, null)).toBe(true);
+    expect(controlOwnsDirection("dpadRight", null, thumb)).toBe(true);
+    expect(controlOwnsDirection("dpadDown", thumb, thumb)).toBe(false);
+    expect(controlOwnsDirection("dpadUp", editing, editing)).toBe(true);
+    expect(controlOwnsDirection("dpadDown", editing, editing)).toBe(true);
+    expect(controlOwnsDirection("dpadUp", idle, idle)).toBe(false);
+    expect(controlOwnsDirection("dpadLeft", editing, editing)).toBe(false);
+    expect(controlOwnsDirection("dpadUp", document as unknown as Element, null)).toBe(false);
+    expect(controlOwnsDirection(null, editing, editing)).toBe(false);
   });
 });
 

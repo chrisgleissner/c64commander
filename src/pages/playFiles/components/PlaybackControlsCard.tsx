@@ -6,26 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from "react";
-import { Loader2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import type { ReactNode } from "react";
+import { Repeat, Repeat1, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
-import { CENTER_VERB_ATTR } from "@/lib/input";
-import {
-  nextPoliteAnnouncement,
-  PENDING_ANNOUNCEMENT_INTERVAL_MS,
-  type PendingSeekPresentation,
-  type PoliteAnnouncement,
-} from "@/lib/playback/pendingSeekStatus";
+import { useStableCallback } from "@/hooks/useStableCallback";
+import type { PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import {
   buildStilTuneLine,
   NOW_PLAYING_METADATA_SEPARATOR,
@@ -33,35 +20,19 @@ import {
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { TuneDetails } from "./TuneDetails";
-import {
-  readShownPlaybackTime,
-  ShownPlaybackCounters,
-  ShownPlaybackProgress,
-  ShownPlaybackTime,
-} from "./ShownPlaybackTime";
+import { PLAY_TRANSPORT_FOCUS_ORDER, PlaybackTransport } from "./PlaybackTransport";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
   currentItemLabel: string | null;
   /**
-   * The single line under the title: composer, year, SID models, video standard, which tune, length.
-   *
-   * Built by `buildNowPlayingMetadataParts` so the order and the omission rules live in one tested
-   * place rather than in this component's JSX. Supplied as labelled parts rather than as a finished
-   * string because the composer is a control and the rest is text; joining first and splitting again
-   * here would mean guessing at where the name ended, and composer names contain the separator's
-   * neighbours often enough for that to be wrong.
+   * Credits and facts under the title, from `buildNowPlayingMetadataParts`. Labelled parts rather
+   * than one string because the composer and the tune count are controls and the rest is text.
    */
   currentItemMetadataParts?: NowPlayingMetadataSegment[];
-  /**
-   * What STIL says about this tune, where it says anything.
-   *
-   * Kept apart from `currentItemMetadata` because it is a different kind of fact. That line is the
-   * SID header — what the file declares about itself. This is the archive's editors describing the
-   * music: what this particular tune is called, who originally wrote it, and any note they left.
-   * STIL covers under a third of the archive, so all three are usually absent and the card renders
-   * exactly as it did before.
-   */
+  /** Item and subsong of the current tune; the "About this tune" block shuts when it changes. */
+  tuneKey?: string | null;
+  /** What STIL says about this tune; under a third of the archive has an entry, so usually all null. */
   stil?: {
     title: string | null;
     originalArtist: string | null;
@@ -72,12 +43,7 @@ export type PlaybackControlsCardProps = {
    * rendered for playback from a device, where the archive is not involved.
    */
   onComposerSelected?: (composer: string) => void;
-  /**
-   * Open the list of tunes in this file.
-   *
-   * The same gesture as the composer beside it: "Tune 3 of 19" states that eighteen others exist,
-   * and until now gave no way to reach any of them.
-   */
+  /** Open the list of tunes in this file ("Tune 3 of 19"). */
   onTunesSelected?: () => void;
   canTransport: boolean;
   hasPrev: boolean;
@@ -120,22 +86,13 @@ export type PlaybackControlsCardProps = {
   /** The progress bar and the time labels follow it, so the clock moving re-renders only them. */
   timeline: PlaybackTimeline;
   /**
-   * Everything shown about a seek that is waiting for the renderer, or undefined when none is.
-   *
-   * A seek past what is rendered cannot be instant — libsidplayfp cannot rewind — so playback holds
-   * while the renderer catches up. Shown explicitly and determinately, because a listener who has
-   * just dragged the bar must never be left wondering whether anything happened, and because a wait
-   * with no end in sight is indistinguishable from a fault.
+   * A seek waiting for the renderer, or undefined. libsidplayfp cannot rewind, so playback holds
+   * until the renderer catches up, and the wait is shown determinately so it never looks like a fault.
    */
   pendingSeek?: PendingSeekPresentation;
-  /**
-   * How much of the tune is already rendered, 0-100, or undefined when that is not a thing here.
-   *
-   * Only on-device playback has this: libsidplayfp cannot rewind, so reaching a position means
-   * rendering everything before it. Shown as a translucent fill behind the played portion so the
-   * listener can see how far a seek will land instantly, and see the renderer catching up when it
-   * will not.
-   */
+  /** The elapsed time currently follows a tick read from the device clock. */
+  elapsedFollowsDeviceClock?: boolean;
+  /** How much of the tune is rendered, 0-100, for on-device playback only: a seek up to it lands instantly. */
   renderedPercent?: number;
   outputSelector?: ReactNode;
   volumeControls: ReactNode;
@@ -148,188 +105,24 @@ export type PlaybackControlsCardProps = {
   onRepeatChange: (value: boolean) => void;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
-  /**
-   * The line that says where the queue comes from, drawn above everything else on the card.
-   *
-   * It leads because it is context for the rest: which station (or which playlist) is producing
-   * this tune has to be readable before the tune's own details and long before the controls. The
-   * slot is expected to occupy the same height in every state, so that starting or stopping a
-   * station never moves the title or the transport underneath it.
-   */
+  /** Where the queue comes from, drawn above everything else at the same height in every state. */
   stationIndicator?: ReactNode;
   /** True while a SID Radio station drives the queue — Shuffle offers to keep its queue as a regular playlist. */
   stationActive?: boolean;
 };
 
-const PLAY_TRANSPORT_FOCUS_ORDER = {
-  previous: 100,
-  play: 110,
-  pause: 120,
-  next: 130,
-  shuffle: 160,
-  repeat: 170,
-} as const;
+/** Two line heights at every text size and at least the 44 px a link inside it needs; About this tune shows any clipped text. */
+const RESERVED_METADATA_LINES =
+  "h-[2lh] min-h-11 min-w-0 self-stretch break-words text-sm leading-snug text-muted-foreground !overflow-clip [overflow-clip-margin:4px]";
 
-/** How long Previous/Next must be held before it scrubs instead of skipping. */
-const SEEK_HOLD_MS = 450;
-/** How often it scrubs while held, and by how much. */
-const SEEK_REPEAT_MS = 200;
-const SEEK_STEP_SECONDS = 5;
-const SEEK_KEY_REPEAT_STEP_SECONDS = 15;
-const SEEK_KEY_FALLBACK_FRACTION = 0.02;
-
-/** How far one Left/Right press on the focused seek bar moves it, as a fraction of the tune; a held key moves further. */
-export const seekKeyStepFraction = (durationMs: number | undefined, repeat: boolean): number => {
-  const seconds = repeat ? SEEK_KEY_REPEAT_STEP_SECONDS : SEEK_STEP_SECONDS;
-  return durationMs ? (seconds * 1000) / durationMs : SEEK_KEY_FALLBACK_FRACTION * (seconds / SEEK_STEP_SECONDS);
-};
-
-/**
- * Hold Previous/Next to scrub the current tune; tap to change track.
- *
- * The two gestures share one button, so a hold must *suppress* the click that
- * follows it — otherwise letting go after scrubbing would also skip the track,
- * which is the opposite of what the user just asked for. `seeked` stays set
- * until the next press so the click handler (which fires after pointerup) can
- * still see it.
- */
-/** Where along the bar the pointer is, as a fraction of its width. */
-const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
-  const rect = event.currentTarget.getBoundingClientRect();
-  if (rect.width <= 0) return 0;
-  return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-};
-
-/** Percentages arrive from a duration that may be an estimate, so pin them to the bar. */
-const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
-
-/**
- * Hold `text` in a live region, but no more often than the announcement interval.
- *
- * The pending status refreshes twice a second. Handed straight to a live region that becomes a
- * screen reader talking over itself continuously, which drowns the rest of the page and tells the
- * listener less than saying it once every few seconds would. Clearing is immediate — a wait that has
- * ended must not keep being announced — and a message held back by the throttle is said when the
- * window opens rather than dropped, so the last state of a wait is always announced.
- */
-const usePoliteAnnouncement = (text: string | null): string => {
-  const [announcement, setAnnouncement] = useState<PoliteAnnouncement | null>(null);
-  const announcementRef = useRef<PoliteAnnouncement | null>(null);
-  announcementRef.current = announcement;
-
-  useEffect(() => {
-    const apply = (): PoliteAnnouncement | null => {
-      const next = nextPoliteAnnouncement(announcementRef.current, text, Date.now());
-      if (next !== announcementRef.current) setAnnouncement(next);
-      return next;
-    };
-    const settled = apply();
-    if (text === null || settled?.text === text) return;
-    const waitMs = Math.max(0, PENDING_ANNOUNCEMENT_INTERVAL_MS - (Date.now() - (settled?.atMs ?? 0)));
-    const timer = window.setTimeout(apply, waitMs);
-    return () => window.clearTimeout(timer);
-  }, [text]);
-
-  return announcement?.text ?? "";
-};
-
-/** A short tick so a scrub is felt as well as seen, where vibration is available. */
-const buzz = (ms: number) => {
-  try {
-    navigator.vibrate?.(ms);
-  } catch (error) {
-    addLog("warn", "Seek vibration failed", {
-      durationMs: ms,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-  }
-};
-
-const useHoldToSeek = (
-  deltaSeconds: number,
-  onSeek?: (deltaSeconds: number) => void,
-  scrub?: { start?: () => void; step?: (deltaSeconds: number) => void; end?: () => void },
-) => {
-  const holdTimer = useRef<number | null>(null);
-  const repeatTimer = useRef<number | null>(null);
-  const seeked = useRef(false);
-  // `stop` is created once, so it reads the latest callbacks through a ref.
-  const scrubRef = useRef(scrub);
-  scrubRef.current = scrub;
-
-  const stop = useCallback(() => {
-    if (holdTimer.current !== null) {
-      window.clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-    if (repeatTimer.current !== null) {
-      window.clearInterval(repeatTimer.current);
-      repeatTimer.current = null;
-    }
-    // Clear the suppression flag on the next tick — after the click that
-    // follows this pointerup has been handled, but before anything else.
-    //
-    // Leaving it set until the next press would swallow a later activation that
-    // produces no pointerdown to reset it: keyboard or keypad Enter on a focused
-    // button raises `click` alone. That is not a corner case here — the C64U
-    // Remote variant is keypad-first — and the symptom would be a Next button
-    // that silently ignores every other press.
-    if (seeked.current) {
-      scrubRef.current?.end?.();
-      window.setTimeout(() => {
-        seeked.current = false;
-      }, 0);
-    }
-  }, []);
-
-  const start = useCallback(
-    (event?: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!onSeek) return;
-      seeked.current = false;
-      // Keep receiving pointer events even if the finger drifts off a small icon
-      // button, which would otherwise fire pointerleave and cancel the hold.
-      // `hasPointerCapture` is the documented guard: capture throws only for a
-      // pointer id that is no longer active, which this rules out without
-      // swallowing anything.
-      const target = event?.currentTarget;
-      if (event?.pointerId !== undefined && target?.isConnected && !target.hasPointerCapture(event.pointerId)) {
-        target.setPointerCapture(event.pointerId);
-      }
-      holdTimer.current = window.setTimeout(() => {
-        seeked.current = true;
-        addLog("debug", "Local SID hold-to-seek engaged", { deltaSeconds });
-        // Scrubbing moves a TARGET that the UI follows immediately; the engine
-        // is sent after it on its own cadence. Stepping the engine once per
-        // repeat instead made the bar sit still until a rewind had finished
-        // re-rendering, which reads as the control being broken.
-        if (scrub?.start) {
-          scrub.start();
-          scrub.step?.(deltaSeconds);
-          buzz(12);
-          repeatTimer.current = window.setInterval(() => {
-            scrub.step?.(deltaSeconds);
-            buzz(8);
-          }, SEEK_REPEAT_MS);
-          return;
-        }
-        onSeek(deltaSeconds);
-        repeatTimer.current = window.setInterval(() => onSeek(deltaSeconds), SEEK_REPEAT_MS);
-      }, SEEK_HOLD_MS);
-    },
-    [deltaSeconds, onSeek],
-  );
-
-  // Never leave a timer running past unmount.
-  useEffect(() => stop, [stop]);
-
-  return { start, stop, consumedClick: () => seeked.current };
-};
+const joinedText = (parts: NowPlayingMetadataSegment[]): string | null =>
+  parts.map((part) => part.text).join(NOW_PLAYING_METADATA_SEPARATOR) || null;
 
 export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemLabel,
   currentItemMetadataParts = [],
+  tuneKey = null,
   stil,
   onComposerSelected,
   onTunesSelected,
@@ -358,6 +151,7 @@ export const PlaybackControlsCard = ({
   timeline,
   renderedPercent,
   pendingSeek,
+  elapsedFollowsDeviceClock = false,
   outputSelector,
   volumeControls,
   shuffleSeed,
@@ -373,18 +167,8 @@ export const PlaybackControlsCard = ({
 }: PlaybackControlsCardProps) => {
   const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
   const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
-  // Credits clip the composer link's 44px target so it cannot cover the title.
-  const hasComposerLink = Boolean(onComposerSelected) && creditsParts.some((part) => part.kind === "author");
-  const hasTunesLink = Boolean(onTunesSelected) && factsParts.some((part) => part.kind === "tunes");
 
-  /**
-   * One metadata segment, with its separator attached to its own end.
-   *
-   * The separator belongs to the segment before it so that a line break falls after the
-   * "·" rather than before it. Rendering it in front of the following segment looks the
-   * same while everything fits and strands a "·" at the start of the next line as soon as
-   * it does not, which on a 320px screen is often.
-   */
+  /** One metadata segment with its separator attached to its own end, so a wrap falls after the "·". */
   const renderMetadataPart = (part: NowPlayingMetadataSegment, index: number, hasNext: boolean) => {
     const body =
       part.kind === "author" && onComposerSelected ? (
@@ -425,42 +209,37 @@ export const PlaybackControlsCard = ({
     title: stil?.title ?? null,
     originalArtist: stil?.originalArtist ?? null,
   });
+  const transportProps = {
+    canTransport,
+    hasPrev,
+    hasNext,
+    isPlaying,
+    isPaused,
+    hasPlaylist,
+    isPlaylistLoading,
+    stopPending,
+    stopping,
+    canPause,
+    onPrevious: useStableCallback(onPrevious, "onPrevious"),
+    onPlay: useStableCallback(onPlay, "onPlay"),
+    onStop: useStableCallback(onStop, "onStop"),
+    onPauseResume: useStableCallback(onPauseResume, "onPauseResume"),
+    onNext: useStableCallback(onNext, "onNext"),
+    onSeek: useStableCallback(onSeek, "onSeek"),
+    onScrubStart: useStableCallback(onScrubStart, "onScrubStart"),
+    onScrubStep: useStableCallback(onScrubStep, "onScrubStep"),
+    onScrubEnd: useStableCallback(onScrubEnd, "onScrubEnd"),
+    isScrubbing,
+    onSeekToFraction: useStableCallback(onSeekToFraction, "onSeekToFraction"),
+    seekDurationMs,
+    timeline,
+    pendingSeek,
+    elapsedFollowsDeviceClock,
+    renderedPercent,
+  };
   const shuffleOn = !stationActive && shuffleEnabled;
   const repeatMode = repeatOneEnabled ? "tune" : repeatEnabled ? "playlist" : "off";
   const repeatOn = repeatMode !== "off";
-  const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
-  const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
-  const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
-  const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek, scrubHandlers);
-
-  const previousFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-previous",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.previous,
-    group: "play-transport",
-    disabled: !canTransport || !hasPrev,
-  });
-  // A launch can take twenty seconds (a disk whose settings file is applied through the device menu),
-  // and the listener must be able to call it off rather than wait for it to finish.
-  const stopAvailable = isPlaying || (isPlaylistLoading && !stopPending);
-  const playButtonLabel = stopping ? "Stopping…" : stopAvailable ? "Stop" : "Play";
-  const playFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-play",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.play,
-    group: "play-transport",
-    disabled: !hasPlaylist,
-  });
-  const pauseFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-pause",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.pause,
-    group: "play-transport",
-    disabled: !canPause || isPlaylistLoading,
-  });
-  const nextFocusRef = useFocusItem<HTMLButtonElement>({
-    id: "play-transport-next",
-    order: PLAY_TRANSPORT_FOCUS_ORDER.next,
-    group: "play-transport",
-    disabled: !canTransport || !hasNext,
-  });
   const shuffleFocusRef = useFocusItem<HTMLButtonElement>({
     id: "play-transport-shuffle",
     order: PLAY_TRANSPORT_FOCUS_ORDER.shuffle,
@@ -479,21 +258,11 @@ export const PlaybackControlsCard = ({
         className="grid w-full grid-cols-[minmax(0,1fr)_max-content_max-content] items-center gap-x-2"
         data-testid="playback-current-track"
       >
-        <div className="col-span-3 mb-0.5 text-xs text-muted-foreground">
+        <div className="col-span-3 mb-0.5 flex h-6 items-center overflow-clip text-xs text-muted-foreground">
           {hasCurrentItem ? (
             <>
-              {/* The title now has the full width of the card to itself.
-
-                It is still truncated rather than wrapped, so the card is exactly as tall for a
-                forty-character HVSC name as for a short one and nothing below it — the metadata, the
-                transport — moves between tunes. Truncation here is `text-overflow`, so the whole name
-                is still in the document and is what a screen reader reads and what a pointer sees as
-                the tooltip.
-
-                The title starts at the left edge of the card, level with the metadata line under it.
-                There used to be a small file-origin glyph in front of it, which indented it by its
-                own width and left the two lines misaligned; where an item came from is in its
-                playlist menu under Details. */}
+              {/* Truncated, not wrapped, so a long name never changes the card's height; the full name stays
+                  in the document for screen readers and as the tooltip. */}
               <div className="flex w-full flex-nowrap items-center">
                 <span
                   className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
@@ -508,369 +277,33 @@ export const PlaybackControlsCard = ({
             "Select a playlist item to start"
           )}
         </div>
-        {/* Credits and facts belong immediately below the title, before the transport. */}
-        {hasCurrentItem ? (
-          <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
-            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
-                their own.
-
-                Credits first - the author and the HVSC `released` value, which is one field
-                holding both year and publisher and is printed whole. Then the facts: chip, video
-                standard, which tune of how many, and how long. On a 320px screen that is the
-                difference between three rows and two, and the row the actions used to occupy was
-                otherwise empty.
-
-                Each segment carries its own trailing separator inside a nowrap span, so a wrap
-                happens after the separator rather than before it. Putting the separator in front
-                of the following segment reads the same on one line but leaves a stranded "·" at
-                the start of the next one as soon as the line is too narrow. */}
-            {creditsParts.length ? (
-              <p
-                className={cn(
-                  "col-span-3 min-w-0 break-words text-sm leading-snug text-muted-foreground",
-                  hasComposerLink && "mb-1 min-h-11 overflow-clip [overflow-clip-margin:4px]",
-                )}
-                data-testid="playback-current-credits"
-              >
-                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
-              </p>
-            ) : null}
-            {factsParts.length || rankingControls ? (
-              <div className="contents">
-                {/* Clips the tunes link's hit area to this paragraph, which is never shorter than 44px when
-                    that link is in it; the 4px margin keeps the keypad ring around the link visible. */}
-                <p
-                  className={cn(
-                    "min-w-0 self-stretch overflow-clip break-words text-sm leading-snug text-muted-foreground [overflow-clip-margin:4px]",
-                    hasTunesLink && "min-h-11",
-                  )}
-                  data-testid="playback-current-facts"
-                >
-                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
-                </p>
-                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
-                {rankingControls ? (
-                  <div className="col-span-2 self-start" data-testid="playback-ranking-row">
-                    {rankingControls}
-                  </div>
-                ) : null}
+        <div className="contents text-xs text-muted-foreground" data-testid="playback-current-details">
+          {/* Credits, then facts with the ranking actions beside them. Each segment carries its own
+              trailing separator, so a wrap never strands a "·" at the start of a line. */}
+          <p
+            className={cn(RESERVED_METADATA_LINES, "col-span-3 mb-1 line-clamp-2")}
+            data-testid="playback-current-credits"
+            title={joinedText(creditsParts) ?? undefined}
+          >
+            {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
+          </p>
+          <div className="contents">
+            {/* The 4px clip margin keeps the keypad ring around the tunes link visible. */}
+            <p
+              className={cn(RESERVED_METADATA_LINES, "line-clamp-2")}
+              data-testid="playback-current-facts"
+              title={joinedText(factsParts) ?? undefined}
+            >
+              {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
+            </p>
+            {rankingControls ? (
+              <div className="col-span-2 self-start" data-testid="playback-ranking-row">
+                {rankingControls}
               </div>
             ) : null}
-            {/* What STIL says about this tune, folded away by default.
-
-                STIL is the archive's editorial record rather than the file's own header: what this
-                particular tune is called, who wrote the music being arranged, and a note about it. A
-                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
-                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
-                names Rob Hubbard, who arranged it.
-
-                All of it is worth reading and none of it is needed to identify the tune or to work
-                the transport, so it is the part of the card that gives way on a small screen. See
-                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
-                archive, which STIL does not cover. */}
-            <div className="col-span-3 min-w-0">
-              <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
-            </div>
-          </div>
-        ) : null}
-        <div className="col-span-3 mt-3 flex w-full flex-col gap-3" data-testid="playback-controls-stack">
-          {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
-            44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
-            were, and the row stopped 33 px short of the right edge — visibly ragged against the
-            ranking pair directly above it, which is flush, and against the progress bar and the
-            metadata line, which are flush too. Distributing them puts the first and last on the
-            card's own edges, so every row of this card now starts and ends on the same two lines. */}
-          {/*
-          Centred, with only Play carrying a fill.
-          Four equally-outlined buttons spread across the row gave the card no focal point: squinted
-          at from a distance every one of them read the same, and the thing you press most was
-          indistinguishable from the three you press rarely. Play is now a filled circle and the
-          other three are ghosts, which is the media-player idiom and what the squint test rewards.
-        */}
-          <div className="flex items-center justify-center gap-1.5" data-testid="playback-transport-row">
-            <Button
-              ref={previousFocusRef}
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                // A hold already scrubbed; do not also change track.
-                if (holdRewind.consumedClick()) return;
-                onPrevious();
-              }}
-              onPointerDown={holdRewind.start}
-              onPointerUp={holdRewind.stop}
-              onPointerLeave={holdRewind.stop}
-              onPointerCancel={holdRewind.stop}
-              disabled={(!canTransport || !hasPrev) && !onSeek}
-              id="playlist-prev"
-              data-testid="playlist-prev"
-              // Without this, Android hands a long press to the scroller and fires
-              // pointercancel at roughly the hold threshold, so the gesture died on
-              // a real finger while working under synthetic events.
-              style={onSeek ? { touchAction: "none" } : undefined}
-              aria-label="Previous"
-              title={onSeek ? "Previous (hold to rewind)" : "Previous"}
-            >
-              <SkipBack className="h-4 w-4" />
-            </Button>
-            <Button
-              ref={playFocusRef}
-              variant={stopping || stopAvailable ? "destructive" : "default"}
-              size="icon"
-              className="size-14 rounded-full"
-              // aria-disabled rather than disabled while a Stop is pending, so the focus ring keeps its place.
-              onClick={stopping || stopPending ? undefined : stopAvailable ? onStop : onPlay}
-              disabled={!hasPlaylist}
-              aria-disabled={stopping || stopPending || undefined}
-              data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
-              data-stopping={stopping ? "true" : undefined}
-              id="playlist-play"
-              data-testid="playlist-play"
-              aria-label={playButtonLabel}
-              title={playButtonLabel}
-            >
-              {stopping ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : stopAvailable ? (
-                <Square className="h-5 w-5" />
-              ) : (
-                <Play className="h-5 w-5" />
-              )}
-            </Button>
-            <Button
-              ref={pauseFocusRef}
-              variant="ghost"
-              size="icon"
-              onClick={onPauseResume}
-              disabled={!canPause || isPlaylistLoading}
-              id="playlist-pause"
-              data-testid="playlist-pause"
-              aria-label={isPaused ? "Resume" : "Pause"}
-              title={isPaused ? "Resume" : "Pause"}
-            >
-              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-            </Button>
-            <Button
-              ref={nextFocusRef}
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                // A hold already scrubbed; do not also change track.
-                if (holdForward.consumedClick()) return;
-                onNext();
-              }}
-              onPointerDown={holdForward.start}
-              onPointerUp={holdForward.stop}
-              onPointerLeave={holdForward.stop}
-              onPointerCancel={holdForward.stop}
-              disabled={(!canTransport || !hasNext) && !onSeek}
-              id="playlist-next"
-              data-testid="playlist-next"
-              // Without this, Android hands a long press to the scroller and fires
-              // pointercancel at roughly the hold threshold, so the gesture died on
-              // a real finger while working under synthetic events.
-              style={onSeek ? { touchAction: "none" } : undefined}
-              aria-label="Next"
-              title={onSeek ? "Next (hold to fast forward)" : "Next"}
-            >
-              <SkipForward className="h-4 w-4" />
-            </Button>
-          </div>
-          {stopping ? (
-            <p
-              role="status"
-              className="text-center text-sm font-medium text-foreground"
-              data-testid="playback-stop-status"
-            >
-              Stopping…
-            </p>
-          ) : null}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span
-                className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "text-foreground")}
-                data-testid="playback-elapsed"
-                // Held, not merely lagging. While the renderer works towards a target the engine is
-                // silent, and this clock stays at the last position that was genuinely audible. A
-                // clock ticking on through that silence is the single thing this whole state exists
-                // to prevent — it is indistinguishable from playback that has died.
-                data-elapsed-held={pendingSeek ? "true" : undefined}
-              >
-                {/* Always the same width, so the bar does not move sideways under a finger that starts a drag. */}
-                <span className="inline-block w-[1.25em]">{pendingSeek ? "⏸" : isScrubbing ? "⏵" : ""}</span>
-                <ShownPlaybackTime timeline={timeline} field="elapsedLabel" />
-              </span>
-              {onSeekToFraction ? (
-                // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
-                // button so it is reachable by keyboard and by the keypad-first C64U Remote variant,
-                // where there is no pointer at all.
-                //
-                // Every pointer move is reported, and that is deliberate rather than an oversight of
-                // "never seek on a gesture sample": the handler this calls does NOT seek per sample.
-                // It moves the displayed target — which is what makes the bar follow the finger — and
-                // debounces a single seek to where the finger came to rest. Withholding the samples
-                // here would only make the bar lag the finger; the coalescing has to live where the
-                // engine is driven, and it does.
-                <button
-                  type="button"
-                  data-key-nav-horizontal=""
-                  {...{ [CENTER_VERB_ATTR]: "Adjust" }}
-                  data-testid="playback-progress-seek"
-                  aria-label="Seek within the tune"
-                  className="flex-1 min-w-0 min-h-11 cursor-pointer py-2 -my-2 touch-none"
-                  onPointerDown={(event) => {
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    onSeekToFraction(fractionFromPointer(event));
-                  }}
-                  onPointerMove={(event) => {
-                    // Only while the finger is actually down on this control.
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      onSeekToFraction(fractionFromPointer(event));
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-                    if (direction === 0) return;
-                    event.preventDefault();
-                    // The shown position follows the pending target, so held keys accumulate and the
-                    // controller seeks once, after the keys stop.
-                    const { progressPercent } = readShownPlaybackTime(timeline);
-                    const step = direction * seekKeyStepFraction(seekDurationMs, event.repeat);
-                    onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
-                  }}
-                >
-                  <div className="relative w-full">
-                    {/* The empty track, always drawn: the progress element is transparent so the rendered
-                      span can show through it, which left nothing visible to aim at while a tune was
-                      still being rendered. */}
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 rounded-full border border-border bg-secondary"
-                      data-testid="playback-track"
-                    />
-                    {/* Behind the played portion, so the two read as one bar: solid where the tune has
-                      played, translucent as far as it is rendered. */}
-                    {/* Shown whenever the tune is not fully rendered — including, and especially, when
-                      rendering is BEHIND the playhead. Hiding it then was backwards: that is exactly
-                      the moment the listener needs to see the renderer catching up rather than wonder
-                      whether playback has died. */}
-                    {renderedPercent !== undefined && renderedPercent < 100 ? (
-                      <div
-                        aria-hidden
-                        className="pointer-events-none absolute inset-y-0 left-0 rounded-full bg-primary/25"
-                        style={{ width: `${Math.min(100, Math.max(0, renderedPercent))}%` }}
-                        data-testid="playback-rendered-ahead"
-                        data-rendered-percent={Math.round(renderedPercent)}
-                      />
-                    ) : null}
-                    {/* The span still to be rendered, from the render head towards the target.
-                      Striped as well as tinted: this app is read at arm's length, and one
-                      translucent fill beside a slightly different translucent fill is not a
-                      distinction anybody can make. The stripes march while the renderer works, and
-                      stop under `prefers-reduced-motion` leaving the texture behind. */}
-                    {pendingSeek ? (
-                      <div
-                        aria-hidden
-                        className="playback-pending-region pointer-events-none absolute inset-y-0 rounded-full"
-                        style={{
-                          left: `${clampPercent(pendingSeek.renderedPercent)}%`,
-                          width: `${Math.max(0, clampPercent(pendingSeek.targetPercent) - clampPercent(pendingSeek.renderedPercent))}%`,
-                        }}
-                        data-testid="playback-pending-region"
-                        data-pending-progress={pendingSeek.progressPercent}
-                        // Where the render head stood when the target was accepted — the denominator
-                        // of the percentage beside it, and the one number a HIL session needs to tell
-                        // a progress figure that is going somewhere from one that only looks like it.
-                        data-started-percent={Math.round(pendingSeek.startedAtPercent)}
-                      />
-                    ) : null}
-                    {/* Where the drag landed, while the renderer works towards it.
-                      Named and dated rather than a bare line: a 2 px rule with no label is the one
-                      element on this bar that a listener cannot interpret, and the position it
-                      stands for is exactly the thing they are waiting to hear. */}
-                    {pendingSeek ? (
-                      <div
-                        role="img"
-                        aria-label={pendingSeek.markerLabel}
-                        className="pointer-events-none absolute inset-y-0"
-                        style={{ left: `${clampPercent(pendingSeek.targetPercent)}%` }}
-                        data-testid="playback-awaited-marker"
-                        data-awaited-percent={Math.round(pendingSeek.targetPercent)}
-                      >
-                        <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 -translate-x-1/2 bg-primary" />
-                        {/* A distinct cap, so the target is a shape and not only a colour. */}
-                        <span
-                          aria-hidden
-                          className="absolute -top-1 left-0 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-primary"
-                        />
-                        <span
-                          aria-hidden
-                          className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded-sm bg-primary px-1 text-xs font-medium leading-4 tabular-nums text-primary-foreground"
-                          data-testid="playback-awaited-timestamp"
-                        >
-                          {pendingSeek.targetLabel}
-                        </span>
-                      </div>
-                    ) : null}
-                    <ShownPlaybackProgress
-                      timeline={timeline}
-                      className={cn(
-                        "relative w-full bg-transparent transition-none",
-                        isScrubbing && "ring-2 ring-primary/60",
-                      )}
-                      aria-label="Playback progress"
-                      data-testid="playback-progress"
-                      data-scrubbing={isScrubbing ? "true" : undefined}
-                    />
-                  </div>
-                </button>
-              ) : (
-                <ShownPlaybackProgress
-                  timeline={timeline}
-                  // Scrubbing gets its own look so the moving bar reads as "you are
-                  // dragging this", not as playback that has suddenly sped up.
-                  className={cn("flex-1 min-w-0 transition-none", isScrubbing && "ring-2 ring-primary/60")}
-                  aria-label="Playback progress"
-                  data-testid="playback-progress"
-                  data-scrubbing={isScrubbing ? "true" : undefined}
-                />
-              )}
-              <span className="shrink-0 tabular-nums" data-testid="playback-remaining">
-                <ShownPlaybackTime timeline={timeline} field="remainingLabel" />
-              </span>
-            </div>
-            {/* Inline and always visible, never a tooltip: there is no hover on a phone, and this is
-              the only place that says why the tune has gone quiet. Determinate — a percentage and,
-              once the device's render rate has actually been measured, a duration. */}
-            {pendingSeek ? (
-              <p
-                // Hidden from assistive technology on purpose: the live region below says the same
-                // thing in sentences, and exposing both makes a screen reader read the wait twice.
-                aria-hidden
-                className="text-xs font-medium text-foreground"
-                data-testid="playback-pending-status"
-                data-pending-progress={pendingSeek.progressPercent}
-                data-pending-eta={pendingSeek.etaSeconds ?? undefined}
-              >
-                {pendingSeek.statusText}
-              </p>
-            ) : null}
-            {/* Present whether or not anything is pending: a live region added to the DOM at the same
-              moment as its content is frequently not announced at all. */}
-            <span className="sr-only" aria-live="polite" data-testid="playback-pending-announcement">
-              {pendingAnnouncement}
-            </span>
-            {/* Wraps, and each counter stays whole. At the largest Text size the two counters no
-              longer fit one row, and the break landed inside the duration itself: an em dash is a
-              break opportunity, so "—:—" was drawn as "—:" then "—". Stacking them keeps each
-              reading as one value. */}
-            <ShownPlaybackCounters
-              timeline={timeline}
-              className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
-              data-testid="playback-counters"
-            />
           </div>
         </div>
+        <PlaybackTransport {...transportProps} />
         {outputSelector ? <div className="col-span-3 mt-3">{outputSelector}</div> : null}
         {/* One grid owns both button pairs, so wrapping metadata cannot move their columns. */}
         <div className="contents" data-testid="playback-volume-metadata-grid">
@@ -930,6 +363,16 @@ export const PlaybackControlsCard = ({
               ) : null}
             </Button>
           </div>
+        </div>
+        <div className="col-span-3 min-w-0">
+          <TuneDetails
+            available={hasCurrentItem}
+            tuneKey={tuneKey}
+            credits={joinedText(creditsParts)}
+            facts={joinedText(factsParts)}
+            tuneLine={stilTuneLine}
+            note={stil?.note ?? null}
+          />
         </div>
       </div>
     </div>

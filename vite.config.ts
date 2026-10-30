@@ -168,6 +168,9 @@ export default defineConfig(() => ({
           if (id.includes("/7z-wasm/") || id.includes("/fflate/")) {
             return "vendor-hvsc";
           }
+          if (id.includes("/zod/")) {
+            return "vendor-zod";
+          }
           // Catch-all UI primitives that aren't in their own bucket but are
           // closely tied to the design system.
           if (id.includes("/class-variance-authority/") || id.includes("/clsx/") || id.includes("/tailwind-merge/")) {

@@ -41,6 +41,10 @@ export interface CollapsibleSectionProps {
    * Omit for a page (like Docs) whose card titles already say enough on their own. */
   summary?: string;
   icon: LucideIcon;
+  /** Drawn in place of the icon, for a card whose header marks itself another way (the Sound card's accent dot). */
+  leading?: ReactNode;
+  /** Let a long badge shrink and end in an ellipsis instead of squeezing the title. */
+  badgeTruncates?: boolean;
   /** Opened on a first visit to this scope, overriding the profile's own default. Set it only
    * where a section is deliberately secondary (closed on a roomy screen) or deliberately the point
    * of the page (open on a small one) - see each call site for which it is. Left unset, the
@@ -112,6 +116,8 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
+  leading,
+  badgeTruncates,
   className,
   testId,
   toggleTestId,
@@ -140,7 +146,8 @@ export const CollapsibleSection = ({
       ? titleVariants.reduce((shortest, variant) => (variant.length < shortest.length ? variant : shortest))
       : title;
   const [fitRefs, fitsOneRow] = useHeaderActionsFit(actions != null, fitTitle);
-  const stackActions = fitsOneRow === false;
+  // A truncating badge gives way instead, so the actions never need a row of their own.
+  const stackActions = fitsOneRow === false && !badgeTruncates;
 
   /*
    * Closed on every profile, for now.
@@ -254,15 +261,18 @@ export const CollapsibleSection = ({
   // to this one id: every other card on the page keeps whatever the user set.
   useEffect(
     () =>
-      subscribeSectionOpenRequest((requestedScope, requestedId) => {
-        if (requestedScope !== scope || requestedId !== id) return;
-        setOpen((current) => {
-          if (current) return current;
-          writeSectionState(scope, id, true);
-          openedByUserRef.current = true;
-          return true;
-        });
-      }),
+      subscribeSectionOpenRequest(
+        (requestedScope, requestedId) => {
+          if (requestedScope !== scope || requestedId !== id) return;
+          setOpen((current) => {
+            if (current) return current;
+            writeSectionState(scope, id, true);
+            openedByUserRef.current = true;
+            return true;
+          });
+        },
+        { scope, id },
+      ),
     [scope, id],
   );
 
@@ -383,13 +393,15 @@ export const CollapsibleSection = ({
             aria-controls={resolvedBodyId}
           >
             <span className="flex min-w-0 flex-1 items-center gap-2.5">
-              <span className="shrink-0">
-                <Icon
-                  className="h-[1.125rem] w-[1.125rem] text-primary"
-                  aria-hidden
-                  data-testid="section-header-icon"
-                />
-              </span>
+              {leading ?? (
+                <span className="shrink-0">
+                  <Icon
+                    className="h-[1.125rem] w-[1.125rem] text-primary"
+                    aria-hidden
+                    data-testid="section-header-icon"
+                  />
+                </span>
+              )}
               <span className="flex min-w-0 flex-1 flex-col">
                 {/* Still a real heading: the section titles are how the page is navigated, by a
                   screen reader and by anyone scanning it. The badge sits beside the heading
@@ -420,6 +432,7 @@ export const CollapsibleSection = ({
                   <h2
                     className={cn(
                       "min-w-0 break-words font-medium",
+                      badgeTruncates && "shrink-0",
                       // line-clamp still ends in an ellipsis, but at two lines rather than one, so
                       // it is the backstop for a title no shorter wording exists for.
                       titleVariants?.length ? "flex-1 truncate" : "line-clamp-2",
@@ -431,7 +444,7 @@ export const CollapsibleSection = ({
                       title
                     )}
                   </h2>
-                  {badge ? <span className="shrink-0">{badge}</span> : null}
+                  {badge ? <span className={badgeTruncates ? "min-w-0 truncate" : "shrink-0"}>{badge}</span> : null}
                 </span>
                 {summary ? (
                   // Wrapped, not truncated: a summary cut off mid-word tells the reader less

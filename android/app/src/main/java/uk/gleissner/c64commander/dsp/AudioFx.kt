@@ -13,36 +13,29 @@ import kotlin.math.abs
 /** What the listener asked for. All off is the default and means the samples are not touched. */
 internal class FxParams(
     val levelling: Boolean,
-    val bassDb: Double,
-    val midDb: Double,
-    val trebleDb: Double,
+    val bandsDb: DoubleArray,
     val stereoWidth: Double,
     val reverb: Double,
 ) {
   val isNeutral: Boolean
-    get() = !levelling && bassDb == 0.0 && midDb == 0.0 && trebleDb == 0.0 && stereoWidth == 0.0 && reverb == 0.0
+    get() = !levelling && bandsDb.all { it == 0.0 } && stereoWidth == 0.0 && reverb == 0.0
 
   companion object {
-    val OFF = FxParams(false, 0.0, 0.0, 0.0, 0.0, 0.0)
+    const val EQ_RANGE_DB = 12.0
 
-    fun clamped(
-        levelling: Boolean,
-        bassDb: Double,
-        midDb: Double,
-        trebleDb: Double,
-        stereoWidth: Double,
-        reverb: Double,
-    ): FxParams =
+    val OFF = FxParams(false, DoubleArray(Equalizer.BANDS), 0.0, 0.0)
+
+    /** The old three-band call: bass is 62 and 125 Hz, mid is 500 Hz to 2 kHz, treble is 4 to 16 kHz. */
+    fun legacyBands(bassDb: Double, midDb: Double, trebleDb: Double): DoubleArray =
+        doubleArrayOf(0.0, bassDb, bassDb, 0.0, midDb, midDb, midDb, trebleDb, trebleDb, trebleDb)
+
+    fun clamped(levelling: Boolean, bandsDb: DoubleArray, stereoWidth: Double, reverb: Double): FxParams =
         FxParams(
             levelling,
-            clamp(bassDb, -EQ_RANGE_DB, EQ_RANGE_DB),
-            clamp(midDb, -EQ_RANGE_DB, EQ_RANGE_DB),
-            clamp(trebleDb, -EQ_RANGE_DB, EQ_RANGE_DB),
+            DoubleArray(Equalizer.BANDS) { clamp(bandsDb.getOrElse(it) { 0.0 }, -EQ_RANGE_DB, EQ_RANGE_DB) },
             clamp(stereoWidth, 0.0, 100.0),
             clamp(reverb, 0.0, 100.0),
         )
-
-    const val EQ_RANGE_DB = 12.0
 
     private fun clamp(value: Double, low: Double, high: Double): Double =
         if (value.isNaN()) 0.0 else value.coerceIn(low, high)
@@ -63,6 +56,10 @@ internal class AudioFxHub(nanoTime: () -> Long = System::nanoTime) {
 
   val analyzer = SpectrumAnalyzer(nanoTime)
 
+  fun setParams(levelling: Boolean, bandsDb: DoubleArray, stereoWidth: Double, reverb: Double) {
+    params = FxParams.clamped(levelling, bandsDb, stereoWidth, reverb)
+  }
+
   fun setParams(
       levelling: Boolean,
       bassDb: Double,
@@ -70,9 +67,7 @@ internal class AudioFxHub(nanoTime: () -> Long = System::nanoTime) {
       trebleDb: Double,
       stereoWidth: Double,
       reverb: Double,
-  ) {
-    params = FxParams.clamped(levelling, bassDb, midDb, trebleDb, stereoWidth, reverb)
-  }
+  ) = setParams(levelling, FxParams.legacyBands(bassDb, midDb, trebleDb), stereoWidth, reverb)
 
   fun readSpectrum(targetNanos: Long = 0L): SpectrumFrame = analyzer.read(spectrumEnabled, targetNanos)
 
@@ -102,16 +97,17 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
   private var levellerMix = 0.0
   private var levellerGain = 1.0
   private var limiterGain = 1.0
+  private var preampDb = 0.0
 
   /** Reads the settings and reports whether this chunk has to go through [process]. */
   fun prepare(playFrame: Long): Boolean {
     val params = hub.params
     if (params.levelling && !levellingOn) leveller.reset(playFrame)
     levellingOn = params.levelling
-    equalizer.setTargets(params.bassDb, params.midDb, params.trebleDb)
+    equalizer.setTargets(params.bandsDb)
     widener.setTarget(params.stereoWidth / 100.0)
     reverb.setTarget(params.reverb / 100.0)
-    return levellingOn || levellerMix > 0.0 || !equalizer.isIdle || !widener.isIdle || !reverb.isIdle
+    return levellingOn || levellerMix > 0.0 || preampDb != 0.0 || !equalizer.isIdle || !widener.isIdle || !reverb.isIdle
   }
 
   /** A flush threw the queued audio away: the next audio is a new passage and is levelled afresh. */
@@ -123,6 +119,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     levellerMix = 0.0
     levellerGain = 1.0
     limiterGain = 1.0
+    preampDb = 0.0
   }
 
   val wantsLookahead: Boolean
@@ -146,9 +143,30 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     unpack(data, frames)
     if (wantsLookahead) level(frames, playFrame, seconds)
     if (!equalizer.isIdle) equalizer.process(left, right, frames, seconds)
+    applyPreamp(frames, seconds)
     if (!widener.isIdle) widener.process(left, right, frames, seconds)
     if (!reverb.isIdle) reverb.process(left, right, frames, seconds)
     pack(data, frames, masterStart, masterEnd)
+  }
+
+  /**
+   * Lowers the signal by the equalizer's peak boost so a boosted curve cannot clip. It follows the target
+   * at the equalizer's own ramp rate, so neither turning a boost on nor off steps the level.
+   */
+  private fun applyPreamp(frames: Int, seconds: Double) {
+    val target = -equalizer.peakGainDb
+    val before = preampDb
+    val delta = target - before
+    val maxStep = PREAMP_RAMP_DB_PER_SECOND * seconds
+    preampDb = if (Math.abs(delta) <= maxStep) target else before + Math.copySign(maxStep, delta)
+    if (before == 0.0 && preampDb == 0.0) return
+    val startGain = Math.pow(10.0, before / 20.0)
+    val slope = (Math.pow(10.0, preampDb / 20.0) - startGain) / frames
+    for (i in 0 until frames) {
+      val gain = (startGain + slope * (i + 1)).toFloat()
+      left[i] *= gain
+      right[i] *= gain
+    }
   }
 
   private fun level(frames: Int, playFrame: Long, seconds: Double) {
@@ -213,6 +231,7 @@ internal class AudioFx(sourceRate: Int, private val outputRate: Int, private val
     const val FULL_SCALE = 32768.0f
     const val INV_FULL_SCALE = 1.0f / 32768.0f
     const val RAMP_SECONDS = 0.05
+    const val PREAMP_RAMP_DB_PER_SECOND = 600.0
     const val LIMITER_RELEASE_SECONDS = 0.1
     const val LIMITER_SETTLE_EPSILON = 1e-6
   }

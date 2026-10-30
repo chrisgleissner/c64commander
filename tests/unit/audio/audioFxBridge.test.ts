@@ -27,11 +27,12 @@ import {
   readSpectrum,
   resetAudioFxForTests,
   setAudioProcessing,
+  setSpectrumDemand,
   setSpectrumEnabled,
 } from "@/lib/native/audioFx";
 import { resetPluginAvailabilityForTests } from "@/lib/native/pluginAvailability";
 
-const params = { levelling: true, bassDb: 1, midDb: 2, trebleDb: 3, stereoWidth: 35, reverb: 25 };
+const params = { levelling: true, bandsDb: [0, 1, 1, 0, 2, 2, 2, 3, 3, 3], stereoWidth: 35, reverb: 25 };
 const frame = {
   enabled: true,
   active: true,
@@ -62,6 +63,46 @@ describe("audio fx bridge", () => {
     expect(await setSpectrumEnabled(true)).toBe(true);
     expect(plugin.setSpectrumEnabled).toHaveBeenCalledWith({ enabled: true });
     expect(await readSpectrum()).toEqual(frame);
+  });
+
+  it("keeps the analyser on while any owner still wants it, and switches it only on the first and last wish", async () => {
+    await setSpectrumDemand("spectrum-card", true);
+    await setSpectrumDemand("sound-card", true);
+    await setSpectrumDemand("spectrum-card", false);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }]]);
+    await setSpectrumDemand("sound-card", false);
+    await setSpectrumDemand("sound-card", false);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
+  });
+
+  it("tries a failed enable again on the next call instead of believing it happened", async () => {
+    plugin.setSpectrumEnabled.mockRejectedValueOnce(new Error("bridge down"));
+    expect(await setSpectrumDemand("sound-card", true)).toBe(false);
+    expect(await setSpectrumDemand("sound-card", true)).toBe(true);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: true }]]);
+    expect(await setSpectrumDemand("sound-card", true)).toBe(true);
+    expect(plugin.setSpectrumEnabled).toHaveBeenCalledTimes(2);
+  });
+
+  it("tries a failed disable again on the next call", async () => {
+    await setSpectrumDemand("sound-card", true);
+    plugin.setSpectrumEnabled.mockRejectedValueOnce(new Error("bridge down"));
+    expect(await setSpectrumDemand("sound-card", false)).toBe(false);
+    expect(await setSpectrumDemand("sound-card", false)).toBe(true);
+    expect(plugin.setSpectrumEnabled.mock.calls.at(-1)).toEqual([{ enabled: false }]);
+  });
+
+  it("ends up off when the last owner leaves while the enabling call is still in flight", async () => {
+    let finish: () => void = () => {};
+    plugin.setSpectrumEnabled.mockImplementationOnce(
+      () => new Promise<object>((resolve) => (finish = () => resolve({}))),
+    );
+    const enabling = setSpectrumDemand("sound-card", true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const disabling = setSpectrumDemand("sound-card", false);
+    finish();
+    await Promise.all([enabling, disabling]);
+    expect(plugin.setSpectrumEnabled.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
   });
 
   it("passes a look-ahead request to the plugin and keeps the frames ahead", async () => {

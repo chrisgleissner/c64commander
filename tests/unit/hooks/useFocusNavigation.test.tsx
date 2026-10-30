@@ -604,6 +604,22 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(fireEvent.keyDown(document.body, { code: "KeyQ", key: "q" })).toBe(true);
   });
 
+  it("leaves Up and Down to a focused control that declares itself their owner, and takes them back after", () => {
+    const Owner = ({ owns }: { owns: boolean }) => (
+      <FocusNavigationProvider>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+        <div tabIndex={0} data-testid="owner" data-key-nav-vertical={owns ? "true" : "false"} />
+      </FocusNavigationProvider>
+    );
+    const { getByTestId, rerender } = render(<Owner owns />);
+    const owner = getByTestId("owner");
+    owner.focus();
+    expect(fireEvent.keyDown(owner, { code: "ArrowDown" })).toBe(true);
+    expect(fireEvent.keyDown(owner, { code: "ArrowUp" })).toBe(true);
+    rerender(<Owner owns={false} />);
+    expect(fireEvent.keyDown(owner, { code: "ArrowDown" })).toBe(false);
+  });
+
   it("detaches the global listener when disabled", () => {
     const onA = vi.fn();
     render(

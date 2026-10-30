@@ -20,6 +20,30 @@ import { fileURLToPath } from "node:url";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+const MAX_PHONE_MEDIA_VOLUME = 10;
+
+/** Step the phone's media stream to a level without exceeding its hearing-safe ceiling. */
+export const setPhoneMediaVolume = async ({
+  target,
+  readVolume,
+  pressVolumeKey,
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+}) => {
+  if (target > MAX_PHONE_MEDIA_VOLUME)
+    throw new Error(`refusing media volume ${target}; the ceiling is ${MAX_PHONE_MEDIA_VOLUME} of 25`);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { muted, index } = await readVolume();
+    if (index < 0) throw new Error("could not read the phone's media volume, so it was not changed");
+    if (index === target && (!muted || target === 0)) return;
+    const up = index < target || (muted && index === target);
+    if (up && index >= MAX_PHONE_MEDIA_VOLUME)
+      throw new Error(`the media volume is ${index} of 25; it is never raised from ${MAX_PHONE_MEDIA_VOLUME} or above`);
+    await pressVolumeKey(up ? 24 : 25);
+    await wait(250);
+  }
+  throw new Error(`could not set the media volume to ${target}`);
+};
+
 const loadDroidctl = async () => {
   try {
     return await import(path.join(REPO, "droidctl", "dist", "server.js"));

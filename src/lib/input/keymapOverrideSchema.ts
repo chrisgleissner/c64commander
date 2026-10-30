@@ -25,7 +25,7 @@ const bindingSchema = z
   })
   .strict()
   .refine((binding) => binding.code !== undefined || binding.key !== undefined || binding.keyCode !== undefined, {
-    message: "a binding needs a code, key or keyCode to match",
+    error: "a binding needs a code, key or keyCode to match",
   });
 
 const deviceMatchSchema = z

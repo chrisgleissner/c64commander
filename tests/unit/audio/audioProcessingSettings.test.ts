@@ -11,72 +11,135 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const setAudioProcessing = vi.hoisted(() => vi.fn(async () => true));
 vi.mock("@/lib/native/audioFx", () => ({ setAudioProcessing }));
+const addLog = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/logging", () => ({ addLog }));
 
 import {
+  AUDIO_PROCESSING_KEY,
   DEFAULT_AUDIO_PROCESSING,
+  MAX_USER_PRESETS,
   REVERB_PRESETS,
   STEREO_WIDTH_PRESETS,
+  activeSoundPreset,
+  applySound,
+  applySoundPreset,
+  backToPreviousSound,
   clampAudioAmount,
   clampEqDb,
-  formatEqDb,
+  deleteUserPreset,
   isAudioProcessingActive,
   loadAudioProcessing,
+  loadAudioProcessingRecord,
   nearestPreset,
-  useAudioProcessing,
+  parseAudioProcessingRecord,
+  renameUserPreset,
   resetAudioEq,
-  saveAudioEqBand,
+  resetAudioProcessingWarningsForTests,
+  saveAudioBandGain,
+  saveAudioEnabled,
   saveAudioLevelling,
   saveAudioReverb,
   saveAudioStereoWidth,
+  saveUserPreset,
+  stepSoundPreset,
+  useAudioProcessing,
 } from "@/lib/config/audioProcessingSettings";
-import { AUDIO_PROCESSING_PUSH_DELAY_MS, installAudioProcessingSync } from "@/lib/audio/audioProcessingSync";
+import {
+  AUDIO_PROCESSING_PUSH_DELAY_MS,
+  AUDIO_PROCESSING_RETRY_DELAYS_MS,
+  installAudioProcessingSync,
+} from "@/lib/audio/audioProcessingSync";
+import { compensatedGains } from "@/lib/audio/tone/toneResponse";
+import { AMBIANCE_PRESETS } from "@/lib/audio/tone/ambiancePresets";
 
-describe("audio processing settings", () => {
-  beforeEach(() => localStorage.clear());
+const flatWith = (index: number, db: number) => Object.assign(new Array<number>(10).fill(0), { [index]: db });
+
+describe("audio processing settings record", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    addLog.mockClear();
+    resetAudioProcessingWarningsForTests();
+  });
 
   it("is off and flat by default", () => {
     expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
     expect(isAudioProcessingActive(loadAudioProcessing())).toBe(false);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("original");
   });
 
-  it("persists every control under its c64u_audio_ key", () => {
+  it("persists every control in one audio_processing record of version 2", () => {
     saveAudioLevelling(true);
-    saveAudioEqBand("bassDb", 4);
-    saveAudioEqBand("midDb", -3);
-    saveAudioEqBand("trebleDb", 12);
+    saveAudioBandGain(5, 4);
+    saveAudioBandGain(8, -3);
     saveAudioStereoWidth(35);
     saveAudioReverb(55);
     expect(loadAudioProcessing()).toEqual({
       levelling: true,
-      bassDb: 4,
-      midDb: -3,
-      trebleDb: 12,
+      bandsDb: compensatedGains(flatWith(5, 4).map((v, i) => (i === 8 ? -3 : v))),
       stereoWidth: 35,
       reverb: 55,
     });
-    expect(localStorage.getItem("c64u_audio_levelling")).toBe("1");
-    expect(localStorage.getItem("c64u_audio_stereo_width")).toBe("35");
+    expect(JSON.parse(localStorage.getItem(AUDIO_PROCESSING_KEY) ?? "{}").version).toBe(2);
     expect(isAudioProcessingActive(loadAudioProcessing())).toBe(true);
   });
 
-  it("clamps what is written and what is read", () => {
-    saveAudioEqBand("bassDb", 40);
-    saveAudioReverb(250);
-    expect(loadAudioProcessing().bassDb).toBe(12);
-    expect(loadAudioProcessing().reverb).toBe(100);
-    localStorage.setItem("c64u_audio_eq_treble_db", "-99");
-    localStorage.setItem("c64u_audio_eq_mid_db", "banana");
-    expect(loadAudioProcessing().trebleDb).toBe(-12);
-    expect(loadAudioProcessing().midDb).toBe(0);
+  it("sends all off while the switch is off and keeps every setting", () => {
+    saveAudioReverb(55);
+    saveAudioEnabled(false);
+    expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
+    saveAudioEnabled(true);
+    expect(loadAudioProcessing().reverb).toBe(55);
+  });
+
+  it("migrates the old c64u_audio_ keys once, spreading bass, mid and treble over the bands, then removes them", () => {
+    localStorage.setItem("c64u_audio_levelling", "1");
+    localStorage.setItem("c64u_audio_eq_bass_db", "3");
+    localStorage.setItem("c64u_audio_eq_mid_db", "-2");
+    localStorage.setItem("c64u_audio_eq_treble_db", "20");
+    localStorage.setItem("c64u_audio_stereo_width", "35");
+    localStorage.setItem("c64u_audio_reverb", "25");
+    expect(loadAudioProcessing()).toEqual({
+      levelling: true,
+      bandsDb: compensatedGains([0, 3, 3, 0, -2, -2, -2, 12, 12, 12]),
+      stereoWidth: 35,
+      reverb: 25,
+    });
+    expect(localStorage.getItem("c64u_audio_reverb")).toBeNull();
+    expect(localStorage.getItem("c64u_audio_levelling")).toBeNull();
+    expect(JSON.parse(localStorage.getItem(AUDIO_PROCESSING_KEY) ?? "{}").version).toBe(2);
+    expect(loadAudioProcessing().reverb).toBe(25);
+  });
+
+  it("falls back to flat and logs one warning for an unusable record", () => {
+    localStorage.setItem(AUDIO_PROCESSING_KEY, "{not json");
+    expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
+    expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
+    localStorage.setItem(AUDIO_PROCESSING_KEY, JSON.stringify({ version: 1 }));
+    expect(loadAudioProcessing()).toEqual(DEFAULT_AUDIO_PROCESSING);
+    expect(addLog).toHaveBeenCalledTimes(1);
+    expect(addLog).toHaveBeenCalledWith("warn", expect.stringContaining("unusable"), expect.any(Object));
+  });
+
+  it("clamps gains, amounts and names from a stored or imported record", () => {
+    const parsed = parseAudioProcessingRecord({
+      version: 2,
+      enabled: true,
+      sound: { levelling: true, bandsDb: [40, -40, "x", 5], stereoWidth: 250, reverb: -4 },
+      userPresets: [{ id: "user-1", name: "  A very long preset name that overflows  ", sound: { bandsDb: [1] } }],
+    });
+    expect(parsed?.sound.bandsDb).toEqual([12, -12, 0, 5, 0, 0, 0, 0, 0, 0]);
+    expect(parsed?.sound.stereoWidth).toBe(100);
+    expect(parsed?.sound.reverb).toBe(0);
+    expect(parsed?.userPresets[0].name).toHaveLength(24);
     expect(clampEqDb(Number.NaN)).toBe(0);
     expect(clampAudioAmount(-5)).toBe(0);
   });
 
   it("resets the equalizer without touching the other controls", () => {
-    saveAudioEqBand("bassDb", 4);
+    saveAudioBandGain(2, 4);
     saveAudioReverb(25);
     resetAudioEq();
-    expect(loadAudioProcessing()).toMatchObject({ bassDb: 0, midDb: 0, trebleDb: 0, reverb: 25 });
+    expect(loadAudioProcessing()).toMatchObject({ bandsDb: new Array(10).fill(0), reverb: 25 });
   });
 
   it("keeps a raw value from a finer control and only rounds which preset is highlighted", () => {
@@ -96,25 +159,106 @@ describe("audio processing settings", () => {
     } finally {
       vi.unstubAllGlobals();
     }
-    expect(localStorage.getItem("c64u_audio_levelling")).toBeNull();
+    expect(localStorage.getItem(AUDIO_PROCESSING_KEY)).toBeNull();
+  });
+});
+
+describe("ambiance presets and user presets", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("applies every built-in preset exactly and names it as active", () => {
+    for (const preset of AMBIANCE_PRESETS) {
+      applySoundPreset(preset.id);
+      expect(loadAudioProcessingRecord().sound).toEqual(preset.sound);
+      expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe(preset.id);
+    }
   });
 
-  it("stores levelling off as 0", () => {
-    saveAudioLevelling(true);
-    saveAudioLevelling(false);
-    expect(localStorage.getItem("c64u_audio_levelling")).toBe("0");
-    expect(loadAudioProcessing().levelling).toBe(false);
+  it("reads as Custom after a manual change", () => {
+    applySoundPreset("hall");
+    saveAudioReverb(54);
+    expect(activeSoundPreset(loadAudioProcessingRecord())).toBeUndefined();
   });
 
-  it("treats an empty stored value as zero", () => {
-    localStorage.setItem("c64u_audio_reverb", "");
-    expect(loadAudioProcessing().reverb).toBe(0);
+  it("applying a preset switches the card on", () => {
+    saveAudioEnabled(false);
+    applySoundPreset("warm");
+    expect(loadAudioProcessingRecord().enabled).toBe(true);
   });
 
-  it("formats the equalizer readout with a sign", () => {
-    expect(formatEqDb(3)).toBe("+3 dB");
-    expect(formatEqDb(-12)).toBe("-12 dB");
-    expect(formatEqDb(0)).toBe("0 dB");
+  it("toggles between the last two sounds with back to previous sound", () => {
+    applySoundPreset("warm");
+    applySoundPreset("hall");
+    backToPreviousSound();
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("warm");
+    backToPreviousSound();
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("hall");
+  });
+
+  it("does nothing for back to previous sound before any change", () => {
+    const before = loadAudioProcessingRecord();
+    backToPreviousSound();
+    expect(loadAudioProcessingRecord()).toEqual(before);
+  });
+
+  it("does not remember the same sound as its own predecessor", () => {
+    applySoundPreset("warm");
+    applySoundPreset("warm");
+    expect(loadAudioProcessingRecord().previous?.bandsDb).toEqual(new Array(10).fill(0));
+  });
+
+  it("steps through the presets in both directions and wraps", () => {
+    stepSoundPreset(1);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe(AMBIANCE_PRESETS[1].id);
+    stepSoundPreset(-1);
+    stepSoundPreset(-1);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe(AMBIANCE_PRESETS[AMBIANCE_PRESETS.length - 1].id);
+    stepSoundPreset(1);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("original");
+  });
+
+  it("steps from a custom sound to the first or the last preset", () => {
+    saveAudioReverb(7);
+    stepSoundPreset(1);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("original");
+    saveAudioReverb(7);
+    stepSoundPreset(-1);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe(AMBIANCE_PRESETS[AMBIANCE_PRESETS.length - 1].id);
+  });
+
+  it("saves, renames and deletes up to five user presets", () => {
+    saveAudioReverb(40);
+    expect(saveUserPreset("  ")).toBe(false);
+    for (let n = 1; n <= MAX_USER_PRESETS; n += 1) expect(saveUserPreset(`Mine ${n}`)).toBe(true);
+    expect(saveUserPreset("One too many")).toBe(false);
+    expect(loadAudioProcessingRecord().userPresets.map((p) => p.id)).toEqual([
+      "user-1",
+      "user-2",
+      "user-3",
+      "user-4",
+      "user-5",
+    ]);
+    expect(renameUserPreset("user-2", "Evening")).toBe(true);
+    expect(renameUserPreset("user-2", "   ")).toBe(false);
+    expect(loadAudioProcessingRecord().userPresets[1].name).toBe("Evening");
+    deleteUserPreset("user-3");
+    expect(saveUserPreset("Again")).toBe(true);
+    expect(loadAudioProcessingRecord().userPresets.map((p) => p.id)).toContain("user-3");
+  });
+
+  it("applies a saved user preset", () => {
+    saveAudioReverb(40);
+    saveUserPreset("Mine");
+    applySoundPreset("original");
+    applySoundPreset("user-1");
+    expect(loadAudioProcessing().reverb).toBe(40);
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("user-1");
+  });
+
+  it("ignores an unknown preset id", () => {
+    applySoundPreset("nope");
+    expect(activeSoundPreset(loadAudioProcessingRecord())?.id).toBe("original");
+    expect(() => applySound(AMBIANCE_PRESETS[0].sound)).not.toThrow();
   });
 });
 
@@ -130,7 +274,7 @@ describe("useAudioProcessing", () => {
     act(() => {
       window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "other" } }));
     });
-    expect(result.current).toBe(before);
+    expect(result.current).toEqual(before);
   });
 
   it("stops listening after unmount", () => {
@@ -160,15 +304,28 @@ describe("audio processing sync", () => {
   it("merges a burst of slider changes into one call carrying the last value", () => {
     const stop = installAudioProcessingSync();
     setAudioProcessing.mockClear();
-    for (const db of [1, 2, 3, 4]) saveAudioEqBand("bassDb", db);
+    for (const db of [1, 2, 3, 4]) saveAudioBandGain(1, db);
     expect(setAudioProcessing).not.toHaveBeenCalled();
     vi.advanceTimersByTime(AUDIO_PROCESSING_PUSH_DELAY_MS + 1);
     expect(setAudioProcessing).toHaveBeenCalledTimes(1);
-    expect(setAudioProcessing).toHaveBeenCalledWith({ ...DEFAULT_AUDIO_PROCESSING, bassDb: 4 });
+    expect(setAudioProcessing).toHaveBeenCalledWith({
+      ...DEFAULT_AUDIO_PROCESSING,
+      bandsDb: compensatedGains(flatWith(1, 4)),
+    });
     stop();
   });
 
-  it("pushes the stored settings on demand and ignores an event without a string key", () => {
+  it("pushes all off when the switch is turned off", () => {
+    saveAudioReverb(55);
+    const stop = installAudioProcessingSync();
+    setAudioProcessing.mockClear();
+    saveAudioEnabled(false);
+    vi.advanceTimersByTime(AUDIO_PROCESSING_PUSH_DELAY_MS + 1);
+    expect(setAudioProcessing).toHaveBeenCalledWith(DEFAULT_AUDIO_PROCESSING);
+    stop();
+  });
+
+  it("ignores an event without a string key", () => {
     saveAudioReverb(25);
     const stop = installAudioProcessingSync();
     setAudioProcessing.mockClear();
@@ -200,5 +357,64 @@ describe("audio processing sync", () => {
     saveAudioReverb(55);
     vi.advanceTimersByTime(500);
     expect(setAudioProcessing).not.toHaveBeenCalled();
+  });
+
+  it("pushes again after a start-up push that did not reach the plugin, a bounded number of times", async () => {
+    saveAudioReverb(25);
+    setAudioProcessing.mockResolvedValue(false);
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    for (const delay of AUDIO_PROCESSING_RETRY_DELAYS_MS) await vi.advanceTimersByTimeAsync(delay);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1 + AUDIO_PROCESSING_RETRY_DELAYS_MS.length);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1 + AUDIO_PROCESSING_RETRY_DELAYS_MS.length);
+    stop();
+    setAudioProcessing.mockResolvedValue(true);
+  });
+
+  it("stops retrying once a push is accepted, and not at all when it is stopped", async () => {
+    setAudioProcessing.mockResolvedValueOnce(false).mockResolvedValue(true);
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(AUDIO_PROCESSING_RETRY_DELAYS_MS[0]);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(2);
+    stop();
+
+    setAudioProcessing.mockClear();
+    setAudioProcessing.mockResolvedValue(false);
+    const stopped = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    stopped();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    setAudioProcessing.mockResolvedValue(true);
+  });
+
+  it("pushes the stored state again when the app comes back to the foreground, and not when it goes away", async () => {
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    setAudioProcessing.mockClear();
+    const hidden = vi.spyOn(document, "hidden", "get");
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    hidden.mockRestore();
+    stop();
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+  });
+
+  it("pushes the stored state again when Listen on changes", async () => {
+    const stop = installAudioProcessingSync();
+    await vi.advanceTimersByTimeAsync(0);
+    setAudioProcessing.mockClear();
+    window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "c64u_playback_engine" } }));
+    expect(setAudioProcessing).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

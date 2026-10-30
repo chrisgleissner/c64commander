@@ -178,7 +178,7 @@ const matchSchema = z
     className: z.string().min(1).describe("Exact class name.").optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, { message: "match must name at least one predicate" })
+  .refine((value) => Object.keys(value).length > 0, { error: "match must name at least one predicate" })
   .describe("Predicates the node must satisfy. At least one is required.");
 
 const assertSchema = z

@@ -7,11 +7,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor, configure } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { addErrorLog } from "@/lib/logging";
+
+// Mounting and ejecting run several macrotask hops, which take longer than the default 1000 ms on a busy host.
+configure({ asyncUtilTimeout: 5000 });
 
 // Mock child components
 vi.mock("@/components/lists/SelectableActionList", () => ({

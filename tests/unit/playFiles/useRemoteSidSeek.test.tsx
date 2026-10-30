@@ -228,6 +228,29 @@ describe("useRemoteSidSeek", () => {
     expect(Math.abs(shownAgainstClock(rebasePlaybackPosition))).toBeLessThanOrEqual(30);
   });
 
+  it("says the shown time follows the C64's clock only once the clock is re-read after a landing", async () => {
+    device.current = createFakeRemoteSeekDevice({ latencyMs: 10 });
+    const { result, rebasePlaybackPosition } = render();
+    rebasePlaybackPosition.mockImplementation(timedRebase());
+    await advance(PROBED_MS + 2000);
+    expect(result.current.followsClock).toBe(true);
+    act(() => {
+      result.current.handlers?.onScrubStart?.();
+      result.current.handlers?.onScrubStep?.(5);
+    });
+    expect(result.current.followsClock).toBe(false);
+    await advance(1500);
+    const beforeLanding = rebasePlaybackPosition.mock.calls.length;
+    act(() => result.current.handlers?.onScrubEnd?.());
+    for (let waited = 0; rebasePlaybackPosition.mock.calls.length === beforeLanding && waited < 5000; waited += 10)
+      await advance(10);
+    expect(rebasePlaybackPosition.mock.calls.length).toBeGreaterThan(beforeLanding);
+    expect(result.current.followsClock).toBe(false);
+    await advance(3000);
+    expect(result.current.followsClock).toBe(true);
+    expect(Math.abs(shownAgainstClock(rebasePlaybackPosition))).toBeLessThanOrEqual(30);
+  });
+
   it("leaves the position to a held Next rather than following the clock under it", async () => {
     device.current = createFakeRemoteSeekDevice({ latencyMs: 10 });
     // Of unknown length, so the hold cannot reach an end and land by itself.
