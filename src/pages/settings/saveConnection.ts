@@ -48,6 +48,8 @@ export const describeSwitchFailure = (
 
 const SAVE_TIMEOUT_MS = 30_000;
 
+const pendingDeadlineTimers = new Set<ReturnType<typeof setTimeout>>();
+
 /** One deadline for the whole save: a device or a secure store that never answers must not disable the page for good. */
 const startSaveDeadline = () => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -58,9 +60,13 @@ const startSaveDeadline = () => {
     );
   });
   expired.catch(() => undefined);
+  if (timer !== undefined) pendingDeadlineTimers.add(timer);
   return {
     guard: <T>(work: Promise<T>): Promise<T> => Promise.race([work, expired]),
-    stop: () => clearTimeout(timer),
+    stop: () => {
+      clearTimeout(timer);
+      if (timer !== undefined) pendingDeadlineTimers.delete(timer);
+    },
   };
 };
 
@@ -74,6 +80,8 @@ const subscribeToSaves = (listener: () => void) => {
 
 /** Forgets saves that a test left waiting. Never call in production code. */
 export const __resetConnectionSaveStateForTests = (): void => {
+  pendingDeadlineTimers.forEach((timer) => clearTimeout(timer));
+  pendingDeadlineTimers.clear();
   saveInFlight = 0;
   notifySaveListeners();
 };
