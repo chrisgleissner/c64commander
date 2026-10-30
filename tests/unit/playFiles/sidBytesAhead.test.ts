@@ -118,4 +118,41 @@ describe("reading SID bytes ahead", () => {
       LEAD_IN_SECONDS,
     );
   });
+
+  it("warms the song after one the playlist would pass over, in either direction", async () => {
+    const warmLeadIn = vi.fn();
+    const controller = { warmLeadIn } as unknown as LocalSidPlaybackController;
+    const bytesOf = (marker: number) => ({ arrayBuffer: async () => new Uint8Array([marker]).buffer });
+    const playlist = [
+      item("before", bytesOf(1)),
+      item("skippedBefore", bytesOf(2)),
+      item("current", bytesOf(3)),
+      item("skipped", bytesOf(4)),
+      item("skippedToo", bytesOf(5)),
+      item("next", bytesOf(6)),
+    ];
+    const passedOver = vi.fn(async (sidBytes: Uint8Array) => [2, 4, 5].includes(sidBytes[0]));
+
+    await warmNeighbouringLeadIns(playlist, 2, vi.fn(), controller, undefined, passedOver);
+
+    expect(warmLeadIn.mock.calls.map(([key]) => key)).toEqual([
+      expect.stringContaining("next"),
+      expect.stringContaining("before"),
+    ]);
+    expect(passedOver).toHaveBeenCalledWith(expect.any(Uint8Array), 1);
+  });
+
+  it("gives up looking past passed-over songs after a few, and warms nothing then", async () => {
+    const warmLeadIn = vi.fn();
+    const controller = { warmLeadIn } as unknown as LocalSidPlaybackController;
+    const playlist = Array.from({ length: 8 }, (_, index) =>
+      item(`song${index}`, { arrayBuffer: async () => new ArrayBuffer(1) }),
+    );
+    const passedOver = vi.fn(async () => true);
+
+    await warmNeighbouringLeadIns(playlist, 0, vi.fn(), controller, undefined, passedOver);
+
+    expect(warmLeadIn).not.toHaveBeenCalled();
+    expect(passedOver).toHaveBeenCalledTimes(5);
+  });
 });

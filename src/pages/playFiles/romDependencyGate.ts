@@ -13,12 +13,13 @@
  * already has; the answer says where the song goes next.
  *
  *   c64     A C64 is there to play it, with its own ROMs. This is the existing ROM fallback, unchanged.
- *   phone   Play it here anyway: the listener turned skipping off, or confirmed.
+ *   phone   Play it here anyway: the listener turned skipping off.
+ *   continue  The listener is already listening to it (a repeat, or a move to this phone): it plays on.
  *   skip    A playlist or station moving on by itself passes over it.
  *   ask     The listener chose it: say what is wrong and let them decide.
  */
 
-export type RomListedPlayback = "c64" | "phone" | "skip" | "ask";
+export type RomListedPlayback = "c64" | "phone" | "continue" | "skip" | "ask";
 
 export interface RomListedPlaybackInput {
   /** A C64 that can play the song is reachable. False for no device, an offline device, and Demo Mode. */
@@ -27,15 +28,19 @@ export interface RomListedPlaybackInput {
   skipEnabled: boolean;
   /** The playlist or station is moving on by itself (`origin: "auto"`), not the listener choosing. */
   autoAdvance: boolean;
+  /** The song already playing, started again by a repeat or a move between engines: it was accepted once. */
+  accepted?: boolean;
 }
 
 export const decideRomListedPlayback = ({
   c64Usable,
   skipEnabled,
   autoAdvance,
+  accepted = false,
 }: RomListedPlaybackInput): RomListedPlayback => {
   if (c64Usable) return "c64";
   if (!skipEnabled) return "phone";
+  if (accepted) return "continue";
   return autoAdvance ? "skip" : "ask";
 };
 

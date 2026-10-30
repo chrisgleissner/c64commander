@@ -60,13 +60,19 @@ type HarnessProps = {
 
 const stationStop = vi.fn();
 const stopPlayback = vi.fn();
+const startOptions = vi.fn();
 
 const useHarness = (props: HarnessProps) => {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>(props.initialPlaylist ?? mine);
   const [currentIndex, setCurrentIndex] = useState(props.initialIndex ?? 1);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState(new Set(["c"]));
   const stationActiveRef = useRef(false);
-  const startPlaylist = async (items: PlaylistItem[], startIndex: number, options: { replaceQueue: boolean }) => {
+  const startPlaylist = async (
+    items: PlaylistItem[],
+    startIndex: number,
+    options: { replaceQueue: boolean; passOver: boolean },
+  ) => {
+    startOptions(options);
     setPlaylist((prev) => mergeStartedPlaylist(prev, items, options));
     setCurrentIndex(startIndex);
     return true;
@@ -118,9 +124,16 @@ beforeEach(() => {
   repo.toast.mockClear();
   stationStop.mockClear();
   stopPlayback.mockClear();
+  startOptions.mockClear();
 });
 
 describe("useStationPlaylistHandover", () => {
+  it("starts a station's queue passing over songs that need the C64 ROMs, since the station chose the first one too", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    expect(startOptions).toHaveBeenCalledWith({ replaceQueue: true, passOver: true });
+  });
+
   it("keeps radio and the saved playlist untouched when shuffle is canceled, then shuffles only after keeping its queue", async () => {
     const harness = renderHarness({ stationActive: false, isPlaying: true });
     await startStation(harness, stationA);

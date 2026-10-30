@@ -31,6 +31,19 @@ describe("decideRomListedPlayback", () => {
       expect(decideRomListedPlayback({ c64Usable, skipEnabled, autoAdvance })).toBe(outcome);
     },
   );
+
+  it.each([
+    // c64Usable, skipEnabled, autoAdvance -> outcome for the song already accepted
+    [true, true, true, "c64"],
+    [false, true, true, "continue"],
+    [false, true, false, "continue"],
+    [false, false, true, "phone"],
+  ] as const)(
+    "an accepted song, usable C64 %s, skipping %s, moving on by itself %s: %s, never skipped or asked again",
+    (c64Usable, skipEnabled, autoAdvance, outcome) => {
+      expect(decideRomListedPlayback({ c64Usable, skipEnabled, autoAdvance, accepted: true })).toBe(outcome);
+    },
+  );
 });
 
 describe("wording", () => {

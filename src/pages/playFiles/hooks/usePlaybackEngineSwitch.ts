@@ -34,6 +34,7 @@ type PlaybackEngineSwitchOptions = {
       playlistIndex: number;
       playlistSize: number;
       origin: "auto";
+      romDependencyAccepted: true;
       stopsAtRequest: number;
       expectedPlayGeneration: number;
       onLaunchStarted: () => void;
@@ -91,6 +92,8 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
           playlistIndex: index,
           playlistSize: current.playlistRef.current.length,
           origin: "auto",
+          // The tune the listener is hearing, moved: if it needs the C64 ROMs it was already let through.
+          romDependencyAccepted: true,
           stopsAtRequest,
           expectedPlayGeneration: playGeneration,
           onLaunchStarted: () => {

@@ -13,24 +13,20 @@
  * and BASIC, and exactly at the threshold (so it plays) in subtune 3 without ROMs.
  */
 
-import { act, renderHook } from "@testing-library/react";
-import { useCallback, useRef, useState } from "react";
+import { act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
-import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
-import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/playbackTimeStore";
-import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { toast } from "@/hooks/use-toast";
 import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
 import { addErrorLog } from "@/lib/logging";
 import { setRomDependencyAssetsForTests } from "@/lib/romDependency/embeddedRomDependencyList";
-import { RomDependentSongDeclined, RomDependentSongSkipped } from "@/lib/romDependency/romDependencyPolicy";
+import { RomDependentSongSkipped } from "@/lib/romDependency/romDependencyPolicy";
 import { romListedSkippedNotice } from "@/pages/playFiles/romDependencyGate";
 import { resetRomSkipNoticeForTests } from "@/pages/playFiles/resolveLocalRoute";
 import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
-import { FAKE_ROMS, syntheticAssets, syntheticSid, SYNTHETIC_SID_MD5 } from "../../helpers/romDependencyFixture";
+import { FAKE_ROMS, syntheticAssets, SYNTHETIC_SID_MD5 } from "../../helpers/romDependencyFixture";
+import { attempt, fakeController, listed, plain, renderController } from "../../helpers/romDependencyController";
 
 const connectionState = vi.hoisted(() => ({ current: "OFFLINE_NO_DEMO" as string }));
 const storedRoms = vi.hoisted(() => ({ current: {} as Record<string, Uint8Array> }));
@@ -82,160 +78,6 @@ vi.mock("@/lib/uiErrors", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
 vi.mock("@/lib/config/applyConfigFileReference", () => ({ applyConfigFileReference: vi.fn(async () => undefined) }));
-
-const sidItem = (id: string, label: string, songNr: number, bytes: () => Uint8Array): PlaylistItem =>
-  ({
-    id,
-    category: "sid",
-    label,
-    path: `/HVSC/${label}.sid`,
-    durationMs: 60_000,
-    subsongCount: 3,
-    sourceId: null,
-    sizeBytes: null,
-    modifiedAt: null,
-    addedAt: new Date(0).toISOString(),
-    status: "ready",
-    unavailableReason: null,
-    request: {
-      source: "local",
-      path: `/HVSC/${label}.sid`,
-      songNr,
-      file: { name: `${label}.sid`, lastModified: 0, arrayBuffer: vi.fn(async () => bytes().slice().buffer) },
-    },
-  }) as unknown as PlaylistItem;
-
-/** Listed by the fixture: the exact bytes of synthetic.sid. */
-const listed = (id: string, songNr: number, label = `Listed ${id}`) => sidItem(id, label, songNr, syntheticSid);
-/** Not in the list: one more byte, so another MD5. */
-const plain = (id: string) => sidItem(id, `Plain ${id}`, 1, () => Uint8Array.from([...syntheticSid(), 0]));
-
-const fakeController = () => {
-  let active = false;
-  return {
-    play: vi.fn(async () => {
-      active = true;
-      return { romRequired: false, started: true, sampleRate: 48000, channels: 2, tuneInfo: null };
-    }),
-    stop: vi.fn(() => {
-      active = false;
-    }),
-    pause: vi.fn(async () => undefined),
-    resume: vi.fn(async () => undefined),
-    getStats: vi.fn(() => null),
-    dispose: vi.fn(),
-    warmLeadIn: vi.fn(),
-    prerender: vi.fn(),
-    isActive: vi.fn(() => active),
-  };
-};
-
-type Options = {
-  decide?: (item: PlaylistItem) => Promise<"play-anyway" | "cancel">;
-  station?: boolean;
-};
-
-const renderController = (
-  initialPlaylist: PlaylistItem[],
-  controller: ReturnType<typeof fakeController>,
-  options: Options = {},
-) =>
-  renderHook(() => {
-    const [playlist, setPlaylist] = useState(initialPlaylist);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
-    const [playbackTime] = useState(createPlaybackTimeStore);
-    const { playedMs } = usePlaybackTime(playbackTime);
-    const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
-    const [, setCurrentSubsongCount] = useState<number | null>(null);
-    const [, setTrackInstanceId] = useState(0);
-    const [, setAutoAdvanceDueAtMs] = useState<number | null>(null);
-    const playedClockRef = useRef({
-      start: vi.fn(),
-      stop: vi.fn(),
-      pause: vi.fn(),
-      resume: vi.fn(),
-      reset: vi.fn(),
-      current: vi.fn(() => playedMs),
-    });
-    const trackStartedAtRef = useRef<number | null>(null);
-    const trackInstanceIdRef = useRef(0);
-    const autoAdvanceGuardRef = useRef<{
-      trackInstanceId: number;
-      dueAtMs: number;
-      autoFired: boolean;
-      userCancelled: boolean;
-    } | null>(null);
-    const playStartInFlightRef = useRef(false);
-    const stationActiveRef = useRef(options.station === true);
-    const enqueuePlayTransition = useCallback(async (task: () => Promise<void>) => task(), []);
-
-    const api = usePlaybackController({
-      playlist,
-      setPlaylist,
-      currentIndex,
-      setCurrentIndex,
-      isPlaying,
-      setIsPlaying,
-      isPaused,
-      setIsPaused,
-      setIsPlaylistLoading: vi.fn(),
-      playbackTime,
-      durationMs,
-      setDurationMs,
-      setCurrentSubsongCount,
-      setTrackInstanceId,
-      repeatEnabled: false,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-      deviceProduct: "C64 Ultimate",
-      ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
-      resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
-      applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
-      restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
-      applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
-      buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
-      captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
-      snapshotToUpdates: vi.fn().mockReturnValue({}),
-      resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
-      dispatchVolume: vi.fn(),
-      sidEnablement: {} as never,
-      pauseMuteSnapshotRef: { current: null },
-      pausingFromPauseRef: { current: false },
-      resumingFromPauseRef: { current: false },
-      ensureUnmuted: vi.fn().mockResolvedValue(undefined),
-      playedClockRef,
-      trackStartedAtRef,
-      ...useSoundingTune(),
-      trackInstanceIdRef,
-      autoAdvanceGuardRef,
-      playStartInFlightRef,
-      cancelAutoAdvance: vi.fn(),
-      enqueuePlayTransition,
-      durationSeconds: 45,
-      setAutoAdvanceDueAtMs,
-      stationActiveRef,
-      localSidPlaybackController: controller as never,
-      resolveRomDependencyDecision: options.decide,
-      trace: (fn: (...args: unknown[]) => unknown) => fn,
-    } as never);
-
-    return { ...api, currentIndex, isPlaying, trackInstanceIdRef };
-  });
-
-/** Run a play inside act and hand back what it threw, so the assertions that follow see settled mocks. */
-const attempt = async (run: () => Promise<unknown>): Promise<unknown> => {
-  let caught: unknown;
-  await act(async () => {
-    try {
-      await run();
-    } catch (error) {
-      caught = error;
-    }
-  });
-  return caught;
-};
 
 const toastDescriptions = () => vi.mocked(toast).mock.calls.map(([t]) => (t as { description?: string }).description);
 
@@ -393,7 +235,7 @@ describe("ROM dependency list in the play path", () => {
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
-    it("does not play it when the answer is Cancel, and stops what was sounding", async () => {
+    it("does not play it when the answer is Cancel, and leaves what was sounding playing", async () => {
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);
       const playlist = [plain("a"), listed("b", 1)];
@@ -403,11 +245,12 @@ describe("ROM dependency list in the play path", () => {
       });
       controller.play.mockClear();
 
-      const error = await attempt(() => result.current.playItem(playlist[1], { playlistIndex: 1 }));
+      expect(await attempt(() => result.current.playItem(playlist[1], { playlistIndex: 1 }))).toBeUndefined();
 
-      expect(error).toBeInstanceOf(RomDependentSongDeclined);
       expect(controller.play).not.toHaveBeenCalled();
-      expect(controller.stop).toHaveBeenCalled();
+      expect(controller.stop).not.toHaveBeenCalled();
+      expect(result.current.isPlaying).toBe(true);
+      expect(result.current.currentIndex).toBe(0);
     });
 
     it("does not play it when nothing is there to ask", async () => {
@@ -415,10 +258,9 @@ describe("ROM dependency list in the play path", () => {
       const playlist = [listed("b", 1)];
       const { result } = renderController(playlist, controller);
 
-      expect(await attempt(() => result.current.playItem(playlist[0], { playlistIndex: 0 }))).toBeInstanceOf(
-        RomDependentSongDeclined,
-      );
+      expect(await attempt(() => result.current.playItem(playlist[0], { playlistIndex: 0 }))).toBeUndefined();
       expect(controller.play).not.toHaveBeenCalled();
+      expect(result.current.isPlaying).toBe(false);
     });
 
     it("does not ask about a song the list does not name", async () => {

@@ -67,7 +67,11 @@ export type UseStationPlaylistHandoverParams = {
     isPaused: boolean;
     playlistEnded: boolean;
     isPlaylistLoading?: boolean;
-    startPlaylist: (items: PlaylistItem[], startIndex: number, options: { replaceQueue: boolean }) => Promise<boolean>;
+    startPlaylist: (
+      items: PlaylistItem[],
+      startIndex: number,
+      options: { replaceQueue: boolean; passOver: boolean },
+    ) => Promise<boolean>;
     stopPlayback: () => void;
     /** Read by the playback traversal: the stopped station's last tune must not repeat or shuffle on. */
     stationActiveRef: { current: boolean };
@@ -120,7 +124,9 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
   const startStationQueue = useCallback(
     async (items: PlaylistItem[]): Promise<boolean> => {
       const { queue, playback } = latestRef.current;
-      const startQueue = async () => (await playback.startPlaylist(items, 0, { replaceQueue: true })) !== false;
+      // The station chose the first tune too, so one that needs the C64 ROMs is passed over, not asked about.
+      const startQueue = async () =>
+        (await playback.startPlaylist(items, 0, { replaceQueue: true, passOver: true })) !== false;
       if (!items.length) return startQueue();
       // A saved copy this launch could not read back is kept, not overwritten with the queue now playing.
       const existing = handoverRef.current ?? unreadSavedHandover();

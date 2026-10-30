@@ -252,9 +252,11 @@ describe("useRemotePlaybackHandover", () => {
     setConnection("OFFLINE_NO_DEMO");
 
     await waitFor(() => expect(seekBy).toHaveBeenCalledTimes(1));
+    // Carried on, not chosen anew: a tune that needs the C64 ROMs is not passed over here.
     expect(playItem).toHaveBeenCalledWith(expect.objectContaining({ id: "one" }), {
       playlistIndex: 0,
       origin: "auto",
+      romDependencyAccepted: true,
       expectedPlayGeneration: 7,
       onLaunchStarted: expect.any(Function),
     });
@@ -395,6 +397,7 @@ describe("useRemotePlaybackHandover", () => {
         {
           item: "one.sid",
           error: "engine failed to open",
+          stack: expect.stringContaining("engine failed to open"),
         },
       ),
     );
