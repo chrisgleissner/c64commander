@@ -10,7 +10,7 @@ import { detectRomRequired } from "./localSidWorkerCore";
 import { LocalSidChunkScheduler } from "./localSidChunkScheduler";
 import type { LocalSidPlayCallbacks, LocalSidPlayResult, LocalSidStats } from "./localSidEngineTypes";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
-import { toEngineSidModel } from "./localSidWorkerProtocol";
+import { toEngineSidModel, toRendererRoms } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
 import {
   effectiveSidEmulationEngine,
@@ -848,21 +848,13 @@ export class LocalSidEngine {
 
     // Read per-play rather than cached, so revoking the ROMs in Settings takes
     // effect on the very next track instead of after a restart.
-    const roms = loadStoredRoms();
+    const romPayload = toRendererRoms(loadStoredRoms());
     // Copied before the transfer detaches it: the watchdog re-opens this tune if it ever stalls,
     // and by then the buffer the caller handed us belongs to the worker.
     this.currentTune = { bytes: sidBytes.slice(0), songIndex };
     this.stallRecoveryUsed = false;
     const transfer: Transferable[] = [sidBytes];
-    let romPayload: { kernal: ArrayBuffer; basic: ArrayBuffer } | undefined;
-    if (roms.kernal && roms.basic) {
-      // Copy: the stored Uint8Arrays are reused across plays, so their buffers
-      // must not be detached by the transfer.
-      const kernal = roms.kernal.slice().buffer;
-      const basic = roms.basic.slice().buffer;
-      romPayload = { kernal, basic };
-      transfer.push(kernal, basic);
-    }
+    if (romPayload) transfer.push(...Object.values(romPayload));
 
     const canStartCachedIntro =
       this.renderer === "sidplayez" ||
@@ -2001,7 +1993,7 @@ export class LocalSidEngine {
   warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     if (this.renderCache.has(key) || seconds <= 0) return;
     // No ROM guard, for the reason given on `prerender`.
-    const roms = loadStoredRoms();
+    const roms = toRendererRoms(loadStoredRoms());
     // One at a time on this thread, but never behind the playing tune's render — that is the point of
     // having a second thread. A warm still in flight is left alone rather than cancelled: the listener
     // is more likely to skip forwards, which is warmed first.
@@ -2022,10 +2014,7 @@ export class LocalSidEngine {
         songIndex,
         seconds,
         sampleRate: this.requestedSampleRate,
-        roms:
-          roms.kernal && roms.basic
-            ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
-            : undefined,
+        roms,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
         engine: renderer,
       },
@@ -2297,7 +2286,7 @@ export class LocalSidEngine {
     if (this.renderCache.get(key)?.partial === false || this.isPrerendering(key) || seconds <= 0) return;
     // No ROM guard. The worker renders a PSID with null images, so refusing here only emptied the
     // cache for anyone whose ROM capture had not succeeded — every seek re-rendered from the start.
-    const roms = loadStoredRoms();
+    const romPayload = toRendererRoms(loadStoredRoms());
     // A pre-render still running for a previous tune is now dead weight, and
     // its worker would render it to the end before touching this one. Killing
     // the thread stops that work immediately rather than queueing behind it.
@@ -2310,8 +2299,6 @@ export class LocalSidEngine {
     this.releaseIfUnused(this.prerenderPcm.reset());
     const renderer = this.fixedRenderer ?? playbackSidEmulation();
     this.prerenderRenderer = renderer;
-    const romPayload =
-      roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
     this.ensurePrerenderWorker(renderer).postMessage(
       {
         type: "prerender",
@@ -2324,7 +2311,7 @@ export class LocalSidEngine {
         sidModel: toEngineSidModel(resolveLocalSidModel()),
         engine: renderer,
       },
-      romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
+      [sidBytes, ...Object.values(romPayload ?? {})],
     );
   }
 

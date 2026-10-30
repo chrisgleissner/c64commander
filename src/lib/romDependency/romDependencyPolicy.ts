@@ -30,7 +30,7 @@ import type { SidEmulationEngine } from "@/lib/config/appSettings";
 export interface RomDependencyRoms {
   kernal?: Uint8Array;
   basic?: Uint8Array;
-  /** Commander never stores one today; present so a build that does gets the reference configuration. */
+  /** Present once the Settings action has read the character ROM; with authentic images this is the reference. */
   chargen?: Uint8Array;
 }
 

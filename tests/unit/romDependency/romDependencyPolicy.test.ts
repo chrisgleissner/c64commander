@@ -27,6 +27,9 @@ import {
 
 vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
 vi.mock("@/lib/sid/sidUtils", () => ({ computeSidMd5: vi.fn(async () => "788728f8e8eb6f7e2c5918b28383a1d6") }));
+vi.mock("@/lib/roms/romStore", () => ({ loadStoredRoms: vi.fn(() => ({})) }));
+
+import { loadStoredRoms } from "@/lib/roms/romStore";
 
 const authentic = { kernal: FAKE_ROMS.kernal, basic: FAKE_ROMS.basic };
 
@@ -178,6 +181,15 @@ describe("assessRomDependency", () => {
       approximate: true,
     });
     expect(await assess("sidlite", 1, jiffy)).toEqual({ kind: "none" });
+  });
+
+  it("reads the stored ROMs, the character ROM included, when the caller passes none", async () => {
+    const stored = (roms: ReturnType<typeof loadStoredRoms>) => {
+      vi.mocked(loadStoredRoms).mockReturnValueOnce(roms);
+      return assessRomDependency({ sidBytes: syntheticSid(), songNr: 2, engine: "sidlite" });
+    };
+    expect(await stored(authentic)).toMatchObject({ kind: "low", lane: "sidliteKernalBasic", grade: 100 });
+    expect(await stored({ ...authentic, chargen: FAKE_ROMS.chargen })).toEqual({ kind: "none" });
   });
 
   it("leaves an unlisted file alone", async () => {

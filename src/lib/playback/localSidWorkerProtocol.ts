@@ -34,6 +34,26 @@ export type EngineSidModel = "MOS6581" | "MOS8580";
 
 export const toEngineSidModel = (model: "6581" | "8580"): EngineSidModel => (model === "6581" ? "MOS6581" : "MOS8580");
 
+/** The C64 ROM images for one tune: KERNAL and BASIC as a pair, the character ROM when it was read. */
+export type RendererRoms = { kernal: ArrayBuffer; basic: ArrayBuffer; chargen?: ArrayBuffer };
+
+/**
+ * Fresh copies of the stored images, since posting them to a worker detaches their buffers. None
+ * without both KERNAL and BASIC: a lone image is no ROM set at all.
+ */
+export const toRendererRoms = (stored: {
+  kernal?: Uint8Array;
+  basic?: Uint8Array;
+  chargen?: Uint8Array;
+}): RendererRoms | undefined => {
+  if (!stored.kernal || !stored.basic) return undefined;
+  return {
+    kernal: stored.kernal.slice().buffer,
+    basic: stored.basic.slice().buffer,
+    ...(stored.chargen ? { chargen: stored.chargen.slice().buffer } : {}),
+  };
+};
+
 /**
  * Which renderer renders a tune: `sidplayez` (libSidplayEZ, native, Android), `residfp` (reSIDfp in
  * WASM) or `sidlite` (SIDLite in WASM, much cheaper). The two WASM ones are separate artifacts
@@ -75,7 +95,7 @@ export interface LocalSidOpenMessage {
    * them per-open keeps the worker stateless about ROMs, so revoking them in
    * Settings takes effect on the very next track.
    */
-  roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+  roms?: RendererRoms;
   /**
    * The chip to assume for a tune whose header does not name one.
    *
@@ -195,7 +215,7 @@ export interface LocalSidPrerenderMessage {
   sampleRate: number;
   /** How much audio to produce; the tune's resolved songlength. */
   seconds: number;
-  roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+  roms?: RendererRoms;
   /**
    * The same fallback chip the playing engine is using — see {@link LocalSidOpenMessage.sidModel}.
    *

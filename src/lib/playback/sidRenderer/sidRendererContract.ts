@@ -12,6 +12,7 @@ import type {
   LocalSidMainToWorker,
   LocalSidOpenedMessage,
   LocalSidWorkerToMain,
+  RendererRoms,
 } from "../localSidWorkerProtocol";
 import type { PcmPayload } from "./pcmPayload";
 import type { SidRendererId } from "./sidRendererAvailability";
@@ -37,7 +38,7 @@ export interface SidRendererOpenRequest {
   /** 0-based song index; the core clamps it to the tune's song count. */
   songIndex: number;
   sampleRate: number;
-  roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+  roms?: RendererRoms;
   /** The chip for a tune that does not name one. A fallback, never forced over a declared model. */
   sidModel?: EngineSidModel;
   engine: SidRendererId;
