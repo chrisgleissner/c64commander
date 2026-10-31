@@ -168,23 +168,21 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
-    it("is asked about when tapped, and plays here on Play anyway", async () => {
+    it("is told it needs the BASIC ROM when tapped: Play anyway is not offered and nothing is played", async () => {
       const controller = fakeController();
-      const decide = vi.fn(async () => "play-anyway" as const);
+      const decide = vi.fn(async () => "cancel" as const);
       const playlist = [basicRsid("b")];
       const { result } = renderController(playlist, controller, { decide });
 
-      await act(async () => {
-        await result.current.playItem(playlist[0], { playlistIndex: 0 });
-      });
+      expect(await attempt(() => result.current.playItem(playlist[0], { playlistIndex: 0 }))).toBeUndefined();
 
-      expect(decide).toHaveBeenCalledWith(playlist[0]);
-      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(decide).toHaveBeenCalledWith(playlist[0], "needs-basic");
+      expect(controller.play).not.toHaveBeenCalled();
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
-      expect(result.current.isPlaying).toBe(true);
+      expect(result.current.isPlaying).toBe(false);
     });
 
-    it("is asked about when tapped, and nothing is sent anywhere on Cancel", async () => {
+    it("is told it needs the BASIC ROM when tapped, and nothing is sent anywhere on dismissal", async () => {
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);
       const playlist = [basicRsid("b")];
@@ -200,7 +198,7 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
   });
 
   describe("a tune that declares BASIC and that the list grades", () => {
-    it("uses the list's grade for the lane in use: below the threshold it is asked about", async () => {
+    it("uses the list's grade for the lane in use: below the threshold the listener is told it cannot play", async () => {
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);
       const playlist = [basicRsid("b", 1, true)];
@@ -210,9 +208,15 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
 
-      expect(decide).toHaveBeenCalledTimes(1);
+      expect(decide).toHaveBeenCalledWith(playlist[0], "needs-basic");
       expect(romLog()).toEqual([
-        expect.objectContaining({ basis: "list", lane: "sidliteNone", grade: 0, approximate: false, outcome: "ask" }),
+        expect.objectContaining({
+          basis: "list",
+          lane: "sidliteNone",
+          grade: 0,
+          approximate: false,
+          outcome: "blocked",
+        }),
       ]);
     });
 
@@ -280,7 +284,7 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
         await result.current.startPlaylist(playlist, 1);
       });
 
-      expect(decide).toHaveBeenCalledWith(playlist[1]);
+      expect(decide).toHaveBeenCalledWith(playlist[1], "listed");
       expect(result.current.currentIndex).toBe(1);
     });
 

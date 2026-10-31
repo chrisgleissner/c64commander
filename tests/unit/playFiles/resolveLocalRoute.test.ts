@@ -240,12 +240,41 @@ describe("resolveLocalRoute", () => {
       );
     });
 
-    it("asks about it when the listener chose it", async () => {
+    it("does not offer Play anyway when the listener chose it: it says what is missing and plays nothing", async () => {
+      const ask = vi.fn(async () => "play-anyway" as const);
+      const route = input({ ask });
+
+      expect(await resolveLocalRoute(route)).toBeNull();
+
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(ask).toHaveBeenCalledWith("needs-basic");
+      expect(route.onDeclined).toHaveBeenCalledTimes(1);
+      expect(route.notify).not.toHaveBeenCalled();
+    });
+
+    it("does not play it, even with skipping switched off, and still has nothing to say when nothing can ask", async () => {
+      mocks.skipEnabled.mockReturnValue(false);
+      const route = input();
+
+      expect(await resolveLocalRoute(route)).toBeNull();
+
+      expect(route.onDeclined).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes it over for a playlist moving on, even with skipping switched off", async () => {
+      mocks.skipEnabled.mockReturnValue(false);
+
+      await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
+    });
+
+    it("still offers Play anyway for a tune the list grades low that declares no BASIC", async () => {
+      mocks.romRequired.mockReturnValue(false);
+      mocks.assess.mockResolvedValue(LOW);
       const ask = vi.fn(async () => "play-anyway" as const);
 
       expect(await resolveLocalRoute(input({ ask }))).toBe(true);
 
-      expect(ask).toHaveBeenCalledTimes(1);
+      expect(ask).toHaveBeenCalledWith("listed");
     });
 
     it("uses the list's grade for the lane in use, and says so in the log", async () => {
