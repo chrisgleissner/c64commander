@@ -455,3 +455,57 @@ describe("which renderers this device has", () => {
     expect(sidplayEzUnavailableReason()).toMatch(/did not answer/);
   });
 });
+
+describe("the libSidplayEZ renderer core and an RSID tune that declares BASIC", () => {
+  const basicTune = (basic?: ArrayBuffer) => {
+    const bytes = new Uint8Array(0x7c);
+    bytes.set(new TextEncoder().encode("RSID"));
+    bytes[5] = 2;
+    bytes[0x77] = 2;
+    return {
+      ...request(),
+      sidBytes: bytes.buffer,
+      roms: basic ? { kernal: new ArrayBuffer(8192), basic } : undefined,
+    };
+  };
+
+  it.each([
+    ["no ROMs at all", undefined],
+    ["a BASIC image of 0 bytes", new ArrayBuffer(0)],
+    ["a BASIC image one byte short", new ArrayBuffer(8191)],
+  ])("refuses to open it with %s, without touching the native renderer", async (_name, basic) => {
+    const { plugin } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+
+    expect(await core.open(basicTune(basic))).toEqual({
+      romRequired: true,
+      sampleRate: 48000,
+      channels: 2,
+      tuneInfo: null,
+    });
+
+    expect(plugin.openTune).not.toHaveBeenCalled();
+    expect(plugin.createRenderer).not.toHaveBeenCalled();
+  });
+
+  it("opens it when a complete BASIC image is supplied", async () => {
+    const { plugin } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+
+    const opened = await core.open(basicTune(new ArrayBuffer(8192)));
+
+    expect(opened.romRequired).toBeUndefined();
+    expect(plugin.openTune).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a pre-render of it without BASIC before the native renderer starts any work", async () => {
+    const { plugin } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: true }, plugin);
+    const onSlice = vi.fn();
+
+    await expect(core.prerender({ ...basicTune(), seconds: 5 }, onSlice, () => false)).rejects.toThrow("BASIC ROM");
+
+    expect(plugin.prerender).not.toHaveBeenCalled();
+    expect(onSlice).not.toHaveBeenCalled();
+  });
+});

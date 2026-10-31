@@ -10,13 +10,16 @@ import { addLog } from "@/lib/logging";
 import { SidAudio, type SidAudioPlugin, type SidAudioPrerenderEvent } from "@/lib/native/sidAudio";
 import { bytesToBase64 } from "@/lib/encoding/base64";
 import type { NativePcmRef } from "./pcmPayload";
-import type {
-  SidRendererChunk,
-  SidRendererCore,
-  SidRendererOpenRequest,
-  SidRendererOpened,
-  SidRendererPrerendered,
-  SidRendererPrerenderSlice,
+import {
+  basicRefusal,
+  MISSING_BASIC_MESSAGE,
+  missingDeclaredBasic,
+  type SidRendererChunk,
+  type SidRendererCore,
+  type SidRendererOpenRequest,
+  type SidRendererOpened,
+  type SidRendererPrerendered,
+  type SidRendererPrerenderSlice,
 } from "./sidRendererContract";
 
 const CHANNELS = 2;
@@ -87,6 +90,7 @@ export class SidplayEzRendererCore implements SidRendererCore {
   }
 
   async open(request: SidRendererOpenRequest): Promise<SidRendererOpened> {
+    if (missingDeclaredBasic(request)) return basicRefusal(request);
     const startedAt = performance.now();
     const renderer = await this.ensureRenderer();
     const readyAt = performance.now();
@@ -132,6 +136,7 @@ export class SidplayEzRendererCore implements SidRendererCore {
     onSlice: (slice: SidRendererPrerenderSlice) => void,
     isSuperseded: () => boolean,
   ): Promise<SidRendererPrerendered> {
+    if (missingDeclaredBasic(request)) throw new Error(MISSING_BASIC_MESSAGE);
     const renderer = await this.ensureRenderer();
     const id = this.nextPrerenderId++;
     let delivered = 0;

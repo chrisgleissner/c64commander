@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { toLocalSidError } from "../localSidWorkerCore";
+import { detectRomRequired, toLocalSidError } from "../localSidWorkerCore";
 import type {
   EngineSidModel,
   LocalSidMainToWorker,
@@ -47,6 +47,19 @@ export interface SidRendererOpenRequest {
 export type SidRendererOpened = Omit<LocalSidOpenedMessage, "type" | "id" | "romRequired"> & {
   romRequired?: boolean;
 };
+
+export const MISSING_BASIC_MESSAGE = "This RSID BASIC program needs a supplied 8192-byte BASIC ROM";
+
+/** No renderer can start an RSID tune that declares BASIC unless a complete BASIC image is supplied. */
+export const missingDeclaredBasic = (request: SidRendererOpenRequest): boolean =>
+  detectRomRequired(new Uint8Array(request.sidBytes)) && request.roms?.basic.byteLength !== 8192;
+
+export const basicRefusal = (request: SidRendererOpenRequest): SidRendererOpened => ({
+  romRequired: true,
+  sampleRate: request.sampleRate,
+  channels: 2,
+  tuneInfo: null,
+});
 
 export interface SidRendererChunk {
   /** Interleaved stereo S16; a JS buffer or a native reference. */

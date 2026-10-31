@@ -7,13 +7,15 @@
  */
 
 import type { EngineSidModel } from "../localSidWorkerProtocol";
-import { detectRomRequired } from "../localSidWorkerCore";
-import type {
-  SidRendererCore,
-  SidRendererOpenRequest,
-  SidRendererOpened,
-  SidRendererPrerendered,
-  SidRendererPrerenderSlice,
+import {
+  basicRefusal,
+  MISSING_BASIC_MESSAGE,
+  missingDeclaredBasic,
+  type SidRendererCore,
+  type SidRendererOpenRequest,
+  type SidRendererOpened,
+  type SidRendererPrerendered,
+  type SidRendererPrerenderSlice,
 } from "./sidRendererContract";
 
 /** The slice of `libsidplayfp-wasm`'s `SidAudioEngine` this core drives. */
@@ -45,9 +47,6 @@ export type SidAudioEngineLoader = () => Promise<SidAudioEngineCtor>;
  */
 const PRERENDER_SLICE_SECONDS = 5;
 const PRERENDER_YIELD_MS = 120;
-
-const missingDeclaredBasic = (request: SidRendererOpenRequest): boolean =>
-  detectRomRequired(new Uint8Array(request.sidBytes)) && request.roms?.basic.byteLength !== 8192;
 
 const wasmEngineName = (engine: SidRendererOpenRequest["engine"]): "residfp" | "sidlite" =>
   engine === "sidlite" ? "sidlite" : "residfp";
@@ -100,7 +99,7 @@ export class WasmSidRendererCore implements SidRendererCore {
   }
 
   private async prepare(target: SidAudioEngineLike, request: SidRendererOpenRequest): Promise<void> {
-    if (missingDeclaredBasic(request)) throw new Error("This RSID BASIC program needs a supplied 8192-byte BASIC ROM");
+    if (missingDeclaredBasic(request)) throw new Error(MISSING_BASIC_MESSAGE);
     // ROMs before the tune: the engine reloads the current tune when ROMs change, and the tune is
     // meant to be opened against the real ROMs once.
     await applySystemRoms(target, request);
@@ -115,9 +114,7 @@ export class WasmSidRendererCore implements SidRendererCore {
 
   async open(request: SidRendererOpenRequest): Promise<SidRendererOpened> {
     this.disposeEngine();
-    if (missingDeclaredBasic(request)) {
-      return { romRequired: true, sampleRate: request.sampleRate, channels: 2, tuneInfo: null };
-    }
+    if (missingDeclaredBasic(request)) return basicRefusal(request);
     const startedAt = performance.now();
     const Ctor = await this.ensureModule();
     const moduleReadyAt = performance.now();
