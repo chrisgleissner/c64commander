@@ -216,19 +216,21 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
       ]);
     });
 
-    it("plays it here without a question when the list grades it at the threshold without ROMs", async () => {
-      // synthetic.sid subtune 3 grades 128 in the SIDLite no-ROMs lane: the header's flag is not the last word.
+    it("still passes it over when the list grades it at the threshold without ROMs: the renderer refuses it without BASIC", async () => {
+      // synthetic.sid subtune 3 grades 128 in the SIDLite no-ROMs lane, but a tune that declares BASIC cannot open without one.
       const controller = fakeController();
       const decide = vi.fn(async () => "cancel" as const);
       const playlist = [basicRsid("b", 3, true)];
       const { result } = renderController(playlist, controller, { decide });
 
       await act(async () => {
-        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+        await result.current
+          .playItem(playlist[0], { playlistIndex: 0, origin: "auto" })
+          .catch((error: unknown) => expect(error).toMatchObject({ name: "RomDependentSongSkipped" }));
       });
 
       expect(decide).not.toHaveBeenCalled();
-      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(controller.play).not.toHaveBeenCalled();
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 

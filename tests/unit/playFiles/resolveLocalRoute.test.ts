@@ -260,15 +260,14 @@ describe("resolveLocalRoute", () => {
       );
     });
 
-    it("plays it here when the list grades it at or above the threshold without ROMs", async () => {
+    it("still passes it over when the list grades it above the threshold without ROMs: the renderer refuses it without BASIC", async () => {
       mocks.assess.mockResolvedValue({ kind: "graded", lane: "sidliteNone", grade: 200, approximate: false });
       const ask = vi.fn(async () => "cancel" as const);
       const route = input({ passOver: true, ask, noMachineForRoms: true });
 
-      expect(await resolveLocalRoute(route)).toBe(true);
+      await expect(resolveLocalRoute(route)).rejects.toBeInstanceOf(RomDependentSongSkipped);
 
       expect(ask).not.toHaveBeenCalled();
-      expect(route.notify).toHaveBeenCalledWith("rom-lite-engine");
     });
   });
 
