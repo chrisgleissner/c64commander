@@ -15,6 +15,9 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 vi.mock("@/lib/hvsc", () => ({ searchHvscSongs: vi.fn() }));
 vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
+vi.mock("@/lib/sidRadio/md5PathIndex", () => ({
+  md548ForVirtualPath: vi.fn((path: string) => (path.includes("Seedable") ? "0123456789ab" : null)),
+}));
 
 const song = (virtualPath: string, canonicalTitle: string) => ({
   virtualPath,
@@ -136,5 +139,84 @@ describe("PlaySearchSheet play all", () => {
     ]);
     expect(index).toBe(2);
     expect(options).toEqual({ replaceQueue: true });
+  });
+});
+
+describe("PlaySearchSheet single tunes, stations and Recent", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  const searchFor = async (query: string) => {
+    fireEvent.change(screen.getByTestId("hvsc-search-input"), { target: { value: query } });
+    await waitFor(() => expect(screen.getAllByTestId("hvsc-search-row").length).toBeGreaterThan(0));
+  };
+
+  it("plays one found tune directly after the current one without dropping the queue behind it", async () => {
+    answerWith([song("/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando")]);
+    const { startPlaylist, onOpenChange } = renderSheet({ currentIndex: 1 });
+
+    await searchFor("commando");
+    fireEvent.click(screen.getByTestId("hvsc-search-play"));
+
+    const [items, index, options] = startPlaylist.mock.calls[0] as [PlaylistItem[], number, unknown];
+    expect(items.map((item) => item.path)).toEqual([
+      "/MUSICIANS/X/a.sid",
+      "/MUSICIANS/X/b.sid",
+      "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      "/MUSICIANS/X/c.sid",
+    ]);
+    expect(index).toBe(2);
+    expect(options).toEqual({ replaceQueue: true });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("offers a station only on a tune the similarity corpus knows, and seeds it with that tune's hash and title", async () => {
+    answerWith([
+      song("/MUSICIANS/H/Hubbard_Rob/Seedable.sid", "Seedable"),
+      song("/MUSICIANS/H/Hubbard_Rob/Unknown.sid", "Unknown"),
+    ]);
+    const startSongRadio = vi.fn().mockResolvedValue(undefined);
+    renderSheet({ startSongRadio });
+
+    await searchFor("hubbard");
+
+    const stationButtons = screen.getAllByTestId("hvsc-search-start-station");
+    expect(stationButtons).toHaveLength(1);
+    expect(stationButtons[0]).toHaveAccessibleName("Start a station from Seedable");
+    fireEvent.click(stationButtons[0]);
+    expect(startSongRadio).toHaveBeenCalledWith("0123456789ab", "Seedable");
+  });
+
+  it("reopens a disk from Recent with the source it came from, directly after the current tune", () => {
+    localStorage.setItem(
+      "c64u_recently_played:v2",
+      JSON.stringify([
+        {
+          virtualPath: "/USB0/Games/Elite.d64",
+          title: "Elite",
+          author: null,
+          folder: "/USB0/Games",
+          category: "disk",
+          source: "ultimate",
+          playedAt: 1,
+        },
+      ]),
+    );
+    const { startPlaylist, onOpenChange } = renderSheet({ currentIndex: 0 });
+
+    fireEvent.click(screen.getByTestId("recently-played-other-row"));
+
+    const [items, index, options] = startPlaylist.mock.calls[0] as [PlaylistItem[], number, unknown];
+    expect(items[1]).toMatchObject({
+      path: "/USB0/Games/Elite.d64",
+      category: "disk",
+      request: { source: "ultimate", path: "/USB0/Games/Elite.d64" },
+    });
+    expect(items).toHaveLength(4);
+    expect(index).toBe(1);
+    expect(options).toEqual({ replaceQueue: true });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

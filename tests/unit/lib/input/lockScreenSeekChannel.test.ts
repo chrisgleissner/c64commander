@@ -84,4 +84,19 @@ describe("lock-screen seek channel (QW-LS-03)", () => {
       expect.objectContaining({ positionMs: 5_000, error: "seek exploded" }),
     );
   });
+
+  it("logs a subscriber that throws something other than an Error by its text, with no stack", () => {
+    const channel = createSeekRequestChannel();
+    channel.subscribe(() => {
+      throw "plain failure";
+    });
+
+    channel.publish(7_000);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "error",
+      "A lock-screen seek subscriber failed",
+      expect.objectContaining({ positionMs: 7_000, error: "plain failure", stack: undefined }),
+    );
+  });
 });

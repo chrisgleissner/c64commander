@@ -24,7 +24,7 @@ vi.mock("@capacitor/filesystem", () => ({
 vi.mock("@capacitor/share", () => ({ Share: { share: native.share } }));
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
-import { shareSettingsExport } from "@/lib/config/settingsExportShare";
+import { isShareCancelled, shareSettingsExport } from "@/lib/config/settingsExportShare";
 
 describe("exporting settings", () => {
   beforeEach(() => {
@@ -66,5 +66,25 @@ describe("exporting settings", () => {
     expect(click).toHaveBeenCalledTimes(1);
     expect(native.share).not.toHaveBeenCalled();
     click.mockRestore();
+  });
+});
+
+describe("isShareCancelled", () => {
+  it.each(["Share canceled", "Share cancelled", "share CANCELED"])(
+    "recognises %j as a dismissed share sheet",
+    (message) => {
+      expect(isShareCancelled(new Error(message))).toBe(true);
+    },
+  );
+
+  it.each([
+    ["another error", new Error("No activity found")],
+    ["a longer message that only contains the words", new Error("Share canceled by policy")],
+    ["an error without a message", new Error()],
+    ["a rejection that is not an Error", "Share canceled"],
+    ["undefined", undefined],
+    ["null", null],
+  ])("does not take %s for a dismissal", (_name, error) => {
+    expect(isShareCancelled(error)).toBe(false);
   });
 });

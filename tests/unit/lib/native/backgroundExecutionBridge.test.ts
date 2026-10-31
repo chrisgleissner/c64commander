@@ -29,7 +29,7 @@ vi.mock("@capacitor/core", async (importOriginal) => ({
   registerPlugin: () => plugin,
 }));
 
-import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { BackgroundExecution, onBackgroundSeekRequest } from "@/lib/native/backgroundExecution";
 
 /**
  * The two calls HARD27-007 and HARD27-040 added to the bridge. Each one forwards its options to
@@ -90,5 +90,19 @@ describe("background execution bridge", () => {
 
     expect(plugin.heartbeat).toHaveBeenCalledTimes(1);
     expect(plugin.takeLaunchCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the position of a lock-screen seek request to the listener, and nothing else of the event", async () => {
+    const listener = vi.fn();
+    await onBackgroundSeekRequest(listener);
+
+    expect(plugin.addListener).toHaveBeenCalledWith("backgroundSeekRequest", expect.any(Function));
+    const registered = (plugin.addListener.mock.calls as unknown as [string, (event: unknown) => void][]).find(
+      ([name]) => name === "backgroundSeekRequest",
+    )![1];
+    registered({ positionMs: 93_000, extra: "ignored" });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(93_000);
   });
 });

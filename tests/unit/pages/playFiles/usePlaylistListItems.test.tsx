@@ -554,6 +554,14 @@ describe("usePlaylistListItems queue actions", () => {
     expect(disabledLabels(menu)).toEqual(["Play next", "Move up", "Move down"]);
   });
 
+  it("treats a playing tune that is no longer in the playlist as nothing playing", () => {
+    const menu = menuOf(buildQueueActions(), 1, { currentPlayingItemId: "removed:/Music/gone.sid" });
+    expect(disabledLabels(menu)).toEqual([]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 0, { currentPlayingItemId: "removed:/Music/gone.sid" }))).toEqual(
+      ["Play next", "Move up"],
+    );
+  });
+
   it("recomputes Play next for the rows when the playing tune changes", () => {
     const queueActions = buildQueueActions();
     const stable = {

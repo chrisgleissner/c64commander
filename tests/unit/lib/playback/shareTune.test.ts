@@ -147,6 +147,17 @@ describe("shareTune", () => {
     );
   });
 
+  it("logs a share failure that is not an Error by its text, with no stack", async () => {
+    mocks.share.mockRejectedValue("intent refused");
+
+    await expect(shareTune(PAYLOAD)).resolves.toBe("failed");
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "error",
+      expect.any(String),
+      expect.objectContaining({ path: PAYLOAD.path, error: "intent refused", stack: undefined }),
+    );
+  });
+
   it("reports a clipboard that refuses the write", async () => {
     mocks.isNative = false;
     const writeText = vi.fn().mockRejectedValue(new Error("NotAllowedError"));

@@ -286,6 +286,29 @@ describe("spectrum view preference", () => {
     );
   });
 
+  it("logs the stack of a read failure, and the text of one that is not an Error", () => {
+    const failure = new Error("storage blocked");
+    const read = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw failure;
+    });
+    getSpectrumViewMode();
+    expect(addLog).toHaveBeenLastCalledWith(
+      "warn",
+      expect.any(String),
+      expect.objectContaining({ error: failure.stack }),
+    );
+
+    read.mockImplementation(() => {
+      throw "storage blocked";
+    });
+    getSpectrumViewMode();
+    expect(addLog).toHaveBeenLastCalledWith(
+      "warn",
+      expect.any(String),
+      expect.objectContaining({ error: "storage blocked" }),
+    );
+  });
+
   it("works without any storage", () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", { value: undefined, configurable: true });

@@ -174,6 +174,46 @@ describe("native media buttons", () => {
     });
   });
 
+  describe("lock-screen seek requests after cleanup and with a non-Error failure", () => {
+    it("ignores a seek that arrives after cleanup, so a torn-down page is never sought", async () => {
+      const { cleanup } = await installAndCaptureListener(vi.fn(), () => "/play");
+      await vi.waitFor(() => expect(seekListener).not.toBeNull());
+      const received: number[] = [];
+      const unsubscribe = lockScreenSeekChannel.subscribe((positionMs) => received.push(positionMs));
+      cleanup();
+
+      seekListener?.(12_000);
+
+      expect(received).toEqual([]);
+      unsubscribe();
+    });
+
+    it("removes a seek listener whose registration finishes only after cleanup", async () => {
+      let finish: (handle: { remove: () => Promise<void> }) => void = () => undefined;
+      mocks.onBackgroundSeekRequest.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+      const { cleanup } = await installAndCaptureListener(vi.fn(), () => "/play");
+      cleanup();
+
+      finish({ remove: removeSeek });
+
+      await vi.waitFor(() => expect(removeSeek).toHaveBeenCalledTimes(1));
+    });
+
+    it("logs the text of a seek registration failure that is not an Error, with no stack", async () => {
+      mocks.onBackgroundSeekRequest.mockRejectedValueOnce("bridge gone");
+      const { cleanup } = await installAndCaptureListener(vi.fn(), () => "/play");
+
+      await vi.waitFor(() =>
+        expect(mocks.addLog).toHaveBeenCalledWith(
+          "warn",
+          "Failed to register native seek request listener",
+          expect.objectContaining({ error: "bridge gone", stack: undefined }),
+        ),
+      );
+      cleanup();
+    });
+  });
+
   describe("resume request the activity was launched with (issue 504)", () => {
     it("publishes the launch command on the transport bus and navigates to Play", async () => {
       mocks.takeLaunchCommand.mockResolvedValueOnce({ command: "play" });

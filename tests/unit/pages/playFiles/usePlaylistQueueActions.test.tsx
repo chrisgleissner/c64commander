@@ -130,6 +130,15 @@ describe("usePlaylistQueueActions", () => {
     expect(setPlaylist).not.toHaveBeenCalled();
   });
 
+  it("does not play next while Shuffle is on, because a move would reshuffle the tunes still to come", () => {
+    const { hook, setPlaylist, setCurrentIndex } = setup({ shuffleEnabled: true, currentIndex: 0 });
+
+    act(() => hook.result.current.playNext(playlist[3].id));
+
+    expect(setPlaylist).not.toHaveBeenCalled();
+    expect(setCurrentIndex).not.toHaveBeenCalled();
+  });
+
   it("changes no order while a filter hides rows, but still plays next", () => {
     const { hook, setPlaylist } = setup({ filterText: "b" });
 
@@ -247,5 +256,57 @@ describe("usePlaylistQueueActions", () => {
     expect(scroller).toHaveBeenCalledWith(playlist[3].id);
     expect(ring.focusRingElement).toHaveBeenCalledWith(document.querySelector("button"));
     unregister();
+  });
+
+  const renderWithRerender = (setPlaylist: ReturnType<typeof vi.fn>) =>
+    renderHook(
+      ({ list }: { list: PlaylistItem[] }) =>
+        usePlaylistQueueActions(
+          {
+            playlist: list,
+            setPlaylist,
+            currentIndex: -1,
+            setCurrentIndex: vi.fn(),
+            shuffleEnabled: false,
+            playlistTypeFilters: CATEGORY_OPTIONS,
+          },
+          "",
+          null,
+        ),
+      { initialProps: { list: playlist } },
+    );
+
+  it("leaves focus alone when no list renders the moved row", async () => {
+    document.body.innerHTML = "";
+    const setPlaylist = vi.fn();
+    const hook = renderWithRerender(setPlaylist);
+
+    act(() => hook.result.current.moveDown(playlist[1].id));
+    hook.rerender({ list: setPlaylist.mock.calls[0][0] });
+    await act(async () => {});
+
+    expect(ring.focusRingElement).not.toHaveBeenCalled();
+    expect(ring.revealRingElementAfterLayout).not.toHaveBeenCalled();
+  });
+
+  it("does not focus a row that only appears after the page that moved it has gone", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = "";
+      const unregister = registerListRowScroller(() => true);
+      const setPlaylist = vi.fn();
+      const hook = renderWithRerender(setPlaylist);
+
+      act(() => hook.result.current.moveDown(playlist[1].id));
+      hook.rerender({ list: setPlaylist.mock.calls[0][0] });
+      hook.unmount();
+      document.body.innerHTML = `<div data-row-id="${playlist[1].id}"><button aria-label="Item actions"></button></div>`;
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(ring.focusRingElement).not.toHaveBeenCalled();
+      unregister();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

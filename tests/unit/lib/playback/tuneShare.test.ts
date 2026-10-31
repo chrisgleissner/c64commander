@@ -101,6 +101,10 @@ describe("buildTuneShare", () => {
     expect(new URL(share.url).searchParams.get("subtune")).toBe("2");
   });
 
+  it("gives a path with no file name an empty title rather than failing", () => {
+    expect(buildTuneShare({ ...COMMANDO, title: null, virtualPath: "/" }).title).toBe("");
+  });
+
   it("drops the collection folder prefix DeepSID omits", () => {
     const share = buildTuneShare({ ...COMMANDO, virtualPath: "/High Voltage SID Collection/MUSICIANS/H/H.sid" });
     expect(share.url).toBe("https://deepsid.chordian.net/?file=/MUSICIANS/H/H.sid");
