@@ -20,7 +20,7 @@ export const APP_MODE_INTERNALS_ALLOWED_IMPORTERS = [
   "src/components/UnifiedHealthBadge.tsx",
   "src/components/input/KeypadQuickMenu.tsx",
   "src/pages/home/components/ConnectC64Card.tsx",
-  "src/pages/playFiles/hooks/usePlaybackController.ts",
+  "src/pages/playFiles/hooks/useTuneReleaseOnSidPlayer.ts",
 ];
 
 export default tseslint.config(

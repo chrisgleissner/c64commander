@@ -59,7 +59,6 @@ import {
 } from "@/lib/playback/localSidPlaybackController";
 import {
   isAnyPlaybackActive,
-  isRemotePlaybackActive,
   isLocalPlaybackActive,
   markRemotePlaybackStarted,
   markRemotePlaybackStopped,
@@ -86,7 +85,7 @@ import { resolvePendingSkipIndices, type PendingUserSkip } from "@/pages/playFil
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
-import { registerDeviceRelease, untilAborted } from "@/lib/appMode/deviceRelease";
+import { useTuneReleaseOnSidPlayer } from "@/pages/playFiles/hooks/useTuneReleaseOnSidPlayer";
 import {
   firstPlayableWithoutDevice,
   isDeviceOutOfReach,
@@ -524,12 +523,7 @@ export function usePlaybackController({
 
   /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
   const stopTuneOnC64 = useCallback(
-    async (
-      api: ReturnType<typeof getC64API>,
-      shouldReboot: boolean,
-      itemId?: string,
-      { endMounts = true }: { endMounts?: boolean } = {},
-    ) => {
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
       // A pause still under way would otherwise freeze the machine after the reset, muted.
       await machineTransitionCoordinatorRef.current.idle();
       const wasPaused = isPausedRef.current;
@@ -550,18 +544,7 @@ export function usePlaybackController({
     [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
   );
 
-  useEffect(
-    () =>
-      registerDeviceRelease(async (signal) => {
-        if (!isRemotePlaybackActive() && !isPausedRef.current) return;
-        try {
-          await untilAborted(stopTuneOnC64(getC64API(), false, undefined, { endMounts: false }), signal);
-        } finally {
-          markRemotePlaybackStopped();
-        }
-      }),
-    [isPausedRef, stopTuneOnC64],
-  );
+  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
 
   const resolveSidMetadata = useCallback(
     (file?: LocalPlayFile, songNr?: number | null) =>
