@@ -78,7 +78,7 @@ export const GRANDFATHERED = new Map([
   ["src/pages/PlayFilesPage.tsx", 3137],
   ["src/components/disks/HomeDiskManager.tsx", 2757],
   ["src/lib/playback/localSidEngine.ts", 2449],
-  ["src/pages/playFiles/hooks/usePlaybackController.ts", 2438],
+  ["src/pages/playFiles/hooks/usePlaybackController.ts", 2417],
   ["src/pages/HomePage.tsx", 2197],
   ["src/lib/diagnostics/healthCheckEngine.ts", 2153],
   ["src/components/diagnostics/DiagnosticsDialog.tsx", 1991],

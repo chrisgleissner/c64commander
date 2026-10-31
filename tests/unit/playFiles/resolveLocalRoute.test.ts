@@ -317,27 +317,28 @@ describe("resolveLocalRoute", () => {
       expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
     });
 
-    it("uses the list's grade for the lane in use, and says so in the log", async () => {
+    it("does not consult the list for it, because no grade makes an engine that cannot start it play it", async () => {
       mocks.assess.mockResolvedValue({ ...LOW, approximate: true });
 
       await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
 
+      expect(mocks.assess).not.toHaveBeenCalled();
       expect(addLog).toHaveBeenCalledWith(
         "info",
         "Song needs the C64 ROMs on this device",
-        expect.objectContaining({ basis: "list", lane: "sidliteNone", grade: 40, approximate: true }),
+        expect.objectContaining({ basis: "header", lane: null, grade: null, outcome: "skip" }),
       );
     });
 
-    it("plays it here when the list grades it at or above the threshold without ROMs", async () => {
+    it("is still unplayable when the list would grade it at or above the threshold without ROMs", async () => {
       mocks.assess.mockResolvedValue({ kind: "graded", lane: "sidliteNone", grade: 200, approximate: false });
-      const ask = vi.fn(async () => "cancel" as const);
-      const route = input({ passOver: true, ask, noMachineForRoms: true });
+      const ask = vi.fn(async () => "play-anyway" as const);
+      const route = input({ ask });
 
-      expect(await resolveLocalRoute(route)).toEqual({ routeToLocal: true, maySoundWrong: false });
+      expect(await resolveLocalRoute(route)).toBeNull();
 
-      expect(ask).not.toHaveBeenCalled();
-      expect(route.notify).toHaveBeenCalledWith("rom-lite-engine");
+      expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
+      await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
     });
   });
 

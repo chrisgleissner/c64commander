@@ -368,14 +368,16 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
   not cancelled, so the next launch (a song the list does not name, or one the C64 plays) clears it.
   The chip is plain text and takes no focus stop. It is not a second setting: the existing switch
   already decides whether such a song is skipped or played, and the chip says what playing it means.
-- A tune whose header declares BASIC, with BASIC not stored and no usable C64, is judged by the list's
-  grade for the lane in use; when the list has none, the declared requirement itself counts as low
-  fidelity (that is the header's verdict, not a missing grade read as low).
-- Such a tune cannot be started by either renderer without a BASIC image: WASM and libSidplayEZ both
-  answer `romRequired` on open (`missingDeclaredBasic` in `sidRendererContract.ts`) and refuse its
-  pre-render. So it is never played here anyway: a playlist or station moving on skips it even with the
-  setting off (notice `romUnplayableSkippedNotice`), and a chosen one gets the dialog without Play
-  anyway (`engineCanStart: false` in `decideRomListedPlayback`).
+- A tune whose header declares BASIC, with BASIC not stored and no usable C64, cannot be started by
+  either renderer: WASM and libSidplayEZ both answer `romRequired` on open (`missingDeclaredBasic` in
+  `sidRendererContract.ts`) and refuse its pre-render. The list is not consulted for it, since no grade
+  makes a refused song play. It is never played here anyway: a playlist or station moving on skips it
+  even with the setting off (notice `romUnplayableSkippedNotice`), and a chosen one gets the dialog
+  without Play anyway (`engineCanStart: false` in `decideRomListedPlayback`).
+- Should a renderer refuse a song after the route let it through, `playItem` does not show it as playing
+  (`rejectRefusedLaunch`): the refusal is logged at WARN, a playlist moving on passes the song over, and
+  a chosen song gets the same OK-only dialog and is then refused as an already reported error, which
+  `startPlaylist`, Next and auto-advance treat as the end of the playing state.
 - A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
   no "unknown" grade: a lane that was not measured cannot be encoded.
 - The opening of the next and previous tracks is warmed past songs the playlist would skip

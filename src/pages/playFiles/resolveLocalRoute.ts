@@ -61,6 +61,13 @@ export const resetRomSkipNoticeForTests = () => {
   skipNoticeShown = false;
 };
 
+export const announceSkippedSong = (label: string, engineCannotStart: boolean) => {
+  if (skipNoticeShown) return;
+  skipNoticeShown = true;
+  const description = engineCannotStart ? romUnplayableSkippedNotice(label) : romListedSkippedNotice(label);
+  toast({ title: "Song skipped", description });
+};
+
 /**
  * A C64 that can play the song: connected, not Demo Mode, not offline, and in reach.
  *
@@ -80,35 +87,25 @@ interface RomFidelity {
   engineCannotStart: boolean;
   /** The list's answer, when it was consulted. */
   verdict: RomDependencyVerdict | null;
-  /** The list grades the song below the threshold here, or the header asks for BASIC that is missing. */
+  /** No C64 can play the song and the engine cannot start it, or the list grades it below the threshold here. */
   low: boolean;
-  /** The header asks for BASIC that is missing, but the list grades the song as playing well without it. */
-  basicCleared: boolean;
 }
 
 /**
- * Does the song sound right on this phone? A header that declares BASIC, with BASIC missing, only a C64
- * can satisfy; so when one is usable the list is not consulted. Without one, the list's grade decides,
- * and with no grade the declared requirement itself counts as low fidelity (the format has no "unknown"
- * grade, so this is the header's verdict, not the list's).
+ * Does the song sound right on this phone? A header that declares BASIC, with BASIC missing, is a song the
+ * engine cannot start whatever the list grades it, and only a C64 can play it; so the list is not consulted
+ * for it, and a usable C64 takes it before anything is judged. Otherwise the list's grade decides.
  */
 const readRomFidelity = async (sidBytes: Uint8Array, songNr: number | null | undefined, c64Usable: boolean) => {
   const romsReady = hasCompleteRomSet();
   const romRequired = detectRomRequired(sidBytes);
-  const basicUnmet = romRequired && !romsReady;
-  const fidelity: RomFidelity = {
-    romsReady,
-    romRequired,
-    engineCannotStart: basicUnmet,
-    verdict: null,
-    low: false,
-    basicCleared: false,
-  };
-  if (basicUnmet && c64Usable) return fidelity;
+  const engineCannotStart = romRequired && !romsReady;
+  const low = engineCannotStart && !c64Usable;
+  const fidelity: RomFidelity = { romsReady, romRequired, engineCannotStart, verdict: null, low };
+  if (engineCannotStart) return fidelity;
   await probeSidRenderers();
   const verdict = await assessRomDependency({ sidBytes, songNr, engine: playbackSidEmulation() });
-  const basicCleared = basicUnmet && verdict.kind === "graded";
-  return { ...fidelity, verdict, basicCleared, low: verdict.kind === "low" || (basicUnmet && !basicCleared) };
+  return { ...fidelity, verdict, low: verdict.kind === "low" };
 };
 
 /**
@@ -169,7 +166,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRo
   try {
     const sidBytes = new Uint8Array(await input.file.arrayBuffer());
     const fidelity = await readRomFidelity(sidBytes, input.songNr, input.c64Usable);
-    const { romsReady, romRequired, verdict, low, basicCleared } = fidelity;
+    const { romsReady, romRequired, verdict, low } = fidelity;
     engineCannotStart = fidelity.engineCannotStart;
     if (low) {
       const outcome = decideRomListedPlayback({
@@ -196,7 +193,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRo
         later = outcome;
       }
     }
-    const decision = romFallbackDecision(romRequired && !basicCleared, romsReady, verdict?.kind === "low");
+    const decision = romFallbackDecision(romRequired, romsReady, verdict?.kind === "low");
     if (later === null && decision.route === "local") {
       routeToLocal = true;
       // Neither the simulated device nor an absent one can supply the images.
@@ -224,13 +221,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRo
     });
   }
   if (later === "skip") {
-    if (!skipNoticeShown) {
-      skipNoticeShown = true;
-      const description = engineCannotStart
-        ? romUnplayableSkippedNotice(input.label)
-        : romListedSkippedNotice(input.label);
-      toast({ title: "Song skipped", description });
-    }
+    announceSkippedSong(input.label, engineCannotStart);
     throw new RomDependentSongSkipped(input.label);
   }
   if (later === "ask") {
