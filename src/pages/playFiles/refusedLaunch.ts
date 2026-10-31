@@ -30,7 +30,7 @@ export const rejectRefusedLaunch = async (
     announceSkippedSong(item.label, true);
     throw new RomDependentSongSkipped(item.label);
   }
-  await ask?.(item, { canPlayAnyway: false });
+  await ask?.(item, "needs-basic");
   const refused = new RomDependentSongRefused(item.label);
   markPlaybackErrorReported(refused);
   throw refused;

@@ -180,12 +180,14 @@ export const readCharacterRomViaIrq = async (
     await unhook(api, layout, originals);
   } catch (error) {
     if (restoring) {
-      addErrorLog("Could not put the C64 back after reading its character ROM", {
+      addErrorLog("Could not put the C64 back after reading its character ROM; trying again", {
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
-    } else {
-      await recover(api, layout, originals, hooked, error);
     }
+    // Restoring included: a failure there can leave the machine paused or the handler installed, and
+    // unhook is safe to repeat (it reads the flags afresh and releases the handler before it is removed).
+    await recover(api, layout, originals, hooked, error);
     throw error;
   }
   if (!chargen) throw new CharacterRomReadTimeoutError(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);

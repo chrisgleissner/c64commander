@@ -40,20 +40,13 @@ import {
   decideRomListedPlayback,
   romListedSkippedNotice,
   romUnplayableSkippedNotice,
+  type RomDialogKind,
   type RomListedDialogChoice,
 } from "@/pages/playFiles/romDependencyGate";
 
-export interface RomDependencyQuestion {
-  /** False when the engine cannot start the song without the ROMs, so there is nothing to play anyway. */
-  canPlayAnyway: boolean;
-}
+export type RomDependencyAsk = (kind: RomDialogKind) => Promise<RomListedDialogChoice>;
 
-export type RomDependencyAsk = (question: RomDependencyQuestion) => Promise<RomListedDialogChoice>;
-
-export type RomDependencyDecider = (
-  item: PlaylistItem,
-  question: RomDependencyQuestion,
-) => ReturnType<RomDependencyAsk>;
+export type RomDependencyDecider = (item: PlaylistItem, kind: RomDialogKind) => ReturnType<RomDependencyAsk>;
 
 /** The skip notice is shown once per session: a run of skipped songs is not news. */
 let skipNoticeShown = false;
@@ -61,10 +54,10 @@ export const resetRomSkipNoticeForTests = () => {
   skipNoticeShown = false;
 };
 
-export const announceSkippedSong = (label: string, engineCannotStart: boolean) => {
+export const announceSkippedSong = (label: string, basicUnmet: boolean) => {
   if (skipNoticeShown) return;
   skipNoticeShown = true;
-  const description = engineCannotStart ? romUnplayableSkippedNotice(label) : romListedSkippedNotice(label);
+  const description = basicUnmet ? romUnplayableSkippedNotice(label) : romListedSkippedNotice(label);
   toast({ title: "Song skipped", description });
 };
 
@@ -83,29 +76,29 @@ export const isC64UsableForSid = (deviceOutOfReach: boolean) => {
 interface RomFidelity {
   romsReady: boolean;
   romRequired: boolean;
-  /** The engine would refuse the song: the header declares BASIC and no BASIC image is stored. */
-  engineCannotStart: boolean;
   /** The list's answer, when it was consulted. */
   verdict: RomDependencyVerdict | null;
-  /** No C64 can play the song and the engine cannot start it, or the list grades it below the threshold here. */
+  /** The list grades the song below the threshold here, or the header asks for BASIC that is missing. */
   low: boolean;
+  /** The header declares BASIC and there is no BASIC ROM here: the local engine cannot open the tune at all. */
+  basicUnmet: boolean;
 }
 
 /**
- * Does the song sound right on this phone? A header that declares BASIC, with BASIC missing, is a song the
- * engine cannot start whatever the list grades it, and only a C64 can play it; so the list is not consulted
- * for it, and a usable C64 takes it before anything is judged. Otherwise the list's grade decides.
+ * Does the song sound right on this phone? A header that declares BASIC, with BASIC missing, only a C64
+ * can satisfy, whatever the list grades: the renderer refuses to open such a tune without a BASIC ROM, so
+ * a good grade cannot make it playable here. It is therefore always low fidelity, and when a C64 is usable
+ * the list is not consulted. Otherwise the list's grade decides.
  */
 const readRomFidelity = async (sidBytes: Uint8Array, songNr: number | null | undefined, c64Usable: boolean) => {
   const romsReady = hasCompleteRomSet();
   const romRequired = detectRomRequired(sidBytes);
-  const engineCannotStart = romRequired && !romsReady;
-  const low = engineCannotStart && !c64Usable;
-  const fidelity: RomFidelity = { romsReady, romRequired, engineCannotStart, verdict: null, low };
-  if (engineCannotStart) return fidelity;
+  const basicUnmet = romRequired && !romsReady;
+  const fidelity: RomFidelity = { romsReady, romRequired, verdict: null, low: false, basicUnmet };
+  if (basicUnmet && c64Usable) return fidelity;
   await probeSidRenderers();
   const verdict = await assessRomDependency({ sidBytes, songNr, engine: playbackSidEmulation() });
-  return { ...fidelity, verdict, low: verdict.kind === "low" };
+  return { ...fidelity, verdict, low: verdict.kind === "low" || basicUnmet };
 };
 
 /**
@@ -114,8 +107,8 @@ const readRomFidelity = async (sidBytes: Uint8Array, songNr: number | null | und
  */
 export const wouldPassOver = async (sidBytes: Uint8Array, songNr: number | null | undefined) => {
   if (isC64UsableForSid(isDeviceOutOfReach())) return false;
-  const { low, engineCannotStart } = await readRomFidelity(sidBytes, songNr, false);
-  return low && (engineCannotStart || loadSkipRomDependentSongs());
+  const { low, basicUnmet } = await readRomFidelity(sidBytes, songNr, false);
+  return low && (basicUnmet || loadSkipRomDependentSongs());
 };
 
 export interface LocalRouteInput {
@@ -148,7 +141,7 @@ export interface LocalRouteInput {
 export interface LocalRoute {
   /** True when the song is to play on this device, false when the C64 takes it. */
   routeToLocal: boolean;
-  /** The song plays here although it needs the ROMs this device lacks, so the player says it may sound wrong. */
+  /** The song plays here although it needs ROMs this device lacks, so the player says it may sound wrong. */
   maySoundWrong: boolean;
 }
 
@@ -160,21 +153,21 @@ export interface LocalRoute {
 export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRoute | null> => {
   const { notify } = input;
   let routeToLocal = false;
-  let engineCannotStart = false;
+  let basicUnmet = false;
   // `skip`, `ask`, `phone` and `continue` are carried out below, outside the try whose catch would swallow a skip.
-  let later: "skip" | "ask" | "phone" | "continue" | null = null;
+  let later: "skip" | "ask" | "blocked" | "phone" | "continue" | null = null;
   try {
     const sidBytes = new Uint8Array(await input.file.arrayBuffer());
     const fidelity = await readRomFidelity(sidBytes, input.songNr, input.c64Usable);
     const { romsReady, romRequired, verdict, low } = fidelity;
-    engineCannotStart = fidelity.engineCannotStart;
+    basicUnmet = fidelity.basicUnmet;
     if (low) {
       const outcome = decideRomListedPlayback({
         c64Usable: input.c64Usable,
         skipEnabled: loadSkipRomDependentSongs(),
         autoAdvance: input.passOver,
         accepted: input.accepted,
-        engineCanStart: !engineCannotStart,
+        playable: !basicUnmet,
       });
       addLog("info", "Song needs the C64 ROMs on this device", {
         service: "rom-dependency",
@@ -221,12 +214,20 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRo
     });
   }
   if (later === "skip") {
-    announceSkippedSong(input.label, engineCannotStart);
+    announceSkippedSong(input.label, basicUnmet);
     throw new RomDependentSongSkipped(input.label);
   }
+  if (later === "blocked") {
+    // Nothing to decide: say why it cannot play, and leave what was playing alone.
+    await input.ask?.("needs-basic");
+    addLog("info", "Song that needs the C64's BASIC ROM not played: no BASIC ROM and no usable C64", {
+      item: input.label,
+    });
+    input.onDeclined();
+    return null;
+  }
   if (later === "ask") {
-    const choice = (await input.ask?.({ canPlayAnyway: !engineCannotStart })) ?? "cancel";
-    if (choice === "cancel" || engineCannotStart) {
+    if (((await input.ask?.("listed")) ?? "cancel") === "cancel") {
       addLog("info", "Song that needs the C64 ROMs not played: the listener said Cancel", { item: input.label });
       input.onDeclined();
       return null;

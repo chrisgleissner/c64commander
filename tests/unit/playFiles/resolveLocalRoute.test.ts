@@ -152,15 +152,6 @@ describe("resolveLocalRoute", () => {
     expect(route.onDeclined).not.toHaveBeenCalled();
   });
 
-  it("offers Play anyway when the engine can start the listed song", async () => {
-    mocks.assess.mockResolvedValue(LOW);
-    const ask = vi.fn(async () => "cancel" as const);
-
-    await resolveLocalRoute(input({ ask }));
-
-    expect(ask).toHaveBeenCalledWith({ canPlayAnyway: true });
-  });
-
   it("marks a song that plays on the phone because skipping is off as one that may sound wrong", async () => {
     mocks.assess.mockResolvedValue(LOW);
     mocks.skipEnabled.mockReturnValue(false);
@@ -271,27 +262,34 @@ describe("resolveLocalRoute", () => {
       );
     });
 
-    it("asks about it without offering Play anyway, because the engine cannot start it", async () => {
-      const ask = vi.fn(async () => "cancel" as const);
+    it("does not offer Play anyway when the listener chose it: it says what is missing and plays nothing", async () => {
+      const ask = vi.fn(async () => "play-anyway" as const);
       const route = input({ ask });
 
       expect(await resolveLocalRoute(route)).toBeNull();
 
-      expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(ask).toHaveBeenCalledWith("needs-basic");
       expect(route.onDeclined).toHaveBeenCalledTimes(1);
+      expect(route.notify).not.toHaveBeenCalled();
     });
 
-    it("does not play it on an answer of Play anyway either", async () => {
-      const route = input({ ask: vi.fn(async () => "play-anyway" as const) });
+    it("does not play it, even with skipping switched off, and still has nothing to say when nothing can ask", async () => {
+      mocks.skipEnabled.mockReturnValue(false);
+      const route = input();
 
       expect(await resolveLocalRoute(route)).toBeNull();
 
       expect(route.onDeclined).toHaveBeenCalledTimes(1);
     });
 
-    it("passes it over with the explanation that fits it, even with skipping switched off", async () => {
+    it("passes it over for a playlist moving on, even with skipping switched off", async () => {
       mocks.skipEnabled.mockReturnValue(false);
 
+      await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
+    });
+
+    it("says in the skip notice that only a C64 can play it, since turning skipping off would not help", async () => {
       await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
 
       expect(mocks.toast).toHaveBeenCalledWith({
@@ -300,45 +298,36 @@ describe("resolveLocalRoute", () => {
       });
     });
 
-    it("asks about it, rather than playing it, even with skipping switched off", async () => {
-      mocks.skipEnabled.mockReturnValue(false);
-      const ask = vi.fn(async () => "cancel" as const);
+    it("still offers Play anyway for a tune the list grades low that declares no BASIC", async () => {
+      mocks.romRequired.mockReturnValue(false);
+      mocks.assess.mockResolvedValue(LOW);
+      const ask = vi.fn(async () => "play-anyway" as const);
 
-      expect(await resolveLocalRoute(input({ ask }))).toBeNull();
+      expect(await resolveLocalRoute(input({ ask }))).toEqual({ routeToLocal: true, maySoundWrong: true });
 
-      expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
+      expect(ask).toHaveBeenCalledWith("listed");
     });
 
-    it("does not play it again for the song already accepted either", async () => {
-      const ask = vi.fn(async () => "cancel" as const);
-
-      expect(await resolveLocalRoute(input({ accepted: true, ask }))).toBeNull();
-
-      expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
-    });
-
-    it("does not consult the list for it, because no grade makes an engine that cannot start it play it", async () => {
+    it("uses the list's grade for the lane in use, and says so in the log", async () => {
       mocks.assess.mockResolvedValue({ ...LOW, approximate: true });
 
       await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
 
-      expect(mocks.assess).not.toHaveBeenCalled();
       expect(addLog).toHaveBeenCalledWith(
         "info",
         "Song needs the C64 ROMs on this device",
-        expect.objectContaining({ basis: "header", lane: null, grade: null, outcome: "skip" }),
+        expect.objectContaining({ basis: "list", lane: "sidliteNone", grade: 40, approximate: true }),
       );
     });
 
-    it("is still unplayable when the list would grade it at or above the threshold without ROMs", async () => {
+    it("still passes it over when the list grades it above the threshold without ROMs: the renderer refuses it without BASIC", async () => {
       mocks.assess.mockResolvedValue({ kind: "graded", lane: "sidliteNone", grade: 200, approximate: false });
-      const ask = vi.fn(async () => "play-anyway" as const);
-      const route = input({ ask });
+      const ask = vi.fn(async () => "cancel" as const);
+      const route = input({ passOver: true, ask, noMachineForRoms: true });
 
-      expect(await resolveLocalRoute(route)).toBeNull();
+      await expect(resolveLocalRoute(route)).rejects.toBeInstanceOf(RomDependentSongSkipped);
 
-      expect(ask).toHaveBeenCalledWith({ canPlayAnyway: false });
-      await expect(resolveLocalRoute(input({ passOver: true }))).rejects.toBeInstanceOf(RomDependentSongSkipped);
+      expect(ask).not.toHaveBeenCalled();
     });
   });
 
@@ -391,7 +380,7 @@ describe("wouldPassOver", () => {
     expect(await wouldPassOver(bytes, 2)).toBe(false);
   });
 
-  it("stays true for a song the engine cannot start, whatever the setting says", async () => {
+  it("stays true for a BASIC tune with no BASIC ROM, whatever the setting says", async () => {
     mocks.romRequired.mockReturnValue(true);
     mocks.romsReady.mockReturnValue(false);
     mocks.skipEnabled.mockReturnValue(false);

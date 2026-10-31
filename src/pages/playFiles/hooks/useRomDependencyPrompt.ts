@@ -7,10 +7,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RomDependencyPrompt } from "@/pages/playFiles/components/RomDependencyDialog";
-import type { RomDependencyQuestion } from "@/pages/playFiles/resolveLocalRoute";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import type { RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate";
+import type { RomDialogKind, RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate";
 
 /**
  * The question "play it here anyway?", as a promise the play path can await.
@@ -18,15 +16,17 @@ import type { RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate"
  * Leaving the page while it is open answers Cancel, so the play path is never left waiting.
  */
 export const useRomDependencyPrompt = () => {
-  const [pending, setPending] = useState<RomDependencyPrompt | null>(null);
+  const [label, setLabel] = useState<string | null>(null);
+  const [kind, setKind] = useState<RomDialogKind>("listed");
   const resolveRef = useRef<((choice: RomListedDialogChoice) => void) | null>(null);
 
   const ask = useCallback(
-    (item: PlaylistItem, question: RomDependencyQuestion) =>
+    (item: PlaylistItem, askKind: RomDialogKind = "listed") =>
       new Promise<RomListedDialogChoice>((resolve) => {
         resolveRef.current?.("cancel");
         resolveRef.current = resolve;
-        setPending({ label: item.label, canPlayAnyway: question.canPlayAnyway });
+        setKind(askKind);
+        setLabel(item.label);
       }),
     [],
   );
@@ -34,7 +34,7 @@ export const useRomDependencyPrompt = () => {
   const choose = useCallback((choice: RomListedDialogChoice) => {
     resolveRef.current?.(choice);
     resolveRef.current = null;
-    setPending(null);
+    setLabel(null);
   }, []);
 
   useEffect(
@@ -45,5 +45,5 @@ export const useRomDependencyPrompt = () => {
     [],
   );
 
-  return { pending, ask, choose };
+  return { label, kind, ask, choose };
 };

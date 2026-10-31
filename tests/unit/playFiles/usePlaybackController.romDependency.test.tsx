@@ -250,7 +250,7 @@ describe("ROM dependency list in the play path", () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
 
-      expect(decide).toHaveBeenCalledWith(playlist[0], { canPlayAnyway: true });
+      expect(decide).toHaveBeenCalledWith(playlist[0], "listed");
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });

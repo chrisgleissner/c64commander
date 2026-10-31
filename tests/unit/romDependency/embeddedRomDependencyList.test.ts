@@ -23,12 +23,12 @@ const shipped = () =>
 describe("shipped SID ROM dependency list", () => {
   it("matches the pin and is the complete HVSC #85 release list", () => {
     const { list, referenceRoms } = shipped();
-    expect(PINNED_MANIFEST_SHA256).toBe("712dcbd2f6aab4c1f39ad774f472b6f9c97cc73ea9b44d6d5bbe97968d77f9c0");
+    expect(PINNED_MANIFEST_SHA256).toBe("bc3bd291064420cf6e0feb93dee55a8dc6393fa0edc57ded111cc35fcf94b482");
     expect(list.header).toMatchObject({
       hvscRelease: 85,
       incompleteSource: false,
-      fileCount: 696,
-      decisionCount: 1556,
+      fileCount: 672,
+      decisionCount: 1516,
       listingCeiling: 191,
       recommendedMinGrade: 128,
     });
@@ -44,13 +44,20 @@ describe("shipped SID ROM dependency list", () => {
     });
     // Giorgio Armani, Merilyn intro (RSID): different music without ROMs, below the skip threshold.
     expect(list.lookup("4e827ff26e87160e173e7473faf120c4", 1).grades).toEqual({
-      sidliteNone: 116,
+      sidliteNone: 114,
       sidliteKernalBasic: 255,
-      residfpNone: 115,
+      residfpNone: 114,
       residfpKernalBasic: 255,
     });
-    // Mach II, Disco Trax 87 tune 2: same notes, drifting tempo; listed but above the skip threshold.
-    expect(list.lookup("e606e785848c6e778eda16b1f9b35283", 1).grades.sidliteNone).toBe(159);
+    // Skate or Die tune 23: listed (a lane is at or below the ceiling) but above the skip threshold.
+    expect(list.lookup("04ab7cd9e4063c077779d6e60d074ddf", 23)).toEqual({
+      listed: true,
+      grades: { sidliteNone: 175, sidliteKernalBasic: 255, residfpNone: 201, residfpKernalBasic: 255 },
+    });
+    // Mach II, Disco Trax 87 tune 2: was listed in an earlier run; the corrected run leaves it unlisted.
+    expect(list.lookup("e606e785848c6e778eda16b1f9b35283", 1).listed).toBe(false);
+    // DEMOS/A-F/Funky_Drummer.sid: its old SIDLite grade of 127 was a false positive the correction removed.
+    expect(list.lookup("cfca7f2a6c14fb0e60ff890925dfeffb", 1).listed).toBe(false);
     // Laxity, Sanxion Loader Remix: identical register values without ROMs, so unlisted.
     expect(list.lookup("f0281b3471e0e0917b91f9dc64de1694", 1).listed).toBe(false);
   });

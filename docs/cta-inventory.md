@@ -506,9 +506,10 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
   appear and the song plays:
   - Cancel — button — `rom-dependency-cancel` — does not play the song
   - Play anyway — button — `rom-dependency-play-anyway` — plays it on this device this once
-  - For a song the phone's engine cannot start without the ROMs (a tune that declares BASIC, with no BASIC stored)
-    the same dialog explains this, appears whatever the setting says, and has one button: OK —
-    `rom-dependency-cancel` — leaves the song; there is no Play anyway
+- BASIC tune chosen by tapping it with no BASIC ROM stored and no C64 to play it on — the same overlay
+  (`rom-dependency-dialog`) titled **Needs the C64’s BASIC ROM**, whatever the skip setting. The local engine cannot
+  open such a tune, so Play anyway is not offered:
+  - OK — button — `rom-dependency-dismiss` — dismisses the notice; nothing is played and what was playing carries on
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(opens `sid-radio-why`, which explains the pick; it is laid over the card directly under the chip and named by the toggle's `aria-controls`, so opening it moves nothing; Escape, moving focus out of the chip, a press outside it, or a tap on the explanation itself closes it; `aria-controls` is set only while it is open)_
 - Liked tunes — button (label **Liked**, accessible name "Liked tunes") — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
   tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —

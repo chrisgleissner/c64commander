@@ -9,10 +9,10 @@
 import { describe, expect, it } from "vitest";
 import {
   decideRomListedPlayback,
+  romBasicDialogText,
   ROM_LISTED_DIALOG_TITLE,
   romListedDialogText,
   romListedSkippedNotice,
-  romUnplayableDialogText,
   romUnplayableSkippedNotice,
 } from "@/pages/playFiles/romDependencyGate";
 
@@ -48,41 +48,33 @@ describe("decideRomListedPlayback", () => {
   );
 });
 
-describe("decideRomListedPlayback for a song the phone's engine cannot start without the ROMs", () => {
+describe("decideRomListedPlayback for a song the phone cannot play at all", () => {
   it.each([
-    // c64Usable, skipEnabled, autoAdvance, accepted -> outcome
-    [true, true, true, false, "c64"],
-    [true, false, false, false, "c64"],
-    [false, true, true, false, "skip"],
-    [false, false, true, false, "skip"],
-    [false, true, false, false, "ask"],
-    [false, false, false, false, "ask"],
-    [false, true, true, true, "skip"],
-    [false, false, false, true, "ask"],
-  ] as const)(
-    "usable C64 %s, skipping %s, moving on by itself %s, accepted %s: %s, never played on the phone",
-    (c64Usable, skipEnabled, autoAdvance, accepted, outcome) => {
-      expect(decideRomListedPlayback({ c64Usable, skipEnabled, autoAdvance, accepted, engineCanStart: false })).toBe(
-        outcome,
-      );
-    },
-  );
+    // skipEnabled, autoAdvance, accepted -> outcome, with no usable C64
+    [true, true, false, "skip"],
+    [false, true, false, "skip"],
+    [true, false, false, "blocked"],
+    [false, false, false, "blocked"],
+    [true, false, true, "blocked"],
+  ] as const)("skipping %s, moving on by itself %s, accepted %s: %s", (skipEnabled, autoAdvance, accepted, outcome) => {
+    expect(decideRomListedPlayback({ c64Usable: false, skipEnabled, autoAdvance, accepted, playable: false })).toBe(
+      outcome,
+    );
+  });
 
-  it("treats a missing engineCanStart as a song the engine can start", () => {
-    expect(decideRomListedPlayback({ c64Usable: false, skipEnabled: false, autoAdvance: false })).toBe("phone");
+  it("goes to a usable C64 whatever the phone can play", () => {
+    expect(decideRomListedPlayback({ c64Usable: true, skipEnabled: true, autoAdvance: false, playable: false })).toBe(
+      "c64",
+    );
   });
 });
 
-describe("wording for a song the phone cannot play without the ROMs", () => {
-  it("says it cannot play here and offers no way to play it anyway", () => {
+describe("wording for a song only a C64 can play", () => {
+  it("names the song, says why it was skipped and does not send the listener to a setting that would not help", () => {
     const notice = romUnplayableSkippedNotice("Comic Bakery");
-    const dialog = romUnplayableDialogText("Comic Bakery");
     expect(notice).toContain("Comic Bakery");
     expect(notice).toContain("Connect your C64");
     expect(notice).not.toContain("Skip songs that need the C64 ROMs");
-    expect(dialog).toContain("Comic Bakery");
-    expect(dialog).toContain("cannot play on this phone");
-    expect(dialog).not.toMatch(/anyway|may sound wrong/i);
   });
 });
 
@@ -96,6 +88,9 @@ describe("wording", () => {
     expect(texts[0]).toContain("Comic Bakery");
     expect(texts[0]).toContain("Skip songs that need the C64 ROMs");
     expect(texts[1]).toContain("needs the C64’s ROMs to play correctly on this phone");
+    expect(romBasicDialogText()).toBe(
+      "This tune is a BASIC program and needs the C64’s BASIC ROM. Connect a C64, or add the ROMs in Settings.",
+    );
     for (const text of texts) expect(text).not.toMatch(/lane|mask|sidromdep|incompatible/i);
   });
 });
