@@ -33,6 +33,14 @@ export const sidPlayerChapter = ({ variantId, appMode = "full" }: GuideContext):
       text: "In SID Player the machine controls, disks, configuration, Live View and Remote Input are put away. Your playlists, settings and saved devices are kept, and come back when you leave.",
     },
     {
+      kind: "text",
+      text: "Stored on this phone only: the mode, app settings, playlists, the music collection and its index, liked and recently played tunes, SID Radio rankings, saved devices and device passwords. The data SID Radio uses to find similar tunes ships inside the app.",
+    },
+    {
+      kind: "text",
+      text: "Network use: the music collection mirror and the online archive, only when you ask for them. In the Full App the app also talks to your own C64 Ultimate. There is no analytics, no crash reporting and no account. A diagnostics report leaves your phone only when you share it.",
+    },
+    {
       kind: "steps",
       heading: inSidPlayer ? "Leave SID Player" : "Use SID Player",
       items: inSidPlayer

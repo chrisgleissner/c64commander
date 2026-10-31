@@ -84,4 +84,28 @@ describe("surface map", () => {
     const source = readFileSync(path.resolve(__dirname, "../../../../src/lib/appMode/surfaces.ts"), "utf8");
     expect(source).not.toMatch(/variant\.id|generated\/variant/);
   });
+
+  it("SPM-MODE-03 the map encodes the Demo Mode versus SID Player table", () => {
+    const rows: Array<[SurfaceId, boolean, boolean]> = [
+      ["route:/disks", true, false],
+      ["route:/config", true, false],
+      ["route:/", true, false],
+      ["home:quick-actions", true, false],
+      ["flag:live_view_enabled", true, false],
+      ["flag:remote_input_enabled", true, false],
+      ["quick-menu:game-mode", true, false],
+      ["quick-menu:switch-device", true, false],
+      ["play:engine-choice", true, false],
+      ["settings:app-mode", true, true],
+      ["quick-menu:leave-sid-player", false, true],
+      ["play:listening-shortcuts", false, true],
+      ["route:/play", true, true],
+      ["play:hvsc", true, true],
+      ["settings:sid-radio", true, true],
+    ];
+    for (const [id, inFull, inSidPlayer] of rows) {
+      expect(isSurfaceVisible(id, "full"), `${id} in Full App`).toBe(inFull);
+      expect(isSurfaceVisible(id, "sid-player"), `${id} in SID Player`).toBe(inSidPlayer);
+    }
+  });
 });

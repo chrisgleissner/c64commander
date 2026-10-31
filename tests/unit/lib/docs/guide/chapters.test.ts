@@ -85,4 +85,15 @@ describe("guide chapters by app mode", () => {
     expect(text).toContain("Leave SID Player");
     expect(text).not.toMatch(/\d+ ?%/);
   });
+
+  it("SPM-PRIV-02 the SID Player chapter lists stored data and network use", () => {
+    const chapter = buildGuideChapters({ variantId: "c64commander", flags: {}, appMode: "sid-player" }).find(
+      (candidate) => candidate.id === "sid-player",
+    );
+    const text = textOf(chapter!);
+    expect(text).toContain("Stored on this phone only");
+    expect(text).toContain("device passwords");
+    expect(text).toContain("Network use");
+    expect(text).toContain("no analytics");
+  });
 });
