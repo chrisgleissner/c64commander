@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { addItemsEntryFilter, addItemsSourceGroups } from "@/pages/playFiles/addItemsFilter";
+import { addItemsAcceptsPath, addItemsEntryFilter, addItemsSourceGroups } from "@/pages/playFiles/addItemsFilter";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 import type { SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 
@@ -50,5 +50,12 @@ describe("Add items in SID Player", () => {
 
   it("SPM-PLAY-01 the Full App lists every source", () => {
     expect(addItemsSourceGroups("full", groups)).toHaveLength(4);
+  });
+
+  it("SPM-PLAY-02 the add handler accepts SID paths only in SID Player, and every path in the Full App", () => {
+    const sidPlayer = addItemsAcceptsPath("sid-player");
+    expect(sidPlayer("/Music/tune.SID")).toBe(true);
+    expect(sidPlayer("/Games/game.prg")).toBe(false);
+    expect(addItemsAcceptsPath("full")("/Games/game.prg")).toBe(true);
   });
 });

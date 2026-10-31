@@ -18,6 +18,10 @@ const connection = vi.hoisted(() => ({
 
 vi.mock("@/lib/connection/connectionManager", () => connection);
 
+const discovery = vi.hoisted(() => ({ discardDeviceDiscovery: vi.fn() }));
+
+vi.mock("@/lib/deviceDiscovery/discoveryManager", () => discovery);
+
 const load = async () => {
   vi.resetModules();
   const store = await import("@/lib/appMode/appModeStore");
@@ -29,6 +33,7 @@ describe("app mode transitions", () => {
   beforeEach(() => {
     localStorage.clear();
     calls.length = 0;
+    discovery.discardDeviceDiscovery.mockReset();
     connection.discoverConnection.mockReset().mockImplementation(async (trigger: string) => {
       calls.push(`discover:${trigger}`);
     });
@@ -51,6 +56,12 @@ describe("app mode transitions", () => {
     await transitions.enterSidPlayer();
     expect(calls).toEqual(["release while sid-player=false", "offline:settings"]);
     expect(() => gate.assertDeviceTrafficAllowed("rest")).toThrow(/blocked device traffic/);
+  });
+
+  it("SPM-NET-01 entering SID Player discards a device scan that is still in flight", async () => {
+    const { transitions } = await load();
+    await transitions.enterSidPlayer();
+    expect(discovery.discardDeviceDiscovery).toHaveBeenCalledTimes(1);
   });
 
   it("SPM-MODE-02 nothing is released when no device is connected", async () => {

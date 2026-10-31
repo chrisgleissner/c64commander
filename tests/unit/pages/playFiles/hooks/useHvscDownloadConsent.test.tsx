@@ -12,6 +12,7 @@ import { useHvscDownloadConsent } from "@/pages/playFiles/hooks/useHvscDownloadC
 import { useHvscPreparationLifecycle } from "@/pages/playFiles/hooks/useHvscPreparationLifecycle";
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import type { HvscPreparationState } from "@/lib/hvsc";
+import { HVSC_CANCELED_STATUS_REASON } from "@/lib/hvsc/hvscCancellation";
 
 vi.mock("@/lib/uiErrors", () => ({ reportUserError: vi.fn() }));
 
@@ -44,6 +45,22 @@ describe("collection download consent", () => {
       const { result } = renderHook(() => useHvscDownloadConsent({ preparationState, sheetOpen: true }));
       expect(result.current.awaiting, preparationState).toBe(false);
     }
+  });
+
+  it("SPM-START-02 a canceled download asks again, and a real failure does not", () => {
+    saveStartupModeByUser("sid-player");
+    const canceled = renderHook(() =>
+      useHvscDownloadConsent({
+        preparationState: "ERROR",
+        errorReason: HVSC_CANCELED_STATUS_REASON,
+        sheetOpen: true,
+      }),
+    );
+    expect(canceled.result.current.awaiting).toBe(true);
+    const failed = renderHook(() =>
+      useHvscDownloadConsent({ preparationState: "ERROR", errorReason: "Network error", sheetOpen: true }),
+    );
+    expect(failed.result.current.awaiting).toBe(false);
   });
 
   it("SPM-START-02 the Full App never asks and keeps starting the download when the sheet opens", () => {

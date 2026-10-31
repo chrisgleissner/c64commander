@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
 import { addLog } from "@/lib/logging";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 /*
  * The three options live in a popover now: the control on the card is a single output chip, so a
@@ -61,6 +62,19 @@ describe("PlaybackEngineToggle", () => {
     playback.connection = "REAL_CONNECTED";
   });
   afterEach(() => cleanup());
+
+  it("SPM-MODE-03 offers no place to send the music to in SID Player, and offers it in the Full App", () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      render(<PlaybackEngineToggle />);
+      expect(screen.queryByTestId("playback-engine-toggle")).toBeNull();
+    } finally {
+      saveStartupModeByUser("default");
+    }
+    cleanup();
+    render(<PlaybackEngineToggle />);
+    expect(screen.getByTestId("playback-engine-toggle")).toBeInTheDocument();
+  });
 
   it("defaults to C64 and marks it pressed", () => {
     renderChooser();
