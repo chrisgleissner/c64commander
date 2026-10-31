@@ -587,6 +587,30 @@ test.describe("Small screen ergonomics", () => {
     expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
   });
 
+  test("SID Player screens meet the target and text floors at the compact profile @layout", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_startup_mode", "sid-player");
+    });
+    const problems: string[] = [];
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    for (const [name, tab] of [
+      ["SID Player Play", null],
+      ["SID Player Settings", "tab-settings"],
+      ["SID Player Docs", "tab-docs"],
+    ] as const) {
+      if (tab) {
+        await page.getByTestId(tab).click();
+        await settle(page);
+      }
+      const surface = activeMain(page);
+      problems.push(...(await measureOpenSurface(page, name, surface)));
+    }
+    await page.getByTestId("unified-health-badge").click();
+    problems.push(...(await measureOpenSurface(page, "SID Player mode sheet", page.getByTestId("mode-sheet"))));
+    expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
+  });
+
   test("Remote Input's keypad menu meets the text and target floors @layout", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await settle(page);
