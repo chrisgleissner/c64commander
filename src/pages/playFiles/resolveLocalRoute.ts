@@ -111,6 +111,12 @@ export interface LocalRouteInput {
   /** A C64 that can play the song is reachable: see {@link isC64UsableForSid}. */
   c64Usable: boolean;
   /**
+   * Present while the connection is still being discovered, when `c64Usable` is only a hope. Called only
+   * for a song that needs the ROMs, waits (bounded) for discovery to end, and says whether a C64 can then
+   * play it.
+   */
+  settleC64?: () => Promise<boolean>;
+  /**
    * The playlist or station is moving on by itself, or the listener pressed Next or Previous: no song
    * was chosen, so one that needs the C64's ROMs is passed over. False when the listener picked this song.
    */
@@ -138,14 +144,16 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
   let later: "skip" | "ask" | "blocked" | "phone" | "continue" | null = null;
   try {
     const sidBytes = new Uint8Array(await input.file.arrayBuffer());
+    let c64Usable = input.c64Usable && input.settleC64 === undefined;
     const { romsReady, romRequired, verdict, low, basicUnmet } = await readRomFidelity(
       sidBytes,
       input.songNr,
-      input.c64Usable,
+      c64Usable,
     );
     if (low) {
+      if (input.settleC64) c64Usable = await input.settleC64();
       const outcome = decideRomListedPlayback({
-        c64Usable: input.c64Usable,
+        c64Usable,
         skipEnabled: loadSkipRomDependentSongs(),
         autoAdvance: input.passOver,
         accepted: input.accepted,

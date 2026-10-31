@@ -348,8 +348,14 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
 
 - A C64 can play it (connected, not Demo Mode, in reach): the existing ROM fallback sends it there
   (`romFallbackDecision`, notice `rom-on-c64` or `rom-list-on-c64`) and, if the ROMs are missing,
-  reads them from it in the background. A connection still being discovered counts as usable, because
-  the C64 route discovers on demand (`isC64UsableForSid`).
+  reads them from it in the background. While the connection is still being discovered (`UNKNOWN` or
+  `DISCOVERING`), `isC64UsableForSid` counts a C64 as usable, but only as a hope: a song the list does
+  not hold back plays here without waiting. For a song that needs the ROMs, `resolveLocalRoute` first
+  calls `settleC64` (`resolveLaunchRoute`), which waits for discovery to end for at most 5 s
+  (`waitForDiscoveryToSettle`) and says whether a C64 can then play it. A C64 that answers takes the
+  song as above; no C64, or discovery still running at the bound, gives the phone-side decision below
+  (skip when moving on, ask or explain when the listener chose it) instead of a connection error from
+  the C64 route.
 - No usable C64, **Settings → Play and disk → Skip songs that need the C64 ROMs** on (the default):
   a playlist, station, auto-advance, Next or Previous skips the song (`RomDependentSongSkipped`, one
   notice per session; `playPassingOver` moves on to the next song that can play, skipping tracks only

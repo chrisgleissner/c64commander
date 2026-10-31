@@ -332,6 +332,82 @@ describe("resolveLocalRoute", () => {
   });
 });
 
+describe("a C64 whose connection is still being discovered", () => {
+  const settling = (usable: boolean) => vi.fn(async () => usable);
+
+  it("is waited for before a listed song is judged, and the song is skipped when it turns out to be absent", async () => {
+    mocks.assess.mockResolvedValue(LOW);
+    const settleC64 = settling(false);
+
+    await expect(resolveLocalRoute(input({ c64Usable: true, settleC64, passOver: true }))).rejects.toBeInstanceOf(
+      RomDependentSongSkipped,
+    );
+
+    expect(settleC64).toHaveBeenCalledTimes(1);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Song skipped" }));
+  });
+
+  it("asks about a chosen listed song instead of failing to connect when the C64 turns out to be absent", async () => {
+    mocks.assess.mockResolvedValue(LOW);
+    const ask = vi.fn(async () => "play-anyway" as const);
+
+    const route = await resolveLocalRoute(input({ c64Usable: true, settleC64: settling(false), ask }));
+
+    expect(ask).toHaveBeenCalledWith("listed");
+    expect(route).toBe(true);
+  });
+
+  it("sends a listed song to the C64 once it turns out to be there", async () => {
+    mocks.assess.mockResolvedValue(LOW);
+    const ask = vi.fn(async () => "cancel" as const);
+
+    const route = await resolveLocalRoute(input({ c64Usable: true, settleC64: settling(true), ask }));
+
+    expect(route).toBe(false);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("is not waited for when the song plays on the phone whatever the C64 does", async () => {
+    const settleC64 = settling(false);
+
+    expect(await resolveLocalRoute(input({ c64Usable: true, settleC64 }))).toBe(true);
+
+    expect(settleC64).not.toHaveBeenCalled();
+  });
+
+  it("treats a BASIC tune without a BASIC ROM as unplayable here when the C64 turns out to be absent", async () => {
+    mocks.romRequired.mockReturnValue(true);
+    mocks.romsReady.mockReturnValue(false);
+    const ask = vi.fn(async () => "play-anyway" as const);
+    const route = input({ c64Usable: true, settleC64: settling(false), ask });
+
+    expect(await resolveLocalRoute(route)).toBeNull();
+
+    expect(ask).toHaveBeenCalledWith("needs-basic");
+    await expect(
+      resolveLocalRoute(input({ c64Usable: true, settleC64: settling(false), passOver: true })),
+    ).rejects.toBeInstanceOf(RomDependentSongSkipped);
+  });
+
+  it("sends a BASIC tune without a BASIC ROM to the C64 once it turns out to be there", async () => {
+    mocks.romRequired.mockReturnValue(true);
+    mocks.romsReady.mockReturnValue(false);
+    const route = input({ c64Usable: true, settleC64: settling(true) });
+
+    expect(await resolveLocalRoute(route)).toBe(false);
+
+    expect(route.notify).toHaveBeenCalledWith("rom-on-c64");
+  });
+
+  it("does not wait when the connection is already settled", async () => {
+    mocks.assess.mockResolvedValue(LOW);
+    const route = input({ c64Usable: false, passOver: true });
+
+    await expect(resolveLocalRoute(route)).rejects.toBeInstanceOf(RomDependentSongSkipped);
+    expect(route.settleC64).toBeUndefined();
+  });
+});
+
 describe("playPassingOver", () => {
   const nextOf = (order: Array<number | null>) => (index: number) => order[index] ?? null;
 
