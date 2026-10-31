@@ -13,6 +13,8 @@ import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { KEY_SELECTED_ATTRIBUTE as SELECTED, enableKeypad, ringFocus } from "./focusRing";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
+import { installAudioFxMock } from "./audioFxMock";
+import { PLAYBACK_SESSION_KEY, SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/playFiles/playFilesUtils";
 
 /**
  * The app driven by keys alone, on the smallest screen it supports.
@@ -64,6 +66,40 @@ const waitForAnimations = (page: Page) =>
         .map((animation) => animation.finished),
     ),
   );
+
+/** Four Rob Hubbard tunes in the HVSC browse index, enough for "Find a tune" to search and play. */
+const seedHubbardBrowseIndex = (page: Page) =>
+  page.addInitScript(() => {
+    const tunes = ["Commando", "Monty on the Run", "Crazy Comets", "Delta"].map((title) => ({
+      virtualPath: `/MUSICIANS/H/Hubbard_Rob/${title.replaceAll(" ", "_")}.sid`,
+      fileName: `${title.replaceAll(" ", "_")}.sid`,
+      canonicalTitle: title,
+      canonicalAuthor: "Rob Hubbard",
+      durationSeconds: 120,
+      durationsSeconds: [120],
+      subsongCount: 1,
+      defaultSong: 1,
+      metadataStatus: "hydrated",
+    }));
+    localStorage.setItem(
+      "c64u_hvsc_browse_index:v1",
+      JSON.stringify({
+        schemaVersion: 2,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        songs: Object.fromEntries(tunes.map((tune) => [tune.virtualPath, tune])),
+        folders: {
+          "/": { path: "/", folders: ["/MUSICIANS"], songs: [] },
+          "/MUSICIANS": { path: "/MUSICIANS", folders: ["/MUSICIANS/H"], songs: [] },
+          "/MUSICIANS/H": { path: "/MUSICIANS/H", folders: ["/MUSICIANS/H/Hubbard_Rob"], songs: [] },
+          "/MUSICIANS/H/Hubbard_Rob": {
+            path: "/MUSICIANS/H/Hubbard_Rob",
+            folders: [],
+            songs: tunes.map((tune) => tune.virtualPath),
+          },
+        },
+      }),
+    );
+  });
 
 test.describe("Keypad-only navigation on the smallest screen", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -147,6 +183,38 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       await inventory.dispose();
       await page.keyboard.press("Escape");
     }
+  });
+
+  test("the Spectrum card's Bars and Wave buttons are reached and switched by keys alone @layout", async ({ page }) => {
+    await installAudioFxMock(page);
+    await page.goto("/play");
+    await settle(page);
+    const card = page.getByTestId("play-section-spectrum");
+    await expect(card).toBeVisible();
+    expect(await ringFocus(page, card)).toBe(true);
+    if ((await card.getAttribute("data-open")) !== "true") await page.keyboard.press("Enter");
+    await expect(card).toHaveAttribute("data-open", "true");
+    const bars = page.getByTestId("spectrum-view-bars");
+    const wave = page.getByTestId("spectrum-view-wave");
+    await expect(bars).toBeVisible();
+
+    expect(await ringFocus(page, bars)).toBe(true);
+    expect(await isOnScreen(bars)).toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await expect(wave).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(wave)).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(wave).toHaveAttribute("aria-pressed", "true");
+    await expect(bars).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("spectrum-canvas")).toHaveAttribute(
+      "aria-label",
+      "Audio channel meters, with the waveform of the sound below",
+    );
+    await page.keyboard.press("ArrowLeft");
+    await expect(bars).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("Enter");
+    await expect(bars).toHaveAttribute("aria-pressed", "true");
+    await expect(wave).toHaveAttribute("aria-pressed", "false");
   });
 
   test("every primary page is reachable using only the keypad @layout", async ({ page }) => {
@@ -340,6 +408,114 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     expect(rowBottom, "the selected row is partly under the guidance bar").toBeLessThanOrEqual(barTop + 0.5);
   });
 
+  test("the keypad reaches Play all in Find a tune from the search box and activates it with OK @layout", async ({
+    page,
+  }) => {
+    await seedHubbardBrowseIndex(page);
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const opener = page.locator('[data-slot-active="true"]').getByTestId("hvsc-search-open");
+    expect(await ringFocus(page, opener), "the ring could not reach Find a tune").toBe(true);
+    await page.keyboard.press("Enter");
+    const sheet = page.getByTestId("hvsc-search-sheet");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+
+    await sheet.getByTestId("hvsc-search-input").fill("hubbard");
+    const playAll = sheet.getByTestId("hvsc-search-play-all");
+    await expect(playAll).toHaveText("Play all 4");
+    expect(await playAll.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+
+    await expect(sheet.getByTestId("hvsc-search-input")).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowDown");
+    await expect(playAll).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(playAll), "Play all is selected but not on screen").toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByTestId("playlist-item")).toHaveCount(4);
+  });
+
+  test("the keypad reaches Share from the About this tune toggle with Right, on the same line at 320 px @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ playlistKey, sessionKey }) => {
+        const items = [
+          { source: "hvsc", path: "/MUSICIANS/B/Barlow_Kit/Blue Screen Waltz 2.sid", name: "Blue Screen Waltz 2.sid" },
+        ].map((item) => ({ ...item, durationMs: 120_000, songNr: 1 }));
+        const payload = JSON.stringify({ items, currentIndex: 0 });
+        localStorage.setItem(playlistKey, payload);
+        localStorage.setItem("c64u_playlist:v1:default", payload);
+        sessionStorage.setItem(
+          sessionKey,
+          JSON.stringify({
+            playlistKey,
+            currentItemId: null,
+            currentItemLabel: items[0].name,
+            currentIndex: 0,
+            isPlaying: false,
+            isPaused: false,
+            elapsedMs: 0,
+            playedMs: 0,
+            durationMs: 120_000,
+            autoAdvanceDueAtMs: null,
+            shuffleEnabled: false,
+            repeatEnabled: false,
+            randomSeed: 1,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+        (window as unknown as { __shared: unknown[] }).__shared = [];
+        Object.defineProperty(navigator, "share", {
+          configurable: true,
+          value: (data: unknown) => {
+            (window as unknown as { __shared: unknown[] }).__shared.push(data);
+            return Promise.resolve();
+          },
+        });
+      },
+      { playlistKey: SHARED_PLAYLIST_STORAGE_KEY, sessionKey: PLAYBACK_SESSION_KEY },
+    );
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+
+    const toggle = page.getByTestId("tune-details-toggle");
+    const share = page.getByTestId("tune-share");
+    await expect(share).toBeVisible();
+    await expect(share).toHaveAccessibleName(/^Share /);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    const [toggleBox, shareBox] = await Promise.all([toggle.boundingBox(), share.boundingBox()]);
+    if (!toggleBox || !shareBox) throw new Error("The toggle or Share has no box");
+    expect(shareBox.height, "Share target height").toBeGreaterThanOrEqual(44);
+    expect(shareBox.width, "Share target width").toBeGreaterThanOrEqual(44);
+    expect(shareBox.x, "Share starts after the toggle ends").toBeGreaterThanOrEqual(toggleBox.x + toggleBox.width);
+    expect(Math.abs(shareBox.y - toggleBox.y), "Share and the toggle share one line").toBeLessThanOrEqual(1);
+    expect(shareBox.x + shareBox.width, "Share ends inside the 320 px viewport").toBeLessThanOrEqual(320);
+    const fontPx = await share.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+    expect(fontPx, "Share text size").toBeGreaterThanOrEqual(14);
+
+    expect(await ringFocus(page, toggle), "the ring could not reach the About this tune toggle").toBe(true);
+    await page.keyboard.press("ArrowRight");
+    await expect(share).toHaveAttribute(SELECTED, "true");
+    expect(await isOnScreen(share), "Share is selected but not on screen").toBe(true);
+    await page.keyboard.press("ArrowLeft");
+    await expect(toggle).toHaveAttribute(SELECTED, "true");
+    await page.keyboard.press("ArrowRight");
+
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared.length))
+      .toBe(1);
+    const [shared] = await page.evaluate(() => (window as unknown as { __shared: Record<string, string>[] }).__shared);
+    expect(shared.url).toBe("https://deepsid.chordian.net/?file=/MUSICIANS/B/Barlow_Kit/Blue%20Screen%20Waltz%202.sid");
+    expect(shared.title).toBe("Blue Screen Waltz 2");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
   /*
    * A playlist row's menu lists eleven detail rows above its actions. They were disabled menu items,
    * which a menu's arrow keys skip, so a keypad opened the menu on its first action with the details
@@ -438,6 +614,150 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await expect(sheet).toBeHidden();
     await expect(trigger).toBeFocused();
     await expect(trigger).toHaveAttribute(SELECTED, "true");
+  });
+
+  /*
+   * Reordering the playlist from a row's menu, with no pointer: Move down twice walks the first tune
+   * to the end, the ring stays on that tune's ⋮ and the tune stays on screen, and the order is still
+   * there after the page is loaded again.
+   */
+  test("a playlist row's Move down, pressed twice from the keypad, reorders the playlist and the order survives a reload @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("playlist-seeded")) return;
+      sessionStorage.setItem("playlist-seeded", "1");
+      const items = Array.from({ length: 3 }, (_, index) => ({
+        source: "ultimate",
+        path: `/Usb0/Demos/Reorder_Tune_${index + 1}.sid`,
+        name: `Reorder_Tune_${index + 1}.sid`,
+        durationMs: 214_000,
+        songNr: 1,
+        sourceId: null,
+      }));
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify({ items, currentIndex: 0 }));
+    });
+    const rowTitles = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"] [data-row-title="true"]')
+        .evaluateAll((titles) => titles.map((title) => (title.textContent ?? "").trim()));
+    const expectOrder = (order: number[]) =>
+      expect.poll(async () => (await rowTitles()).map((title) => title.match(/\d+/)?.[0])).toEqual(order.map(String));
+
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+    const firstRowTrigger = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]')
+        .first()
+        .getByRole("button", { name: "Item actions" });
+    await expect(firstRowTrigger()).toBeAttached({ timeout: 15_000 });
+    await expectOrder([1, 2, 3]);
+    expect(await ringFocus(page, firstRowTrigger()), "the ring could not reach the first row's menu button").toBe(true);
+
+    const moveDownFromTheKeypad = async () => {
+      await page.keyboard.press("Enter");
+      const sheet = page.getByTestId("action-list-item-sheet");
+      await expect(sheet).toBeVisible();
+      await waitForAnimations(page);
+      const moveDown = sheet.getByRole("button", { name: "Move down" });
+      for (let step = 0; step < 8 && !(await moveDown.evaluate((el) => el === document.activeElement)); step += 1) {
+        await page.keyboard.press("ArrowDown");
+      }
+      await expect(moveDown).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(sheet).toBeHidden();
+    };
+
+    await moveDownFromTheKeypad();
+    await expectOrder([2, 1, 3]);
+
+    const movedRow = () =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]', { hasText: "Reorder Tune 1" })
+        .getByRole("button", { name: "Item actions" });
+    await expect(movedRow()).toHaveAttribute(SELECTED, "true");
+    await expect.poll(() => isOnScreen(movedRow())).toBe(true);
+
+    await moveDownFromTheKeypad();
+    await expectOrder([2, 3, 1]);
+    await expect(movedRow()).toHaveAttribute(SELECTED, "true");
+    await expect.poll(() => isOnScreen(movedRow())).toBe(true);
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await settle(page);
+    await expectOrder([2, 3, 1]);
+  });
+
+  test("a playlist row's menu offers Share after Move down for an archive tune only, and OK on it shares the encoded link @layout", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      const items = [
+        { source: "ultimate", path: "/Usb0/Demos/Share_Plain.sid", name: "Share_Plain.sid", sourceId: null },
+        { source: "hvsc", path: "/MUSICIANS/B/Barlow_Kit/Blue Screen Waltz 2.sid", name: "Blue Screen Waltz 2.sid" },
+      ].map((item) => ({ ...item, durationMs: 120_000, songNr: 1 }));
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify({ items, currentIndex: 0 }));
+      (window as unknown as { __shared: unknown[] }).__shared = [];
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        value: (data: unknown) => {
+          (window as unknown as { __shared: unknown[] }).__shared.push(data);
+          return Promise.resolve();
+        },
+      });
+    });
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await settle(page);
+    await page.keyboard.press("ArrowDown");
+
+    const rowTrigger = (text: string) =>
+      page
+        .locator('[data-slot-active="true"]')
+        .locator('[data-testid="playlist-item"]', { hasText: text })
+        .getByRole("button", { name: "Item actions" });
+    const sheet = page.getByTestId("action-list-item-sheet");
+    const shareButton = sheet.getByRole("button", { name: "Share", exact: true });
+
+    await expect(rowTrigger("Share Plain")).toBeAttached({ timeout: 15_000 });
+    expect(await ringFocus(page, rowTrigger("Share Plain")), "the ring could not reach the first row").toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    await expect(sheet.getByRole("button", { name: "Move down" })).toBeVisible();
+    await expect(shareButton, "a file on the Ultimate has no public link").toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(sheet).toBeHidden();
+
+    expect(await ringFocus(page, rowTrigger("Blue Screen")), "the ring could not reach the archive row").toBe(true);
+    await page.keyboard.press("Enter");
+    await expect(sheet).toBeVisible();
+    await waitForAnimations(page);
+    await expect(shareButton).toBeVisible();
+    const [moveDownBox, shareBox] = await Promise.all([
+      sheet.getByRole("button", { name: "Move down" }).boundingBox(),
+      shareButton.boundingBox(),
+    ]);
+    expect(shareBox!.y, "Share follows Move down").toBeGreaterThan(moveDownBox!.y);
+    expect(shareBox!.height, "Share target height").toBeGreaterThanOrEqual(44);
+    for (let step = 0; step < 8 && !(await shareButton.evaluate((el) => el === document.activeElement)); step += 1) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(shareButton).toBeFocused();
+    expect(await isOnScreen(shareButton), "Share is focused but not on screen").toBe(true);
+
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared.length))
+      .toBe(1);
+    const [shared] = await page.evaluate(() => (window as unknown as { __shared: Record<string, string>[] }).__shared);
+    expect(shared.url).toBe("https://deepsid.chordian.net/?file=/MUSICIANS/B/Barlow_Kit/Blue%20Screen%20Waltz%202.sid");
+    expect(shared.title).toBe("Blue Screen Waltz 2");
+    await expect(sheet).toBeHidden();
   });
 
   test("a selected card's top edge is never left under the app bar @layout", async ({ page }) => {

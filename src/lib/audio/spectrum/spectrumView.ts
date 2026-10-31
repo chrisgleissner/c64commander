@@ -9,6 +9,7 @@
 import { addLog } from "@/lib/logging";
 import { readSpectrum, setSpectrumDemand, type SpectrumFrame } from "@/lib/native/audioFx";
 import type { StreamUdpSpectrumRequest as SpectrumRequest } from "@/lib/native/streamUdp";
+import type { SpectrumViewMode } from "@/lib/uiPreferences";
 import {
   SPECTRUM_BALLISTICS,
   SPECTRUM_BALLISTICS_REDUCED,
@@ -38,6 +39,7 @@ import {
   type FrameDrawOptions,
   type SpectrumLayout,
 } from "@/lib/audio/spectrum/spectrumRenderer";
+import { WaveTrace, drawWave, drawWaveBackdrop } from "@/lib/audio/spectrum/waveRenderer";
 
 /** Latch time of the clip lamp after a sample reached full scale. */
 export const CLIP_LAMP_HOLD_MS = 1500;
@@ -79,6 +81,8 @@ export interface SpectrumLayer {
 export interface SpectrumViewOptions {
   canvas: HTMLCanvasElement;
   profile: string;
+  /** What the spectrum area shows. Default `"bars"`. */
+  mode?: SpectrumViewMode;
   onReadout?: (readout: SpectrumReadout) => void;
   onActiveChange?: (active: boolean) => void;
   onTierChange?: (tier: SpectrumTier) => void;
@@ -124,6 +128,8 @@ const defaultDeviceSignals = () => {
 export class SpectrumView {
   private readonly canvas: HTMLCanvasElement;
   private readonly profile: string;
+  private mode: SpectrumViewMode;
+  private readonly trace = new WaveTrace();
   private readonly readFrame: (request?: SpectrumRequest) => Promise<SpectrumFrame | null>;
   private readonly setEnabled: (enabled: boolean) => Promise<boolean>;
   private readonly now: () => number;
@@ -200,6 +206,7 @@ export class SpectrumView {
       (options.canvas as unknown as { __spectrumView?: SpectrumView }).__spectrumView = this;
     }
     this.profile = options.profile;
+    this.mode = options.mode ?? "bars";
     this.readFrame = options.read ?? readSpectrum;
     this.setEnabled = options.setEnabled ?? ((enabled) => setSpectrumDemand("spectrum-card", enabled));
     this.now = options.now ?? (() => performance.now());
@@ -254,6 +261,15 @@ export class SpectrumView {
     if (!this.ctx) return;
     this.rebuildStaticLayer();
     this.drawOnce();
+  }
+
+  /** Switches the spectrum area between the bars and the waveform; the meters and the canvas size stay. */
+  setMode(mode: SpectrumViewMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.trace.clear();
+    this.refreshTheme();
+    this.apply();
   }
 
   /** Whether the view is on screen, and whether the tune is paused. The native analyser follows audible playback. */
@@ -334,7 +350,9 @@ export class SpectrumView {
     this.layer = this.createLayer(this.canvas.width, this.canvas.height);
     if (this.layer) {
       this.layer.context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
-      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio, this.meterLabels);
+      const bars = this.mode === "bars";
+      drawStaticLayer(this.layer.context, this.layout, this.palette, this.ratio, this.meterLabels, bars);
+      if (!bars) drawWaveBackdrop(this.layer.context, this.layout, this.palette);
     }
     this.meterGradient = createMeterGradient(this.ctx, this.layout, this.palette);
     this.gradient = createBarGradient(this.ctx, this.layout, this.palette);
@@ -391,12 +409,20 @@ export class SpectrumView {
         targetNanos: this.clock.nativeNanosAt(firstMs),
         count: FRAMES_PER_READ,
         stepNanos: Math.round(stepMs * 1e6),
+        ...this.modeRequest,
       });
       return;
     }
     if (nowMs - this.lastPollAt < (1000 / SPECTRUM_POLL_HZ) * SLOT_TOLERANCE) return;
     this.lastPollAt = nowMs;
-    this.read(false, { targetNanos: this.clock.nativeNanosAt(nowMs + PRESENT_FRAMES_AHEAD * this.frameIntervalMs) });
+    this.read(false, {
+      targetNanos: this.clock.nativeNanosAt(nowMs + PRESENT_FRAMES_AHEAD * this.frameIntervalMs),
+      ...this.modeRequest,
+    });
+  }
+
+  private get modeRequest(): Pick<SpectrumRequest, "wave" | "bands"> {
+    return this.mode === "wave" ? { wave: true, bands: false } : {};
   }
 
   private read(idle: boolean, request?: SpectrumRequest): void {
@@ -479,6 +505,7 @@ export class SpectrumView {
       return;
     }
     for (let i = 0; i < SPECTRUM_BAND_COUNT; i++) this.latest[i] = frame.bands[i];
+    if (this.mode === "wave") this.trace.update(frame);
     this.rmsDb = frame.rmsDb;
     this.peakDb = frame.peakDb;
     const channels = frame.channels;
@@ -585,7 +612,10 @@ export class SpectrumView {
     const elapsed = this.lastDrawAt === 0 ? 1000 / this.tier.drawFps : Math.min(MAX_STEP_MS, nowMs - this.lastDrawAt);
     const sounding = this.isSounding(nowMs);
     if (sounding) foldBands(this.latest, this.folded);
-    else this.folded.fill(SPECTRUM_FLOOR_DB);
+    else {
+      this.folded.fill(SPECTRUM_FLOOR_DB);
+      this.trace.clear();
+    }
     const reduced = this.reducedMotion();
     stepBallistics(this.ballistics, this.folded, elapsed, reduced ? SPECTRUM_BALLISTICS_REDUCED : SPECTRUM_BALLISTICS);
     if (sounding) this.meterTargets.set(this.meterLatest);
@@ -628,7 +658,8 @@ export class SpectrumView {
     const options = this.drawOptions;
     if (!options) return;
     options.glow = this.tier.glow && !reducedMotion;
-    drawBars(ctx, options, this.ballistics);
+    if (this.mode === "wave") drawWave(ctx, options, this.trace);
+    else drawBars(ctx, options, this.ballistics);
     for (let channel = 0; channel < this.channelClipped.length; channel++) {
       this.channelClipped[channel] = this.now() < this.channelClipUntil[channel];
     }

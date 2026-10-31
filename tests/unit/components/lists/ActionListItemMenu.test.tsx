@@ -100,6 +100,17 @@ describe("orderActionsFirst", () => {
     ]);
   });
 
+  it("puts a note above the actions, whatever its place among the entries", () => {
+    const ordered = orderActionsFirst([
+      { type: "action", label: "Move up", onSelect: vi.fn(), disabled: true },
+      { type: "note", text: "Clear the filter to change the order" },
+      { type: "separator" },
+      { type: "label", label: "Details" },
+      { type: "info", label: "Type", value: "SID" },
+    ]);
+    expect(ordered.map((entry) => entry.type)).toEqual(["note", "action", "separator", "label", "info"]);
+  });
+
   it("adds no leading separator when there are no actions", () => {
     expect(orderActionsFirst([{ type: "info", label: "Type", value: "SID" }])[0]).toMatchObject({ type: "info" });
   });
@@ -211,6 +222,41 @@ describe("a list row's item actions on the compact profile", () => {
     renderList(buildItem({ isDimmed: true }), 320);
     const sheet = await openSheet();
     expect(sheet.getByTestId("action-list-item-sheet-primary")).toBeDisabled();
+  });
+});
+
+const noteItem = () =>
+  buildItem({
+    menuItems: [
+      { type: "action", label: "Move up", onSelect: vi.fn(), disabled: true },
+      { type: "note", text: "Clear the filter to change the order" },
+      { type: "label", label: "Details" },
+      { type: "info", label: "Type", value: "SID music" },
+    ],
+  });
+
+describe("a note among a row's menu entries", () => {
+  it("shows in the sheet above the actions and is not counted as a detail", async () => {
+    renderList(noteItem(), 320);
+    const sheet = await openSheet();
+    const note = sheet.getByTestId("action-list-item-sheet-note");
+    expect(note).toHaveTextContent("Clear the filter to change the order");
+    const action = sheet.getByRole("button", { name: "Move up" });
+    expect(note.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sheet.getAllByTestId("action-list-item-sheet-details")).toHaveLength(1);
+  });
+
+  it("shows in the menu above the actions", async () => {
+    renderList(noteItem(), 1024);
+    const trigger = screen.getByRole("button", { name: "Item actions" });
+    await act(async () => {
+      fireEvent.pointerDown(trigger);
+      fireEvent.click(trigger);
+    });
+    const note = screen.getByTestId("action-list-item-menu-note");
+    expect(note).toHaveTextContent("Clear the filter to change the order");
+    const action = screen.getByRole("menuitem", { name: "Move up" });
+    expect(note.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

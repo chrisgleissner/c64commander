@@ -9,16 +9,6 @@
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Joystick, Heart, Keyboard, ListMusic, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
@@ -78,18 +68,17 @@ import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
+import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   isBackgroundExecutionActive,
-  setBackgroundExecutionNowPlaying,
   setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
-import { runTransportCommand } from "@/pages/playFiles/transportCommands";
 
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -111,11 +100,10 @@ import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheetHost } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useExternalOpenState } from "@/hooks/useExternalOpenState";
-import {
-  PlayDeepLinks,
-  useTransportCommands,
-  type PlayDeepLinkHandlers,
-} from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { PlayDeepLinks, type PlayDeepLinkHandlers } from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { useLockScreenPlayback } from "@/pages/playFiles/hooks/useLockScreenPlayback";
+import { usePlayTransportCommands } from "@/pages/playFiles/hooks/usePlayTransportCommands";
+import { resolveSeekToFraction } from "@/pages/playFiles/resolveSeekToFraction";
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
@@ -134,13 +122,14 @@ import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
 import { usePlaylistTotals } from "@/pages/playFiles/hooks/usePlaylistTotals";
 import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { usePlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
-import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
+import { PlaySearchSheet } from "@/pages/playFiles/components/PlaySearchSheet";
+import {
+  PendingConfigChangeDialog,
+  type PendingConfigChangeState,
+} from "@/pages/playFiles/components/PendingConfigChangeDialog";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
-import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
-import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { isMd548InHvsc, md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
-import type { RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 import { useRecordRecentlyPlayed } from "@/pages/playFiles/hooks/useRecordRecentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
@@ -163,6 +152,7 @@ import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListIte
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
+import { usePlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
 import { useC64MuteFollowsRoute } from "@/pages/playFiles/hooks/useC64MuteFollowsRoute";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
@@ -258,13 +248,6 @@ export default function PlayFilesPage() {
   type ConfigPickerState =
     { itemId: string; sourceType: "ultimate" } | { itemId: string; sourceType: "local"; sourceId: string };
 
-  type PendingConfigChangeState = {
-    itemId: string;
-    configRef: PlaylistItem["configRef"];
-    origin?: PlaylistItem["configOrigin"];
-    candidates?: PlaylistItem["configCandidates"];
-  };
-
   const { status } = useC64Connection();
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
@@ -273,6 +256,7 @@ export default function PlayFilesPage() {
   // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
   const stationActiveRef = useRef(false);
   const stationFinishingRef = useRef(false);
+  const playlistManager = usePlaylistManager();
   const {
     playlist,
     setPlaylist,
@@ -294,7 +278,7 @@ export default function PlayFilesPage() {
     setSelectedPlaylistIds,
     isPlaylistLoading,
     setIsPlaylistLoading,
-  } = usePlaylistManager();
+  } = playlistManager;
   const hasPlaylistRef = useRef(false);
   const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -675,24 +659,16 @@ export default function PlayFilesPage() {
     resumeSession: () => transportCommandBus.publish("play"),
   };
 
-  // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
-  // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
-  // one, so a command drained on mount ran against an empty playlist and did nothing.
-  //
-  // HARD27-032: also held until the stored session has been applied. The session now survives
-  // process death, so the Home "Last" tile can arrive at a page that has its playlist but not yet
-  // its paused position, and a "play" drained there sees isPaused false and restarts the tune from
-  // the beginning instead of resuming where the user left off.
-  useTransportCommands(
-    (command) =>
-      runTransportCommand(command, {
-        isPlaying,
-        isPaused,
-        play: () => void handlePlay(),
-        pauseResume: () => void handlePauseResume(),
-        next: () => void handleNext(),
-        stop: stopPlayback,
-      }),
+  usePlayTransportCommands(
+    {
+      isPlaying,
+      isPaused,
+      play: () => void handlePlay(),
+      pauseResume: () => void handlePauseResume(),
+      next: () => void handleNext(),
+      previous: () => void handlePrevious(),
+      stop: stopPlayback,
+    },
     playlist.length > 0 && sessionRestoreSettled,
   );
   const sleepTimer = useSleepTimer({
@@ -1729,50 +1705,6 @@ export default function PlayFilesPage() {
     if (!currentSeedMd548) return;
     void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune", styleBit);
   };
-  /**
-   * Play one tune that was reached for by name, without losing the station.
-   *
-   * Inserted directly after what is playing rather than appended: a station keeps ten tunes queued
-   * ahead of the cursor, so the tail is roughly half an hour away. Nothing about the station is
-   * touched — it keeps its seed, its exclusion set and its place — so when this tune ends the queue
-   * simply carries on into what the station had already lined up. That is the whole of "and then go
-   * back to the station".
-   */
-  const playFoundTune = useCallback(
-    (hit: HvscSearchHit) => {
-      const item = buildFoundTuneItem(hit);
-      const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
-      void startPlaylist(items, index, { replaceQueue: true });
-    },
-    [currentIndex, playlist, startPlaylist],
-  );
-
-  // The same path for a disk or a program out of Recent: its stored source kind and id are what
-  // turn a remembered path back into something the router can dispatch.
-  const playRecentItem = useCallback(
-    (entry: RecentlyPlayedEntry) => {
-      const item = buildRecentPlaylistItem(entry);
-      const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
-      void startPlaylist(items, index, { replaceQueue: true });
-    },
-    [currentIndex, playlist, startPlaylist],
-  );
-  /**
-   * Whether a station can be seeded from a tune found by name.
-   *
-   * The similarity corpus knows tunes by their content hash, and the archive index is what turns a
-   * path back into one. A tune the corpus has never heard of can still be played — it just cannot be
-   * the seed of anything, so the action is left off that row rather than offered and then failing.
-   */
-  const canSeedStationFrom = useCallback((hit: HvscSearchHit) => md548ForVirtualPath(hit.virtualPath) !== null, []);
-  const startStationFromFoundTune = useCallback(
-    (hit: HvscSearchHit) => {
-      const md548 = md548ForVirtualPath(hit.virtualPath);
-      if (!md548) return;
-      void sidRadio.startSongRadio(md548, hit.title);
-    },
-    [sidRadio],
-  );
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const shownNowPlaying = useShownNowPlaying({ playlist, currentIndex, durationMs: currentDurationMs, playbackTime });
@@ -1915,28 +1847,6 @@ export default function PlayFilesPage() {
    */
   const nowPlayingTitle = currentDisplay?.title ?? shownItem?.label ?? null;
   const nowPlayingArtist = currentItemCredits.author;
-  useEffect(() => {
-    void setBackgroundExecutionNowPlaying(
-      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: shownNowPlaying.durationMs ?? null },
-      {
-        source: "playback-controller",
-        reason: "now-playing",
-        context: { trackInstanceId },
-      },
-    ).catch((error) => {
-      reportUserError({
-        operation: "setBackgroundExecutionNowPlaying",
-        title: "Now-playing metadata update failed",
-        description: "The lock-screen media control may not name the current tune.",
-        error,
-        context: { trackInstanceId },
-        // The tune plays either way; a media control naming the wrong thing is
-        // diagnostics material, never a toast (ERROR_POLICY §3).
-        background: true,
-      });
-    });
-  }, [shownNowPlaying.durationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
-
   const activePlayback = useActivePlayback();
   const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
   const remoteSeek = useRemoteSidSeek({
@@ -1948,6 +1858,13 @@ export default function PlayFilesPage() {
     playbackTime,
     durationMs: currentDurationMs,
     rebasePlaybackPosition,
+  });
+  const onSeekToFraction = resolveSeekToFraction({
+    category: currentItem?.category,
+    remoteHandlers: remoteSeek.handlers,
+    localEngineActive,
+    durationMs: currentDurationMs,
+    seekLocal: seekToFraction,
   });
   const shownScrubTargetMs = remoteSeek.targetMs ?? scrubTargetMs;
   const isScrubbing = shownScrubTargetMs !== null;
@@ -2151,6 +2068,18 @@ export default function PlayFilesPage() {
         lengthLabel: currentDurationLabel,
       })
     : [];
+
+  useLockScreenPlayback({
+    title: nowPlayingTitle,
+    artist: nowPlayingArtist,
+    durationMs: shownNowPlaying.durationMs ?? null,
+    tuneNumber: clampedSongNr,
+    tuneCount: knownSubsongCount,
+    trackInstanceId,
+    playing: isPlaying && !isPaused,
+    playbackTime,
+    onSeekToFraction,
+  });
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -2463,6 +2392,7 @@ export default function PlayFilesPage() {
   );
   const handleOpenConfig = useCallback((item: PlaylistItem) => setActiveConfigItemId(item.id), []);
 
+  const queueActions = usePlaylistQueueActions(playlistManager, playlistFilterText, currentPlayingItemId);
   const playlistPreviewListItems = usePlaylistListItems({
     filteredPlaylist: previewFilteredPlaylist,
     playlist,
@@ -2481,6 +2411,7 @@ export default function PlayFilesPage() {
     formatDate,
     getParentPath,
     currentPlayingItemId,
+    queueActions,
   });
 
   const playlistViewAllListItems = usePlaylistListItems({
@@ -2501,6 +2432,7 @@ export default function PlayFilesPage() {
     formatDate,
     getParentPath,
     currentPlayingItemId,
+    queueActions,
   });
   const pageShellClassName = usePrimaryPageShellClassName("bg-gradient-to-b from-background to-background/95");
 
@@ -2522,6 +2454,7 @@ export default function PlayFilesPage() {
                   currentItemLabel={currentDisplay?.title ?? null}
                   currentItemMetadataParts={currentItemMetadataParts}
                   tuneKey={currentItem ? `${currentItem.id}:${currentSongNr}` : null}
+                  tuneShare={tuneShareForItem(shownItem, currentItemCredits, knownSubsongCount, currentDisplay?.title)}
                   stil={stilInfo}
                   onComposerSelected={openSearchForComposer}
                   {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}
@@ -2590,12 +2523,9 @@ export default function PlayFilesPage() {
                         ? () => beginScrub(currentDurationMs)
                         : undefined,
                     onScrubStep: scrubBy,
-                    onSeekToFraction:
-                      localEngineActive && currentItem?.category === "sid" && currentDurationMs
-                        ? (fraction: number) => seekToFraction(fraction, currentDurationMs)
-                        : undefined,
                     onScrubEnd: () => void endScrub(),
                   })}
+                  onSeekToFraction={onSeekToFraction}
                   isScrubbing={isScrubbing}
                   timeline={timeline}
                   seekDurationMs={currentDurationMs}
@@ -3061,55 +2991,31 @@ export default function PlayFilesPage() {
             }}
           />
 
-          <HvscSearchSheet
+          <PlaySearchSheet
             open={hvscSearchOpen}
             onOpenChange={(open) => {
               setHvscSearchOpen(open);
               if (!open) setHvscSearchSeed(null);
             }}
-            onPlay={playFoundTune}
-            onPlayRecent={playRecentItem}
-            onStartStation={startStationFromFoundTune}
-            canSeedStation={canSeedStationFrom}
+            initialQuery={hvscSearchSeed}
+            playlist={playlist}
+            currentIndex={currentIndex}
+            startPlaylist={startPlaylist}
+            startSongRadio={sidRadio.startSongRadio}
             stationActive={sidRadio.active}
-            {...(hvscSearchSeed ? { initialQuery: hvscSearchSeed } : {})}
           />
 
-          <AlertDialog
-            open={Boolean(pendingConfigChange)}
-            onOpenChange={(open) => {
-              if (!open && pendingConfigChange) {
-                setPendingConfigChange(null);
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader hideClose>
-                <AlertDialogTitle>Clear custom edits?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Changing the config file will clear this item&apos;s custom value edits. Continue only if you want to
-                  replace the current base config.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel data-open-focus>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    if (!pendingConfigChange) return;
-                    updatePlaylistItemConfigRef(pendingConfigChange.itemId, pendingConfigChange.configRef, {
-                      origin: pendingConfigChange.origin,
-                      candidates: pendingConfigChange.candidates,
-                      overrides: null,
-                    });
-                    setPendingConfigChange(null);
-                  }}
-                >
-                  Continue
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
+          <PendingConfigChangeDialog
+            pendingConfigChange={pendingConfigChange}
+            onPendingConfigChangeConfirmed={(change) =>
+              updatePlaylistItemConfigRef(change.itemId, change.configRef, {
+                origin: change.origin,
+                candidates: change.candidates,
+                overrides: null,
+              })
+            }
+            onPendingConfigChangeClosed={() => setPendingConfigChange(null)}
+          />
           <UnavailableConfigDialog prompt={unavailableConfigPrompt.prompt} onChoose={unavailableConfigPrompt.choose} />
           <RomDependencyDialog
             label={romDependencyPrompt.label}

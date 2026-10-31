@@ -12,9 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SPECTRUM_UNAVAILABLE_MESSAGE, SpectrumCard } from "@/components/playback/SpectrumCard";
 import type { SpectrumReadout } from "@/lib/audio/spectrum/spectrumView";
 
+const VIEW_STORAGE_KEY = "c64u_spectrum_view";
+
 interface ViewOptions {
   canvas: HTMLCanvasElement;
   profile: string;
+  mode: "bars" | "wave";
   onReadout: (readout: SpectrumReadout) => void;
   onActiveChange: (active: boolean) => void;
   onTierChange: (tier: { index: number }) => void;
@@ -37,6 +40,7 @@ vi.mock("@/lib/audio/spectrum/spectrumView", () => ({
     const instance = {
       currentTier: { index: 2 },
       setState: vi.fn(),
+      setMode: vi.fn(),
       resize: vi.fn(),
       refreshTheme: vi.fn(),
       setDocumentShowing: vi.fn(),
@@ -50,7 +54,12 @@ vi.mock("@/lib/audio/spectrum/spectrumView", () => ({
 vi.mock("@/components/CollapsibleSection", () => ({
   CollapsibleSection: (props: Record<string, unknown> & { children: ReactNode }) => {
     state.sectionProps = props;
-    return <div data-testid={String(props.testId)}>{props.children}</div>;
+    return (
+      <div data-testid={String(props.testId)}>
+        <div data-testid="section-actions">{props.actions as ReactNode}</div>
+        {props.children}
+      </div>
+    );
   },
 }));
 vi.mock("@/components/ScreenActivityWatch", () => ({ ScreenActivityWatch: () => null }));
@@ -62,7 +71,11 @@ describe("SpectrumCard", () => {
   let resizeCallback: () => void;
   let resizeDisconnect: ReturnType<typeof vi.fn>;
 
+  const setSectionOpen = (open: boolean) =>
+    act(() => (state.sectionProps!.onOpenChange as (open: boolean) => void)(open));
+
   beforeEach(() => {
+    localStorage.clear();
     Object.assign(state, { available: true, profile: "medium", sectionProps: null });
     created.options.length = 0;
     created.views.length = 0;
@@ -213,5 +226,95 @@ describe("SpectrumCard", () => {
     removeListener.mockRestore();
     fireEvent(document, new Event("visibilitychange"));
     expect(view.setDocumentShowing).toHaveBeenCalledTimes(1);
+  });
+  describe("view switch", () => {
+    it("renders the Bars and Wave group in the header only while the card is open", () => {
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      expect(screen.queryByRole("group", { name: "Spectrum view" })).toBeNull();
+      setSectionOpen(true);
+      const group = screen.getByRole("group", { name: "Spectrum view" });
+      expect(group).toContainElement(screen.getByTestId("spectrum-view-bars"));
+      expect(group).toContainElement(screen.getByTestId("spectrum-view-wave"));
+      expect(screen.getByTestId("section-actions")).toContainElement(group);
+      setSectionOpen(false);
+      expect(screen.queryByRole("group", { name: "Spectrum view" })).toBeNull();
+    });
+
+    it("labels the two options Bars and Wave and marks the bars as pressed by default", () => {
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      expect(screen.getByTestId("spectrum-view-bars")).toHaveTextContent("Bars");
+      expect(screen.getByTestId("spectrum-view-wave")).toHaveTextContent("Wave");
+      expect(screen.getByTestId("spectrum-view-bars")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("spectrum-view-wave")).toHaveAttribute("aria-pressed", "false");
+      expect(lastOptions().mode).toBe("bars");
+    });
+
+    it("shows the words beside an icon on a profile with room, and only the icon on the compact one", () => {
+      const roomy = render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      expect(screen.getByText("Bars")).not.toHaveClass("sr-only");
+      expect(screen.getByText("Wave")).not.toHaveClass("sr-only");
+      roomy.unmount();
+      state.profile = "compact";
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      expect(screen.getByText("Bars")).toHaveClass("sr-only");
+      expect(screen.getByText("Wave")).toHaveClass("sr-only");
+      expect(screen.getByRole("button", { name: "Bars" })).toBe(screen.getByTestId("spectrum-view-bars"));
+      expect(screen.getByRole("button", { name: "Wave" })).toBe(screen.getByTestId("spectrum-view-wave"));
+    });
+
+    it("applies the chosen view to the live view at once and follows it in the canvas description", () => {
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      const canvas = screen.getByTestId("spectrum-canvas");
+      expect(canvas.getAttribute("aria-label")).toContain("frequency spectrum below");
+      fireEvent.click(screen.getByTestId("spectrum-view-wave"));
+      expect(lastView().setMode).toHaveBeenLastCalledWith("wave");
+      expect(screen.getByTestId("spectrum-view-wave")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("spectrum-view-bars")).toHaveAttribute("aria-pressed", "false");
+      expect(canvas).toHaveAttribute("aria-label", "Audio channel meters, with the waveform of the sound below");
+      fireEvent.click(screen.getByTestId("spectrum-view-bars"));
+      expect(lastView().setMode).toHaveBeenLastCalledWith("bars");
+      expect(canvas.getAttribute("aria-label")).toContain("frequency spectrum below");
+    });
+
+    it("keeps the same canvas height in both views", () => {
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      const height = screen.getByTestId("spectrum-canvas").style.height;
+      fireEvent.click(screen.getByTestId("spectrum-view-wave"));
+      expect(screen.getByTestId("spectrum-canvas").style.height).toBe(height);
+    });
+
+    it("does not recreate the live view when the view changes", () => {
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      fireEvent.click(screen.getByTestId("spectrum-view-wave"));
+      expect(created.views).toHaveLength(1);
+    });
+
+    it("remembers the choice and opens the next card in the same view", () => {
+      const first = render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      fireEvent.click(screen.getByTestId("spectrum-view-wave"));
+      expect(localStorage.getItem(VIEW_STORAGE_KEY)).toBe("wave");
+      first.unmount();
+      render(<SpectrumCard soundOnPhone paused={false} />);
+      setSectionOpen(true);
+      expect(lastOptions().mode).toBe("wave");
+      expect(screen.getByTestId("spectrum-view-wave")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("spectrum-canvas")).toHaveAttribute(
+        "aria-label",
+        "Audio channel meters, with the waveform of the sound below",
+      );
+    });
+
+    it("keeps the unavailable message in Wave view", () => {
+      localStorage.setItem(VIEW_STORAGE_KEY, "wave");
+      render(<SpectrumCard soundOnPhone={false} paused={false} />);
+      expect(screen.getByTestId("spectrum-message")).toHaveTextContent(SPECTRUM_UNAVAILABLE_MESSAGE);
+    });
   });
 });

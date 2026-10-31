@@ -31,17 +31,30 @@ export type InsertNextResult<T> = {
 };
 
 /**
+ * Put a block of items directly after the playing track, keeping their order.
+ *
+ * `index` is where the first of them ended up. Everything that was queued after the playing track
+ * follows the block, so playing it through ends in the tunes that were already lined up.
+ */
+export const insertAllAfterCurrent = <T>(
+  playlist: readonly T[],
+  currentIndex: number,
+  block: readonly T[],
+): InsertNextResult<T> => {
+  const index = currentIndex >= 0 && currentIndex < playlist.length ? currentIndex + 1 : playlist.length;
+  const items = [...playlist.slice(0, index), ...block, ...playlist.slice(index)];
+  return { items, index };
+};
+
+/**
  * Put `item` directly after the playing track.
  *
  * An empty queue, or a cursor that is not on anything, puts the item at the end — which for an empty
  * queue is position zero, and for a queue that is not playing is the natural place for "and then
  * this".
  */
-export const insertAfterCurrent = <T>(playlist: readonly T[], currentIndex: number, item: T): InsertNextResult<T> => {
-  const index = currentIndex >= 0 && currentIndex < playlist.length ? currentIndex + 1 : playlist.length;
-  const items = [...playlist.slice(0, index), item, ...playlist.slice(index)];
-  return { items, index };
-};
+export const insertAfterCurrent = <T>(playlist: readonly T[], currentIndex: number, item: T): InsertNextResult<T> =>
+  insertAllAfterCurrent(playlist, currentIndex, [item]);
 
 /**
  * A playlist item for a tune chosen by name from HVSC.

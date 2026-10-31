@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Base64
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
@@ -45,13 +46,15 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
     val target = request?.opt("targetNanos").asLong()
     val count = request?.opt("count").asLong().toInt().coerceIn(1, MAX_FRAMES_PER_READ)
     val step = request?.opt("stepNanos").asLong()
-    val first = hub().readSpectrum(target)
+    val wave = request?.optBoolean("wave", false) ?: false
+    val bands = request?.optBoolean("bands", true) ?: true
+    val first = hub().analyzer.read(hub().spectrumEnabled, target, wave, bands)
     val result = payload(first)
     if (target > 0L && step > 0L && first.aligned && count > 1) {
       val ahead = JSArray()
       var previous = first.sequence
       for (k in 1 until count) {
-        val frame = hub().readSpectrum(target + k * step)
+        val frame = hub().analyzer.read(hub().spectrumEnabled, target + k * step, wave, bands)
         if (frame.sequence == previous) break
         previous = frame.sequence
         ahead.put(payload(frame))
@@ -70,7 +73,7 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("rmsDb", channel.rmsDb)
         .put("peakDb", channel.peakDb)
         .put("clipped", channel.clipped))
-    return JSObject()
+    val result = JSObject()
         .put("enabled", frame.enabled)
         .put("active", frame.active)
         .put("sequence", frame.sequence)
@@ -83,6 +86,10 @@ internal class AudioProcessingBridge(private val hub: () -> AudioFxHub) {
         .put("timestampNanos", frame.timestampNanos)
         .put("shortfallSamples", frame.shortfallSamples)
         .put("aligned", frame.aligned)
+    frame.wave?.let {
+      result.put("wave", Base64.encodeToString(it, Base64.NO_WRAP)).put("waveTriggered", frame.waveTriggered)
+    }
+    return result
   }
 
   /** A JSON number arrives as an Int, Long or Double depending on its size; the typed getters drop some of them. */

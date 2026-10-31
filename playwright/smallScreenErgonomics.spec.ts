@@ -14,6 +14,7 @@ import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 import { clickSourceSelectionButton } from "./sourceSelection";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
+import { installAudioFxMock, installLiveViewAudioStub, startPhoneSoundAndOpenPlay } from "./audioFxMock";
 
 /**
  * Readability and reach on the smallest screen the app supports.
@@ -586,6 +587,79 @@ test.describe("Small screen ergonomics", () => {
     }
     expect(problems, `Below the ${MIN_TEXT_PX}px text or ${MIN_TARGET_PX}px target floor`).toEqual([]);
   });
+
+  for (const withDescriptions of [false, true]) {
+    test(`the Spectrum card header keeps its title, the view group and the chevron on one row, ${
+      withDescriptions ? "with" : "without"
+    } section descriptions @layout`, async ({ page }) => {
+      await installAudioFxMock(page);
+      await installLiveViewAudioStub(page);
+      await page.addInitScript(() => localStorage.setItem("c64u_playback_engine", "local"));
+      if (withDescriptions) {
+        await page.addInitScript(() => localStorage.setItem("c64u_show_section_descriptions", "1"));
+      }
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await startPhoneSoundAndOpenPlay(page);
+
+      const card = page.getByTestId("play-section-spectrum");
+      await expect(card).toBeVisible();
+      if ((await card.getAttribute("data-open")) !== "true") {
+        await expect(page.getByTestId("spectrum-view-group")).toHaveCount(0);
+        await page.getByTestId("play-section-toggle-spectrum").click();
+      }
+      const group = page.getByTestId("spectrum-view-group");
+      await expect(group).toBeVisible();
+      await card.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(700);
+
+      const rects = await card.evaluate((element) => {
+        const box = (selector: string) => {
+          const found = element.querySelector<HTMLElement>(selector);
+          if (!found) throw new Error(`${selector} is not in the Spectrum card`);
+          const rect = found.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height };
+        };
+        const title = element.querySelector<HTMLElement>("h2");
+        return {
+          card: element.getBoundingClientRect().toJSON(),
+          title: box("h2"),
+          titleLines: Math.round(
+            title!.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(title!).lineHeight),
+          ),
+          group: box('[data-testid="spectrum-view-group"]'),
+          bars: box('[data-testid="spectrum-view-bars"]'),
+          wave: box('[data-testid="spectrum-view-wave"]'),
+          chevron: box('[data-testid="play-section-chevron-spectrum"]'),
+          barsFont: Number.parseFloat(
+            getComputedStyle(element.querySelector('[data-testid="spectrum-view-bars"]')!).fontSize,
+          ),
+          waveFont: Number.parseFloat(
+            getComputedStyle(element.querySelector('[data-testid="spectrum-view-wave"]')!).fontSize,
+          ),
+        };
+      });
+      expect(rects.titleLines, "The title wraps").toBe(1);
+      expect(rects.title.right, "The title ends before the group").toBeLessThanOrEqual(rects.group.left + 1);
+      expect(rects.group.right, "The group ends before the chevron").toBeLessThanOrEqual(rects.chevron.left + 1);
+      expect(rects.chevron.right, "The chevron stays inside the card").toBeLessThanOrEqual(rects.card.right + 1);
+      const headerBottom = Math.max(rects.title.bottom, rects.chevron.bottom);
+      expect(rects.group.top, "The group sits on the title row").toBeLessThan(headerBottom);
+      expect(rects.group.bottom, "The group sits on the title row").toBeGreaterThan(rects.title.top);
+      for (const button of [rects.bars, rects.wave]) {
+        expect(button.height, "View button height").toBeGreaterThanOrEqual(44);
+        expect(button.right - button.left, "View button width").toBeGreaterThanOrEqual(44);
+      }
+      expect(rects.barsFont).toBeGreaterThanOrEqual(MIN_TEXT_PX);
+      expect(rects.waveFont).toBeGreaterThanOrEqual(MIN_TEXT_PX);
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, "The page scrolls horizontally").toBeLessThanOrEqual(1);
+      const cardOverflow = await card.evaluate((element) => element.scrollWidth - element.clientWidth);
+      expect(cardOverflow, "The card scrolls horizontally").toBeLessThanOrEqual(1);
+    });
+  }
 
   test("Remote Input's keypad menu meets the text and target floors @layout", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });

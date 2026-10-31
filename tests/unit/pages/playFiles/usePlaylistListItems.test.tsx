@@ -7,8 +7,10 @@
  */
 
 import { render, renderHook, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
+import type { PlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
+import type { ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { LOCAL_DEVICE_LABEL } from "@/lib/sourceNavigation/sourceTerms";
@@ -37,6 +39,10 @@ vi.mock("@/lib/hvsc/hvscPerformance", () => ({
 vi.mock("@/lib/smoke/smokeMode", () => ({
   recordSmokeBenchmarkSnapshot,
 }));
+
+const { shareTune } = vi.hoisted(() => ({ shareTune: vi.fn() }));
+
+vi.mock("@/lib/playback/shareTune", () => ({ shareTune }));
 
 const buildItem = (
   source: "local" | "ultimate" | "hvsc",
@@ -382,5 +388,318 @@ describe("usePlaylistListItems", () => {
 
     expect(candidateRow?.secondaryActionLabel).toBe("CFG?");
     expect(candidateRow?.titleSuffix).not.toContain("CFG");
+  });
+});
+
+describe("usePlaylistListItems queue actions", () => {
+  const playlist = [
+    buildItem("local", "/Music/one.sid"),
+    buildItem("local", "/Music/two.sid"),
+    buildItem("local", "/Music/three.sid"),
+    buildItem("local", "/Music/four.sid"),
+  ];
+
+  const buildQueueActions = (overrides: Partial<PlaylistQueueActions> = {}): PlaylistQueueActions => ({
+    shuffleEnabled: false,
+    filterHidesRows: false,
+    playNext: vi.fn(),
+    moveUp: vi.fn(),
+    moveDown: vi.fn(),
+    ...overrides,
+  });
+
+  const menuOf = (
+    queueActions: PlaylistQueueActions,
+    rowIndex: number,
+    { isPlaylistLoading = false, currentPlayingItemId = null as string | null } = {},
+  ): ActionListMenuItem[] => {
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onOpenConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId,
+        queueActions,
+      }),
+    );
+    const rows = result.current.filter((entry) => entry.variant !== "header");
+    return rows[rowIndex].menuItems ?? [];
+  };
+
+  const queueEntries = (menu: ActionListMenuItem[]) =>
+    menu.filter((entry) => entry.type === "action").slice(0, 3) as Extract<ActionListMenuItem, { type: "action" }>[];
+
+  const disabledLabels = (menu: ActionListMenuItem[]) =>
+    queueEntries(menu)
+      .filter((entry) => entry.disabled)
+      .map((entry) => entry.label);
+
+  it("opens the menu with Play next, Move up and Move down, then a separator, then the details", () => {
+    const menu = menuOf(buildQueueActions(), 1);
+
+    expect(menu.slice(0, 5).map((entry) => (entry.type === "action" ? entry.label : entry.type))).toEqual([
+      "Play next",
+      "Move up",
+      "Move down",
+      "separator",
+      "label",
+    ]);
+    expect(menu[4]).toEqual({ type: "label", label: "Details" });
+  });
+
+  it("adds nothing to the menu when the page supplies no queue actions", () => {
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onOpenConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+      }),
+    );
+
+    expect(result.current.find((entry) => entry.variant !== "header")?.menuItems?.[0]).toEqual({
+      type: "label",
+      label: "Details",
+    });
+  });
+
+  it("calls each handler with the id of the row whose menu it is", () => {
+    const queueActions = buildQueueActions();
+    const menu = queueEntries(menuOf(queueActions, 2));
+
+    menu.forEach((entry) => entry.onSelect());
+
+    expect(queueActions.playNext).toHaveBeenCalledWith(playlist[2].id);
+    expect(queueActions.moveUp).toHaveBeenCalledWith(playlist[2].id);
+    expect(queueActions.moveDown).toHaveBeenCalledWith(playlist[2].id);
+  });
+
+  it("enables all three actions on a middle row when nothing plays", () => {
+    expect(disabledLabels(menuOf(buildQueueActions(), 2))).toEqual([]);
+  });
+
+  it("disables Move up on the first row and Move down on the last row", () => {
+    expect(disabledLabels(menuOf(buildQueueActions(), 0))).toEqual(["Play next", "Move up"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 3))).toEqual(["Move down"]);
+  });
+
+  it("disables Play next on the playing row and on the row directly after it", () => {
+    const playing = { currentPlayingItemId: playlist[1].id };
+
+    expect(disabledLabels(menuOf(buildQueueActions(), 1, playing))).toEqual(["Play next"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 2, playing))).toEqual(["Play next"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 3, playing))).toEqual(["Move down"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 0, playing))).toEqual(["Move up"]);
+  });
+
+  it("disables all three actions and says why while Shuffle is on", () => {
+    const menu = menuOf(buildQueueActions({ shuffleEnabled: true }), 2);
+
+    expect(disabledLabels(menu)).toEqual(["Play next", "Move up", "Move down"]);
+    expect(menu.filter((entry) => entry.type === "note")).toEqual([
+      { type: "note", text: "Turn off Shuffle to change the order" },
+    ]);
+  });
+
+  it("disables Move up and Move down but not Play next while a filter hides rows, and says why", () => {
+    const menu = menuOf(buildQueueActions({ filterHidesRows: true }), 2);
+
+    expect(disabledLabels(menu)).toEqual(["Move up", "Move down"]);
+    expect(menu.filter((entry) => entry.type === "note")).toEqual([
+      { type: "note", text: "Clear the filter to change the order" },
+    ]);
+  });
+
+  it("names Shuffle, not the filter, when both apply", () => {
+    const menu = menuOf(buildQueueActions({ shuffleEnabled: true, filterHidesRows: true }), 2);
+
+    expect(menu.filter((entry) => entry.type === "note")).toEqual([
+      { type: "note", text: "Turn off Shuffle to change the order" },
+    ]);
+  });
+
+  it("shows no note when the order can be changed", () => {
+    expect(menuOf(buildQueueActions(), 2).some((entry) => entry.type === "note")).toBe(false);
+  });
+
+  it("disables all three actions while the playlist loads", () => {
+    const menu = menuOf(buildQueueActions(), 2, { isPlaylistLoading: true });
+
+    expect(disabledLabels(menu)).toEqual(["Play next", "Move up", "Move down"]);
+  });
+
+  it("recomputes Play next for the rows when the playing tune changes", () => {
+    const queueActions = buildQueueActions();
+    const stable = {
+      handlePlaylistSelect: vi.fn(),
+      onAttachLocalConfig: vi.fn(),
+      onAttachUltimateConfig: vi.fn(),
+      onOpenConfig: vi.fn(),
+      onRemoveConfig: vi.fn(),
+      startPlaylist: vi.fn(),
+      playlistItemDuration: () => undefined,
+      formatTime: () => "—:—",
+      formatPlayCategory: () => "SID",
+      formatBytes: () => "—",
+      formatDate: () => "—",
+      getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+      selectedPlaylistIds: new Set<string>(),
+    };
+    const { result, rerender } = renderHook(
+      ({ playingId }: { playingId: string | null }) =>
+        usePlaylistListItems({
+          filteredPlaylist: playlist,
+          playlist,
+          ...stable,
+          isPlaylistLoading: false,
+          currentPlayingItemId: playingId,
+          queueActions,
+        }),
+      { initialProps: { playingId: playlist[0].id as string | null } },
+    );
+    const thirdRowPlayNext = () =>
+      queueEntries(result.current.filter((entry) => entry.variant !== "header")[2].menuItems ?? [])[0];
+
+    expect(thirdRowPlayNext().disabled).toBe(false);
+
+    rerender({ playingId: playlist[1].id });
+
+    expect(thirdRowPlayNext().disabled).toBe(true);
+  });
+});
+
+describe("usePlaylistListItems share", () => {
+  const COMMANDO = "/MUSICIANS/H/Hubbard_Rob/Commando.sid";
+  const playlist = [
+    buildItem("local", "/Music/one.sid"),
+    buildItem("hvsc", COMMANDO),
+    buildItem("ultimate", "/USB0/two.sid"),
+    {
+      ...buildItem("hvsc", "/MUSICIANS/G/Galway_Martin/Arkanoid.sid"),
+      subsongCount: 3,
+      request: { source: "hvsc", path: "/MUSICIANS/G/Galway_Martin/Arkanoid.sid", songNr: 2 },
+    } as PlaylistItem,
+  ];
+
+  const queueActions = (overrides: Partial<PlaylistQueueActions> = {}): PlaylistQueueActions => ({
+    shuffleEnabled: false,
+    filterHidesRows: false,
+    playNext: vi.fn(),
+    moveUp: vi.fn(),
+    moveDown: vi.fn(),
+    ...overrides,
+  });
+
+  const menuOf = (
+    rowIndex: number,
+    { actions = queueActions() as PlaylistQueueActions | null, isPlaylistLoading = false } = {},
+  ): ActionListMenuItem[] => {
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading,
+        handlePlaylistSelect: vi.fn(),
+        onAttachLocalConfig: vi.fn(),
+        onAttachUltimateConfig: vi.fn(),
+        onOpenConfig: vi.fn(),
+        onRemoveConfig: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => "—:—",
+        formatPlayCategory: () => "SID",
+        formatBytes: () => "—",
+        formatDate: () => "—",
+        getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+        currentPlayingItemId: null,
+        ...(actions ? { queueActions: actions } : {}),
+      }),
+    );
+    return result.current.filter((entry) => entry.variant !== "header")[rowIndex].menuItems ?? [];
+  };
+
+  const kinds = (menu: ActionListMenuItem[], count: number) =>
+    menu.slice(0, count).map((entry) => (entry.type === "action" ? entry.label : entry.type));
+
+  const shareEntry = (menu: ActionListMenuItem[]) =>
+    menu.find((entry) => entry.type === "action" && entry.label === "Share") as
+      Extract<ActionListMenuItem, { type: "action" }> | undefined;
+
+  beforeEach(() => shareTune.mockReset());
+
+  it("puts Share after the three queue actions and keeps one separator before the details", () => {
+    expect(kinds(menuOf(1), 6)).toEqual(["Play next", "Move up", "Move down", "Share", "separator", "label"]);
+    expect(menuOf(1)[5]).toEqual({ type: "label", label: "Details" });
+  });
+
+  it("offers Share only for a tune whose archive path is known", () => {
+    expect(shareEntry(menuOf(0))).toBeUndefined();
+    expect(shareEntry(menuOf(2))).toBeUndefined();
+    expect(kinds(menuOf(0), 5)).toEqual(["Play next", "Move up", "Move down", "separator", "label"]);
+    expect(shareEntry(menuOf(1))).toBeDefined();
+  });
+
+  it("offers Share on its own, still followed by one separator, when the page supplies no queue actions", () => {
+    expect(kinds(menuOf(1, { actions: null }), 3)).toEqual(["Share", "separator", "label"]);
+  });
+
+  it("hands the row's text and link to the share function, and nothing else", () => {
+    shareEntry(menuOf(1))?.onSelect();
+
+    expect(shareTune).toHaveBeenCalledTimes(1);
+    expect(shareTune).toHaveBeenCalledWith({
+      title: "Commando",
+      text: "Commando",
+      url: "https://deepsid.chordian.net/?file=/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      path: COMMANDO,
+    });
+  });
+
+  it("shares the tune the row holds when its file has several", () => {
+    shareEntry(menuOf(3))?.onSelect();
+
+    expect(shareTune).toHaveBeenCalledWith({
+      title: "Arkanoid",
+      text: "Arkanoid\nTune 2 of 3",
+      url: "https://deepsid.chordian.net/?file=/MUSICIANS/G/Galway_Martin/Arkanoid.sid&subtune=2",
+      path: "/MUSICIANS/G/Galway_Martin/Arkanoid.sid",
+    });
+  });
+
+  it.each([
+    ["Shuffle is on", { shuffleEnabled: true }, false],
+    ["a filter hides rows", { filterHidesRows: true }, false],
+    ["the playlist is loading", {}, true],
+  ])("leaves Share enabled while %s, because it does not change the order", (_name, overrides, loading) => {
+    const menu = menuOf(1, { actions: queueActions(overrides), isPlaylistLoading: loading });
+    expect(shareEntry(menu)).toBeDefined();
+    expect(shareEntry(menu)?.disabled).toBeFalsy();
   });
 });

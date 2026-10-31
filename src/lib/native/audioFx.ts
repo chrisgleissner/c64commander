@@ -140,6 +140,8 @@ const isFrame = (value: unknown): value is SpectrumFrame => {
     Array.isArray(frame.bands) &&
     typeof frame.sequence === "number" &&
     typeof frame.active === "boolean" &&
+    (frame.wave === undefined || typeof frame.wave === "string") &&
+    (frame.waveTriggered === undefined || typeof frame.waveTriggered === "boolean") &&
     (frame.ahead === undefined || (Array.isArray(frame.ahead) && frame.ahead.every(isFrame)))
   );
 };
@@ -149,7 +151,7 @@ export const readSpectrum = async (request?: StreamUdpSpectrumRequest): Promise<
   const backend = resolveBackend();
   if (!backend || isKnownUnavailable("StreamUdp.audioFx")) return null;
   try {
-    const frame = await backend.readSpectrum(request && request.targetNanos ? request : undefined);
+    const frame = await backend.readSpectrum(request && (request.targetNanos || request.wave) ? request : undefined);
     if (!isFrame(frame)) {
       reportFailure("readSpectrum", new Error("readSpectrum returned an unexpected shape"));
       return null;

@@ -11,6 +11,8 @@ import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { shareTune } from "@/lib/playback/shareTune";
+import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { describeConfigOrigin, describeConfigOutcome, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
@@ -20,6 +22,7 @@ import type { ActionListItem, ActionListMenuItem } from "@/components/lists/Sele
 import { formatPlayCategoryTag, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistRowSubtitle } from "@/pages/playFiles/playlistRowSubtitle";
+import type { PlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
 
 export type PlaylistListItemsOptions = {
   filteredPlaylist: PlaylistItem[];
@@ -39,6 +42,7 @@ export type PlaylistListItemsOptions = {
   formatDate: (value?: string | null) => string;
   getParentPath: (value: string) => string;
   currentPlayingItemId: string | null;
+  queueActions?: PlaylistQueueActions;
 };
 
 /** What a built row was built from; the row is reused while every one of these is unchanged. */
@@ -48,10 +52,61 @@ type CachedPlaylistRow = {
   durationLabel: string;
   selected: boolean;
   isPlaying: boolean;
+  queueAvailability: string;
   row: ActionListItem;
 };
 
 type PlaylistRowCache = { shared: readonly unknown[]; rows: Map<string, CachedPlaylistRow | ActionListItem> };
+
+type QueueAvailability = { playNext: boolean; moveUp: boolean; moveDown: boolean; note: string | null };
+
+const SHUFFLE_NOTE = "Turn off Shuffle to change the order";
+const FILTER_NOTE = "Clear the filter to change the order";
+
+const resolveQueueAvailability = (
+  queueActions: PlaylistQueueActions,
+  { index, count, playingIndex, loading }: { index: number; count: number; playingIndex: number; loading: boolean },
+): QueueAvailability => {
+  if (queueActions.shuffleEnabled) return { playNext: false, moveUp: false, moveDown: false, note: SHUFFLE_NOTE };
+  const orderLocked = loading || queueActions.filterHidesRows;
+  return {
+    playNext: !loading && index !== playingIndex && index !== playingIndex + 1,
+    moveUp: !orderLocked && index > 0,
+    moveDown: !orderLocked && index < count - 1,
+    note: queueActions.filterHidesRows ? FILTER_NOTE : null,
+  };
+};
+
+const describeQueueAvailability = (availability: QueueAvailability) =>
+  `${availability.playNext}${availability.moveUp}${availability.moveDown}${availability.note}`;
+
+/** The row menu's reorder actions, with the note that says why they are unavailable. */
+const buildQueueMenuItems = (
+  queueActions: PlaylistQueueActions,
+  availability: QueueAvailability,
+  itemId: string,
+): ActionListMenuItem[] => [
+  ...(availability.note ? [{ type: "note" as const, text: availability.note }] : []),
+  {
+    type: "action",
+    label: "Play next",
+    onSelect: () => queueActions.playNext(itemId),
+    disabled: !availability.playNext,
+  },
+  { type: "action", label: "Move up", onSelect: () => queueActions.moveUp(itemId), disabled: !availability.moveUp },
+  {
+    type: "action",
+    label: "Move down",
+    onSelect: () => queueActions.moveDown(itemId),
+    disabled: !availability.moveDown,
+  },
+];
+
+/** Not disabled while loading or reordering is locked: it reads the row and never changes the playlist. */
+const buildShareMenuItems = (item: PlaylistItem, title: string): ActionListMenuItem[] => {
+  const payload = tuneShareForItem(item, undefined, undefined, title);
+  return payload ? [{ type: "action", label: "Share", onSelect: () => void shareTune(payload) }] : [];
+};
 
 const sameInputs = (left: readonly unknown[], right: readonly unknown[]) =>
   left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
@@ -74,6 +129,7 @@ export const usePlaylistListItems = ({
   formatDate,
   getParentPath,
   currentPlayingItemId,
+  queueActions,
 }: PlaylistListItemsOptions) => {
   const startPlaylist = useLatestCallback(startPlaylistLatest);
   const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
@@ -101,7 +157,9 @@ export const usePlaylistListItems = ({
       formatBytes,
       formatDate,
       getParentPath,
+      queueActions,
     ];
+    const playingIndex = currentPlayingItemId === null ? -1 : (playlistIndexById.get(currentPlayingItemId) ?? -1);
     const previousCache = rowCacheRef.current;
     const cachedRows = previousCache && sameInputs(previousCache.shared, shared) ? previousCache.rows : new Map();
     rowCacheRef.current = { shared, rows: cachedRows };
@@ -138,6 +196,15 @@ export const usePlaylistListItems = ({
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
       const selected = selectedPlaylistIds.has(item.id);
       const isPlaying = currentPlayingItemId === item.id;
+      const availability = queueActions
+        ? resolveQueueAvailability(queueActions, {
+            index: playlistIndex,
+            count: playlist.length,
+            playingIndex,
+            loading: isPlaylistLoading,
+          })
+        : null;
+      const queueAvailability = availability ? describeQueueAvailability(availability) : "";
       const cached = cachedRows.get(item.id) as CachedPlaylistRow | undefined;
       if (
         cached &&
@@ -145,7 +212,8 @@ export const usePlaylistListItems = ({
         cached.playlistIndex === playlistIndex &&
         cached.durationLabel === durationLabel &&
         cached.selected === selected &&
-        cached.isPlaying === isPlaying
+        cached.isPlaying === isPlaying &&
+        cached.queueAvailability === queueAvailability
       ) {
         items.push(cached.row);
         return;
@@ -179,7 +247,13 @@ export const usePlaylistListItems = ({
       ]
         .filter(Boolean)
         .join(" ");
+      const actionItems = [
+        ...(queueActions && availability ? buildQueueMenuItems(queueActions, availability, item.id) : []),
+        ...buildShareMenuItems(item, display.title),
+      ];
       const menuItems: ActionListMenuItem[] = [
+        ...actionItems,
+        ...(actionItems.length ? [{ type: "separator" as const }] : []),
         { type: "label", label: "Details" },
         {
           type: "info",
@@ -300,7 +374,7 @@ export const usePlaylistListItems = ({
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
       };
-      cachedRows.set(item.id, { item, playlistIndex, durationLabel, selected, isPlaying, row });
+      cachedRows.set(item.id, { item, playlistIndex, durationLabel, selected, isPlaying, queueAvailability, row });
       items.push(row);
     });
     endHvscPerfScope(renderScope, {
@@ -345,5 +419,6 @@ export const usePlaylistListItems = ({
     selectedPlaylistIds,
     startPlaylist,
     currentPlayingItemId,
+    queueActions,
   ]);
 };

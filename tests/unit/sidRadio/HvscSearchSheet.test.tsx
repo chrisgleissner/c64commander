@@ -38,7 +38,15 @@ const answerWith = (songs: unknown[], totalSongs = songs.length) =>
 
 const renderSheet = (props: Partial<React.ComponentProps<typeof HvscSearchSheet>> = {}) =>
   render(
-    <HvscSearchSheet open onOpenChange={vi.fn()} onPlay={vi.fn()} onStartStation={vi.fn()} stationActive {...props} />,
+    <HvscSearchSheet
+      open
+      onOpenChange={vi.fn()}
+      onPlay={vi.fn()}
+      onPlayAll={vi.fn()}
+      onStartStation={vi.fn()}
+      stationActive
+      {...props}
+    />,
   );
 
 const type = (value: string) => fireEvent.change(screen.getByTestId("hvsc-search-input"), { target: { value } });
@@ -172,6 +180,124 @@ describe("HvscSearchSheet", () => {
     renderSheet({ stationActive: true });
 
     expect(screen.getByTestId("hvsc-search-sheet").textContent).toContain("carries on");
+  });
+});
+
+/**
+ * Playing every result of a search, which is how "everything by this composer" becomes one press.
+ */
+describe("play all", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  const tunes = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      hit(`/MUSICIANS/H/Hubbard_Rob/Tune_${index + 1}.sid`, `Tune ${index + 1}`),
+    );
+
+  const mutedParts = (button: HTMLElement) =>
+    Array.from(button.querySelectorAll("span"))
+      .filter((span) => span.className.includes("text-muted-foreground"))
+      .map((span) => span.textContent);
+
+  const resultsShown = async () => {
+    type("hubbard");
+    await waitFor(() => expect(screen.getAllByTestId("hvsc-search-row").length).toBeGreaterThan(0));
+  };
+
+  it("turns the count line into a full-width button when two or more tunes were found", async () => {
+    answerWith(tunes(87));
+    renderSheet();
+
+    await resultsShown();
+
+    const button = screen.getByTestId("hvsc-search-play-all");
+    expect(button.tagName).toBe("BUTTON");
+    expect(button.textContent).toBe("Play all 87");
+    expect(mutedParts(button)).toEqual(["87"]);
+    expect(button.className).toContain("w-full");
+    expect(button.className).toContain("h-11");
+    expect(screen.queryByTestId("hvsc-search-count")).toBeNull();
+  });
+
+  it("shows the plain count, and no button, for a single tune", async () => {
+    answerWith(tunes(1));
+    renderSheet();
+
+    await resultsShown();
+
+    expect(screen.queryByTestId("hvsc-search-play-all")).toBeNull();
+    expect(screen.getByTestId("hvsc-search-count").tagName).toBe("P");
+    expect(screen.getByTestId("hvsc-search-count").textContent).toBe("1 match");
+  });
+
+  it("offers no button when nothing was found", async () => {
+    answerWith([]);
+    renderSheet();
+
+    type("zzzz");
+    await waitFor(() => expect(searchHvscSongs).toHaveBeenCalled());
+
+    expect(screen.queryByTestId("hvsc-search-play-all")).toBeNull();
+    expect(screen.queryByTestId("hvsc-search-count")).toBeNull();
+  });
+
+  it("says how many of the matches the capped list holds", async () => {
+    answerWith(tunes(100), 412);
+    renderSheet();
+
+    await resultsShown();
+
+    const button = screen.getByTestId("hvsc-search-play-all");
+    expect(button.textContent).toBe("Play these 100 of 412");
+    expect(mutedParts(button)).toEqual(["100 of 412"]);
+  });
+
+  it("keeps the whole label at 14 px or larger", async () => {
+    answerWith(tunes(3));
+    renderSheet();
+
+    await resultsShown();
+
+    const classes = [
+      screen.getByTestId("hvsc-search-play-all"),
+      ...screen.getByTestId("hvsc-search-play-all").querySelectorAll("*"),
+    ]
+      .map((element) => element.getAttribute("class") ?? "")
+      .join(" ");
+    expect(classes).not.toMatch(/text-xs|text-\[1[0-3]px\]/);
+  });
+
+  it("plays every listed tune in ranked order, then closes", async () => {
+    const found = tunes(5);
+    answerWith(found);
+    const onPlayAll = vi.fn();
+    const onPlay = vi.fn();
+    const onOpenChange = vi.fn();
+    renderSheet({ onPlayAll, onPlay, onOpenChange });
+
+    await resultsShown();
+    fireEvent.click(screen.getByTestId("hvsc-search-play-all"));
+
+    expect(onPlay).not.toHaveBeenCalled();
+    expect(onPlayAll).toHaveBeenCalledTimes(1);
+    expect(onPlayAll.mock.calls[0]?.[0].map((entry: { virtualPath: string }) => entry.virtualPath)).toEqual(
+      found.map((entry) => entry.virtualPath),
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("plays only the capped list it shows when there are more matches than it holds", async () => {
+    answerWith(tunes(100), 412);
+    const onPlayAll = vi.fn();
+    renderSheet({ onPlayAll });
+
+    await resultsShown();
+    fireEvent.click(screen.getByTestId("hvsc-search-play-all"));
+
+    expect(onPlayAll.mock.calls[0]?.[0]).toHaveLength(100);
   });
 });
 

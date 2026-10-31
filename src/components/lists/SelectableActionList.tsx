@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { useCallback, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { LetterIndexRail, useLetterRailModel } from "./LetterIndexRail";
 import type { LetterIndexSource } from "@/lib/lists/letterIndex";
 import { ActionListItemMenu } from "./ActionListItemMenu";
 import { CollapsibleListFilter, ListFilterField, nearestScroller, type ListFilterRegion } from "./ListFilter";
+import { registerListRowScroller } from "./listRowReveal";
 import { getDisplayProfileLayoutTokens, type DisplayProfile } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
@@ -33,6 +34,7 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 export type ActionListMenuItem =
   | { type: "label"; label: string }
   | { type: "info"; label: string; value: string }
+  | { type: "note"; text: string }
   | { type: "separator" }
   | {
       type: "action";
@@ -492,6 +494,15 @@ export const SelectableActionList = ({
     () => filterWithHeaders(expandedFilterText, effectiveViewAllItems),
     [effectiveViewAllItems, expandedFilterText, filterWithHeaders],
   );
+  useEffect(() => {
+    if (!viewAllOpen) return undefined;
+    return registerListRowScroller((rowId) => {
+      const index = viewAllFilteredItems.findIndex((item) => item.id === rowId);
+      if (index < 0 || !virtuosoRef.current) return false;
+      virtuosoRef.current.scrollToIndex({ index, align: "center" });
+      return true;
+    });
+  }, [viewAllFilteredItems, viewAllOpen]);
   const letterRail = useLetterRailModel(
     viewAllFilteredItems,
     estimatedItemHeight,

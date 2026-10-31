@@ -7,8 +7,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AudioWaveform } from "lucide-react";
+import { Activity, AudioWaveform, ChartNoAxesColumn, type LucideIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { ScreenActivityWatch } from "@/components/ScreenActivityWatch";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -17,12 +18,24 @@ import { useAvMirror } from "@/hooks/useAvMirror";
 import { useAudioFxAvailable } from "@/lib/audio/useAudioFxAvailable";
 import { SpectrumView, type SpectrumReadout } from "@/lib/audio/spectrum/spectrumView";
 import { METER_AREA_HEIGHT_PX } from "@/lib/audio/spectrum/spectrumRenderer";
+import { cn } from "@/lib/utils";
+import { getSpectrumViewMode, setSpectrumViewMode, type SpectrumViewMode } from "@/lib/uiPreferences";
 
 export const SPECTRUM_UNAVAILABLE_MESSAGE = "Spectrum is available for sound played on this phone";
 
 const CANVAS_HEIGHT_PX: Record<string, number> = { compact: 110, medium: 190, expanded: 240 };
 
 const THEME_ATTRIBUTES = ["class", "style", "data-theme", "data-app-style", "data-palette"];
+
+const CANVAS_LABELS: Record<SpectrumViewMode, string> = {
+  bars: "Audio channel meters growing from left to right: solid average level, translucent instantaneous peak, and a held peak marker on a shared dBFS scale; frequency spectrum below, bass to treble",
+  wave: "Audio channel meters, with the waveform of the sound below",
+};
+
+const VIEW_OPTIONS: ReadonlyArray<{ mode: SpectrumViewMode; label: string; icon: LucideIcon }> = [
+  { mode: "bars", label: "Bars", icon: ChartNoAxesColumn },
+  { mode: "wave", label: "Wave", icon: Activity },
+];
 
 const formatLevel = (db: number | null) => (db === null ? "—" : String(db));
 
@@ -35,9 +48,35 @@ export interface SpectrumCardProps {
 
 interface SpectrumPanelProps extends SpectrumCardProps {
   profile: string;
+  mode: SpectrumViewMode;
 }
 
-const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) => {
+interface SpectrumViewSwitchProps {
+  mode: SpectrumViewMode;
+  onChange: (mode: SpectrumViewMode) => void;
+  /** On the compact profile the header has room for two 44 px icon buttons but not for two words at 18 px. */
+  iconOnly: boolean;
+}
+
+const SpectrumViewSwitch = ({ mode, onChange, iconOnly }: SpectrumViewSwitchProps) => (
+  <div role="group" aria-label="Spectrum view" className="flex items-center gap-0.5" data-testid="spectrum-view-group">
+    {VIEW_OPTIONS.map((option) => (
+      <Button
+        key={option.mode}
+        variant="outline"
+        className={cn(iconOnly ? "px-0" : "px-3", mode === option.mode && "bg-accent text-accent-foreground")}
+        aria-pressed={mode === option.mode}
+        onClick={() => onChange(option.mode)}
+        data-testid={`spectrum-view-${option.mode}`}
+      >
+        <option.icon aria-hidden="true" />
+        <span className={iconOnly ? "sr-only" : undefined}>{option.label}</span>
+      </Button>
+    ))}
+  </div>
+);
+
+const SpectrumPanel = ({ soundOnPhone, paused, profile, mode }: SpectrumPanelProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewRef = useRef<SpectrumView | null>(null);
   const rmsRef = useRef<HTMLSpanElement | null>(null);
@@ -48,6 +87,8 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
   const [active, setActive] = useState(false);
   const height = CANVAS_HEIGHT_PX[profile] ?? CANVAS_HEIGHT_PX.medium;
   const chartHeight = height + METER_AREA_HEIGHT_PX;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const writeReadout = useCallback((readout: SpectrumReadout) => {
     if (rmsRef.current) rmsRef.current.textContent = formatLevel(readout.rmsDb);
@@ -69,6 +110,7 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
     const view = new SpectrumView({
       canvas,
       profile,
+      mode: modeRef.current,
       onReadout: writeReadout,
       onActiveChange: setActive,
       onTierChange: (tier) => {
@@ -97,6 +139,10 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
       viewRef.current = null;
     };
   }, [profile, writeReadout]);
+
+  useEffect(() => {
+    viewRef.current?.setMode(mode);
+  }, [mode]);
 
   useEffect(() => {
     viewRef.current?.setState({ visible: onScreen && soundOnPhone, paused });
@@ -129,7 +175,7 @@ const SpectrumPanel = ({ soundOnPhone, paused, profile }: SpectrumPanelProps) =>
         <canvas
           ref={canvasRef}
           role="img"
-          aria-label="Audio channel meters growing from left to right: solid average level, translucent instantaneous peak, and a held peak marker on a shared dBFS scale; frequency spectrum below, bass to treble"
+          aria-label={CANVAS_LABELS[mode]}
           className="block w-full rounded-panel border border-border bg-background"
           style={{ height: chartHeight }}
           data-testid="spectrum-canvas"
@@ -157,6 +203,12 @@ export const SpectrumCard = ({ soundOnPhone, paused }: SpectrumCardProps) => {
   const available = useAudioFxAvailable();
   const { profile } = useDisplayProfile();
   const [openByDefault] = useState(soundOnPhone);
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState(getSpectrumViewMode);
+  const chooseMode = useCallback((next: SpectrumViewMode) => {
+    setMode(next);
+    setSpectrumViewMode(next);
+  }, []);
   if (!available) return null;
   return (
     <CollapsibleSection
@@ -166,9 +218,13 @@ export const SpectrumCard = ({ soundOnPhone, paused }: SpectrumCardProps) => {
       summary="Live level of the sound from this phone"
       icon={AudioWaveform}
       defaultOpen={openByDefault}
+      onOpenChange={setOpen}
+      actions={
+        open ? <SpectrumViewSwitch mode={mode} onChange={chooseMode} iconOnly={profile === "compact"} /> : undefined
+      }
       testId="play-section-spectrum"
     >
-      <SpectrumPanel soundOnPhone={soundOnPhone} paused={paused} profile={profile} />
+      <SpectrumPanel soundOnPhone={soundOnPhone} paused={paused} profile={profile} mode={mode} />
     </CollapsibleSection>
   );
 };

@@ -37,6 +37,10 @@ internal class SpectrumFrame(
     val shortfallSamples: Int = 0,
     /** True when the bands follow a speaker position, so a later target time yields later sound. */
     val aligned: Boolean = false,
+    /** The waveform window, when one was asked for and could be read. */
+    val wave: ByteArray? = null,
+    /** False when the window found no rising zero crossing and simply covers the newest samples. */
+    val waveTriggered: Boolean = false,
 )
 
 /**
@@ -131,6 +135,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   private val power = FloatArray(MAX_FFT_SIZE / 2 + 1)
   private var cached: SpectrumFrame? = null
   private var cachedSeq = -1L
+  private var cachedWithBands = false
 
   /**
    * Prepare analysis for a pipeline's rate. This allocates the band plan and history on the opening
@@ -172,6 +177,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     readerAnchorKnown = false
     cached = null
     cachedSeq = -1
+    cachedWithBands = false
     configuration = next
   }
 
@@ -229,7 +235,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
 
   /** The analysis of the samples now being heard; runs the FFT only when they have moved on. */
   @Synchronized
-  fun read(enabled: Boolean, targetNanos: Long = 0L): SpectrumFrame {
+  fun read(enabled: Boolean, targetNanos: Long = 0L, wave: Boolean = false, bands: Boolean = true): SpectrumFrame {
     val now = nanoTime()
     val config = configuration
     val newest = writeCount
@@ -241,11 +247,12 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
     val active = now - lastFeedNanos < ACTIVE_WINDOW_NANOS || newest - end >= config.levelSamples
     val seq = end / config.stepSamples
     val previous = cached
-    if (previous == null || cachedSeq != seq) {
-      val analysed = analyseStable(config, seq * config.stepSamples, newest, now)
+    if (previous == null || cachedSeq != seq || (bands && !cachedWithBands)) {
+      val analysed = analyseStable(config, seq * config.stepSamples, newest, now, bands)
       if (analysed != null) {
         cached = analysed
         cachedSeq = seq
+        cachedWithBands = bands
       }
     }
     val frame = cached
@@ -254,12 +261,19 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       // A sequence is observable only once its matching history has been copied.
       return SpectrumFrame(true, active, 0L, config.sampleRate, floorBands(), SpectrumBands.FLOOR_DB, SpectrumBands.FLOOR_DB, clipped, timestampNanos = now, aligned = readerAnchorKnown)
     }
+    val window = if (wave) readWave(config, end, newest) else null
     return SpectrumFrame(true, active, frame.sequence, frame.sampleRate, frame.bands, frame.peakDb, frame.rmsDb, clipped,
         Array(2) { channel ->
           val level = frame.channels[channel]
           SpectrumChannelLevel(level.id, level.rmsDb, level.peakDb,
               channelClipNanos[channel] != Long.MIN_VALUE && now - channelClipNanos[channel] < CLIP_HOLD_NANOS)
-        }, now, frame.shortfallSamples, readerAnchorKnown)
+        }, now, frame.shortfallSamples, readerAnchorKnown, window?.points, window?.triggered ?: false)
+  }
+
+  /** The waveform ending where the listener is; null when the writer overwrote any of its samples meanwhile. */
+  private fun readWave(config: Configuration, end: Long, newest: Long): WaveWindow? {
+    val window = WaveWindow.extract(config.history, end, maxOf(0L, newest - config.reach))
+    return if (writingUpTo - config.history.size > window.oldestRead) null else window
   }
 
   /**
@@ -297,10 +311,10 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
   }
 
   /** Analyses samples up to [newest]; null when the writer overwrote any of them meanwhile. */
-  private fun analyseStable(config: Configuration, end: Long, newest: Long, now: Long): SpectrumFrame? {
+  private fun analyseStable(config: Configuration, end: Long, newest: Long, now: Long, withBands: Boolean): SpectrumFrame? {
     val history = config.history
     val mask = config.mask
-    val bands = IntArray(SpectrumBands.COUNT)
+    val bands = if (withBands) IntArray(SpectrumBands.COUNT) else floorBands()
     var oldestRead = Long.MAX_VALUE
     var shortfall = 0L
     for (resolution in config.resolutions) {
@@ -311,6 +325,7 @@ internal class SpectrumAnalyzer(private val nanoTime: () -> Long = System::nanoT
       shortfall = maxOf(shortfall, wanted - windowEnd)
       val start = windowEnd - size
       oldestRead = minOf(oldestRead, start)
+      if (!withBands) continue
       for (n in 0 until size) {
         val index = start + n
         re[n] = if (index < 0) 0.0f else history[(index and mask).toInt()] * window[n]
