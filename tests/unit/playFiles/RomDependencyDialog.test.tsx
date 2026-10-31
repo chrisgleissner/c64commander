@@ -16,13 +16,13 @@ const item = (label: string) => ({ id: label, label }) as PlaylistItem;
 
 describe("RomDependencyDialog", () => {
   it("is closed without a song", () => {
-    render(<RomDependencyDialog label={null} onChoose={vi.fn()} />);
+    render(<RomDependencyDialog prompt={null} onChoose={vi.fn()} />);
     expect(screen.queryByTestId("rom-dependency-dialog")).toBeNull();
   });
 
   it("names the song and offers Play anyway and Cancel", () => {
     const onChoose = vi.fn();
-    render(<RomDependencyDialog label="Comic Bakery" onChoose={onChoose} />);
+    render(<RomDependencyDialog prompt={{ label: "Comic Bakery", canPlayAnyway: true }} onChoose={onChoose} />);
 
     expect(screen.getByText("Needs the C64 ROMs")).toBeInTheDocument();
     expect(screen.getByText(/Comic Bakery.*needs the C64.s ROMs to play correctly on this phone/)).toBeInTheDocument();
@@ -35,9 +35,21 @@ describe("RomDependencyDialog", () => {
     expect(onChoose).toHaveBeenNthCalledWith(1, "cancel");
   });
 
+  it("offers only OK, and no Play anyway, for a song the phone cannot play without the ROMs", () => {
+    const onChoose = vi.fn();
+    render(<RomDependencyDialog prompt={{ label: "Comic Bakery", canPlayAnyway: false }} onChoose={onChoose} />);
+
+    expect(screen.getByText(/Comic Bakery.*cannot play on this phone without the C64.s ROMs/)).toBeInTheDocument();
+    expect(screen.queryByTestId("rom-dependency-play-anyway")).toBeNull();
+    expect(screen.getByTestId("rom-dependency-cancel")).toHaveTextContent("OK");
+
+    fireEvent.click(screen.getByTestId("rom-dependency-cancel"));
+    expect(onChoose).toHaveBeenNthCalledWith(1, "cancel");
+  });
+
   it("counts Escape as Cancel", () => {
     const onChoose = vi.fn();
-    render(<RomDependencyDialog label="Comic Bakery" onChoose={onChoose} />);
+    render(<RomDependencyDialog prompt={{ label: "Comic Bakery", canPlayAnyway: true }} onChoose={onChoose} />);
     fireEvent.keyDown(screen.getByTestId("rom-dependency-dialog"), { key: "Escape" });
     expect(onChoose).toHaveBeenCalledWith("cancel");
   });
@@ -48,13 +60,13 @@ describe("useRomDependencyPrompt", () => {
     const { result } = renderHook(() => useRomDependencyPrompt());
     let answer: Promise<string> | undefined;
     act(() => {
-      answer = result.current.ask(item("Comic Bakery"));
+      answer = result.current.ask(item("Comic Bakery"), { canPlayAnyway: true });
     });
-    expect(result.current.label).toBe("Comic Bakery");
+    expect(result.current.pending).toEqual({ label: "Comic Bakery", canPlayAnyway: true });
     act(() => result.current.choose("play-anyway"));
     act(() => result.current.choose("cancel")); // the dismissal that follows a button press changes nothing
     await expect(answer).resolves.toBe("play-anyway");
-    expect(result.current.label).toBeNull();
+    expect(result.current.pending).toBeNull();
   });
 
   it("answers Cancel to a question it replaces, and to one left open when the page goes", async () => {
@@ -62,12 +74,13 @@ describe("useRomDependencyPrompt", () => {
     let first: Promise<string> | undefined;
     let second: Promise<string> | undefined;
     act(() => {
-      first = result.current.ask(item("one"));
+      first = result.current.ask(item("one"), { canPlayAnyway: true });
     });
     act(() => {
-      second = result.current.ask(item("two"));
+      second = result.current.ask(item("two"), { canPlayAnyway: false });
     });
     await expect(first).resolves.toBe("cancel");
+    expect(result.current.pending).toEqual({ label: "two", canPlayAnyway: false });
     unmount();
     await expect(second).resolves.toBe("cancel");
   });

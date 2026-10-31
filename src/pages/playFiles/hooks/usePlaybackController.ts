@@ -65,7 +65,7 @@ import {
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
-import { playPassingOver, type RomDependencyAsk } from "@/pages/playFiles/resolveLocalRoute";
+import { playPassingOver, type RomDependencyDecider } from "@/pages/playFiles/resolveLocalRoute";
 import { resolveLaunchRoute } from "@/pages/playFiles/resolveLaunchRoute";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
@@ -197,7 +197,7 @@ interface UsePlaybackControllerProps {
     context: { configFileName: string | null; reason: string },
   ) => Promise<"play-without-config" | "cancel">;
   /** Asks the listener about a chosen song that needs the C64 ROMs. Absent: such a song is not played. */
-  resolveRomDependencyDecision?: (item: PlaylistItem) => ReturnType<RomDependencyAsk>;
+  resolveRomDependencyDecision?: RomDependencyDecider;
   /**
    * A track the USER asked for has actually launched. Never fires for a playlist
    * moving on by itself, and never for a launch that failed.
@@ -843,7 +843,7 @@ export function usePlaybackController({
           takePrefetched: (id) => nextTunePrefetch.take(id),
           passOver: options?.origin === "auto" || options?.passOverRomDependent === true,
           accepted: options?.romDependencyAccepted === true,
-          ask: resolveRomDependencyDecision && (() => resolveRomDependencyDecision(item)),
+          ask: resolveRomDependencyDecision && ((question) => resolveRomDependencyDecision(item, question)),
           stillWanted: () =>
             stopCountRef.current === stopsAtRequest &&
             playGenerationRef.current === myPlayGeneration &&

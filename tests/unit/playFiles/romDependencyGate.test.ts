@@ -12,6 +12,8 @@ import {
   ROM_LISTED_DIALOG_TITLE,
   romListedDialogText,
   romListedSkippedNotice,
+  romUnplayableDialogText,
+  romUnplayableSkippedNotice,
 } from "@/pages/playFiles/romDependencyGate";
 
 describe("decideRomListedPlayback", () => {
@@ -44,6 +46,44 @@ describe("decideRomListedPlayback", () => {
       expect(decideRomListedPlayback({ c64Usable, skipEnabled, autoAdvance, accepted: true })).toBe(outcome);
     },
   );
+});
+
+describe("decideRomListedPlayback for a song the phone's engine cannot start without the ROMs", () => {
+  it.each([
+    // c64Usable, skipEnabled, autoAdvance, accepted -> outcome
+    [true, true, true, false, "c64"],
+    [true, false, false, false, "c64"],
+    [false, true, true, false, "skip"],
+    [false, false, true, false, "skip"],
+    [false, true, false, false, "ask"],
+    [false, false, false, false, "ask"],
+    [false, true, true, true, "skip"],
+    [false, false, false, true, "ask"],
+  ] as const)(
+    "usable C64 %s, skipping %s, moving on by itself %s, accepted %s: %s, never played on the phone",
+    (c64Usable, skipEnabled, autoAdvance, accepted, outcome) => {
+      expect(decideRomListedPlayback({ c64Usable, skipEnabled, autoAdvance, accepted, engineCanStart: false })).toBe(
+        outcome,
+      );
+    },
+  );
+
+  it("treats a missing engineCanStart as a song the engine can start", () => {
+    expect(decideRomListedPlayback({ c64Usable: false, skipEnabled: false, autoAdvance: false })).toBe("phone");
+  });
+});
+
+describe("wording for a song the phone cannot play without the ROMs", () => {
+  it("says it cannot play here and offers no way to play it anyway", () => {
+    const notice = romUnplayableSkippedNotice("Comic Bakery");
+    const dialog = romUnplayableDialogText("Comic Bakery");
+    expect(notice).toContain("Comic Bakery");
+    expect(notice).toContain("Connect your C64");
+    expect(notice).not.toContain("Skip songs that need the C64 ROMs");
+    expect(dialog).toContain("Comic Bakery");
+    expect(dialog).toContain("cannot play on this phone");
+    expect(dialog).not.toMatch(/anyway|may sound wrong/i);
+  });
 });
 
 describe("wording", () => {

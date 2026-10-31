@@ -13,7 +13,7 @@
  * and BASIC, and exactly at the threshold (so it plays) in subtune 3 without ROMs.
  */
 
-import { act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executePlayPlan } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
@@ -24,6 +24,7 @@ import { setRomDependencyAssetsForTests } from "@/lib/romDependency/embeddedRomD
 import { RomDependentSongSkipped } from "@/lib/romDependency/romDependencyPolicy";
 import { romListedSkippedNotice } from "@/pages/playFiles/romDependencyGate";
 import { resetRomSkipNoticeForTests } from "@/pages/playFiles/resolveLocalRoute";
+import { setMaySoundWrong, useMaySoundWrong } from "@/pages/playFiles/maySoundWrongStore";
 import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import { FAKE_ROMS, syntheticAssets, SYNTHETIC_SID_MD5 } from "../../helpers/romDependencyFixture";
 import { attempt, fakeController, listed, plain, renderController } from "../../helpers/romDependencyController";
@@ -249,7 +250,7 @@ describe("ROM dependency list in the play path", () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
 
-      expect(decide).toHaveBeenCalledWith(playlist[0]);
+      expect(decide).toHaveBeenCalledWith(playlist[0], { canPlayAnyway: true });
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
@@ -328,6 +329,76 @@ describe("ROM dependency list in the play path", () => {
     });
   });
 
+  describe("the may sound wrong flag the player shows", () => {
+    const flag = () => renderHook(() => useMaySoundWrong());
+
+    beforeEach(() => setMaySoundWrong(false));
+
+    it("is raised for a listed song the listener chose to play anyway, and drops when a song the list does not name follows", async () => {
+      const controller = fakeController();
+      const decide = vi.fn(async () => "play-anyway" as const);
+      const playlist = [listed("b", 1), plain("a")];
+      const { result } = renderController(playlist, controller, { decide });
+      const shown = flag();
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      expect(shown.result.current).toBe(true);
+
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
+      expect(shown.result.current).toBe(false);
+    });
+
+    it("is raised for a listed song that plays because skipping is switched off", async () => {
+      localStorage.setItem("c64u_skip_rom_dependent_songs", "0");
+      const controller = fakeController();
+      const playlist = [listed("b", 1)];
+      const { result } = renderController(playlist, controller);
+      const shown = flag();
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+      });
+
+      expect(shown.result.current).toBe(true);
+    });
+
+    it("stays down for a song the list does not name", async () => {
+      const controller = fakeController();
+      const playlist = [plain("a")];
+      const { result } = renderController(playlist, controller);
+      const shown = flag();
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      expect(shown.result.current).toBe(false);
+    });
+
+    it("is left as it was when the listener cancels a question about another song", async () => {
+      const controller = fakeController();
+      const answers = ["play-anyway", "cancel"] as const;
+      const decide = vi.fn(async () => answers[decide.mock.calls.length - 1]);
+      const playlist = [listed("b", 1), listed("c", 1)];
+      const { result } = renderController(playlist, controller, { decide });
+      const shown = flag();
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      await act(async () => {
+        await result.current.playItem(playlist[1], { playlistIndex: 1 });
+      });
+
+      expect(decide).toHaveBeenCalledTimes(2);
+      expect(shown.result.current).toBe(true);
+    });
+  });
+
   describe("with a C64 connected", () => {
     beforeEach(() => {
       connectionState.current = "REAL_CONNECTED";
@@ -354,6 +425,20 @@ describe("ROM dependency list in the play path", () => {
       expect(toastDescriptions()).toContain(ENGINE_FALLBACK_MESSAGES["rom-on-c64"]);
       // The C64 is there, so the ROMs are worth reading from it for the songs that follow.
       expect(ensureSystemRoms).toHaveBeenCalled();
+    });
+
+    it("does not raise the may sound wrong flag for the song the C64 plays", async () => {
+      setMaySoundWrong(true);
+      const controller = fakeController();
+      const playlist = [listed("b", 1)];
+      const { result } = renderController(playlist, controller);
+      const shown = renderHook(() => useMaySoundWrong());
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      expect(shown.result.current).toBe(false);
     });
 
     it("does the same when skipping is turned off", async () => {

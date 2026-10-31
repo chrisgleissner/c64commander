@@ -19,12 +19,19 @@ import {
 import {
   ROM_LISTED_DIALOG_TITLE,
   romListedDialogText,
+  romUnplayableDialogText,
   type RomListedDialogChoice,
 } from "@/pages/playFiles/romDependencyGate";
 
+export type RomDependencyPrompt = {
+  label: string;
+  /** False when the phone's engine cannot start the song without the ROMs: the dialog only explains. */
+  canPlayAnyway: boolean;
+};
+
 export type RomDependencyDialogProps = {
-  /** The label of the song the listener chose, or null while the dialog is closed. */
-  label: string | null;
+  /** The song the listener chose, or null while the dialog is closed. */
+  prompt: RomDependencyPrompt | null;
   onChoose: (choice: RomListedDialogChoice) => void;
 };
 
@@ -32,20 +39,28 @@ export type RomDependencyDialogProps = {
  * Shown when the listener picks a song that needs the C64's ROMs and nothing can play it with them.
  * Dismissing it any other way counts as Cancel.
  */
-export const RomDependencyDialog = ({ label, onChoose }: RomDependencyDialogProps) => (
-  <AlertDialog open={label !== null} onOpenChange={() => onChoose("cancel")}>
+export const RomDependencyDialog = ({ prompt, onChoose }: RomDependencyDialogProps) => (
+  <AlertDialog open={prompt !== null} onOpenChange={() => onChoose("cancel")}>
     <AlertDialogContent data-testid="rom-dependency-dialog">
       <AlertDialogHeader hideClose>
         <AlertDialogTitle>{ROM_LISTED_DIALOG_TITLE}</AlertDialogTitle>
-        <AlertDialogDescription>{label === null ? "" : romListedDialogText(label)}</AlertDialogDescription>
+        <AlertDialogDescription>
+          {prompt === null
+            ? ""
+            : prompt.canPlayAnyway
+              ? romListedDialogText(prompt.label)
+              : romUnplayableDialogText(prompt.label)}
+        </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel data-testid="rom-dependency-cancel" onClick={() => onChoose("cancel")}>
-          Cancel
+          {prompt?.canPlayAnyway === false ? "OK" : "Cancel"}
         </AlertDialogCancel>
-        <AlertDialogAction data-testid="rom-dependency-play-anyway" onClick={() => onChoose("play-anyway")}>
-          Play anyway
-        </AlertDialogAction>
+        {prompt?.canPlayAnyway === false ? null : (
+          <AlertDialogAction data-testid="rom-dependency-play-anyway" onClick={() => onChoose("play-anyway")}>
+            Play anyway
+          </AlertDialogAction>
+        )}
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>

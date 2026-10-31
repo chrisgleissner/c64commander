@@ -3111,7 +3111,7 @@ export default function PlayFilesPage() {
           </AlertDialog>
 
           <UnavailableConfigDialog prompt={unavailableConfigPrompt.prompt} onChoose={unavailableConfigPrompt.choose} />
-          <RomDependencyDialog label={romDependencyPrompt.label} onChoose={romDependencyPrompt.choose} />
+          <RomDependencyDialog prompt={romDependencyPrompt.pending} onChoose={romDependencyPrompt.choose} />
 
           <StationQueueEditedDialog {...stationHandover.editedPrompt} />
 

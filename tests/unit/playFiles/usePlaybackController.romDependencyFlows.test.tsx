@@ -21,7 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import { addLog } from "@/lib/logging";
 import { savePlaybackEngine } from "@/lib/config/appSettings";
 import { setRomDependencyAssetsForTests } from "@/lib/romDependency/embeddedRomDependencyList";
-import { romListedSkippedNotice } from "@/pages/playFiles/romDependencyGate";
+import { romUnplayableSkippedNotice } from "@/pages/playFiles/romDependencyGate";
 import { resetRomSkipNoticeForTests } from "@/pages/playFiles/resolveLocalRoute";
 import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
@@ -147,7 +147,7 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
       expect(result.current.isPlaying).toBe(true);
       expect(controller.play).toHaveBeenCalledTimes(2);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
-      expect(skipNotices()).toEqual([romListedSkippedNotice("BASIC b")]);
+      expect(skipNotices()).toEqual([romUnplayableSkippedNotice("BASIC b")]);
       // The list does not name it: the header's requirement is the reason.
       expect(romLog()).toEqual([expect.objectContaining({ basis: "header", lane: null, outcome: "skip" })]);
     });
@@ -168,20 +168,36 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
-    it("is asked about when tapped, and plays here on Play anyway", async () => {
+    it("is explained when tapped, without an offer to play it anyway, and an answer of Play anyway plays nothing", async () => {
       const controller = fakeController();
       const decide = vi.fn(async () => "play-anyway" as const);
       const playlist = [basicRsid("b")];
       const { result } = renderController(playlist, controller, { decide });
 
+      expect(await attempt(() => result.current.playItem(playlist[0], { playlistIndex: 0 }))).toBeUndefined();
+
+      expect(decide).toHaveBeenCalledWith(playlist[0], { canPlayAnyway: false });
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+      expect(result.current.isPlaying).toBe(false);
+    });
+
+    it("is passed over by auto-advance even when skipping songs that need the ROMs is switched off", async () => {
+      localStorage.setItem("c64u_skip_rom_dependent_songs", "0");
+      const controller = fakeController();
+      const playlist = [plain("a"), basicRsid("b"), plain("c")];
+      const { result } = renderController(playlist, controller);
       await act(async () => {
         await result.current.playItem(playlist[0], { playlistIndex: 0 });
       });
 
-      expect(decide).toHaveBeenCalledWith(playlist[0]);
-      expect(controller.play).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
-      expect(result.current.isPlaying).toBe(true);
+      await act(async () => {
+        await result.current.handleNext("auto", result.current.trackInstanceIdRef.current);
+      });
+
+      expect(result.current.currentIndex).toBe(2);
+      expect(controller.play).toHaveBeenCalledTimes(2);
+      expect(skipNotices()).toEqual([romUnplayableSkippedNotice("BASIC b")]);
     });
 
     it("is asked about when tapped, and nothing is sent anywhere on Cancel", async () => {
@@ -278,7 +294,7 @@ describe("songs that need the C64 ROMs: starts, questions, repeats and moves", (
         await result.current.startPlaylist(playlist, 1);
       });
 
-      expect(decide).toHaveBeenCalledWith(playlist[1]);
+      expect(decide).toHaveBeenCalledWith(playlist[1], { canPlayAnyway: true });
       expect(result.current.currentIndex).toBe(1);
     });
 
