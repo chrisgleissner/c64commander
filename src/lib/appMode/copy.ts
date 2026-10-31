@@ -61,3 +61,26 @@ export const MODE_COPY = {
     leave: "Leave SID Player",
   },
 } as const;
+
+export const START_LISTENING_COPY = {
+  title: "Start listening",
+  collection: "Get the free C64 music collection",
+  station: "Play a station",
+  addFiles: "Add your own SID files",
+  archive: "Browse the online archive",
+  offline: "The free collection needs an internet connection.",
+} as const;
+
+export const COLLECTION_CONSENT_COPY = {
+  title: "Get the free C64 music collection",
+  intro: "The collection is downloaded once and kept on this phone.",
+  whatYouGet: [
+    "Tens of thousands of C64 tunes to browse by composer and year.",
+    "Stations that play by mood, such as Chill, Melodic or Energetic.",
+    "Everything plays on this phone, with or without a network, once it is here.",
+  ],
+  afterwards: "You can remove it again in Settings.",
+  wifi: "Wi-Fi recommended.",
+  download: "Download",
+  notNow: "Not now",
+} as const;

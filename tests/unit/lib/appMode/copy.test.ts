@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { MODE_COPY, MODE_NAMES } from "@/lib/appMode/copy";
+import { COLLECTION_CONSENT_COPY, MODE_COPY, MODE_NAMES, START_LISTENING_COPY } from "@/lib/appMode/copy";
 
 const FEATURE_NAMES = new Set([
   "SID",
@@ -27,6 +27,9 @@ const FEATURE_NAMES = new Set([
   "Docs",
   "Home",
   "WiFi",
+  "Chill",
+  "Melodic",
+  "Energetic",
 ]);
 const BRITISH =
   /\b(colour|favourite|behaviour|organis|recognis|centre|licence|analogue|catalogue|grey|whilst|towards|cancelled)\w*/i;
@@ -77,5 +80,21 @@ describe("mode copy", () => {
     expect(MODE_COPY.firstRun.useSidPlayer).toBe("Use SID Player");
     expect(MODE_COPY.firstRun.tryDemoMode).toBe("Try Demo Mode");
     expect(MODE_COPY.firstRun.retry).toBe("Retry connection");
+  });
+
+  it("SPM-TONE-01 SID Player-only copy avoids the jargon list", () => {
+    const jargon = /\b(REST|FTP|Telnet|host|IP|PAL|NTSC|dB|KERNAL|BASIC)\b/;
+    for (const copy of [START_LISTENING_COPY, COLLECTION_CONSENT_COPY, MODE_COPY.firstRun, MODE_COPY.sheet]) {
+      for (const text of strings(copy)) expect(text, text).not.toMatch(jargon);
+    }
+  });
+
+  it("SPM-TONE-01 Start listening and the consent copy are sentence case and fit the rules of the other copy", () => {
+    for (const copy of [START_LISTENING_COPY, COLLECTION_CONSENT_COPY]) {
+      for (const text of strings(copy)) {
+        expect(sentenceCaseViolations(text), text).toEqual([]);
+        expect(text).not.toMatch(BRITISH);
+      }
+    }
   });
 });

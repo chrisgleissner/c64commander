@@ -75,7 +75,7 @@ export const isTest = (file) =>
 export const GRANDFATHERED = new Map([
   ["src/pages/SettingsPage.tsx", 2921],
   ["src/lib/c64api.ts", 3397],
-  ["src/pages/PlayFilesPage.tsx", 3137],
+  ["src/pages/PlayFilesPage.tsx", 3124],
   ["src/components/disks/HomeDiskManager.tsx", 2757],
   ["src/lib/playback/localSidEngine.ts", 2449],
   ["src/pages/playFiles/hooks/usePlaybackController.ts", 2438],

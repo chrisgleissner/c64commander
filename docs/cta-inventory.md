@@ -395,6 +395,14 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
 
 ### 4.2 Play (`/play`)
 
+- **SID Player only, first on the page** — search (`home-search-field`) and, while the playlist is empty, the
+  **Start listening** area (`start-listening`): buttons `start-listening-collection` (Get the free C64 music
+  collection; only while HVSC is missing and the network is up), `start-listening-station` (Play a station;
+  once HVSC is installed), `start-listening-add-files` (Add your own SID files), `start-listening-archive`
+  (Browse the online archive; only with a network), then the listening tiles
+  (`play-listening-shortcuts`: `home-tile-action.sid-radio`, `home-tile-action.resume-session`,
+  `home-tile-action.recently-played`). Offline, `start-listening-offline-note` explains that the collection needs
+  an internet connection. Not yet verified on hardware.
 - Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading (Previous, Pause, Next), or no previous/next item in the current repeat/shuffle traversal; while a launch is in flight Play shows Stop and stays enabled; after Stop is pressed the button is labelled "Stopping…" with a spinner and `aria-disabled` (still focusable), and a "Stopping…" line (`playback-stop-status`) shows under the transport, until the device answers the reset or reboot; if a stopped launch is still unwinding after that, it shows Play with `aria-disabled` until the launch returns]`
 - Now playing: where the queue comes from — `now-playing-source` — the first row of the card, present
   in both states and the same height in both (`data-station-active`); a running station renders
@@ -458,7 +466,9 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
   - Reset HVSC confirmation — alert dialog — `hvsc-reset-dialog` — Cancel (`hvsc-reset-cancel`, takes focus
     when the dialog opens) and Reset (`hvsc-reset-confirm`); Reset removes the installed library
 - HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
-- **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
+- **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. In SID Player a closed-collection download first asks: Download
+(`hvsc-consent-download`) and Not now (`hvsc-consent-not-now`) with the size, the free space needed and "Wi-Fi recommended"
+(`hvsc-consent-size`); nothing downloads before Download is pressed. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying` and not on a device that cannot stream, such as a U2)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button (label **Input**, accessible name "Remote Input") — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - About this tune — expand/collapse — `tune-details-toggle` — R✅ I✅ — below the progress bar and the playback order buttons, present whenever a tune is current, so changing tunes never adds or removes its row. Reveals `tune-details-body` (shuts when the item or subsong changes, not when the tune's text is refined, e.g. a late song length): the full credits (`tune-details-credits`) and facts (`tune-details-facts`) lines, then the STIL entry; `tune-details-empty` when nothing is known yet. Opening it moves nothing above it

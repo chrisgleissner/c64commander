@@ -31,6 +31,10 @@ export interface PlayDeepLinkHandlers {
   readonly openFindATune: (seed?: string) => void;
   readonly openLikedTunes: () => void;
   readonly resumeSession: () => void;
+  /** Start listening in SID Player: the collection download sheet, Add items, and Add items on the online archive. */
+  readonly openCollection: () => void;
+  readonly openAddItems: () => void;
+  readonly openArchive: () => void;
 }
 
 const PARAM_TO_HANDLER: Readonly<Record<string, keyof PlayDeepLinkHandlers>> = {
@@ -39,6 +43,9 @@ const PARAM_TO_HANDLER: Readonly<Record<string, keyof PlayDeepLinkHandlers>> = {
   find: "openFindATune",
   liked: "openLikedTunes",
   resume: "resumeSession",
+  collection: "openCollection",
+  add: "openAddItems",
+  archive: "openArchive",
 };
 
 export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
@@ -118,3 +125,28 @@ export const useTransportCommands = (run: (command: TransportCommand) => void, r
     });
   }, [listening]);
 };
+
+type StartListeningSetters = {
+  readonly setHvscPreparationOpen: (open: boolean) => void;
+  readonly setBrowserOpen: (open: boolean) => void;
+  readonly setBrowserInitialSourceId: (sourceId: string | null) => void;
+  readonly archiveSourceId: string;
+};
+
+/** What the Start listening actions ask Play to open, built from the page's own sheet state. */
+export const startListeningHandlers = ({
+  setHvscPreparationOpen,
+  setBrowserOpen,
+  setBrowserInitialSourceId,
+  archiveSourceId,
+}: StartListeningSetters): Pick<PlayDeepLinkHandlers, "openCollection" | "openAddItems" | "openArchive"> => ({
+  openCollection: () => setHvscPreparationOpen(true),
+  openAddItems: () => {
+    setBrowserInitialSourceId(null);
+    setBrowserOpen(true);
+  },
+  openArchive: () => {
+    setBrowserInitialSourceId(archiveSourceId);
+    setBrowserOpen(true);
+  },
+});
