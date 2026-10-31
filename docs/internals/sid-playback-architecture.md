@@ -355,6 +355,10 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
   notice per session; `playPassingOver` moves on to the next song that can play, skipping tracks only
   a C64 can play as well). So does the first song of a station, or of Play pressed with no song
   chosen. Only a song the listener picked asks first (`RomDependencyDialog`, Play anyway or Cancel).
+  A tune whose header declares BASIC, with no BASIC ROM stored, cannot be opened by the local engine
+  whatever the list grades; the listener who picks it gets a notice with one OK button instead
+  (`decideRomListedPlayback` outcome `blocked`, `RomDependencyDialog` kind `needs-basic`), and a playlist
+  moving on passes over it even with skipping switched off.
   The question comes before anything playing is stopped: Cancel leaves the current tune playing with
   its auto-advance armed, and a Stop, skip or other launch while the question is open wins over a late
   Play anyway.
@@ -371,8 +375,8 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
   such a song itself, so it needs no such check.
 
 **The embedded files** live in `src/lib/romDependency/data/`. They are the HVSC #85 release list
-from the sidflow-data release `rom-audit-hvsc85-20261030`: 19,836 bytes listing 696 files and 1,556
-subtunes, of which 1,469 grade below the threshold of 128 in at least one lane (nearly all BASIC
+from the sidflow-data release `rom-audit-hvsc85-20261030`: 19,228 bytes listing 672 files and 1,516
+subtunes, of which 1,468 grade below the threshold of 128 in at least one lane (nearly all BASIC
 tunes, about 1% of RSIDs and 28 PSIDs without ROMs). To ship a newer list, copy the release's
 `hvsc<N>-sidromdep-1.bin` and `.manifest.json` over `hvsc85-sidromdep-1.bin` and
 `hvsc85-sidromdep-1.manifest.json` (or change the two import names in `embeddedRomDependencyList.ts`)

@@ -531,7 +531,7 @@ The copies stay on your phone or tablet. They are never uploaded, never shared, 
 A few songs do not sound right on your phone or tablet, because they lean on parts of the real C64 that it cannot supply. C64 Commander carries a list of them, made by playing every HVSC tune with and without the ROMs and grading how close the sound comes to the real thing. Songs that fall clearly short need the real machine.
 
 - With your C64 connected, such a song plays on the C64, as it would for any tune that needs the ROMs.
-- With no C64 to play it on, a playlist or station that moves on by itself **skips** the song and says so once. If you tap the song yourself, you are asked first: **Play anyway** plays it here, and it may sound wrong; **Cancel** leaves it.
+- With no C64 to play it on, a playlist or station that moves on by itself **skips** the song and says so once. If you tap the song yourself, you are asked first: **Play anyway** plays it here, and it may sound wrong; **Cancel** leaves it. A BASIC program needs the C64’s BASIC ROM and cannot play here without it: you are told so, and asked to connect a C64 or add the ROMs in Settings.
 - Prefer to hear them regardless? Turn off **Settings → Play and disk → Skip songs that need the C64 ROMs**. They then play here without asking.
 
 Songs that are not on the list play as always. Being off the list is not a promise that a song sounds right. The list follows the [SID ROM dependency list specification](https://github.com/chrisgleissner/sidflow/blob/main/doc/rom-dependency-list.md).

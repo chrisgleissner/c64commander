@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decideRomListedPlayback,
+  romBasicDialogText,
   ROM_LISTED_DIALOG_TITLE,
   romListedDialogText,
   romListedSkippedNotice,
@@ -46,6 +47,27 @@ describe("decideRomListedPlayback", () => {
   );
 });
 
+describe("decideRomListedPlayback for a song the phone cannot play at all", () => {
+  it.each([
+    // skipEnabled, autoAdvance, accepted -> outcome, with no usable C64
+    [true, true, false, "skip"],
+    [false, true, false, "skip"],
+    [true, false, false, "blocked"],
+    [false, false, false, "blocked"],
+    [true, false, true, "blocked"],
+  ] as const)("skipping %s, moving on by itself %s, accepted %s: %s", (skipEnabled, autoAdvance, accepted, outcome) => {
+    expect(decideRomListedPlayback({ c64Usable: false, skipEnabled, autoAdvance, accepted, playable: false })).toBe(
+      outcome,
+    );
+  });
+
+  it("goes to a usable C64 whatever the phone can play", () => {
+    expect(decideRomListedPlayback({ c64Usable: true, skipEnabled: true, autoAdvance: false, playable: false })).toBe(
+      "c64",
+    );
+  });
+});
+
 describe("wording", () => {
   it("names the song and says what to do, without jargon", () => {
     const texts = [
@@ -56,6 +78,9 @@ describe("wording", () => {
     expect(texts[0]).toContain("Comic Bakery");
     expect(texts[0]).toContain("Skip songs that need the C64 ROMs");
     expect(texts[1]).toContain("needs the C64’s ROMs to play correctly on this phone");
+    expect(romBasicDialogText()).toBe(
+      "This tune is a BASIC program and needs the C64’s BASIC ROM. Connect a C64, or add the ROMs in Settings.",
+    );
     for (const text of texts) expect(text).not.toMatch(/lane|mask|sidromdep|incompatible/i);
   });
 });
