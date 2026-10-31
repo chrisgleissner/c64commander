@@ -56,7 +56,7 @@ export interface TourStep {
   /** True for a step that only makes sense with a machine attached. */
   readonly requiresDevice?: boolean;
   /** What differs in SID Player: the same step, worded and anchored for a phone with no machine. */
-  readonly sidPlayer?: Partial<Pick<TourStep, "title" | "body" | "anchor">> & { readonly skip?: true };
+  readonly sidPlayer?: Partial<Pick<TourStep, "title" | "body" | "anchor">>;
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
@@ -71,7 +71,6 @@ export const TOUR_STEPS: readonly TourStep[] = [
     title: "Search everything",
     body: "Find pages, settings, tunes and disks from this field.",
     anchor: { path: "/", testIds: ["home-search-field"] },
-    sidPlayer: { skip: true },
   },
   {
     id: "listening-without-a-c64",
@@ -101,7 +100,6 @@ export const TOUR_STEPS: readonly TourStep[] = [
       sectionId: "quick-actions",
       testIds: ["home-tile-action.resume-session", "home-tile-action.recently-played"],
     },
-    sidPlayer: { skip: true },
   },
   {
     id: "playlists",
@@ -176,12 +174,11 @@ export const TOUR_STEPS: readonly TourStep[] = [
 
 /**
  * The steps this mode tours: SID Player words and anchors its own, and leaves out a step that needs a
- * machine, a step it marks as skipped, or a step whose page the mode hides.
+ * machine or whose page the mode hides.
  */
 export const tourStepsFor = (appMode: AppMode): readonly TourStep[] => {
   if (appMode === "full") return TOUR_STEPS;
   return TOUR_STEPS.filter((step) => !step.requiresDevice)
-    .filter((step) => !step.sidPlayer?.skip)
     .map((step) => ({ ...step, ...step.sidPlayer }))
     .filter((step) => step.anchor === undefined || isTabPathVisible(step.anchor.path, appMode));
 };
