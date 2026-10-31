@@ -12,7 +12,7 @@ describe("Play files HVSC hook contracts", () => {
     expect(playFilesPage.match(/useHvscLibrary\(/g) ?? []).toHaveLength(1);
     // HARD19-026: the page passes the live hvsc_enabled gate into the hook.
     expect(playFilesPage).toContain("const hvsc = useHvscLibrary(hvscControlsEnabled);");
-    expect(playFilesPage).toContain("<HvscManager hvscControlsEnabled={true} hvsc={hvsc} />");
+    expect(playFilesPage).toMatch(/<HvscManager\s+hvscControlsEnabled=\{true\}\s+hvsc=\{hvsc\}/);
 
     expect(hvscManager).toContain("hvsc: HvscLibraryState;");
     expect(hvscManager).not.toContain("useHvscLibrary(");
