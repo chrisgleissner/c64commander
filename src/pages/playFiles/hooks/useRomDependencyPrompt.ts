@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import type { RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate";
+import type { RomDialogKind, RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate";
 
 /**
  * The question "play it here anyway?", as a promise the play path can await.
@@ -17,13 +17,15 @@ import type { RomListedDialogChoice } from "@/pages/playFiles/romDependencyGate"
  */
 export const useRomDependencyPrompt = () => {
   const [label, setLabel] = useState<string | null>(null);
+  const [kind, setKind] = useState<RomDialogKind>("listed");
   const resolveRef = useRef<((choice: RomListedDialogChoice) => void) | null>(null);
 
   const ask = useCallback(
-    (item: PlaylistItem) =>
+    (item: PlaylistItem, askKind: RomDialogKind = "listed") =>
       new Promise<RomListedDialogChoice>((resolve) => {
         resolveRef.current?.("cancel");
         resolveRef.current = resolve;
+        setKind(askKind);
         setLabel(item.label);
       }),
     [],
@@ -43,5 +45,5 @@ export const useRomDependencyPrompt = () => {
     [],
   );
 
-  return { label, ask, choose };
+  return { label, kind, ask, choose };
 };

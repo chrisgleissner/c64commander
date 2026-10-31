@@ -176,6 +176,25 @@ describe("readCharacterRomViaIrq", () => {
     expect(addErrorLog).toHaveBeenCalledWith(expect.stringContaining("Could not put the C64 back"), expect.anything());
   });
 
+  it("tries the undo again, and leaves the machine running, when putting it back fails once", async () => {
+    const machine = new FakeMachine("on-resume");
+    let failed = false;
+    machine.failOn = (op, address) => {
+      const fail = !failed && op === "write" && address === VECTOR && machine.ram[layout.done] === 1;
+      if (fail) failed = true;
+      return fail;
+    };
+
+    await expect(readCharacterRomViaIrq(machine.api, clock())).rejects.toThrow("write $0314 failed");
+
+    expect(addErrorLog).toHaveBeenCalledWith(
+      expect.stringContaining("Could not put the C64 back after reading its character ROM"),
+      expect.objectContaining({ stack: expect.any(String) }),
+    );
+    expect(machine.paused).toBe(false);
+    expectRestored(machine);
+  });
+
   it("puts back the vector and the saved region when the handler could not be written", async () => {
     const machine = new FakeMachine("on-resume");
     let handlerWrites = 0;

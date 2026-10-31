@@ -81,7 +81,11 @@ async function fetchCharacterRom(api: C64API, deviceLabel: string): Promise<RomF
     return storeValidated("chargen", await readCharacterRomViaIrq(api), deviceLabel);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    addLog("warn", "Reading the C64 character ROM failed", { error: reason });
+    addLog("warn", "Reading the C64 character ROM failed", {
+      device: deviceLabel,
+      error: reason,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return { kind: "chargen", ok: false, reason };
   }
 }

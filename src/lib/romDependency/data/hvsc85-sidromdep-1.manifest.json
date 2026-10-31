@@ -1,28 +1,28 @@
 {
   "binary": {
-    "bytes": 19836,
+    "bytes": 19228,
     "decisionRecordBytes": 5,
     "file": "hvsc85-sidromdep-1.bin",
     "fileRecordBytes": 17,
     "headerBytes": 224,
-    "payloadSha256": "ecdf519d1ce41f14d7d0b47dc50cf031145687fcdd3bd5fd9b2a1d32f5c4060a",
+    "payloadSha256": "2697e18bedbffe7b4cf43385d96e61f1e92303abc85d19f163e4124b8da55cbc",
     "sections": {
       "decision": {
-        "bytes": 7780,
-        "offset": 12056
+        "bytes": 7580,
+        "offset": 11648
       },
       "file": {
-        "bytes": 11832,
+        "bytes": 11424,
         "offset": 224
       }
     },
-    "sha256": "cc1ede22deb7268cd5f0d56c00a13c3b8b0a5ec2f9d25b94f3f17d32b80437a7"
+    "sha256": "c1923e490825ebbdfcd2d5c83f837e129c629d1eb222df1029c063afa19f1be6"
   },
   "complete": true,
   "counts": {
     "excludedUnmeasuredSubtunes": 0,
-    "listedFiles": 696,
-    "listedSubtunes": 1556,
+    "listedFiles": 672,
+    "listedSubtunes": 1516,
     "perLane": {
       "residfpKernalBasic": {
         "bands": {
@@ -38,8 +38,8 @@
         "bands": {
           "0": 1432,
           "1-63": 23,
-          "128-191": 68,
-          "192-253": 22,
+          "128-191": 40,
+          "192-253": 10,
           "64-127": 11
         },
         "belowRecommended": 1466
@@ -56,18 +56,18 @@
       },
       "sidliteNone": {
         "bands": {
-          "0": 1436,
-          "1-63": 20,
-          "128-191": 83,
-          "192-253": 4,
-          "64-127": 12
+          "0": 1437,
+          "1-63": 19,
+          "128-191": 46,
+          "192-253": 2,
+          "64-127": 11
         },
-        "belowRecommended": 1468
+        "belowRecommended": 1467
       }
     },
     "sourceFiles": 61157,
     "sourceSubtunes": 87868,
-    "subtunesBelowRecommended": 1469
+    "subtunesBelowRecommended": 1468
   },
   "format": {
     "id": "sidromdep-1",
@@ -76,7 +76,7 @@
   },
   "humanReadable": {
     "file": "hvsc85-sidromdep-1.json",
-    "sha256": "2815df1cc3cb0f0f80a573798e9004f9e5f95024a86d77f241fc450b12da8f08"
+    "sha256": "7a5a065482827373dc1c9e7dea1acfff323942c54ba4c561b1a61b6b83dcbf87"
   },
   "hvscRelease": 85,
   "lanes": [
@@ -133,8 +133,10 @@
         },
         "digi": {
           "minWrites": 100,
+          "retimedMaxDriftCycles": 63,
           "windowCycles": 100000
         },
+        "driftAlignment": "class B/I lanes not decided by the trace: variant window w read at round(d_w * 48000 / clockHz) frames, d_w = variant - reference cycle of the last matched write at or before the window start (first write before it); zero outside produced PCM",
         "gamma": 1,
         "horizonRule": "Songlengths.md5 duration + 5 s, minimum 10 s; 300 s when the length is absent (scripts/rom-audit/methodology.ts observationHorizon)",
         "lateDivergenceFraction": 0.5,
@@ -142,7 +144,7 @@
         "maxInitWrites": 32,
         "minSimilarMusic": 0.5,
         "nativeProfile": {
-          "chargenUnreadShortcut": true,
+          "chargenUnreadShortcut": "reference chargenReads === 0 and no reference error other than a diagnosed CPU halt",
           "lanes": [
             "none=mask0",
             "kernal+basic=mask3"
@@ -154,6 +156,7 @@
         },
         "nearEqualCountRatio": 0.9,
         "severity": {
+          "bandActiveDb": 15,
           "bandRatio": 1.26,
           "deadZoneDb": 3,
           "fftSize": 1024,
@@ -181,9 +184,9 @@
   },
   "provenance": {
     "corpusId": "4b66fe03e72e18155ee4e14a0a7fd3f2c4de2ed1a467296156d5642e716f132e",
-    "gradingMethodologySha256": "bf3b3efffe4cbe69c538b7d81aa1b84b5b8aa98a8dc312b00500062f57f7c90c",
+    "gradingMethodologySha256": "f256dd987eb81af427731400b505c4470e6c423aa0f583198f5f99171a3b4d83",
     "songlengthsSha256": "3f2bb5c14e3396fb20979cb017421386dc9e32162999974ad1e4f0a230dc397e",
-    "sourceSha256": "47fd683f67895f18ba1192aa92aec4827c28db2fa0166f1b6cbf6f1d8aa49e86"
+    "sourceSha256": "83e84a015c73a6c7720b5d18029ed55b0a050825519d6ba2cc5b3471133fa33e"
   },
   "recommendedMinGrade": 128,
   "releasable": true,

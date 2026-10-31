@@ -35,6 +35,27 @@ describe("RomDependencyDialog", () => {
     expect(onChoose).toHaveBeenNthCalledWith(1, "cancel");
   });
 
+  it("says a BASIC tune needs the BASIC ROM, with one dismiss button and no Play anyway", () => {
+    const onChoose = vi.fn();
+    render(<RomDependencyDialog label="Comic Bakery" kind="needs-basic" onChoose={onChoose} />);
+
+    expect(screen.getByText(/This tune is a BASIC program and needs the C64.s BASIC ROM/)).toBeInTheDocument();
+    expect(screen.getByText(/Connect a C64, or add the ROMs in Settings/)).toBeInTheDocument();
+    expect(screen.queryByTestId("rom-dependency-play-anyway")).toBeNull();
+    expect(screen.queryByTestId("rom-dependency-cancel")).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId("rom-dependency-dismiss"));
+    expect(onChoose).toHaveBeenNthCalledWith(1, "cancel");
+  });
+
+  it("counts Escape on the BASIC notice as a dismissal", () => {
+    const onChoose = vi.fn();
+    render(<RomDependencyDialog label="Comic Bakery" kind="needs-basic" onChoose={onChoose} />);
+    fireEvent.keyDown(screen.getByTestId("rom-dependency-dialog"), { key: "Escape" });
+    expect(onChoose).toHaveBeenCalledWith("cancel");
+  });
+
   it("counts Escape as Cancel", () => {
     const onChoose = vi.fn();
     render(<RomDependencyDialog label="Comic Bakery" onChoose={onChoose} />);
@@ -55,6 +76,16 @@ describe("useRomDependencyPrompt", () => {
     act(() => result.current.choose("cancel")); // the dismissal that follows a button press changes nothing
     await expect(answer).resolves.toBe("play-anyway");
     expect(result.current.label).toBeNull();
+  });
+
+  it("carries the kind of question it was asked", () => {
+    const { result } = renderHook(() => useRomDependencyPrompt());
+    expect(result.current.kind).toBe("listed");
+    act(() => {
+      void result.current.ask(item("Comic Bakery"), "needs-basic");
+    });
+    expect(result.current.kind).toBe("needs-basic");
+    act(() => result.current.choose("cancel"));
   });
 
   it("answers Cancel to a question it replaces, and to one left open when the page goes", async () => {
