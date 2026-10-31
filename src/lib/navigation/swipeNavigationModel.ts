@@ -6,32 +6,51 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { ALL_TAB_INDEXES } from "@/lib/navigation/tabRoutes";
 
 export type RunwayPanelIndexes = readonly [number, number, number];
 
-export const resolveAdjacentIndexes = (index: number): RunwayPanelIndexes => {
-  const count = TAB_ROUTES.length;
-  return [(index - 1 + count) % count, index, (index + 1) % count];
+const visibleSetFor = (index: number, visible: readonly number[]): readonly number[] =>
+  visible.includes(index) ? visible : ALL_TAB_INDEXES;
+
+export const resolveAdjacentIndexes = (
+  index: number,
+  visible: readonly number[] = ALL_TAB_INDEXES,
+): RunwayPanelIndexes => {
+  const set = visibleSetFor(index, visible);
+  const position = set.indexOf(index);
+  const count = set.length;
+  return [set[(position - 1 + count) % count], index, set[(position + 1) % count]];
 };
 
-export const resolveNavigationDirection = (fromIndex: number, toIndex: number): -1 | 0 | 1 => {
-  const count = TAB_ROUTES.length;
-  const forwardDistance = (toIndex - fromIndex + count) % count;
-  const backwardDistance = (fromIndex - toIndex + count) % count;
+export const resolveNavigationDirection = (
+  fromIndex: number,
+  toIndex: number,
+  visible: readonly number[] = ALL_TAB_INDEXES,
+): -1 | 0 | 1 => {
+  const set = visible.includes(fromIndex) && visible.includes(toIndex) ? visible : ALL_TAB_INDEXES;
+  const count = set.length;
+  const from = set.indexOf(fromIndex);
+  const to = set.indexOf(toIndex);
+  const forwardDistance = (to - from + count) % count;
+  const backwardDistance = (from - to + count) % count;
 
   if (forwardDistance === 0) return 0;
   return forwardDistance <= backwardDistance ? 1 : -1;
 };
 
-export const buildRunwayPanelIndexes = (centerIndex: number, targetIndex?: number): RunwayPanelIndexes => {
-  const [previousIndex, currentIndex, nextIndex] = resolveAdjacentIndexes(centerIndex);
+export const buildRunwayPanelIndexes = (
+  centerIndex: number,
+  targetIndex?: number,
+  visible: readonly number[] = ALL_TAB_INDEXES,
+): RunwayPanelIndexes => {
+  const [previousIndex, currentIndex, nextIndex] = resolveAdjacentIndexes(centerIndex, visible);
 
   if (targetIndex === undefined || targetIndex === centerIndex) {
     return [previousIndex, currentIndex, nextIndex];
   }
 
-  const direction = resolveNavigationDirection(centerIndex, targetIndex);
+  const direction = resolveNavigationDirection(centerIndex, targetIndex, visible);
   if (direction === -1) {
     return [targetIndex, currentIndex, nextIndex];
   }

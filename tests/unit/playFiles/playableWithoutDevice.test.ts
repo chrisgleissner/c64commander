@@ -11,12 +11,14 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const remembered = vi.hoisted(() => new Set<string>());
 
+const engine = vi.hoisted(() => ({ supported: true }));
+
 vi.mock("@/lib/playback/playbackRouter", () => ({
   getRememberedUltimateSidBlob: (path: string) => (remembered.has(path) ? new Blob() : null),
 }));
 
 vi.mock("@/lib/playback/localSidPlaybackController", () => ({
-  LocalSidPlaybackController: { isSupported: () => true },
+  LocalSidPlaybackController: { isSupported: () => engine.supported },
 }));
 
 const connection = vi.hoisted(() => ({ state: "REAL_CONNECTED", simulated: false }));
@@ -26,11 +28,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   isSimulatedDeviceTarget: () => connection.simulated,
 }));
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import {
   canPlayWithoutDevice,
   firstPlayableWithoutDevice,
   isDeviceOutOfReach,
+  needsDeviceToPlay,
+  reachableStartIndex,
 } from "@/pages/playFiles/playableWithoutDevice";
 
 const item = (id: string, source: string, category = "sid", extra: Record<string, unknown> = {}) =>
@@ -95,5 +100,55 @@ describe("playing without the device", () => {
     expect(firstPlayableWithoutDevice(playlist, 0, wrapping)).toBe(2);
     playlist[2] = item("c", "ultimate");
     expect(firstPlayableWithoutDevice(playlist, 0, wrapping)).toBeNull();
+  });
+});
+
+describe("SID Player and rows the phone cannot play", () => {
+  beforeEach(() => {
+    remembered.clear();
+    connection.state = "OFFLINE_NO_DEMO";
+    connection.simulated = false;
+  });
+
+  it("SPM-PLAY-03 SID Player skips a program row", () => {
+    const playlist = [item("game", "local", "prg"), item("tune", "local")];
+    expect(firstPlayableWithoutDevice(playlist, 0, (from) => (from + 1 < playlist.length ? from + 1 : null))).toBe(1);
+  });
+
+  it("SPM-PLAY-03 a playlist of only programs has nothing to play", () => {
+    const playlist = [item("a", "local", "prg"), item("b", "local", "d64")];
+    expect(
+      firstPlayableWithoutDevice(playlist, 0, (from) => (from + 1 < playlist.length ? from + 1 : null)),
+    ).toBeNull();
+  });
+
+  it("SPM-PLAY-03 needsDeviceToPlay names programs and tunes only the Ultimate holds", () => {
+    expect(needsDeviceToPlay(item("game", "local", "prg"))).toBe(true);
+    expect(needsDeviceToPlay(item("tune", "local"))).toBe(false);
+    expect(needsDeviceToPlay(item("held", "ultimate"))).toBe(true);
+    remembered.add("/held.sid");
+    expect(needsDeviceToPlay(item("held", "ultimate"))).toBe(false);
+  });
+
+  it("SPM-PLAY-03 a SID is marked as needing the device where the on-device engine is unavailable", () => {
+    engine.supported = false;
+    try {
+      expect(needsDeviceToPlay(item("tune", "local"))).toBe(true);
+      expect(canPlayWithoutDevice(item("tune", "local"))).toBe(false);
+    } finally {
+      engine.supported = true;
+    }
+  });
+
+  it("SPM-PLAY-03 a pressed program row starts at the next row the phone can play, only in SID Player", () => {
+    const playlist = [item("game", "local", "prg"), item("tune", "local")];
+    saveStartupModeByUser("sid-player");
+    try {
+      expect(reachableStartIndex(playlist, 0)).toBe(1);
+      expect(reachableStartIndex([playlist[0]], 0)).toBe(0);
+    } finally {
+      saveStartupModeByUser("default");
+    }
+    expect(reachableStartIndex(playlist, 0)).toBe(0);
   });
 });

@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSurfaceVisible } from "@/lib/appMode/surfaces";
 import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { useMemo, useRef } from "react";
 import { Folder } from "lucide-react";
@@ -78,6 +80,8 @@ export const usePlaylistListItems = ({
   const startPlaylist = useLatestCallback(startPlaylistLatest);
   const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
   const friendlyNames = useFriendlySidNames();
+  const appMode = useAppMode();
+  const showItemConfig = isSurfaceVisible("play:item-config", appMode);
   // Rows outlive one call: the view-all list grows a page at a time, and rebuilding every row on each
   // page made the first jump to a far letter one render of several hundred milliseconds.
   const rowCacheRef = useRef<PlaylistRowCache | null>(null);
@@ -88,6 +92,7 @@ export const usePlaylistListItems = ({
       playlist,
       playlistIndexById,
       friendlyNames,
+      appMode,
       isPlaylistLoading,
       handlePlaylistSelect,
       onAttachLocalConfig,
@@ -162,8 +167,9 @@ export const usePlaylistListItems = ({
         configOverrides: item.configOverrides ?? null,
         configCandidates: item.configCandidates ?? null,
       });
-      const configStatusLabel =
-        configUiState === "edited"
+      const configStatusLabel = !showItemConfig
+        ? null
+        : configUiState === "edited"
           ? "CFG*"
           : configUiState === "resolved"
             ? "CFG"
@@ -179,24 +185,7 @@ export const usePlaylistListItems = ({
       ]
         .filter(Boolean)
         .join(" ");
-      const menuItems: ActionListMenuItem[] = [
-        { type: "label", label: "Details" },
-        {
-          type: "info",
-          label: "Type",
-          value: formatPlayCategory(item.category),
-        },
-        { type: "info", label: "Duration", value: durationLabel },
-        { type: "info", label: "Source", value: describeContentSource(item.request.source) },
-        // The row may show something more useful than the path (see `buildPlaylistRowSubtitle`).
-        { type: "info", label: "Path", value: item.path },
-        {
-          type: "info",
-          label: "Status",
-          value: item.status === "unavailable" ? "Unavailable" : "Available",
-        },
-        { type: "info", label: "Size", value: formatBytes(item.sizeBytes) },
-        { type: "info", label: "Date", value: formatDate(detailsDate) },
+      const configMenuItems: ActionListMenuItem[] = [
         { type: "separator" },
         { type: "label", label: "Config" },
         {
@@ -271,11 +260,31 @@ export const usePlaylistListItems = ({
             ]
           : []),
       ];
+      const menuItems: ActionListMenuItem[] = [
+        { type: "label", label: "Details" },
+        {
+          type: "info",
+          label: "Type",
+          value: formatPlayCategory(item.category),
+        },
+        { type: "info", label: "Duration", value: durationLabel },
+        { type: "info", label: "Source", value: describeContentSource(item.request.source) },
+        // The row may show something more useful than the path (see `buildPlaylistRowSubtitle`).
+        { type: "info", label: "Path", value: item.path },
+        {
+          type: "info",
+          label: "Status",
+          value: item.status === "unavailable" ? "Unavailable" : "Available",
+        },
+        { type: "info", label: "Size", value: formatBytes(item.sizeBytes) },
+        { type: "info", label: "Date", value: formatDate(detailsDate) },
+        ...(showItemConfig ? configMenuItems : []),
+      ];
       const row: ActionListItem = {
         id: item.id,
         title: display.title,
         titleClassName: "whitespace-normal break-words block",
-        subtitle: buildPlaylistRowSubtitle(item),
+        subtitle: buildPlaylistRowSubtitle(item, { sidPlayer: appMode === "sid-player" }),
         subtitleClassName: "truncate block",
         titleSuffix,
         meta: display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : undefined,
@@ -328,6 +337,7 @@ export const usePlaylistListItems = ({
   }, [
     filteredPlaylist,
     friendlyNames,
+    appMode,
     formatBytes,
     formatDate,
     formatPlayCategory,

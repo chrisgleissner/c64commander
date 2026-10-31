@@ -14,6 +14,7 @@ import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } fro
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { APP_SETTINGS_KEYS, loadNotificationDurationMs } from "@/lib/config/appSettings";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { SKIP_ATTR } from "@/lib/input/discovery";
 
 const TOAST_RESERVED_HEIGHT_VAR = "--app-toast-reserved-height";
 
@@ -72,6 +73,7 @@ export function Toaster() {
           action,
           onToastDismiss: _onToastDismiss,
           alwaysVisible: _alwaysVisible,
+          informational,
           ...props
         }) => (
           <ToastItem
@@ -81,6 +83,7 @@ export function Toaster() {
             description={description}
             action={action}
             dismiss={dismiss}
+            informational={informational}
             {...props}
           />
         ),
@@ -96,6 +99,7 @@ type ToastItemProps = {
   description?: React.ReactNode;
   action?: React.ReactElement;
   dismiss: (id?: string) => void;
+  informational?: boolean;
   variant?: "default" | "destructive" | null;
   [key: string]: unknown;
 };
@@ -103,7 +107,7 @@ type ToastItemProps = {
 const TOAST_BUTTON_CLASS =
   "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-function ToastItem({ id, title, description, action, dismiss, variant, ...props }: ToastItemProps) {
+function ToastItem({ id, title, description, action, dismiss, informational, variant, ...props }: ToastItemProps) {
   // Radix dismisses on a rightward swipe itself; a leftward one is dismissed here.
   const handleSwipeEnd: NonNullable<ComponentProps<typeof Toast>["onSwipeEnd"]> = (e) => {
     if (e.detail.delta.x < -50) {
@@ -125,6 +129,7 @@ function ToastItem({ id, title, description, action, dismiss, variant, ...props 
       // The provider duration is the notice duration, so destructive roots override it (HARD19-037).
       duration={variant === "destructive" ? Infinity : undefined}
       {...props}
+      {...(informational ? { tabIndex: -1, [SKIP_ATTR]: "" } : {})}
       onSwipeEnd={handleSwipeEnd}
     >
       <div className="flex items-start gap-1">
@@ -135,23 +140,27 @@ function ToastItem({ id, title, description, action, dismiss, variant, ...props 
             </ToastTitle>
           )}
         </div>
-        <button
-          type="button"
-          className={`${TOAST_BUTTON_CLASS} border border-current px-3`}
-          data-testid="app-toast-details"
-          onClick={openDetails}
-        >
-          Details
-        </button>
-        <button
-          type="button"
-          className={`${TOAST_BUTTON_CLASS} -mr-2 opacity-80 hover:opacity-100`}
-          aria-label="Close notification"
-          data-testid="app-toast-close"
-          onClick={() => dismiss(id)}
-        >
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
+        {informational ? null : (
+          <>
+            <button
+              type="button"
+              className={`${TOAST_BUTTON_CLASS} border border-current px-3`}
+              data-testid="app-toast-details"
+              onClick={openDetails}
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              className={`${TOAST_BUTTON_CLASS} -mr-2 opacity-80 hover:opacity-100`}
+              aria-label="Close notification"
+              data-testid="app-toast-close"
+              onClick={() => dismiss(id)}
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </>
+        )}
       </div>
       {description && (
         <ToastDescription className="line-clamp-3" data-testid="app-toast-description">

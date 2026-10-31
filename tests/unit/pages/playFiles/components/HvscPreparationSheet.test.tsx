@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { HvscPreparationSheet } from "@/pages/playFiles/components/HvscPreparationSheet";
+import { useHvscArchiveSize } from "@/lib/hvsc/hvscArchiveSize";
+import { HvscPreparationSheet, READY_CLOSE_DELAY_MS } from "@/pages/playFiles/components/HvscPreparationSheet";
 
 const buildProps = (overrides: Partial<ComponentProps<typeof HvscPreparationSheet>> = {}) => ({
   open: true,
@@ -20,6 +21,8 @@ const buildProps = (overrides: Partial<ComponentProps<typeof HvscPreparationShee
   onRetry: vi.fn(),
   ...overrides,
 });
+
+vi.mock("@/lib/hvsc/hvscArchiveSize", () => ({ useHvscArchiveSize: vi.fn(() => null) }));
 
 describe("HvscPreparationSheet", () => {
   it("renders the automatic preparation progress state", () => {
@@ -117,5 +120,93 @@ describe("HvscPreparationSheet", () => {
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  describe("asking before the download", () => {
+    const consentProps = (overrides: Partial<ComponentProps<typeof HvscPreparationSheet>> = {}) =>
+      buildProps({
+        state: "NOT_PRESENT",
+        statusLabel: "Not downloaded",
+        stage: null,
+        stagePercent: null,
+        awaitingConsent: true,
+        onConsent: vi.fn(),
+        ...overrides,
+      });
+
+    it("SPM-START-02 the consent states the size the HVSC host reports", () => {
+      vi.mocked(useHvscArchiveSize).mockReturnValue(84_827_547);
+      render(<HvscPreparationSheet {...consentProps()} />);
+
+      expect(screen.getByTestId("hvsc-consent").textContent).toMatch(/It is 81 MB and needs/);
+      vi.mocked(useHvscArchiveSize).mockReturnValue(null);
+    });
+
+    it("SPM-START-02 the download waits for consent and shows its size", () => {
+      const props = consentProps();
+      render(<HvscPreparationSheet {...props} />);
+
+      const text = screen.getByTestId("hvsc-consent").textContent ?? "";
+      expect(text).toMatch(/It is about 81 MB and needs/);
+      expect(text).toMatch(/about [\d.]+ GB of free space/);
+      expect(text).toMatch(/Wi-Fi recommended/);
+      expect(text).not.toMatch(/\b(REST|FTP|Telnet|host|IP|PAL|NTSC|dB|KERNAL|BASIC|HVSC)\b/);
+      expect(screen.getByTestId("hvsc-consent-download")).toHaveTextContent("Download");
+      expect(screen.getByTestId("hvsc-consent-not-now")).toHaveTextContent("Not now");
+      expect(props.onConsent).not.toHaveBeenCalled();
+    });
+
+    it("SPM-START-02 the consent says what the person gets and that it can be removed, in plain words", () => {
+      render(<HvscPreparationSheet {...consentProps()} />);
+
+      const benefits = screen.getByTestId("hvsc-consent-benefits");
+      expect(benefits.querySelectorAll("li")).toHaveLength(3);
+      expect(screen.getByTestId("hvsc-consent").textContent).toMatch(/remove it again in Settings/);
+    });
+
+    it("SPM-START-02 after a download the person asked for, the ready sheet closes itself, and one nobody asked for stays", () => {
+      vi.useFakeTimers();
+      try {
+        const asked = consentProps();
+        const view = render(<HvscPreparationSheet {...asked} />);
+        view.rerender(
+          <HvscPreparationSheet
+            {...asked}
+            awaitingConsent={false}
+            state="READY"
+            statusLabel="Ready"
+            readySongCount={10}
+          />,
+        );
+        expect(asked.onOpenChange).not.toHaveBeenCalled();
+        act(() => void vi.advanceTimersByTime(READY_CLOSE_DELAY_MS + 1));
+        expect(asked.onOpenChange).toHaveBeenCalledWith(false);
+
+        const unasked = buildProps({ state: "READY", statusLabel: "Ready", readySongCount: 10 });
+        render(<HvscPreparationSheet {...unasked} />);
+        act(() => void vi.advanceTimersByTime(READY_CLOSE_DELAY_MS + 1));
+        expect(unasked.onOpenChange).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("SPM-START-02 Download grants consent and Not now closes the sheet without it", () => {
+      const props = consentProps();
+      render(<HvscPreparationSheet {...props} />);
+
+      fireEvent.click(screen.getByTestId("hvsc-consent-not-now"));
+      expect(props.onOpenChange).toHaveBeenCalledWith(false);
+      expect(props.onConsent).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId("hvsc-consent-download"));
+      expect(props.onConsent).toHaveBeenCalledTimes(1);
+    });
+
+    it("SPM-START-02 without a consent request the sheet is the progress sheet it always was", () => {
+      render(<HvscPreparationSheet {...buildProps()} />);
+      expect(screen.queryByTestId("hvsc-consent")).toBeNull();
+      expect(screen.queryByTestId("hvsc-consent-download")).toBeNull();
+    });
   });
 });

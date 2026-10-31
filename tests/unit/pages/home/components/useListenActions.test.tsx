@@ -8,7 +8,8 @@
 
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 import type { RequirementContext } from "@/lib/search/requirements";
 
@@ -112,6 +113,30 @@ describe("useListenActions", () => {
 
     expect(tile("action.resume-session")?.description).toBe("Chess");
     expect(tile("action.recently-played")?.description).toBe("2");
+  });
+});
+
+describe("useListenActions in SID Player", () => {
+  beforeEach(() => {
+    stored.session = null;
+    stored.recent = [];
+    stored.hvscInstalled = false;
+    stored.contexts.clear();
+  });
+  afterEach(() => saveStartupModeByUser("default"));
+
+  it("SPM-HOME-03 SID Player omits the Live View tile and keeps Radio, Last and Recent", () => {
+    saveStartupModeByUser("sid-player");
+    const { tile } = renderTiles(true);
+    expect(tile("home.section.live-view")).toBeUndefined();
+    for (const id of ["action.sid-radio", "action.resume-session", "action.recently-played"]) {
+      expect(tile(id), id).toBeDefined();
+    }
+  });
+
+  it("SPM-HOME-03 the Full App still offers the Live View tile", () => {
+    const { tile } = renderTiles(true);
+    expect(tile("home.section.live-view")).toBeDefined();
   });
 });
 

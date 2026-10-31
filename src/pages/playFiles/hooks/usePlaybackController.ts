@@ -47,11 +47,12 @@ import {
   tryAcquireSingleFlight,
   releaseSingleFlight,
 } from "@/pages/playFiles/playFilesUtils";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { endPlayLaunchMounts } from "@/lib/playback/playLaunchMounts";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
-import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadMirrorC64Audio } from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -84,10 +85,12 @@ import { resolvePendingSkipIndices, type PendingUserSkip } from "@/pages/playFil
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
+import { useTuneReleaseOnSidPlayer } from "@/pages/playFiles/hooks/useTuneReleaseOnSidPlayer";
 import {
   firstPlayableWithoutDevice,
   isDeviceOutOfReach,
   reachableFollowing,
+  reachableStartIndex,
 } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { useNextTunePrefetch } from "@/pages/playFiles/hooks/useNextTunePrefetch";
@@ -358,7 +361,7 @@ export function usePlaybackController({
   const [localEngineActive, setLocalEngineActive] = useState(false);
   const localEngineStatsRef = useRef(new LocalEngineStatsAccumulator());
   /** Last engine seen, to tell an engine change from any other settings change. */
-  const selectedEngineRef = useRef(loadPlaybackEngine());
+  const selectedEngineRef = useRef(effectivePlaybackEngine());
   /** Keep the ref (read synchronously mid-transition) and the state in sync. */
   const setCurrentPlaybackIsLocal = useCallback((isLocal: boolean) => {
     currentPlaybackIsLocalRef.current = isLocal;
@@ -521,7 +524,7 @@ export function usePlaybackController({
 
   /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
   const stopTuneOnC64 = useCallback(
-    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string) => {
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
       // A pause still under way would otherwise freeze the machine after the reset, muted.
       await machineTransitionCoordinatorRef.current.idle();
       const wasPaused = isPausedRef.current;
@@ -533,7 +536,7 @@ export function usePlaybackController({
         });
       if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
       await stopMachineWithGracePeriod(api, shouldReboot);
-      await endPlayLaunchMounts(api);
+      if (endMounts) await endPlayLaunchMounts(api);
       // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
       if (wasPaused && pauseMuteSnapshotRef.current) {
         await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
@@ -541,6 +544,8 @@ export function usePlaybackController({
     },
     [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
   );
+
+  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
 
   const resolveSidMetadata = useCallback(
     (file?: LocalPlayFile, songNr?: number | null) =>
@@ -1398,7 +1403,7 @@ export function usePlaybackController({
         const following = reachableFollowing(resolvedItems, playlistTraversal(resolvedItems).next);
         try {
           const played = await playPassingOver(
-            startIndex,
+            reachableStartIndex(resolvedItems, startIndex),
             (index) =>
               playItem(resolvedItems[index], {
                 playlistIndex: index,
@@ -1454,8 +1459,9 @@ export function usePlaybackController({
 
   const handlePlay = useCallback(
     trace(async function handlePlay() {
-      const targetIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
-      if (targetIndex === null) return;
+      const requestedIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
+      if (requestedIndex === null) return;
+      const targetIndex = reachableStartIndex(playlist, requestedIndex);
       if (currentIndex < 0) {
         // startPlaylist handles its own single-flight and guard cancellation.
         await startPlaylist(playlist, targetIndex, { passOver: true });

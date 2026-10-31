@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
@@ -3779,7 +3780,10 @@ describe("usePlaybackController", () => {
         current: { trackInstanceId, dueAtMs: 0, autoFired: false, userCancelled: false },
       });
 
-      afterEach(() => resetNetworkStatusWatchForTests());
+      afterEach(() => {
+        resetNetworkStatusWatchForTests();
+        saveStartupModeByUser("default");
+      });
 
       it("stops an auto-advance onto a tune kept on the Ultimate without asking the device or reporting an error", async () => {
         const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
@@ -3831,6 +3835,64 @@ describe("usePlaybackController", () => {
           "Playback request started",
           expect.objectContaining({ itemId: "three" }),
         );
+      });
+
+      it("SPM-PLAY-03 pressing a row that needs the device starts the next SID that plays on the phone", async () => {
+        enableLocal();
+        saveStartupModeByUser("sid-player");
+        const controller = fakeController();
+        const playlist = [ultimateSid("one"), sidItem(psid, 1, "two")];
+        const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.startPlaylist(playlist, 0);
+        });
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+          "info",
+          "Playback request started",
+          expect.objectContaining({ itemId: "two" }),
+        );
+        expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
+      });
+
+      it("SPM-PLAY-03 the Full App keeps its own behavior: a row that needs the device is not skipped", async () => {
+        enableLocal();
+        saveStartupModeByUser("default");
+        const controller = fakeController();
+        const playlist = [ultimateSid("one"), sidItem(psid, 1, "two")];
+        const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.startPlaylist(playlist, 0);
+        });
+
+        expect(controller.play).not.toHaveBeenCalled();
+      });
+
+      it("SPM-PLAY-03 the play button on a row that needs the device plays the next SID instead", async () => {
+        enableLocal();
+        saveStartupModeByUser("sid-player");
+        const controller = fakeController();
+        const playlist = [ultimateSid("one"), sidItem(psid, 1, "two")];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          currentIndex: 0,
+        });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handlePlay();
+        });
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
       });
 
       it("plays a tune kept on the Ultimate on the phone when it was read before the network went", async () => {

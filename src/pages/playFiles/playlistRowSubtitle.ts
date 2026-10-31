@@ -7,6 +7,7 @@
  */
 
 import { NOW_PLAYING_METADATA_SEPARATOR } from "@/lib/playback/nowPlayingMetadata";
+import { needsDeviceToPlay } from "./playableWithoutDevice";
 import type { PlaylistItem } from "./types";
 
 /**
@@ -15,7 +16,10 @@ import type { PlaylistItem } from "./types";
  * Nineteen rows then carry the same name, and the two facts that tell them apart are which tune
  * this is and what STIL calls it where it has a name. The file name and path are on the details menu.
  */
-export const buildPlaylistRowSubtitle = (item: PlaylistItem): string | null => {
+export const NEEDS_DEVICE_SUBTITLE = "Needs a C64 Ultimate";
+
+export const buildPlaylistRowSubtitle = (item: PlaylistItem, options: { sidPlayer?: boolean } = {}): string | null => {
+  if (options.sidPlayer && needsDeviceToPlay(item)) return NEEDS_DEVICE_SUBTITLE;
   const songNr = item.request.songNr;
   const tuneCount = item.subsongCount ?? 0;
   const isOneOfMany = typeof songNr === "number" && songNr > 0 && tuneCount > 1;

@@ -7,7 +7,8 @@
  */
 
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
-import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled } from "@/lib/config/appSettings";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { preRouteEngine, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
@@ -57,7 +58,7 @@ export const resolveLaunchRoute = async (input: LaunchRouteInput): Promise<Launc
   if (!loadLocalEngineEnabled() && !noMachineForRoms) return { routeToLocal: false, request, simulatedDevice };
   const selection = preRouteEngine({
     category: item.category,
-    engine: loadPlaybackEngine(),
+    engine: effectivePlaybackEngine(),
     localSupported: LocalSidPlaybackController.isSupported(),
     simulatedDevice,
     noDeviceConnected,

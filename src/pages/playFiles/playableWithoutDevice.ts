@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
 import { getCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
 import { getConnectionSnapshot, isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
@@ -24,10 +25,19 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 export const isDeviceOutOfReach = () =>
   !isSimulatedDeviceTarget() && (isNetworkKnownOffline() || getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
 
+/** What the phone can render for itself: a SID, with the on-device engine available, and the bytes of an Ultimate-held tune already read. */
+const phoneCanRender = (item: PlaylistItem | undefined): item is PlaylistItem =>
+  item?.category === "sid" &&
+  LocalSidPlaybackController.isSupported() &&
+  (item.request.source !== "ultimate" || getRememberedUltimateSidBlob(item.path, item.request.origin) !== null);
+
+/** A program, disk or cartridge, or a tune that only the Ultimate holds: nothing a phone can play. */
+export const needsDeviceToPlay = (item: PlaylistItem | undefined): boolean => !phoneCanRender(item);
+
 /** Whether a track can play on the phone while the Ultimate is out of reach. */
 export const canPlayWithoutDevice = (item: PlaylistItem | undefined): boolean => {
-  if (item?.category !== "sid" || !LocalSidPlaybackController.isSupported()) return false;
-  if (item.request.source === "ultimate") return getRememberedUltimateSidBlob(item.path, item.request.origin) !== null;
+  if (!phoneCanRender(item)) return false;
+  if (item.request.source === "ultimate") return true;
   if (item.request.source !== "commoserve" || item.request.file || !isNetworkKnownOffline()) return true;
   return Boolean(item.archiveRef && getCachedArchivePlayback(item.archiveRef));
 };
@@ -53,3 +63,13 @@ export const reachableFollowing =
     const index = following(from);
     return index === null || !isDeviceOutOfReach() ? index : firstPlayableWithoutDevice(playlist, index, following);
   };
+
+/**
+ * Where a press on a row starts. In SID Player, with no device to reach, a row the phone cannot play hands over to the next
+ * row that it can; with nothing playable after it, the pressed row is kept so the failure is reported as usual.
+ */
+export const reachableStartIndex = (playlist: PlaylistItem[], index: number): number => {
+  if (!isSidPlayerActive() || !isDeviceOutOfReach()) return index;
+  const sequentially = (from: number) => (from + 1 < playlist.length ? from + 1 : null);
+  return firstPlayableWithoutDevice(playlist, index, sequentially) ?? index;
+};

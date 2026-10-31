@@ -12,7 +12,8 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from "@/hooks/useSwipeGesture";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
-import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath, visibleTabIndexes } from "@/lib/navigation/tabRoutes";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { confirmNavigation } from "@/lib/navigation/navigationGuards";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
 import { useTourActive } from "@/hooks/useTourActive";
@@ -63,10 +64,10 @@ const TRANSITION_DURATION_TEST_MS = 1200;
 const TRANSITION_SETTLE_BUFFER_MS = 80;
 const DRAG_SETTLE_TIMEOUT_MS = 600;
 
-const buildIdleState = (index: number): RunwayState => ({
+const buildIdleState = (index: number, visible: readonly number[]): RunwayState => ({
   phase: "idle",
   centerIndex: index,
-  panelIndexes: resolveAdjacentIndexes(index),
+  panelIndexes: resolveAdjacentIndexes(index, visible),
   dragOffsetPx: 0,
   targetIndex: index,
   transitionDirection: 0,
@@ -146,8 +147,10 @@ export function SwipeNavigationLayer() {
 }
 
 function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps) {
+  const appMode = useAppMode();
+  const visible = useMemo(() => visibleTabIndexes(appMode), [appMode]);
   const interstitialActive = useInterstitialActive();
-  const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
+  const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex, visible));
   const [pageGenerations, setPageGenerations] = useState<Readonly<Record<number, number>>>({});
   const [cachePages] = useState(cachesVisitedPages);
   const [hiddenContentSkipped] = useState(skipsHiddenContent);
@@ -246,6 +249,14 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     if (cachePages) setCachedPages((cached) => rememberCachedPage(cached, routeIndex));
   }, [cachePages, routeIndex]);
 
+  useEffect(() => {
+    setRunway((previous) => {
+      if (previous.phase !== "idle") return previous;
+      const next = buildIdleState(previous.centerIndex, visible);
+      return next.panelIndexes.every((index, position) => index === previous.panelIndexes[position]) ? previous : next;
+    });
+  }, [visible]);
+
   useSettingsPageStaleness(cachePages, routeIndex, setPageGenerations);
 
   useEffect(() => {
@@ -253,9 +264,9 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     if (routeIndex === current.centerIndex && current.phase === "idle") return;
     if (current.phase === "transitioning" && current.targetIndex === routeIndex) return;
 
-    const direction = resolveNavigationDirection(current.centerIndex, routeIndex);
+    const direction = resolveNavigationDirection(current.centerIndex, routeIndex, visible);
     if (direction === 0) {
-      setRunway(buildIdleState(routeIndex));
+      setRunway(buildIdleState(routeIndex, visible));
       return;
     }
 
@@ -270,28 +281,31 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     setRunway({
       phase: "transitioning",
       centerIndex: current.centerIndex,
-      panelIndexes: buildRunwayPanelIndexes(current.centerIndex, routeIndex),
+      panelIndexes: buildRunwayPanelIndexes(current.centerIndex, routeIndex, visible),
       dragOffsetPx: 0,
       targetIndex: routeIndex,
       transitionDirection: direction,
       lastVelocityX: current.lastVelocityX,
       revealedIndexes: addRevealedIndex(addRevealedIndex(current.revealedIndexes, current.centerIndex), routeIndex),
     });
-  }, [routeIndex]);
+  }, [routeIndex, visible]);
 
-  const handleTransitionEnd = useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    const current = runwayRef.current;
-    if (current.phase !== "transitioning") return;
+  const handleTransitionEnd = useCallback(
+    (event: React.TransitionEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) return;
+      const current = runwayRef.current;
+      if (current.phase !== "transitioning") return;
 
-    addLog("debug", "[SwipeNav] transition-end", {
-      from: TAB_ROUTES[current.centerIndex].label,
-      to: TAB_ROUTES[current.targetIndex].label,
-      direction: current.transitionDirection,
-    });
+      addLog("debug", "[SwipeNav] transition-end", {
+        from: TAB_ROUTES[current.centerIndex].label,
+        to: TAB_ROUTES[current.targetIndex].label,
+        direction: current.transitionDirection,
+      });
 
-    setRunway(buildIdleState(current.targetIndex));
-  }, []);
+      setRunway(buildIdleState(current.targetIndex, visible));
+    },
+    [visible],
+  );
 
   // Some WebView/CSS engines miss transitionend for transform animations. Settle
   // the runway after the configured duration plus a small buffer so navigation
@@ -306,10 +320,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         to: TAB_ROUTES[current.targetIndex].label,
         settleAfterMs,
       });
-      setRunway(buildIdleState(current.targetIndex));
+      setRunway(buildIdleState(current.targetIndex, visible));
     }, settleAfterMs);
     return () => clearTimeout(timer);
-  }, [runway.phase, runway.targetIndex, transitionConfig.durationMs]);
+  }, [runway.phase, runway.targetIndex, transitionConfig.durationMs, visible]);
 
   // Recovers a runway stuck in "dragging" after a missed pointerup/
   // pointercancel (some WebView/OS combinations drop it). Re-arming this on
@@ -336,11 +350,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         settleAfterMs: DRAG_SETTLE_TIMEOUT_MS,
         dragOffsetPx: current.dragOffsetPx,
       });
-      setRunway(buildIdleState(current.centerIndex));
+      setRunway(buildIdleState(current.centerIndex, visible));
     };
     timer = setTimeout(checkSettled, DRAG_SETTLE_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [runway.phase]);
+  }, [runway.phase, visible]);
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
@@ -373,7 +387,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       // would prompt the user a second time after this check.
       if (!confirmNavigation()) return;
 
-      const targetIndex = resolveSwipeTarget(current.centerIndex, direction);
+      const targetIndex = resolveSwipeTarget(current.centerIndex, direction, visible);
       addLog("debug", "[SwipeNav] transition-start", {
         reason: "swipe",
         from: TAB_ROUTES[current.centerIndex].label,
@@ -386,7 +400,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       setRunway({
         phase: "transitioning",
         centerIndex: current.centerIndex,
-        panelIndexes: buildRunwayPanelIndexes(current.centerIndex, targetIndex),
+        panelIndexes: buildRunwayPanelIndexes(current.centerIndex, targetIndex, visible),
         dragOffsetPx: current.dragOffsetPx,
         targetIndex,
         transitionDirection: direction,
@@ -395,7 +409,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       });
       navigate(TAB_ROUTES[targetIndex].path);
     },
-    [navigate, swipeEnabled],
+    [navigate, swipeEnabled, visible],
   );
 
   const onCancel = useCallback(
@@ -492,7 +506,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         {TAB_ROUTES.map((_, pageIndex) => {
           const panelPosition = runway.panelIndexes.indexOf(pageIndex);
           const inRunway = panelPosition >= 0;
-          const cached = cachedPages.includes(pageIndex);
+          const cached = cachedPages.includes(pageIndex) && visible.includes(pageIndex);
           if (!inRunway && !cached) return null;
           const label = TAB_ROUTES[pageIndex].label.toLowerCase();
           const key = `${pageIndex}:${pageGenerations[pageIndex] ?? 0}`;

@@ -19,6 +19,8 @@ import { resolveSearchHandler } from "@/lib/search/handlers";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { resolveEntry } from "@/lib/search/requirements";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSearchEntryShown } from "@/lib/appMode/searchVisibility";
 import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
@@ -106,6 +108,7 @@ const disabledTileReason = (reason: string | null): string | null =>
 
 export const useListenActions = (): ListenAction[] => {
   const navigate = useStableNavigate();
+  const appMode = useAppMode();
   const currentPath = useCurrentPathReader();
   // Read, not assumed: an entry that needs the archive must resolve as unavailable where it has
   // never been prepared, so the tile says what it is waiting for instead of failing when tapped.
@@ -164,9 +167,10 @@ export const useListenActions = (): ListenAction[] => {
     };
     return PROMOTED_ENTRY_IDS.flatMap((entryId) => {
       const tile = byId[entryId];
-      return tile === undefined ? [] : [{ entryId, ...tile }];
+      const entry = getSearchEntries().find((candidate) => candidate.id === entryId);
+      return tile === undefined || (entry && !isSearchEntryShown(entry, appMode)) ? [] : [{ entryId, ...tile }];
     });
-  }, [recentCount, sessionLabel]);
+  }, [appMode, recentCount, sessionLabel]);
 
   const resolved = useMemo(() => {
     const entries = getSearchEntries();

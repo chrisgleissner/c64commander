@@ -15,7 +15,7 @@ const FLASH_ATTR = "data-c64-tap-flash";
 const PERSISTENT_ATTR = "data-c64-persistent-active";
 const dismissDemoInterstitial = async (page: Page) => {
   const continueDemo = page.getByRole("button", {
-    name: "Continue in Demo Mode",
+    name: /Continue in Demo Mode|Try Demo Mode/,
   });
   if (await continueDemo.isVisible().catch(() => false)) {
     await continueDemo.click();

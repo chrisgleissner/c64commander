@@ -114,7 +114,28 @@ const connectionBadge = (page: Page) => page.locator('[data-panel-position="1"]'
 const expectConnectionState = async (page: Page, state: string, timeout = 15000) =>
   expect(connectionBadge(page)).toHaveAttribute("data-connection-state", state, { timeout });
 
-const demoDialog = (page: Page) => page.getByRole("dialog", { name: "Demo Mode" });
+/**
+ * A device that has connected before. Without one the offer is the first-run offer, which leads with SID Player and
+ * says nothing about a host; these tests are about the offer a returning user sees.
+ */
+const seedPriorConnection = async (page: Page, host: string) => {
+  await page.addInitScript((deviceHost: string) => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "returning",
+        devices: [
+          { id: "returning", host: deviceHost, httpPort: 80, lastSuccessfulConnectionAt: "2026-01-01T00:00:00.000Z" },
+        ],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+  }, host);
+};
+
+const demoDialog = (page: Page) => page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
 
 /**
  * Click a control that a concurrent re-render may detach mid-click.
@@ -259,6 +280,7 @@ test.describe("Entering Demo Mode", () => {
     // The device server is reachable throughout. Nothing may reach it: with no network there is
     // nothing to discover, and a probe that went out anyway would mean the app was about to
     // report a working device as offline.
+    await seedPriorConnection(page, new URL(device.baseUrl).host);
     await seedHandset(page, {
       deviceHost: new URL(device.baseUrl).host,
       deviceBaseUrl: device.baseUrl,
@@ -362,6 +384,43 @@ test.describe("Entering Demo Mode", () => {
     await snap(page, testInfo, "no-network-retry-connected");
   });
 
+  test("with no device ever connected the offer leads with SID Player, and entering it stops all device traffic", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, "The configured device is deliberately unreachable in this test.");
+
+    device.setReachable(false);
+    await seedHandset(page, {
+      deviceHost: new URL(device.baseUrl).host,
+      deviceBaseUrl: device.baseUrl,
+      demoBaseUrl: demo.baseUrl,
+      networkStatus: { online: true, supported: true },
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const dialog = demoDialog(page);
+    await expect(dialog).toBeVisible({ timeout: 20000 });
+    await expect(dialog).toContainText("No C64 Ultimate found");
+    await expect(page.getByTestId("demo-interstitial-use-sid-player")).toBeVisible();
+    await expect(page.getByTestId("demo-interstitial-continue")).toHaveText("Try Demo Mode");
+    await expect(page.getByTestId("demo-interstitial-retry")).toHaveText("Retry connection");
+
+    await snap(page, testInfo, "first-run-offer");
+
+    await clickCta(page, "demo-interstitial-use-sid-player");
+    await expect(page).toHaveURL(/\/play$/);
+    await expect(page.getByTestId("unified-health-badge").first()).toHaveAttribute(
+      "data-connectivity-state",
+      "SID Player",
+    );
+
+    device.requests.length = 0;
+    await page.waitForTimeout(3000);
+    expect(device.requests).toEqual([]);
+  });
+
   test("with a network but no device answering, the offer names the host it tried", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
@@ -370,6 +429,7 @@ test.describe("Entering Demo Mode", () => {
 
     device.setReachable(false);
     const deviceHost = new URL(device.baseUrl).host;
+    await seedPriorConnection(page, deviceHost);
     await seedHandset(page, {
       deviceHost,
       deviceBaseUrl: device.baseUrl,
@@ -541,6 +601,7 @@ test.describe("The Demo Mode offer on a small screen", () => {
         });
       });
 
+      await seedPriorConnection(page, new URL(device.baseUrl).host);
       await seedHandset(page, {
         deviceHost: new URL(device.baseUrl).host,
         deviceBaseUrl: device.baseUrl,

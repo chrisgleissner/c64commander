@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, renderHook, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
@@ -382,5 +383,64 @@ describe("usePlaylistListItems", () => {
 
     expect(candidateRow?.secondaryActionLabel).toBe("CFG?");
     expect(candidateRow?.titleSuffix).not.toContain("CFG");
+  });
+});
+
+describe("usePlaylistListItems in SID Player", () => {
+  const options = (playlist: PlaylistItem[]) => ({
+    filteredPlaylist: playlist,
+    playlist,
+    selectedPlaylistIds: new Set<string>(),
+    isPlaylistLoading: false,
+    handlePlaylistSelect: vi.fn(),
+    onAttachLocalConfig: vi.fn(),
+    onAttachUltimateConfig: vi.fn(),
+    onOpenConfig: vi.fn(),
+    onRemoveConfig: vi.fn(),
+    startPlaylist: vi.fn(),
+    playlistItemDuration: () => undefined,
+    formatTime: () => "—:—",
+    formatPlayCategory: () => "SID",
+    formatBytes: () => "—",
+    formatDate: () => "—",
+    getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+    currentPlayingItemId: null,
+  });
+  const configRef = { kind: "local", fileName: "x.cfg", path: "/x.cfg" } as unknown as ConfigFileReference;
+
+  afterEach(() => saveStartupModeByUser("default"));
+
+  it("SPM-PLAY-01 SID Player hides the per-item config menu entries and the config chip", () => {
+    saveStartupModeByUser("sid-player");
+    const playlist = [buildItem("local", "/Music/a.sid", "ready", configRef)];
+    const { result } = renderHook(() => usePlaylistListItems(options(playlist)));
+
+    const row = result.current.find((entry) => entry.variant !== "header")!;
+    const labels = (row.menuItems ?? []).map((menu) => ("label" in menu ? menu.label : ""));
+    expect(labels).toContain("Details");
+    expect(labels).not.toContain("Review playback config");
+    expect(labels).not.toContain("Attach local .cfg");
+    expect(row.secondaryActionLabel).toBeUndefined();
+  });
+
+  it("SPM-PLAY-01 the Full App keeps them", () => {
+    const playlist = [buildItem("local", "/Music/a.sid", "ready", configRef)];
+    const { result } = renderHook(() => usePlaylistListItems(options(playlist)));
+
+    const row = result.current.find((entry) => entry.variant !== "header")!;
+    const labels = (row.menuItems ?? []).map((menu) => ("label" in menu ? menu.label : ""));
+    expect(labels).toContain("Review playback config");
+    expect(row.secondaryActionLabel).toBeDefined();
+  });
+
+  it("SPM-PLAY-01 switching the mode rebuilds the rows", () => {
+    const playlist = [buildItem("local", "/Music/a.sid", "ready", configRef)];
+    const stableOptions = options(playlist);
+    const { result, rerender } = renderHook(() => usePlaylistListItems(stableOptions));
+    expect(result.current.find((entry) => entry.variant !== "header")?.secondaryActionLabel).toBeDefined();
+
+    act(() => saveStartupModeByUser("sid-player"));
+    rerender();
+    expect(result.current.find((entry) => entry.variant !== "header")?.secondaryActionLabel).toBeUndefined();
   });
 });

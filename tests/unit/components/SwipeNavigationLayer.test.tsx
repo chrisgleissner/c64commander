@@ -16,6 +16,7 @@ import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import { requestPageReset } from "@/lib/navigation/pageReset";
 import { resetPagePositionsForTests } from "@/lib/navigation/pagePositions";
 import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { useStableNavigate } from "@/hooks/useStableNavigate";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
@@ -414,6 +415,45 @@ describe("SwipeNavigationLayer", () => {
     fireEvent.transitionEnd(runway, { target: runway });
     expect(runway).toHaveAttribute("data-runway-phase", "idle");
     expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("SPM-NAV-02 swiping left from Play in SID Player opens Settings, and right opens Docs", async () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      renderLayer("/play", undefined, false, true);
+      await screen.findByTestId("swipe-navigation-runway");
+
+      act(() => {
+        capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+      });
+      expect(screen.getByTestId("location-probe")).toHaveTextContent("/settings");
+
+      const runway = screen.getByTestId("swipe-navigation-runway");
+      fireEvent.transitionEnd(runway, { target: runway });
+      act(() => {
+        capturedCallbacks?.onCommit(-1, { dx: 120, dy: 0, velocityX: 1 });
+      });
+      fireEvent.transitionEnd(runway, { target: runway });
+      act(() => {
+        capturedCallbacks?.onCommit(-1, { dx: 120, dy: 0, velocityX: 1 });
+      });
+      expect(screen.getByTestId("location-probe")).toHaveTextContent("/docs");
+    } finally {
+      saveStartupModeByUser("default");
+    }
+  });
+
+  it("SPM-NAV-02 SID Player mounts neither Disks nor Config as a neighbour of Play", async () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      renderLayer("/play", undefined, false, true);
+      await screen.findByTestId("swipe-navigation-runway");
+      expect(mocks.mountCounts.disks).toBe(0);
+      expect(mocks.mountCounts.config).toBe(0);
+      expect(mocks.mountCounts.home).toBe(0);
+    } finally {
+      saveStartupModeByUser("default");
+    }
   });
 
   it("leaves the page and the runway untouched when a guard refuses the swipe commit (HARD27-022)", async () => {

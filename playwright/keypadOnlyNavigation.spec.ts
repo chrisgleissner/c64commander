@@ -83,6 +83,50 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await server.close();
   });
 
+  test("SPM-ED-03 SID Player digit keys open the three visible tabs and leave the rest alone", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("c64u_startup_mode", "sid-player"));
+    await page.goto("/play");
+    await settle(page);
+
+    await page.keyboard.press("2");
+    await expect(page).toHaveURL(/\/settings$/);
+    await page.keyboard.press("3");
+    await expect(page).toHaveURL(/\/docs$/);
+    await page.keyboard.press("5");
+    await expect(page).toHaveURL(/\/docs$/);
+    await page.keyboard.press("1");
+    await expect(page).toHaveURL(/\/play$/);
+    for (const key of ["8", "9", "0"]) {
+      await page.keyboard.press(key);
+      await expect(page).toHaveURL(/\/play$/);
+    }
+  });
+
+  test("SPM-ED-03 SID Player can be entered and left by keypad only", async ({ page }) => {
+    await page.goto("/settings");
+    await settle(page);
+    const section = page.getByTestId("settings-section-app-mode");
+    expect(await ringFocus(page, section)).toBe(true);
+    await page.keyboard.press("Enter");
+    expect(await ringFocus(page, page.getByTestId("device-less-choice-sid-player"))).toBe(true);
+    await page.keyboard.press("Enter");
+    expect(await ringFocus(page, page.getByTestId("mode-dialog-enter-confirm"))).toBe(true);
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/\/play$/);
+    await expect(page.getByTestId("tab-home")).toHaveCount(0);
+    await expect(page.getByTestId("mode-dialog-enter")).toHaveCount(0);
+
+    await page.keyboard.press("2");
+    await expect(page).toHaveURL(/\/settings$/);
+    expect(await ringFocus(page, page.getByTestId("device-less-choice-full-app"))).toBe(true);
+    await page.keyboard.press("Enter");
+    expect(await ringFocus(page, page.getByTestId("mode-dialog-leave-full-app"))).toBe(true);
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+  });
+
   test("Lighting exposes both Case Light and Keyboard Light after opening by keypad @layout", async ({ page }) => {
     await page.goto("/");
     await settle(page);

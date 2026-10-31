@@ -53,6 +53,11 @@ export const TourHost = () => {
 
   useEffect(() => subscribeTourStart(setRequest), []);
 
+  // A sheet opened over a running tour (the collection download, say) ends it: two guides on one screen help nobody.
+  useEffect(() => {
+    if (request !== null && interstitialActive) setRequest(null);
+  }, [interstitialActive, request]);
+
   useEffect(() => {
     if (request !== null || offeredRef.current || launchBusy) return undefined;
     if (!shouldOfferTourOnLaunch(loadTourState())) return undefined;

@@ -19,7 +19,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { TAB_ROUTES, visibleTabIndexes } from "@/lib/navigation/tabRoutes";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { MODE_COPY } from "@/lib/appMode/copy";
+import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
+import { isSurfaceVisible } from "@/lib/appMode/surfaces";
 import {
   requestDeviceSwitcherOpen,
   requestMachineCommand,
@@ -93,6 +97,8 @@ export function KeypadQuickMenu() {
   const savedDevices = useSavedDevices();
   const gameModeAvailable = useGameModeAvailable();
   const mirror = useAvMirror();
+  const appMode = useAppMode();
+  const shows = (id: Parameters<typeof isSurfaceVisible>[0]) => isSurfaceVisible(id, appMode);
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
   const [functionActions, setFunctionActions] = useState(
@@ -132,7 +138,7 @@ export function KeypadQuickMenu() {
     action();
   }, []);
 
-  const canSwitchDevices = savedDevices.devices.length > 1;
+  const canSwitchDevices = savedDevices.devices.length > 1 && shows("quick-menu:switch-device");
 
   /*
    * Both section entries are always listed on a page that has sections, rather than one entry whose
@@ -215,6 +221,16 @@ export function KeypadQuickMenu() {
             {fromKeypad ? <ShortcutKey>7</ShortcutKey> : null}
             Search
           </Button>
+          {shows("quick-menu:leave-sid-player") ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-leave-sid-player"
+              onClick={() => run(() => requestModeDialog("leave"))}
+            >
+              {MODE_COPY.menu.leave}
+            </Button>
+          ) : null}
           {toastAction ? (
             <Button
               variant="ghost"
@@ -234,7 +250,7 @@ export function KeypadQuickMenu() {
             </Button>
           ) : null}
           {/* Live View's mark in the header badge says a stream is running; this is where it stops. */}
-          {mirror.anyLive ? (
+          {mirror.anyLive && shows("quick-menu:stop-live-view") ? (
             <Button
               variant="ghost"
               className="justify-start"
@@ -245,24 +261,24 @@ export function KeypadQuickMenu() {
             </Button>
           ) : null}
           {fromKeypad
-            ? TAB_ROUTES.map((route, index) => (
+            ? visibleTabIndexes(appMode).map((tabIndex, position) => (
                 <Button
-                  key={route.path}
+                  key={TAB_ROUTES[tabIndex].path}
                   variant="ghost"
                   className="justify-start gap-3"
-                  data-testid={`keypad-quick-menu-tab-${route.label.toLowerCase()}`}
-                  data-quick-menu-key={String(index + 1)}
-                  onClick={() => run(() => navigate(route.path))}
+                  data-testid={`keypad-quick-menu-tab-${TAB_ROUTES[tabIndex].label.toLowerCase()}`}
+                  data-quick-menu-key={String(position + 1)}
+                  onClick={() => run(() => navigate(TAB_ROUTES[tabIndex].path))}
                 >
-                  <ShortcutKey>{index + 1}</ShortcutKey>
-                  {route.label}
+                  <ShortcutKey>{position + 1}</ShortcutKey>
+                  {TAB_ROUTES[tabIndex].label}
                 </Button>
               ))
             : null}
           {/* The machine controls carry their own keys too. They live in Home's Quick actions grid,
               which is where they read best, but that is ten presses from a cold arrival; naming the
               key here is how a keypad user finds the short way without reading the manual. */}
-          {fromKeypad ? (
+          {fromKeypad && shows("quick-menu:machine-pause") ? (
             <>
               <Button
                 variant="ghost"
@@ -288,7 +304,7 @@ export function KeypadQuickMenu() {
           ) : null}
           {/* Carried here as well as on `0`, so the shortcut is discoverable without
               reading the manual — in the same place the page jumps already are. */}
-          {gameModeAvailable ? (
+          {gameModeAvailable && shows("quick-menu:game-mode") ? (
             <Button
               variant="ghost"
               className="justify-start gap-3"
@@ -359,30 +375,42 @@ export function KeypadQuickMenu() {
               Switch device
             </Button>
           ) : null}
+          {appMode === "full" ? (
+            <Button
+              variant="ghost"
+              className="min-h-11 justify-start"
+              data-testid="keypad-quick-menu-use-sid-player"
+              onClick={() => run(() => requestModeDialog("enter"))}
+            >
+              {MODE_COPY.menu.quick}
+            </Button>
+          ) : null}
           {/* Last: reference for the two function keys, not a destination; the entries above are what the menu is opened for. */}
           {String(variant.id) === "c64u-remote" ? (
             <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="keypad-quick-menu-function-summary">
               F1: {REMOTE_FUNCTION_ACTION_LABELS[functionActions[0]]} · F3:{" "}
               {REMOTE_FUNCTION_ACTION_LABELS[functionActions[1]]}
-              <Button
-                variant="link"
-                className="ml-1 h-auto min-h-11 px-1"
-                data-testid="keypad-quick-menu-configure-function-keys"
-                onClick={() => {
-                  handingOverFocusRef.current = true;
-                  run(
-                    () =>
-                      void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
-                        navigate,
-                        currentPath: location.pathname,
-                        label: "Remote function keys",
-                        onToast: (message) => toast({ title: message, variant: "destructive" }),
-                      }),
-                  );
-                }}
-              >
-                Configure
-              </Button>
+              {shows("settings:play-and-disk-machine-rows") ? (
+                <Button
+                  variant="link"
+                  className="ml-1 h-auto min-h-11 px-1"
+                  data-testid="keypad-quick-menu-configure-function-keys"
+                  onClick={() => {
+                    handingOverFocusRef.current = true;
+                    run(
+                      () =>
+                        void navigateToSearchTarget(REMOTE_FUNCTION_SETTINGS_TARGET, {
+                          navigate,
+                          currentPath: location.pathname,
+                          label: "Remote function keys",
+                          onToast: (message) => toast({ title: message, variant: "destructive" }),
+                        }),
+                    );
+                  }}
+                >
+                  Configure
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </div>

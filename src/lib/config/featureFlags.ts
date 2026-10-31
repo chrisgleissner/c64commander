@@ -20,6 +20,7 @@ import {
   type FeatureFlagId,
 } from "./featureFlagsRegistry.generated";
 import { getDeveloperModeEnabled, subscribeDeveloperMode } from "./developerModeStore";
+import { getAppMode, subscribeAppMode, type AppMode } from "@/lib/appMode/appModeStore";
 
 export { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_DEFINITION_BY_ID, FEATURE_FLAG_GROUPS, FEATURE_FLAG_IDS };
 export type { FeatureFlagDefinition, FeatureFlagGroupKey, FeatureFlagGroupMetadata, FeatureFlagId };
@@ -175,16 +176,25 @@ export const computeResolution = (
   };
 };
 
+export const withholdForAppMode = (resolution: FeatureFlagResolution, appMode: AppMode): FeatureFlagResolution =>
+  appMode === "sid-player" && resolution.definition.requires_device
+    ? { ...resolution, value: false, visible: false, editable: false }
+    : resolution;
+
 const buildSnapshot = (
   overrides: Partial<Record<FeatureFlagId, boolean>>,
   developerMode: boolean,
   isLoaded: boolean,
+  appMode: AppMode = getAppMode(),
 ): FeatureFlagSnapshot => {
   const flags = {} as FeatureFlags;
   const resolved = {} as Record<FeatureFlagId, FeatureFlagResolution>;
   FEATURE_FLAG_DEFINITIONS.forEach((baseDefinition) => {
     const definition = definitionFor(baseDefinition.id);
-    const resolution = computeResolution(definition, overrides[definition.id], developerMode);
+    const resolution = withholdForAppMode(
+      computeResolution(definition, overrides[definition.id], developerMode),
+      appMode,
+    );
     flags[definition.id] = resolution.value;
     resolved[definition.id] = resolution;
   });
@@ -216,6 +226,7 @@ export class FeatureFlagManager {
   ) {
     this.developerMode = this.readDeveloperMode();
     this.snapshot = buildSnapshot(this.overrides, this.developerMode, false);
+    subscribeAppMode(() => this.emitSnapshot(this.snapshot.isLoaded));
   }
 
   getSnapshot() {

@@ -13,6 +13,10 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { deviceKeypadShortcuts } from "@/lib/appMode/deviceKeypadShortcuts";
+import { ModeDialogs } from "@/components/appMode/ModeDialogs";
+import { HiddenRouteRedirect } from "@/components/HiddenRouteRedirect";
 import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppStyleProvider } from "@/components/AppStyleProvider";
@@ -45,7 +49,7 @@ import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
 import { NotificationPermissionMoment } from "@/components/NotificationPermissionMoment";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
-import { requestDeviceSwitcherOpen, requestMachineCommand, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
+import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { deviceSupportsGameMode, GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
@@ -308,20 +312,20 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       }),
     [flags.remote_input_enabled, gameModeAvailable, launchGameMode, transportShortcutOptions],
   );
+  const appMode = useAppMode();
+  const deviceShortcuts = useMemo(() => deviceKeypadShortcuts(appMode), [appMode]);
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: createTabJumpShortcut(guardedNavigate),
       openDiagnostics: () => requestDiagnosticsOpen("header"),
-      openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
       // C64U Remote assignments are live-read so Settings changes take effect
       // immediately. The standard variant retains its existing transport keys.
       runFunctionShortcut: runNormalNavigationFunctionShortcut,
-      machinePauseResume: () => requestMachineCommand("pauseResume"),
-      machineReset: () => requestMachineCommand("reset"),
+      ...deviceShortcuts,
       openGameMode: gameModeAvailable ? launchGameMode : undefined,
     }),
-    [guardedNavigate, gameModeAvailable, launchGameMode, runNormalNavigationFunctionShortcut],
+    [guardedNavigate, gameModeAvailable, launchGameMode, runNormalNavigationFunctionShortcut, deviceShortcuts],
   );
   return (
     <FocusNavigationProvider
@@ -364,6 +368,7 @@ const AppRoutes = () => {
             <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
+            <ModeDialogs />
             <NotificationPermissionMoment />
             <ConnectionController />
             <DemoModeInterstitial />
@@ -377,6 +382,7 @@ const AppRoutes = () => {
             ) : null}
             <DeviceSwitchLabLauncherGate enabled={coverageProbeEnabled} />
             <Suspense fallback={<PageLoadingFallback />}>
+              <HiddenRouteRedirect />
               <SwipeNavigationLayer />
               <Routes>
                 {coverageProbeEnabled && CoverageProbePage ? (

@@ -22,6 +22,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { resolveAppBarHeightPx } from "@/components/ui/interstitialStyles";
 import { useHealthState } from "@/hooks/useHealthState";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
@@ -417,7 +419,8 @@ export function UnifiedHealthBadge({ className }: Props) {
   const longPressHandledRef = useRef(false);
   const suppressClickRef = useRef(false);
 
-  const canSwitchDevices = savedDevices.devices.length > 1;
+  const appMode = useAppMode();
+  const canSwitchDevices = savedDevices.devices.length > 1 && appMode !== "sid-player";
   // HARD19-034 (decision D6): run saved-device health checks whenever more than
   // one device is saved — not only while the picker is open. With the picker
   // closed this drives the F-DIAG-1 `backgroundMaintenance` mode (selected-device
@@ -593,6 +596,10 @@ export function UnifiedHealthBadge({ className }: Props) {
         return;
       }
       handlePointerButtonClick(event);
+      if (connectivity === "SID Player") {
+        requestModeDialog("sheet");
+        return;
+      }
       // When the device is offline, a tap actively kicks off a reconnect in
       // addition to opening Diagnostics. The passive background re-probe can be
       // slow to recover when the device was unreachable at app launch, so this
@@ -670,11 +677,13 @@ export function UnifiedHealthBadge({ className }: Props) {
           </span>
         </>
       ) : null}
-      <HealthStateShape
-        state={shapeState}
-        className={showShortDeviceLabel ? "text-[12.8px]" : "text-[1rem]"}
-        overlayCritical
-      />
+      {connectivity === "SID Player" ? null : (
+        <HealthStateShape
+          state={shapeState}
+          className={showShortDeviceLabel ? "text-[12.8px]" : "text-[1rem]"}
+          overlayCritical
+        />
+      )}
       {badgeText.countLabel ? (
         <>
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
@@ -797,7 +806,7 @@ export function UnifiedHealthBadge({ className }: Props) {
               (`app-chrome-badge-host`) so the breakpoint lives beside the other header rules
               instead of being duplicated as a width listener here.
             */}
-              {narrowHeader && connectivity === "Demo" ? (
+              {narrowHeader && (connectivity === "Demo" || connectivity === "SID Player") ? (
                 // Not a host name, so not dropped with one: on a narrow screen this word is the only
                 // sign that nothing real is connected.
                 <>

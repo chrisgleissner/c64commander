@@ -75,7 +75,7 @@ test.describe("Audio Mixer volumes", () => {
 
     await page.goto("/config");
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
@@ -129,7 +129,7 @@ test.describe("Audio Mixer volumes", () => {
     const initialState = server.getState()["Audio Mixer"];
     await page.goto("/config");
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
@@ -162,7 +162,7 @@ test.describe("Audio Mixer volumes", () => {
     allowVisualOverflow(testInfo, "Audio mixer controls expand beyond viewport during volume editing");
     await page.goto("/config");
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();

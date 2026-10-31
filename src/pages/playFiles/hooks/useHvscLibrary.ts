@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -1083,7 +1084,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         });
       }
       setHvscActiveToken(null);
-      toast({ title: "HVSC update canceled" });
+      toast({ title: isSidPlayerActive() ? "Download canceled" : "HVSC update canceled" });
     } catch (error) {
       reportUserError({
         operation: "HVSC_CANCEL",

@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   HVSC_LIBRARY_EXPANSION_FACTOR,
+  describeHvscInstallRequirement,
   ensureRoomForHvscInstall,
   estimateHvscInstallBytes,
   librariesToMakeRoomFor,
@@ -96,5 +97,15 @@ describe("hvscStorageBudget", () => {
       const readBudget = vi.fn(async () => ({ availableBytes: 0, libraryPresent: false }));
       await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
     });
+  });
+});
+
+describe("SPM-START-02 describeHvscInstallRequirement", () => {
+  it("states a known archive size exactly", () => {
+    expect(describeHvscInstallRequirement(100 * 1024 * 1024).sizeLabel).toBe("100 MB");
+  });
+
+  it("falls back to the measured baseline archive, marked as approximate", () => {
+    expect(describeHvscInstallRequirement(null).sizeLabel).toBe("about 81 MB");
   });
 });

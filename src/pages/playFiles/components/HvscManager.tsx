@@ -7,15 +7,23 @@
  */
 
 import type { HvscLibraryState } from "../hooks/useHvscLibrary";
+import { HVSC_CANCELED_STATUS_REASON } from "@/lib/hvsc/hvscCancellation";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { HvscControls } from "./HvscControls";
 
 interface HvscManagerProps {
   hvscControlsEnabled: boolean;
   hvsc: HvscLibraryState;
+  /** Opens the preparation sheet, which in SID Player asks before the first download. */
+  onOpenPreparation?: () => void;
 }
 
-export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
+export function HvscManager({ hvscControlsEnabled, hvsc, onOpenPreparation }: HvscManagerProps) {
   const { formatHvscDuration, formatHvscTimestamp } = hvsc;
+  const sidPlayer = useAppMode() === "sid-player";
+  const canceled =
+    hvsc.hvscPreparationState === "ERROR" && hvsc.hvscPreparationErrorReason === HVSC_CANCELED_STATUS_REASON;
+  const asksFirst = sidPlayer && (hvsc.hvscPreparationState === "NOT_PRESENT" || canceled) && onOpenPreparation;
 
   if (!hvscControlsEnabled) {
     return null;
@@ -48,7 +56,7 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscSonglengthSyntaxErrors={hvsc.hvscSonglengthSyntaxErrors}
       formatHvscDuration={formatHvscDuration}
       formatHvscTimestamp={formatHvscTimestamp}
-      onInstall={() => void hvsc.handleHvscInstall()}
+      onInstall={() => (asksFirst ? onOpenPreparation() : void hvsc.handleHvscInstall())}
       onIngest={() => void hvsc.handleHvscIngest()}
       onCancel={() => void hvsc.handleHvscCancel()}
       onReindex={() => void hvsc.handleHvscReindex()}

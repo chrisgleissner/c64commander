@@ -529,37 +529,39 @@ export const ItemSelectionDialog = ({
                     </span>
                   </span>
                 </Button>
-                <Button
-                  variant="outline"
-                  className={interstitialButtonClassName}
-                  onClick={() => {
-                    void handleSelectSource(c64UltimateSource);
-                  }}
-                  disabled={!c64UltimateSource?.isAvailable}
-                  id="import-option-c64u"
-                  data-testid="import-option-c64u"
-                  aria-label={`Add file / folder from ${c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}`}
-                >
-                  <span className={interstitialOptionContentClassName} aria-hidden="true">
-                    <span className={interstitialIconSlotClassName}>
-                      <FileOriginIcon origin="ultimate" className={resolveInterstitialIconClassName("ultimate")} />
-                    </span>
-                    <span className={interstitialLabelClassName}>
-                      <span className={cn("truncate font-medium", interstitialTextClassName)}>
-                        {c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}
+                {c64UltimateSource ? (
+                  <Button
+                    variant="outline"
+                    className={interstitialButtonClassName}
+                    onClick={() => {
+                      void handleSelectSource(c64UltimateSource);
+                    }}
+                    disabled={!c64UltimateSource?.isAvailable}
+                    id="import-option-c64u"
+                    data-testid="import-option-c64u"
+                    aria-label={`Add file / folder from ${c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}`}
+                  >
+                    <span className={interstitialOptionContentClassName} aria-hidden="true">
+                      <span className={interstitialIconSlotClassName}>
+                        <FileOriginIcon origin="ultimate" className={resolveInterstitialIconClassName("ultimate")} />
                       </span>
-                      {/* Offline, this opened an empty browser that said only "No matching items". */}
-                      {c64UltimateSource?.isAvailable ? null : (
-                        <span
-                          className="whitespace-normal text-left text-xs text-muted-foreground"
-                          data-testid="import-option-c64u-unavailable"
-                        >
-                          Needs a connected device
+                      <span className={interstitialLabelClassName}>
+                        <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                          {c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}
                         </span>
-                      )}
+                        {/* Offline, this opened an empty browser that said only "No matching items". */}
+                        {c64UltimateSource?.isAvailable ? null : (
+                          <span
+                            className="whitespace-normal text-left text-xs text-muted-foreground"
+                            data-testid="import-option-c64u-unavailable"
+                          >
+                            Needs a connected device
+                          </span>
+                        )}
+                      </span>
                     </span>
-                  </span>
-                </Button>
+                  </Button>
+                ) : null}
                 {hvscSource ? (
                   <Button
                     variant="outline"

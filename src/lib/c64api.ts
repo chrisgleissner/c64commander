@@ -30,6 +30,7 @@ import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
@@ -816,113 +817,18 @@ export interface VersionInfo {
   errors: string[];
 }
 
-export type MachineInputStateResponse = {
-  keyboard: {
-    inputs: string[];
-  };
-  joysticks: Array<{
-    port: 1 | 2;
-    inputs: string[];
-  }>;
-  errors: string[];
-};
-
-// HARD12-017: the u64e-openapi.yaml v3.15-alpha `machine:input` schema
-// (KeyboardInput/JoystickInput enums, InputBatch/*Event shapes). U64-family +
-// machine:input-capable firmware only.
-export type JoystickInputName = "up" | "down" | "left" | "right" | "fire" | "fire2" | "fire3";
-
-export type KeyboardInputName =
-  | "inst_del"
-  | "return"
-  | "cursor_left_right"
-  | "f7"
-  | "f1"
-  | "f3"
-  | "f5"
-  | "cursor_up_down"
-  | "0"
-  | "1"
-  | "2"
-  | "3"
-  | "4"
-  | "5"
-  | "6"
-  | "7"
-  | "8"
-  | "9"
-  | "a"
-  | "b"
-  | "c"
-  | "d"
-  | "e"
-  | "f"
-  | "g"
-  | "h"
-  | "i"
-  | "j"
-  | "k"
-  | "l"
-  | "m"
-  | "n"
-  | "o"
-  | "p"
-  | "q"
-  | "r"
-  | "s"
-  | "t"
-  | "u"
-  | "v"
-  | "w"
-  | "x"
-  | "y"
-  | "z"
-  | "left_shift"
-  | "right_shift"
-  | "plus"
-  | "minus"
-  | "period"
-  | "colon"
-  | "at"
-  | "comma"
-  | "pound"
-  | "star"
-  | "semicolon"
-  | "clr_home"
-  | "equals"
-  | "arrow_up"
-  | "slash"
-  | "arrow_left"
-  | "ctrl"
-  | "space"
-  | "commodore"
-  | "run_stop"
-  | "restore";
-
-export type MachineInputTransition = "press" | "release" | "tap";
-
-export type MachineInputKeyboardEvent = {
-  kind: "keyboard";
-  inputs: KeyboardInputName[];
-  transition: MachineInputTransition;
-};
-
-export type MachineInputJoystickEvent = {
-  kind: "joystick";
-  port: 1 | 2;
-  inputs: JoystickInputName[];
-  transition: MachineInputTransition;
-};
-
-export type MachineInputReleaseAllEvent = {
-  kind: "release_all";
-};
-
-export type MachineInputEvent = MachineInputKeyboardEvent | MachineInputJoystickEvent | MachineInputReleaseAllEvent;
-
-export type MachineInputBatch = {
-  events: MachineInputEvent[];
-};
+export type {
+  MachineInputStateResponse,
+  JoystickInputName,
+  KeyboardInputName,
+  MachineInputTransition,
+  MachineInputKeyboardEvent,
+  MachineInputJoystickEvent,
+  MachineInputReleaseAllEvent,
+  MachineInputEvent,
+  MachineInputBatch,
+} from "@/lib/c64api/machineInputTypes";
+import type { MachineInputBatch, MachineInputStateResponse } from "@/lib/c64api/machineInputTypes";
 
 export interface ConfigCategory {
   [itemName: string]:
@@ -1565,6 +1471,7 @@ export class C64API {
   }
 
   private async request<T>(path: string, options: C64ReadRequestOptions = {}): Promise<T> {
+    assertDeviceTrafficAllowed("rest", { host: this.deviceHost, path, method: options.method });
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...this.buildTransportHeaders(),
@@ -2070,6 +1977,7 @@ export class C64API {
     } & Pick<C64ReadRequestOptions, (typeof FETCH_PROBE_OPTION_KEYS)[number]>,
     timeoutMs?: number,
   ): Promise<Response> {
+    assertDeviceTrafficAllowed("rest", { host: this.deviceHost, url, method: options.method });
     const intent = options.__c64uIntent ?? "user";
     const forceProbe = Boolean(options.__c64uForceProbe);
     const bypassCooldown = Boolean(options.__c64uBypassCooldown) || forceProbe;

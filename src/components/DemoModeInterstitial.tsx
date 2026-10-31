@@ -23,6 +23,11 @@ import { declineDemoMode, pinDemoModeByUserChoice } from "@/lib/connection/conne
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { loadStartupMode } from "@/lib/appMode/appModeStore";
+import { enterSidPlayer } from "@/lib/appMode/appModeTransitions";
+import { MODE_COPY } from "@/lib/appMode/copy";
+import { hasNeverConnectedDevice } from "@/lib/connection/demoOfferMemory";
+import { addErrorLog } from "@/lib/logging";
 
 /**
  * The dialog's words, in one place.
@@ -71,8 +76,17 @@ export function DemoModeInterstitial() {
   // that cannot change the outcome until they turn a network back on.
   const noNetwork = demoInterstitialReason === "no-network";
   const compact = profile === "compact";
+  const firstRun = loadStartupMode() === "default" && hasNeverConnectedDevice();
   const notFoundSuffix = compact ? NOT_FOUND_SUFFIX_COMPACT : NOT_FOUND_SUFFIX;
   const noNetworkMessage = compact ? NO_NETWORK_MESSAGE_COMPACT : NO_NETWORK_MESSAGE;
+  const firstRunCopy = MODE_COPY.firstRun;
+  const firstRunBody = noNetwork
+    ? compact
+      ? firstRunCopy.noNetworkCompactBody
+      : firstRunCopy.noNetworkBody
+    : compact
+      ? firstRunCopy.compactBody
+      : firstRunCopy.body;
   const message = noNetwork ? noNetworkMessage : `${NOT_FOUND_PREFIX} ${attemptedHost}${notFoundSuffix}`;
 
   const handleSaveAndRetry = () => {
@@ -99,11 +113,15 @@ export function DemoModeInterstitial() {
       {/* Compact: the default 24 px padding and 16 px gaps took 80 of the 283 px this offer gets. */}
       <DialogContent className={compact ? "gap-2 p-4" : undefined}>
         <DialogHeader>
-          <DialogTitle>Demo Mode</DialogTitle>
-          <DialogDescription data-testid="demo-interstitial-description">{message}</DialogDescription>
+          <DialogTitle>{firstRun ? MODE_COPY.firstRun.title : "Demo Mode"}</DialogTitle>
+          <DialogDescription data-testid="demo-interstitial-description">
+            {firstRun ? firstRunBody : message}
+          </DialogDescription>
         </DialogHeader>
         <p className="px-4 pt-1 text-sm text-muted-foreground sm:px-6" data-testid="demo-interstitial-message">
-          {noNetwork ? (
+          {firstRun ? (
+            firstRunBody
+          ) : noNetwork ? (
             noNetworkMessage
           ) : (
             <>
@@ -112,7 +130,7 @@ export function DemoModeInterstitial() {
             </>
           )}
         </p>
-        {noNetwork ? null : (
+        {noNetwork || (firstRun && compact) ? null : (
           <div className="space-y-2 px-4 py-2 sm:px-6">
             <Label htmlFor="demo-device-host">C64U hostname / IP</Label>
             <Input
@@ -139,16 +157,41 @@ export function DemoModeInterstitial() {
         >
           {/* Primary first: stacked on a phone it is the one action sure to be on screen when the offer opens. */}
           <div className="flex flex-col gap-2 w-full sm:flex-row-reverse sm:justify-start">
-            <Button
-              variant="default"
-              data-testid="demo-interstitial-continue"
-              onClick={() => {
-                void pinDemoModeByUserChoice();
-              }}
-            >
-              Continue in Demo Mode
-            </Button>
-            {noNetwork ? null : (
+            {firstRun ? (
+              <Button
+                variant="default"
+                data-testid="demo-interstitial-use-sid-player"
+                onClick={() => {
+                  enterSidPlayer().catch((error: unknown) =>
+                    addErrorLog("Entering SID Player from the first-run offer failed", { error: String(error) }),
+                  );
+                }}
+              >
+                {MODE_COPY.firstRun.useSidPlayer}
+              </Button>
+            ) : null}
+            {firstRun ? (
+              <Button
+                variant="secondary"
+                data-testid="demo-interstitial-continue"
+                onClick={() => {
+                  void pinDemoModeByUserChoice();
+                }}
+              >
+                {MODE_COPY.firstRun.tryDemoMode}
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                data-testid="demo-interstitial-continue"
+                onClick={() => {
+                  void pinDemoModeByUserChoice();
+                }}
+              >
+                Continue in Demo Mode
+              </Button>
+            )}
+            {noNetwork || (firstRun && compact) ? null : (
               <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
                 Save & retry
               </Button>
@@ -160,7 +203,7 @@ export function DemoModeInterstitial() {
                 void declineDemoMode({ retry: "manual" });
               }}
             >
-              {noNetwork ? "Try again" : "Retry connection"}
+              {firstRun ? MODE_COPY.firstRun.retry : noNetwork ? "Try again" : "Retry connection"}
             </Button>
           </div>
         </DialogFooter>

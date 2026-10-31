@@ -12,6 +12,7 @@
 import "./lib/tour/tourState";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { normalizeInitialLocation } from "./lib/navigation/hiddenRoutes";
 import { installAsyncContextPropagation } from "./lib/tracing/traceActionContextStore";
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
@@ -134,5 +135,6 @@ void import("./lib/input/keymapOverrideFiles")
     const err = error as Error;
     addErrorLog("Keymap override files could not be loaded", { error: { message: err.message, stack: err.stack } });
   });
+normalizeInitialLocation();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);
