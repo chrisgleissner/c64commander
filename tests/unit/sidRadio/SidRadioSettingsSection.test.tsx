@@ -29,7 +29,15 @@ vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
+vi.mock("@/lib/roms/romFetchService", () => ({
+  fetchSystemRomsFromDevice: vi.fn(async () => ({
+    ok: true,
+    outcomes: [{ kind: "chargen", ok: false, reason: "skipped: this device cannot run the copy routine" }],
+  })),
+}));
+
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
+import { fetchSystemRomsFromDevice } from "@/lib/roms/romFetchService";
 import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import { updateHvscState } from "@/lib/hvsc/hvscStateStore";
 import { saveRom } from "@/lib/roms/romStore";
@@ -125,6 +133,30 @@ describe("SidRadioSettingsSection — C64 ROMs", () => {
     const row = screen.getByTestId("settings-local-engine-roms");
     expect(row).toHaveTextContent(/only connect .* to devices you own or have been given permission to use/i);
     expect(row).toHaveTextContent(/never shared, uploaded or included in diagnostics/i);
+  });
+
+  it("reads the character ROM too from the explicit action, and says whether it has it", async () => {
+    const save = (kind: "kernal" | "basic" | "chargen", description: string) =>
+      saveRom(kind, new Uint8Array([1]), { description, fingerprint: "abc", capturedFrom: "c64u" });
+    save("kernal", "KERNAL 901227-03");
+    save("basic", "BASIC 901226-01");
+    const { unmount } = render(<SidRadioSettingsSection developerMode />);
+    expect(screen.getByTestId("settings-local-engine-roms")).toHaveTextContent(
+      /also copies the optional character ROM/,
+    );
+    expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("Chargen: not read (optional)");
+
+    fireEvent.click(screen.getByTestId("settings-roms-fetch"));
+    await waitFor(() => expect(screen.getByTestId("settings-roms-result")).toHaveTextContent("skipped"));
+    expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith(expect.anything(), expect.any(String), {
+      includeCharacterRom: true,
+    });
+    unmount();
+
+    save("chargen", "C64 character ROM (901225-01)");
+    render(<SidRadioSettingsSection developerMode />);
+    expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("C64 character ROM (901225-01)");
+    expect(screen.getByTestId("settings-roms-status")).not.toHaveTextContent("not read");
   });
 
   it("hides the ROM row when the on-device engine is switched off", async () => {

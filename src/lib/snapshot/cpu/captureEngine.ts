@@ -90,7 +90,7 @@ export class CpuCaptureFailedError extends Error {
 const DEFAULT_CAPTURE_TIMEOUT_MS = 2000;
 const DEFAULT_POLL_INTERVAL_MS = 50;
 
-const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStart(4, "0");
+export const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStart(4, "0");
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Reads the captured register scratch block into a {@link CpuState}. */

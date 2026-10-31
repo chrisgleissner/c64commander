@@ -185,6 +185,7 @@ import {
 } from "@/lib/config/appSettings";
 import { loadShowSectionDescriptions, saveShowSectionDescriptions } from "@/lib/ui/collapsibleSectionStore";
 import { HelperText } from "@/components/ui/HelperText";
+import { SkipRomDependentSongsRow } from "@/pages/settings/SkipRomDependentSongsRow";
 import { C64SeekMuteRow } from "@/pages/settings/C64SeekMuteRow";
 import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import {
@@ -2151,6 +2152,8 @@ export default function SettingsPage() {
                     }}
                   />
                 </div>
+
+                <SkipRomDependentSongsRow />
 
                 <div className="space-y-2">
                   <Label htmlFor="disk-autostart-mode" className="text-sm">

@@ -663,6 +663,23 @@ entries:
     target:
       { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-friendly-sid-names }
 
+  - id: settings.control.skip-rom-dependent-songs
+    title_key: search.settings.skipRomDependentSongs
+    title: Skip songs that need the C64 ROMs
+    subtitle_key: search.settings.skipRomDependentSongs.subtitle
+    subtitle: Pass over songs that sound wrong without the ROMs
+    keywords: [rom, kernal, basic, skip, sid, songs, tunes]
+    group: setting
+    icon: skip-forward
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: play-and-disk,
+        testId: settings-skip-rom-dependent-songs,
+      }
+
   - id: settings.control.search-inside-disks
     title_key: search.settings.searchInsideDisks
     title: Search inside disk images

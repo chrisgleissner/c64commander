@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { C64_ROM_BYTES, ROM_SOURCE_ADDRESS, romFingerprint, validateRomImage } from "@/lib/roms/c64SystemRoms";
+import {
+  C64_CHARGEN_BYTES,
+  C64_ROM_BYTES,
+  ROM_SOURCE_ADDRESS,
+  romFingerprint,
+  validateRomImage,
+} from "@/lib/roms/c64SystemRoms";
 
 /**
  * Fixtures are **synthesised**, never real ROM dumps.
@@ -33,6 +39,20 @@ function synthesiseKernal({ resetVector = 0xfce2, revision = 0x03 } = {}): Uint8
 function synthesiseBasic({ signature = "CBMBASIC" } = {}): Uint8Array {
   const bytes = noisyImage(0x5678);
   for (let i = 0; i < signature.length; i++) bytes[4 + i] = signature.charCodeAt(i);
+  return bytes;
+}
+
+/** Two character sets, each 1 KiB of glyphs then its reverse-video inverse, with the stock image's one odd byte. */
+function synthesiseChargen({ oddBytes = 1 } = {}): Uint8Array {
+  const glyphs = noisyImage(0x9abc);
+  const bytes = new Uint8Array(C64_CHARGEN_BYTES);
+  for (const set of [0, 2048]) {
+    for (let i = 0; i < 1024; i++) {
+      bytes[set + i] = glyphs[set + i];
+      bytes[set + 1024 + i] = ~glyphs[set + i] & 0xff;
+    }
+    for (let i = 0; i < oddBytes; i++) bytes[set + 1024 + 5 + i] ^= 0x04;
+  }
   return bytes;
 }
 
@@ -114,15 +134,45 @@ describe("validateRomImage", () => {
   });
 });
 
+describe("validateRomImage for the character ROM", () => {
+  it("accepts a 4 KiB image with reverse-video halves, odd byte included, and names it as unrecognised", () => {
+    const result = validateRomImage("chargen", synthesiseChargen());
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.image.description).toBe("C64 character ROM (unrecognised variant)");
+  });
+
+  it("rejects the wrong size, including an 8 KiB image", () => {
+    expect(validateRomImage("chargen", new Uint8Array(C64_ROM_BYTES)).ok).toBe(false);
+    expect(validateRomImage("chargen", synthesiseChargen().subarray(0, 4095))).toMatchObject({
+      ok: false,
+      reason: "expected 4096 bytes, got 4095",
+    });
+  });
+
+  it("rejects what a read returns when the character ROM was not banked in", () => {
+    const io = noisyImage(0x4242).subarray(0, C64_CHARGEN_BYTES);
+    const result = validateRomImage("chargen", io);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("reverse-video pattern");
+    expect(validateRomImage("chargen", synthesiseChargen({ oddBytes: 9 })).ok).toBe(false);
+  });
+
+  it("rejects blank and two-valued RAM", () => {
+    expect(validateRomImage("chargen", new Uint8Array(C64_CHARGEN_BYTES)).ok).toBe(false);
+    const stripes = Uint8Array.from({ length: C64_CHARGEN_BYTES }, (_, i) => (i & 0x400 ? 0xff : 0x00));
+    expect(validateRomImage("chargen", stripes)).toMatchObject({ ok: false });
+  });
+});
+
 describe("ROM_SOURCE_ADDRESS", () => {
   it("reads the ROMs from where the C64 maps them", () => {
     expect(ROM_SOURCE_ADDRESS.kernal).toBe("e000");
     expect(ROM_SOURCE_ADDRESS.basic).toBe("a000");
   });
 
-  it("does not fetch chargen", () => {
+  it("has no plain read for the character ROM", () => {
     // $D000 is I/O under default banking, so a plain read returns I/O space, not
-    // the character generator — and chargen has no effect on audio anyway.
+    // the character generator; characterRomReader copies it on the C64 instead.
     expect(Object.keys(ROM_SOURCE_ADDRESS).sort()).toEqual(["basic", "kernal"]);
   });
 });

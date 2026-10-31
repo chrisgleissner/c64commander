@@ -110,6 +110,12 @@ import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { useRestoreVolumeWhenPlaybackEnds } from "@/pages/playFiles/hooks/useRestoreVolumeWhenPlaybackEnds";
 import { SidRadioChip, whyThisTuneFor } from "@/pages/playFiles/components/SidRadioChip";
 import { StationQueueEditedDialog } from "@/pages/playFiles/components/StationQueueEditedDialog";
+import { RomDependencyDialog } from "@/pages/playFiles/components/RomDependencyDialog";
+import {
+  UnavailableConfigDialog,
+  useUnavailableConfigPrompt,
+} from "@/pages/playFiles/components/UnavailableConfigDialog";
+import { useRomDependencyPrompt } from "@/pages/playFiles/hooks/useRomDependencyPrompt";
 import { useStationPlaylistHandover } from "@/pages/playFiles/hooks/useStationPlaylistHandover";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { SID_RADIO_NOTICE_TEXT } from "@/pages/playFiles/sidRadioNotices";
@@ -118,10 +124,9 @@ import { createPlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { usePlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
 import { PlaySearchSheet } from "@/pages/playFiles/components/PlaySearchSheet";
 import {
-  PlaylistConfigDialogs,
+  PendingConfigChangeDialog,
   type PendingConfigChangeState,
-  type UnavailableConfigPromptState,
-} from "@/pages/playFiles/components/PlaylistConfigDialogs";
+} from "@/pages/playFiles/components/PendingConfigChangeDialog";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { isMd548InHvsc, md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
@@ -452,7 +457,6 @@ export default function PlayFilesPage() {
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
   const [pendingConfigChange, setPendingConfigChange] = useState<PendingConfigChangeState | null>(null);
-  const [unavailableConfigPrompt, setUnavailableConfigPrompt] = useState<UnavailableConfigPromptState | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -546,18 +550,8 @@ export default function PlayFilesPage() {
     [gameModeAvailable],
   );
 
-  const resolveUnavailableConfigDecision = useCallback(
-    (item: PlaylistItem, context: { configFileName: string | null; reason: string }) =>
-      new Promise<"play-without-config" | "cancel">((resolve) => {
-        setUnavailableConfigPrompt({
-          item,
-          configFileName: context.configFileName,
-          reason: context.reason,
-          resolve,
-        });
-      }),
-    [],
-  );
+  const romDependencyPrompt = useRomDependencyPrompt();
+  const unavailableConfigPrompt = useUnavailableConfigPrompt();
 
   const {
     playItem,
@@ -637,7 +631,8 @@ export default function PlayFilesPage() {
     resumingFromPauseRef,
     ensureUnmuted,
     isManualMuteHeld,
-    resolveUnavailableConfigDecision,
+    resolveUnavailableConfigDecision: unavailableConfigPrompt.ask,
+    resolveRomDependencyDecision: romDependencyPrompt.ask,
     onUserLaunchedItem: handleUserLaunchedItem,
   });
   const { stopPending, stopping, stopPlayback } = useLaunchStopGuard({
@@ -3010,7 +3005,7 @@ export default function PlayFilesPage() {
             stationActive={sidRadio.active}
           />
 
-          <PlaylistConfigDialogs
+          <PendingConfigChangeDialog
             pendingConfigChange={pendingConfigChange}
             onPendingConfigChangeConfirmed={(change) =>
               updatePlaylistItemConfigRef(change.itemId, change.configRef, {
@@ -3020,9 +3015,9 @@ export default function PlayFilesPage() {
               })
             }
             onPendingConfigChangeClosed={() => setPendingConfigChange(null)}
-            unavailableConfigPrompt={unavailableConfigPrompt}
-            onUnavailableConfigPromptClosed={() => setUnavailableConfigPrompt(null)}
           />
+          <UnavailableConfigDialog prompt={unavailableConfigPrompt.prompt} onChoose={unavailableConfigPrompt.choose} />
+          <RomDependencyDialog label={romDependencyPrompt.label} onChoose={romDependencyPrompt.choose} />
 
           <StationQueueEditedDialog {...stationHandover.editedPrompt} />
 

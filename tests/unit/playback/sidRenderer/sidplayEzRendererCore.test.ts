@@ -121,7 +121,18 @@ describe("the libSidplayEZ renderer core", () => {
     const open = calls.find((c) => c.method === "openTune")!.options;
     expect(open).toMatchObject({ songIndex: 2, sampleRate: 48000, sidModel: "MOS6581", sid: btoa("PSID") });
     expect(open.kernal).toBe(btoa(String.fromCharCode(1, 2)));
+    expect(open.basic).toBe(btoa(String.fromCharCode(3)));
+    expect(open.chargen).toBeUndefined();
     expect(opened).toMatchObject({ sampleRate: 48000, channels: 2, tuneInfo: { songs: 3 } });
+  });
+
+  it("sends the character ROM too when it was read", async () => {
+    const { plugin, calls } = fakePlugin();
+    const core = new SidplayEzRendererCore({ background: false }, plugin);
+    const withChargen = request();
+    await core.open({ ...withChargen, roms: { ...withChargen.roms, chargen: new Uint8Array([4, 5, 6]).buffer } });
+    const open = calls.find((c) => c.method === "openTune")!.options;
+    expect(open.chargen).toBe(btoa(String.fromCharCode(4, 5, 6)));
   });
 
   it("returns rendered audio as a reference to the native buffer, never as samples", async () => {

@@ -48,13 +48,16 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
   // the text there gives the description the full width.
   const stacked = profile === "compact";
 
-  const complete = summaries.length === 2;
+  const complete = summaries.some((s) => s.kind === "kernal") && summaries.some((s) => s.kind === "basic");
+  const hasCharacterRom = summaries.some((s) => s.kind === "chargen");
 
   const handleFetch = async () => {
     setBusy(true);
     setOutcomes(null);
     try {
-      const result = await fetchSystemRomsFromDevice(getC64API(), deviceHost || "connected C64");
+      const result = await fetchSystemRomsFromDevice(getC64API(), deviceHost || "connected C64", {
+        includeCharacterRom: true,
+      });
       setOutcomes(result.outcomes);
       setSummaries(loadRomSummaries());
     } catch (error) {
@@ -77,7 +80,8 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         <div className="min-w-0">
           <Label className="text-sm font-medium">C64 ROMs for on-device playback</Label>
           <p className="text-xs text-muted-foreground">
-            Needed for accurate on-device playback; without them, tunes fall back to the lighter emulation.
+            Needed for accurate on-device playback; without them, tunes fall back to the lighter emulation. Reading also
+            copies the optional character ROM, which briefly pauses the C64 to run a small routine on it.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -132,6 +136,11 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
               {summary.fingerprint}
             </li>
           ))}
+          {hasCharacterRom ? null : (
+            <li>
+              <span className="font-medium text-foreground">Chargen:</span> not read (optional)
+            </li>
+          )}
         </ul>
       ) : (
         <p className="text-xs text-muted-foreground" data-testid="settings-roms-status">
@@ -142,7 +151,10 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
       {outcomes ? (
         <ul className="space-y-0.5 text-xs" data-testid="settings-roms-result">
           {outcomes.map((outcome) => (
-            <li key={outcome.kind} className={outcome.ok ? "text-muted-foreground" : "text-destructive"}>
+            <li
+              key={outcome.kind}
+              className={outcome.ok || outcome.kind === "chargen" ? "text-muted-foreground" : "text-destructive"}
+            >
               <span className="capitalize">{outcome.kind}</span>: {outcome.ok ? outcome.description : outcome.reason}
             </li>
           ))}

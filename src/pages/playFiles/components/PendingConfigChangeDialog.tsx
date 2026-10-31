@@ -25,35 +25,18 @@ export type PendingConfigChangeState = {
   candidates?: PlaylistItem["configCandidates"];
 };
 
-export type UnavailableConfigPromptState = {
-  item: PlaylistItem;
-  configFileName: string | null;
-  reason: string;
-  resolve: (choice: "play-without-config" | "cancel") => void;
-};
-
-type PlaylistConfigDialogsProps = {
+type PendingConfigChangeDialogProps = {
   pendingConfigChange: PendingConfigChangeState | null;
   onPendingConfigChangeConfirmed: (change: PendingConfigChangeState) => void;
   onPendingConfigChangeClosed: () => void;
-  unavailableConfigPrompt: UnavailableConfigPromptState | null;
-  onUnavailableConfigPromptClosed: () => void;
 };
 
-/** The two confirmations a playlist item's config can raise: replacing edited values, and a missing config file. */
-export const PlaylistConfigDialogs = ({
+/** Asks before a config change clears the item's custom value edits. */
+export const PendingConfigChangeDialog = ({
   pendingConfigChange,
   onPendingConfigChangeConfirmed,
   onPendingConfigChangeClosed,
-  unavailableConfigPrompt,
-  onUnavailableConfigPromptClosed,
-}: PlaylistConfigDialogsProps) => {
-  const resolveUnavailableConfigPrompt = (choice: "play-without-config" | "cancel") => {
-    if (!unavailableConfigPrompt) return;
-    unavailableConfigPrompt.resolve(choice);
-    onUnavailableConfigPromptClosed();
-  };
-
+}: PendingConfigChangeDialogProps) => {
   return (
     <>
       <AlertDialog
@@ -82,33 +65,6 @@ export const PlaylistConfigDialogs = ({
               }}
             >
               Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={Boolean(unavailableConfigPrompt)}
-        onOpenChange={(open) => {
-          if (!open) resolveUnavailableConfigPrompt("cancel");
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader hideClose>
-            <AlertDialogTitle>Config unavailable</AlertDialogTitle>
-            <AlertDialogDescription>
-              {unavailableConfigPrompt
-                ? `${unavailableConfigPrompt.configFileName ?? "The selected config"} is unavailable for ${unavailableConfigPrompt.item.label}. Play without config, or cancel?`
-                : "The selected config is unavailable."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {unavailableConfigPrompt ? (
-            <div className="text-sm text-muted-foreground">{unavailableConfigPrompt.reason}</div>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => resolveUnavailableConfigPrompt("cancel")}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => resolveUnavailableConfigPrompt("play-without-config")}>
-              Play without config
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

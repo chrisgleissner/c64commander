@@ -66,7 +66,13 @@ type RemotePlaybackHandoverOptions = {
   resolveNextIndex: (from: number) => number | null;
   playItem: (
     item: PlaylistItem,
-    options: { playlistIndex: number; origin: "auto"; expectedPlayGeneration: number; onLaunchStarted: () => void },
+    options: {
+      playlistIndex: number;
+      origin: "auto";
+      romDependencyAccepted: true;
+      expectedPlayGeneration: number;
+      onLaunchStarted: () => void;
+    },
   ) => Promise<void>;
   seekBy: (deltaSeconds: number) => Promise<void>;
 };
@@ -180,6 +186,8 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         await current.playItem(item, {
           playlistIndex: index,
           origin: "auto",
+          // Carried on, not chosen anew: a tune that needs the C64 ROMs plays on here, as it does with the page closed.
+          romDependencyAccepted: true,
           expectedPlayGeneration,
           onLaunchStarted: () => {
             launchStarted = true;
@@ -191,6 +199,7 @@ export function useRemotePlaybackHandover(options: RemotePlaybackHandoverOptions
         addLog("warn", "Playback: could not carry on with the tune on this phone", {
           item: item.label,
           error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
       } finally {
         releaseSilence();

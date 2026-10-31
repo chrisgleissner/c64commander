@@ -45,3 +45,11 @@ export const firstPlayableWithoutDevice = (
   }
   return null;
 };
+
+/** `following`, but with the device out of reach it names only tracks that can play without it. */
+export const reachableFollowing =
+  (playlist: PlaylistItem[], following: (from: number) => number | null) =>
+  (from: number): number | null => {
+    const index = following(from);
+    return index === null || !isDeviceOutOfReach() ? index : firstPlayableWithoutDevice(playlist, index, following);
+  };

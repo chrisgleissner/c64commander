@@ -77,6 +77,7 @@ export class SidplayEzRendererCore implements SidRendererCore {
       sampleRate: request.sampleRate,
       kernal: request.roms ? base64Of(request.roms.kernal) : undefined,
       basic: request.roms ? base64Of(request.roms.basic) : undefined,
+      chargen: request.roms?.chargen ? base64Of(request.roms.chargen) : undefined,
       sidModel: request.sidModel,
     };
   }

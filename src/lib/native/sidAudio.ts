@@ -59,6 +59,7 @@ export interface SidAudioTuneRequest {
   sampleRate: number;
   kernal?: string;
   basic?: string;
+  chargen?: string;
   sidModel?: "MOS6581" | "MOS8580";
 }
 

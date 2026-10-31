@@ -42,7 +42,7 @@ class SidplayEzRendererTest {
     return future.get(60, TimeUnit.SECONDS)
   }
 
-  private fun request(sid: ByteArray = tune) = EzTuneRequest(sid, 0, 48000, null, null, SidplayEzNative.MODEL_8580)
+  private fun request(sid: ByteArray = tune) = EzTuneRequest(sid, 0, 48000, null, null, null, SidplayEzNative.MODEL_8580)
 
   private fun bytesOf(id: Long): ByteArray {
     val buffer = store.get(id)!!

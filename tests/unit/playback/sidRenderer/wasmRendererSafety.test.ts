@@ -76,6 +76,29 @@ describe("WASM renderer ROM declarations and fixed engine dependency", () => {
     expect(instances[0].loadSidBuffer).toHaveBeenCalledOnce();
   });
 
+  it("hands KERNAL, BASIC and the character ROM to the engine in that order, on open and pre-render", async () => {
+    const roms = { kernal: new ArrayBuffer(8192), basic: new ArrayBuffer(8192), chargen: new ArrayBuffer(4096) };
+    new Uint8Array(roms.kernal).fill(1);
+    new Uint8Array(roms.basic).fill(2);
+    new Uint8Array(roms.chargen).fill(3);
+    const c = core();
+    await c.open({ ...request(), roms });
+    await c.prerender({ ...request(), roms, seconds: 1 }, vi.fn(), () => false);
+    for (const instance of instances) {
+      const [kernal, basic, chargen] = instance.setSystemROMs.mock.calls[0] as unknown as Uint8Array[];
+      expect([kernal[0], kernal.length, basic[0], basic.length, chargen[0], chargen.length]).toEqual([
+        1, 8192, 2, 8192, 3, 4096,
+      ]);
+    }
+    expect(instances).toHaveLength(2);
+  });
+
+  it("passes null for a character ROM that was never read", async () => {
+    const c = core();
+    await c.open({ ...request(), roms: { kernal: new ArrayBuffer(8192), basic: new ArrayBuffer(8192) } });
+    expect((instances[0].setSystemROMs.mock.calls[0] as unknown[])[2]).toBeNull();
+  });
+
   it("rejects a BASIC pre-render without ROMs before it can emit initialization audio", async () => {
     const onSlice = vi.fn();
     await expect(core().prerender({ ...request("sidlite", true), seconds: 1 }, onSlice, () => false)).rejects.toThrow(

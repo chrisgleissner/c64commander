@@ -35,7 +35,6 @@ import {
   executePlayPlan,
   getRememberedUltimateSidBlob,
   PlaybackLaunchOvertakenError,
-  tryFetchUltimateSidBlob,
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
@@ -52,12 +51,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { endPlayLaunchMounts } from "@/lib/playback/playLaunchMounts";
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { stopRequiresReboot } from "@/lib/playback/fileTypes";
-import {
-  loadLocalEngineAutoRoms,
-  loadLocalEngineEnabled,
-  loadMirrorC64Audio,
-  loadPlaybackEngine,
-} from "@/lib/config/appSettings";
+import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -70,11 +64,9 @@ import {
   stopRemoteTuneBeforeLocalPlayback,
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
-import { hasCompleteRomSet } from "@/lib/roms/romStore";
-import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
-import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
-import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
+import { playPassingOver, type RomDependencyAsk } from "@/pages/playFiles/resolveLocalRoute";
+import { resolveLaunchRoute } from "@/pages/playFiles/resolveLaunchRoute";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
@@ -85,18 +77,17 @@ import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
-import {
-  ENGINE_FALLBACK_MESSAGES,
-  preRouteEngine,
-  type EngineFallbackNotice,
-  romFallbackDecision,
-} from "@/lib/playback/playbackEngineRouting";
+import { ENGINE_FALLBACK_MESSAGES, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolvePendingSkipIndices, type PendingUserSkip } from "@/pages/playFiles/pendingUserSkip";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
-import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import {
+  firstPlayableWithoutDevice,
+  isDeviceOutOfReach,
+  reachableFollowing,
+} from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { useNextTunePrefetch } from "@/pages/playFiles/hooks/useNextTunePrefetch";
 import { resolveUltimateSidDurationByMd5 } from "@/pages/playFiles/sidBytesAhead";
@@ -205,6 +196,8 @@ interface UsePlaybackControllerProps {
     item: PlaylistItem,
     context: { configFileName: string | null; reason: string },
   ) => Promise<"play-without-config" | "cancel">;
+  /** Asks the listener about a chosen song that needs the C64 ROMs. Absent: such a song is not played. */
+  resolveRomDependencyDecision?: (item: PlaylistItem) => ReturnType<RomDependencyAsk>;
   /**
    * A track the USER asked for has actually launched. Never fires for a playlist
    * moving on by itself, and never for a launch that failed.
@@ -301,6 +294,7 @@ export function usePlaybackController({
   deviceProduct,
   ensurePlaybackConnection,
   resolveUnavailableConfigDecision,
+  resolveRomDependencyDecision,
   onUserLaunchedItem,
   resolveSonglengthDurationMsForPath,
   applySonglengthsToItems,
@@ -681,6 +675,12 @@ export function usePlaybackController({
         outgoingSonglengthMs?: number;
         /** The Stop count when the user asked, for a request that waited before reaching here. */
         stopsAtRequest?: number;
+        /** Next/Previous: a song that needs the C64 ROMs is passed over (like `auto`), not asked about. */
+        passOverRomDependent?: boolean;
+        /** The song already playing, started again (repeat, a move between engines): never passed over or asked about. */
+        romDependencyAccepted?: boolean;
+        /** Called once the launch is going ahead, after any question about the song, before anything playing stops. */
+        onCommitted?: () => void;
         /** The play generation when the request was made; a request that a later launch or Stop overtook is dropped. */
         expectedPlayGeneration?: number;
         /** Called when the request got past the checks above and the launch begins. */
@@ -835,76 +835,33 @@ export function usePlaybackController({
             });
           }
         }
-        let routeToLocal = false;
-        // Against the simulated device, or with no device at all, the on-device engine is the only
-        // thing that can make a sound, so this block runs whatever the local-engine flag says. The
-        // flag still governs the choice against real hardware.
-        const connectionState = getConnectionSnapshot().state;
-        const simulatedDevice = connectionState === "DEMO_ACTIVE";
-        const noDeviceConnected = connectionState === "OFFLINE_NO_DEMO";
-        const noMachineForRoms = simulatedDevice || noDeviceConnected;
-        if (loadLocalEngineEnabled() || noMachineForRoms) {
-          const selection = preRouteEngine({
-            category: item.category,
-            engine: loadPlaybackEngine(),
-            localSupported: LocalSidPlaybackController.isSupported(),
-            simulatedDevice,
-            noDeviceConnected,
-          });
-          // An Ultimate-hosted tune has no local blob, and the on-device engine needs the bytes.
-          if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
-            // No try/catch: the fetch reports its own failures and answers with null.
-            const remembered =
-              noDeviceConnected || deviceOutOfReach
-                ? getRememberedUltimateSidBlob(effectivePath, effectiveRequest.origin)
-                : null;
-            const blob =
-              remembered ??
-              nextTunePrefetch.take(item.id) ??
-              (await tryFetchUltimateSidBlob(effectivePath, effectiveRequest.origin));
-            if (blob) {
-              effectiveRequest = {
-                ...effectiveRequest,
-                file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
-              };
-            } else if (!noMachineForRoms) {
-              emitEngineNotice("sid-unreadable-on-c64");
-            }
-          }
-          if (selection.route === "local" && effectiveRequest.file) {
-            try {
-              const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
-              const romsReady = hasCompleteRomSet();
-              const decision = romFallbackDecision(detectRomRequired(sidBytes), romsReady);
-              if (decision.route === "local") {
-                routeToLocal = true;
-                // Neither the simulated device nor an absent one can supply the images.
-                if (!romsReady && !noMachineForRoms) {
-                  if (loadLocalEngineAutoRoms()) {
-                    // Read the images from the connected machine, but do not wait: the tune plays now
-                    // on the kernal-free emulation and the next worker picks them up. Waiting would
-                    // put a network round trip in front of the first note.
-                    void ensureSystemRoms();
-                  } else {
-                    // Switched off deliberately, so ask rather than override — but ask where the
-                    // problem is, with one button that turns it back on and reads them.
-                    promptForSystemRoms();
-                  }
-                }
-              }
-              // Where the engine choice was overridden, that is what the listener needs explained.
-              const notice = decision.route === "local" && selection.notice ? selection.notice : decision.notice;
-              if (notice) emitEngineNotice(notice);
-            } catch (error) {
-              addErrorLog("Local engine could not read the SID; using the C64", {
-                error: (error as Error).message,
-                item: item.label,
-              });
-            }
-          } else if (selection.notice && selection.route !== "local") {
-            emitEngineNotice(selection.notice);
-          }
-        }
+        const launchRoute = await resolveLaunchRoute({
+          item,
+          request: effectiveRequest,
+          path: effectivePath,
+          deviceOutOfReach,
+          takePrefetched: (id) => nextTunePrefetch.take(id),
+          passOver: options?.origin === "auto" || options?.passOverRomDependent === true,
+          accepted: options?.romDependencyAccepted === true,
+          ask: resolveRomDependencyDecision && (() => resolveRomDependencyDecision(item)),
+          stillWanted: () =>
+            stopCountRef.current === stopsAtRequest &&
+            playGenerationRef.current === myPlayGeneration &&
+            pendingUserSkipRef.current === null &&
+            latestQueuedUserSkipRef.current === userSkipsQueuedAtLaunch,
+          notify: emitEngineNotice,
+          // The caller held back the playing tune's auto-advance for this launch, which is not happening.
+          onDeclined: () => {
+            const guard = autoAdvanceGuardRef.current;
+            if (!guard?.userCancelled || guard.autoFired) return;
+            guard.userCancelled = false;
+            setAutoAdvanceDueAtMs(guard.dueAtMs);
+          },
+        });
+        if (!launchRoute) return;
+        const { routeToLocal, simulatedDevice } = launchRoute;
+        effectiveRequest = launchRoute.request;
+        options?.onCommitted?.();
         // Silence any prior on-device tune before the C64 takes over (a local→C64
         // switch); consecutive local plays are handled inside the engine.
         if (!routeToLocal && localSidPlaybackRef.current) {
@@ -1289,6 +1246,7 @@ export function usePlaybackController({
       enqueuePlayTransition,
       ensurePlaybackConnection,
       resolveUnavailableConfigDecision,
+      resolveRomDependencyDecision,
       ensureUnmuted,
       buildHvscLocalPlayFile,
       localEntriesBySourceId,
@@ -1392,8 +1350,28 @@ export function usePlaybackController({
     },
   });
 
+  // Resolve the live station and repeat state when a transition actually runs.
+  const playlistTraversal = useCallback(
+    (items: PlaylistItem[]) =>
+      createPlaylistTraversal(
+        items,
+        resolveTraversalOrdering(
+          { repeatEnabled, shuffleEnabled },
+          stationActiveRef?.current === true,
+          stationFinishingRef?.current === true,
+        ),
+        shuffleSeed,
+        shuffleAnchorId,
+      ),
+    [repeatEnabled, shuffleEnabled, stationActiveRef, stationFinishingRef, shuffleSeed, shuffleAnchorId],
+  );
+
   const startPlaylist = useCallback(
-    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }): Promise<boolean> => {
+    async (
+      items: PlaylistItem[],
+      startIndex = 0,
+      options?: { replaceQueue?: boolean; passOver?: boolean },
+    ): Promise<boolean> => {
       if (!items.length) return false;
       // Playlist row/title taps call this directly, so it needs the same
       // duplicate-start drop as handlePlay, and it must invalidate the
@@ -1405,20 +1383,34 @@ export function usePlaybackController({
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
-        playedClockRef.current.reset();
-        setPlayedMs(0);
         setPlaylistEnded(false);
-        writeMachineExecutionFromPlay("running");
         const resolvedItems = await applySonglengthsToItems(items);
         setPlaylist((prev) => mergeStartedPlaylist(prev, resolvedItems, options));
-        setIsPaused(false);
+        // Not before: a song that needs the C64 ROMs is asked about first, and Cancel leaves what plays as it was.
+        const commitStart = () => {
+          playedClockRef.current.reset();
+          setPlayedMs(0);
+          writeMachineExecutionFromPlay("running");
+          setIsPaused(false);
+        };
+        // A station, or Play with nothing chosen yet: the first song was not picked, so it is passed over like the rest.
+        const following = reachableFollowing(resolvedItems, playlistTraversal(resolvedItems).next);
         try {
-          await playItem(resolvedItems[startIndex], {
-            playlistIndex: startIndex,
-            playlistSize: resolvedItems.length,
-            stopsAtRequest: stopsAtStart,
-          });
+          const played = await playPassingOver(
+            startIndex,
+            (index) =>
+              playItem(resolvedItems[index], {
+                playlistIndex: index,
+                playlistSize: resolvedItems.length,
+                stopsAtRequest: stopsAtStart,
+                passOverRomDependent: options?.passOver === true,
+                onCommitted: commitStart,
+              }),
+            (index) => (options?.passOver ? following(index) : null),
+          );
+          if (!played) finishPlaylistPlayback("auto-end");
         } catch (error) {
+          commitStart();
           reportPlaybackStartFailure({
             operation: "PLAYBACK_START",
             title: "Playback failed",
@@ -1442,7 +1434,9 @@ export function usePlaybackController({
     [
       applySonglengthsToItems,
       cancelAutoAdvance,
+      finishPlaylistPlayback,
       playItem,
+      playlistTraversal,
       playStartInFlightRef,
       reportPlaybackStartFailure,
       playedClockRef,
@@ -1463,7 +1457,7 @@ export function usePlaybackController({
       if (targetIndex === null) return;
       if (currentIndex < 0) {
         // startPlaylist handles its own single-flight and guard cancellation.
-        await startPlaylist(playlist, targetIndex);
+        await startPlaylist(playlist, targetIndex, { passOver: true });
         return;
       }
       if (!tryAcquireSingleFlight(playStartInFlightRef)) return;
@@ -1848,22 +1842,6 @@ export function usePlaybackController({
     ],
   );
 
-  // Resolve the live station and repeat state when a transition actually runs.
-  const playlistTraversal = useCallback(
-    (items: PlaylistItem[]) =>
-      createPlaylistTraversal(
-        items,
-        resolveTraversalOrdering(
-          { repeatEnabled, shuffleEnabled },
-          stationActiveRef?.current === true,
-          stationFinishingRef?.current === true,
-        ),
-        shuffleSeed,
-        shuffleAnchorId,
-      ),
-    [repeatEnabled, shuffleEnabled, stationActiveRef, stationFinishingRef, shuffleSeed, shuffleAnchorId],
-  );
-
   const flushPendingUserSkip = useCallback(async () => {
     const pending = pendingUserSkipRef.current;
     if (!pending) return;
@@ -1911,12 +1889,23 @@ export function usePlaybackController({
         const currentItem = activePlaylist[anotherTransitionAdvanced ? activeIndex : originIndex];
         const targetItem = activePlaylist[resolvedTargetIndex];
         if (!targetItem) return;
-        const shouldReboot = currentItem?.category === "disk" || targetItem.category === "disk";
-        await playItem(targetItem, {
-          rebootBeforePlay: shouldReboot,
-          playlistIndex: resolvedTargetIndex,
-          stopsAtRequest: stopsAtSkip,
-        });
+        // Next and Previous choose no song in particular: one that needs the C64 ROMs is passed over, not asked about.
+        const traversal = playlistTraversal(activePlaylist);
+        const played = await playPassingOver(
+          resolvedTargetIndex,
+          (index) =>
+            playItem(activePlaylist[index], {
+              rebootBeforePlay: currentItem?.category === "disk" || activePlaylist[index]?.category === "disk",
+              playlistIndex: index,
+              stopsAtRequest: stopsAtSkip,
+              passOverRomDependent: true,
+            }),
+          reachableFollowing(
+            activePlaylist,
+            pending.operation === "PLAYBACK_NEXT" ? traversal.next : traversal.previous,
+          ),
+        );
+        if (!played) return finishPlaylistPlayback("user-next-end");
         lastUserSkipTrackInstanceIdRef.current = trackInstanceIdRef.current;
         setIsPaused(false);
       });
@@ -2104,8 +2093,6 @@ export function usePlaybackController({
           return;
         }
 
-        const nextItem = activePlaylist[reachableIndex ?? nextIndex];
-        const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
         try {
           if (reachableIndex === null) {
             // Away from the device, with nothing left that plays without it: stop here, without an error.
@@ -2114,12 +2101,19 @@ export function usePlaybackController({
             markPlaybackErrorReported(unreachable);
             throw unreachable;
           }
-          await playItem(nextItem, {
-            rebootBeforePlay: shouldReboot,
-            playlistIndex: reachableIndex,
-            origin: "auto",
-            outgoingSonglengthMs: durationNowMs,
-          });
+          const played = await playPassingOver(
+            reachableIndex,
+            (index) =>
+              playItem(activePlaylist[index], {
+                rebootBeforePlay: currentItem?.category === "disk" || activePlaylist[index]?.category === "disk",
+                playlistIndex: index,
+                origin: "auto",
+                outgoingSonglengthMs: durationNowMs,
+                romDependencyAccepted: index === activeIndex,
+              }),
+            (index) => resolveReachableNextIndex(activePlaylist, index).reachableIndex,
+          );
+          if (!played) return finishPlaylistPlayback("auto-end");
           setIsPaused(false);
         } catch (error) {
           if (!isPlaybackErrorReported(error)) {

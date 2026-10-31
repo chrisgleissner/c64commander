@@ -52,6 +52,13 @@ const missingDeclaredBasic = (request: SidRendererOpenRequest): boolean =>
 const wasmEngineName = (engine: SidRendererOpenRequest["engine"]): "residfp" | "sidlite" =>
   engine === "sidlite" ? "sidlite" : "residfp";
 
+const applySystemRoms = (target: SidAudioEngineLike, { roms }: SidRendererOpenRequest): Promise<void> =>
+  target.setSystemROMs(
+    roms ? new Uint8Array(roms.kernal) : null,
+    roms ? new Uint8Array(roms.basic) : null,
+    roms?.chargen ? new Uint8Array(roms.chargen) : null,
+  );
+
 /**
  * Tell the engine which chip to assume for a tune that does not name one.
  *
@@ -96,11 +103,7 @@ export class WasmSidRendererCore implements SidRendererCore {
     if (missingDeclaredBasic(request)) throw new Error("This RSID BASIC program needs a supplied 8192-byte BASIC ROM");
     // ROMs before the tune: the engine reloads the current tune when ROMs change, and the tune is
     // meant to be opened against the real ROMs once.
-    await target.setSystemROMs(
-      request.roms ? new Uint8Array(request.roms.kernal) : null,
-      request.roms ? new Uint8Array(request.roms.basic) : null,
-      null,
-    );
+    await applySystemRoms(target, request);
     await target.loadSidBuffer(new Uint8Array(request.sidBytes), request.songIndex);
     await applySidModel(target, request.sidModel);
   }
@@ -121,11 +124,7 @@ export class WasmSidRendererCore implements SidRendererCore {
     const engine = new Ctor({ sampleRate: request.sampleRate, stereo: true, engine: wasmEngineName(request.engine) });
     this.engine = engine;
     const constructedAt = performance.now();
-    await engine.setSystemROMs(
-      request.roms ? new Uint8Array(request.roms.kernal) : null,
-      request.roms ? new Uint8Array(request.roms.basic) : null,
-      null,
-    );
+    await applySystemRoms(engine, request);
     const romsReadyAt = performance.now();
     await engine.loadSidBuffer(new Uint8Array(request.sidBytes), request.songIndex);
     await applySidModel(engine, request.sidModel);

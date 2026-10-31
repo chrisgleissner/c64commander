@@ -50,6 +50,8 @@ const nodeTestGlobs = [
 
 export default defineConfig({
   plugins: [react()],
+  // Mirrors vite.config.ts: the embedded ROM dependency list is a `.bin` imported with `?inline`.
+  assetsInclude: ["**/*.bin"],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

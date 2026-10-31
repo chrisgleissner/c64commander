@@ -734,6 +734,23 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     },
   },
   {
+    id: "settings.control.skip-rom-dependent-songs",
+    titleKey: "search.settings.skipRomDependentSongs",
+    titleDefault: "Skip songs that need the C64 ROMs",
+    subtitleKey: "search.settings.skipRomDependentSongs.subtitle",
+    subtitleDefault: "Pass over songs that sound wrong without the ROMs",
+    keywords: ["rom", "kernal", "basic", "skip", "sid", "songs", "tunes"],
+    group: "setting",
+    iconId: "skip-forward",
+    target: {
+      kind: "control",
+      path: "/settings",
+      scope: "settings",
+      sectionId: "play-and-disk",
+      testId: "settings-skip-rom-dependent-songs",
+    },
+  },
+  {
     id: "settings.control.search-inside-disks",
     titleKey: "search.settings.searchInsideDisks",
     titleDefault: "Search inside disk images",
