@@ -3608,6 +3608,7 @@ test.describe("App screenshots", () => {
       // Everything after this shot is about the controls themselves, so put the chapters back.
       await page.evaluate(() => {
         const ids = [
+          "app-mode",
           "appearance",
           "connection",
           "diagnostics",
