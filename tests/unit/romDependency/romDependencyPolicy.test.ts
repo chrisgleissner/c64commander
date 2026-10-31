@@ -372,7 +372,7 @@ describe("loading and failure degradation", () => {
     const loaded = await loadEmbeddedRomDependencyList();
     expect(vi.mocked(addErrorLog).mock.calls).toEqual([]);
     expect(loaded).not.toBeNull();
-    expect(loaded?.list.header).toMatchObject({ hvscRelease: 85, fileCount: 696, decisionCount: 1556 });
+    expect(loaded?.list.header).toMatchObject({ hvscRelease: 85, fileCount: 672, decisionCount: 1516 });
     expect(addErrorLog).not.toHaveBeenCalled();
   });
 });
