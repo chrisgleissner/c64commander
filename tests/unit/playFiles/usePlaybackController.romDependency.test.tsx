@@ -28,7 +28,11 @@ import { ENGINE_FALLBACK_MESSAGES } from "@/lib/playback/playbackEngineRouting";
 import { FAKE_ROMS, syntheticAssets, SYNTHETIC_SID_MD5 } from "../../helpers/romDependencyFixture";
 import { attempt, fakeController, listed, plain, renderController } from "../../helpers/romDependencyController";
 
-const connectionState = vi.hoisted(() => ({ current: "OFFLINE_NO_DEMO" as string }));
+const connectionState = vi.hoisted(() => ({
+  current: "OFFLINE_NO_DEMO" as string,
+  settlesAs: "OFFLINE_NO_DEMO" as string,
+}));
+const settle = vi.hoisted(() => ({ waits: 0 }));
 const storedRoms = vi.hoisted(() => ({ current: {} as Record<string, Uint8Array> }));
 
 vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
@@ -38,6 +42,15 @@ vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
     getConnectionSnapshot: () => ({ ...actual.getConnectionSnapshot(), state: connectionState.current }),
   };
 });
+
+vi.mock("@/lib/connection/connectionSettle", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/connection/connectionSettle")>()),
+  waitForDiscoveryToSettle: vi.fn(async () => {
+    settle.waits += 1;
+    connectionState.current = connectionState.settlesAs;
+    return "settled" as const;
+  }),
+}));
 
 vi.mock("@/lib/roms/romStore", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/roms/romStore")>();
@@ -324,6 +337,74 @@ describe("ROM dependency list in the play path", () => {
       });
 
       expect(decide).not.toHaveBeenCalled();
+      expect(controller.play).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("while the connection is still being discovered", () => {
+    beforeEach(() => {
+      connectionState.current = "DISCOVERING";
+      settle.waits = 0;
+      localStorage.setItem("c64u_local_engine_enabled", "1");
+      localStorage.setItem("c64u_playback_engine", "local");
+    });
+
+    it("passes over a listed song for good when discovery ends without a C64, instead of failing to connect", async () => {
+      connectionState.settlesAs = "OFFLINE_NO_DEMO";
+      const controller = fakeController();
+      const playlist = [listed("b", 1)];
+      const { result } = renderController(playlist, controller);
+
+      expect(
+        await attempt(() => result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" })),
+      ).toBeInstanceOf(RomDependentSongSkipped);
+
+      expect(settle.waits).toBe(1);
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("asks about a chosen listed song when discovery ends without a C64, and plays it here on Play anyway", async () => {
+      connectionState.settlesAs = "OFFLINE_NO_DEMO";
+      const controller = fakeController();
+      const decide = vi.fn(async () => "play-anyway" as const);
+      const playlist = [listed("b", 1)];
+      const { result } = renderController(playlist, controller, { decide });
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+
+      expect(decide).toHaveBeenCalledWith(playlist[0], "listed");
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("plays a listed song on the C64 when discovery ends with one", async () => {
+      connectionState.settlesAs = "REAL_CONNECTED";
+      const controller = fakeController();
+      const playlist = [listed("b", 1)];
+      const { result } = renderController(playlist, controller);
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+      });
+
+      expect(controller.play).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not hold back a song the list does not name", async () => {
+      connectionState.settlesAs = "OFFLINE_NO_DEMO";
+      const controller = fakeController();
+      const playlist = [plain("a")];
+      const { result } = renderController(playlist, controller);
+
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0, origin: "auto" });
+      });
+
+      expect(settle.waits).toBe(0);
       expect(controller.play).toHaveBeenCalledTimes(1);
     });
   });
