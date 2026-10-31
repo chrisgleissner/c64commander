@@ -13,8 +13,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // which device is connected. useC64Connection is react-query backed; this suite
 // is about the SID Radio group, not connection state, so stub it rather than
 // wrapping every case in a QueryClientProvider.
+const connection = vi.hoisted(() => ({ deviceHost: "c64u.local" as string | undefined }));
 vi.mock("@/hooks/useC64Connection", () => ({
-  useC64Connection: () => ({ deviceHost: "c64u.local" }),
+  useC64Connection: () => ({ deviceHost: connection.deviceHost }),
 }));
 
 // The chapter body animates open. jsdom runs no animations, so the real components would keep
@@ -57,6 +58,7 @@ import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/ranking
 import { __setSidplayEzAvailabilityForTests } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 
 beforeEach(async () => {
+  connection.deviceHost = "c64u.local";
   localStorage.clear();
   // SID Radio is one of Settings' collapsible chapters and its controls are not rendered while
   // it is closed. This suite is about those controls, not about the collapse (which has its own
@@ -125,6 +127,31 @@ describe("SidRadioSettingsSection — C64 ROMs", () => {
     expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("No ROMs stored");
   });
 
+  it("offers the C64 ROM read outside developer mode, so that every user can read the character ROM", () => {
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-local-engine-roms")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-roms-fetch")).toHaveTextContent("Read from C64");
+  });
+
+  it("labels the ROM read 'connected C64' when no device host is known yet", async () => {
+    connection.deviceHost = undefined;
+    render(<SidRadioSettingsSection />);
+
+    fireEvent.click(screen.getByTestId("settings-roms-fetch"));
+
+    await waitFor(() =>
+      expect(fetchSystemRomsFromDevice).toHaveBeenLastCalledWith(expect.anything(), "connected C64", {
+        includeCharacterRom: false,
+      }),
+    );
+  });
+
+  it("does not offer the C64 ROM read when the on-device engine is off", () => {
+    saveLocalEngineEnabled(false);
+    render(<SidRadioSettingsSection developerMode />);
+    expect(screen.queryByTestId("settings-local-engine-roms")).toBeNull();
+  });
+
   it("states the authorisation obligation at the point of action", () => {
     // This wording is a product requirement, not decoration: reading ROM images
     // from a machine the user is not entitled to use is not sanctioned by this
@@ -135,26 +162,31 @@ describe("SidRadioSettingsSection — C64 ROMs", () => {
     expect(row).toHaveTextContent(/never shared, uploaded or included in diagnostics/i);
   });
 
-  it("reads the character ROM too from the explicit action, and says whether it has it", async () => {
+  it("reads only KERNAL and BASIC from the explicit action until the user turns the character ROM read on, and says whether it has the character ROM", async () => {
     const save = (kind: "kernal" | "basic" | "chargen", description: string) =>
       saveRom(kind, new Uint8Array([1]), { description, fingerprint: "abc", capturedFrom: "c64u" });
     save("kernal", "KERNAL 901227-03");
     save("basic", "BASIC 901226-01");
-    const { unmount } = render(<SidRadioSettingsSection developerMode />);
-    expect(screen.getByTestId("settings-local-engine-roms")).toHaveTextContent(
-      /also copies the optional character ROM/,
-    );
+    const { unmount } = render(<SidRadioSettingsSection />);
     expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("Chargen: not read (optional)");
 
     fireEvent.click(screen.getByTestId("settings-roms-fetch"));
     await waitFor(() => expect(screen.getByTestId("settings-roms-result")).toHaveTextContent("skipped"));
-    expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith(expect.anything(), expect.any(String), {
-      includeCharacterRom: true,
+    expect(fetchSystemRomsFromDevice).toHaveBeenLastCalledWith(expect.anything(), expect.any(String), {
+      includeCharacterRom: false,
     });
+
+    fireEvent.click(screen.getByTestId("settings-roms-read-chargen"));
+    fireEvent.click(screen.getByTestId("settings-roms-fetch"));
+    await waitFor(() =>
+      expect(fetchSystemRomsFromDevice).toHaveBeenLastCalledWith(expect.anything(), expect.any(String), {
+        includeCharacterRom: true,
+      }),
+    );
     unmount();
 
     save("chargen", "C64 character ROM (901225-01)");
-    render(<SidRadioSettingsSection developerMode />);
+    render(<SidRadioSettingsSection />);
     expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("C64 character ROM (901225-01)");
     expect(screen.getByTestId("settings-roms-status")).not.toHaveTextContent("not read");
   });

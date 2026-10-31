@@ -19,6 +19,7 @@ import { addLog } from "@/lib/logging";
 import { fetchSystemRomsFromDevice, type RomFetchOutcome } from "@/lib/roms/romFetchService";
 import { clearStoredRoms, loadRomSummaries, type RomSummary } from "@/lib/roms/romStore";
 import { loadLocalEngineAutoRoms, saveLocalEngineAutoRoms } from "@/lib/config/appSettings";
+import { loadCharacterRomRead, saveCharacterRomRead } from "@/lib/config/characterRomSettings";
 
 /**
  * "C64 ROMs" row for on-device playback (spec §12, Track B).
@@ -41,6 +42,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState<RomFetchOutcome[] | null>(null);
   const [autoRead, setAutoRead] = useState<boolean>(() => loadLocalEngineAutoRoms());
+  const [readCharacterRom, setReadCharacterRom] = useState<boolean>(() => loadCharacterRomRead());
   const { profile } = useDisplayProfile();
   // "Read from C64" is set nowrap and does not shrink, so on the smallest screen it
   // took about 160px of the 232px available and left the description beside it a
@@ -56,7 +58,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
     setOutcomes(null);
     try {
       const result = await fetchSystemRomsFromDevice(getC64API(), deviceHost || "connected C64", {
-        includeCharacterRom: true,
+        includeCharacterRom: readCharacterRom,
       });
       setOutcomes(result.outcomes);
       setSummaries(loadRomSummaries());
@@ -80,8 +82,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         <div className="min-w-0">
           <Label className="text-sm font-medium">C64 ROMs for on-device playback</Label>
           <p className="text-xs text-muted-foreground">
-            Needed for accurate on-device playback; without them, tunes fall back to the lighter emulation. Reading also
-            copies the optional character ROM, which briefly pauses the C64 to run a small routine on it.
+            Needed for accurate on-device playback; without them, tunes fall back to the lighter emulation.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -119,6 +120,27 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
           onCheckedChange={(next) => {
             setAutoRead(next);
             saveLocalEngineAutoRoms(next);
+          }}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-3 min-w-0" data-testid="settings-roms-read-chargen-row">
+        <div className="min-w-0">
+          <Label htmlFor="settings-roms-read-chargen" className="text-sm">
+            Also read the character ROM
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Optional: only one song in HVSC release 85 sounds different without it. Reading it pauses the C64 briefly
+            and may disturb a program that uses NMIs while it runs.
+          </p>
+        </div>
+        <Switch
+          id="settings-roms-read-chargen"
+          data-testid="settings-roms-read-chargen"
+          checked={readCharacterRom}
+          onCheckedChange={(next) => {
+            setReadCharacterRom(next);
+            saveCharacterRomRead(next);
           }}
         />
       </div>
