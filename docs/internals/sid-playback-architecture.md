@@ -365,9 +365,21 @@ tune's bytes are read and the route is known, so it costs one MD5 of the file as
 - The song already playing, started again (Repeat one, a move between engines, carrying a C64 tune on
   here when the C64 goes), was accepted once and plays on without a question or a skip.
 - Setting off: the song plays, with a one-time notice.
-- A tune whose header declares BASIC, with BASIC not stored and no usable C64, is judged by the list's
-  grade for the lane in use; when the list has none, the declared requirement itself counts as low
-  fidelity (that is the header's verdict, not a missing grade read as low).
+- A song that plays here although it needs the ROMs (setting off, Play anyway, or the song already
+  accepted and started again) shows **May sound wrong** beside its title on the Now Playing card
+  (`MaySoundWrongChip`) for as long as that launch plays. `resolveLocalRoute` reports it as
+  `maySoundWrong`, and `resolveLaunchRoute` records it in `maySoundWrongStore` on every launch that is
+  not cancelled, so the next launch (a song the list does not name, or one the C64 plays) clears it.
+  The chip is plain text and takes no focus stop. It is not a second setting: the existing switch
+  already decides whether such a song is skipped or played, and the chip says what playing it means.
+- Both renderers enforce that BASIC requirement themselves: WASM and libSidplayEZ answer `romRequired`
+  on open and reject the pre-render of an RSID tune that declares BASIC when no complete BASIC image is
+  supplied (`missingDeclaredBasic` in `sidRendererContract.ts`). The skip notice for such a tune is
+  `romUnplayableSkippedNotice`, since turning off the setting would not help.
+- Should a renderer refuse a song after the route let it through, `playItem` does not show it as playing
+  (`rejectRefusedLaunch`): the refusal is logged at WARN, a playlist moving on passes the song over, and
+  a chosen song gets the same OK-only dialog and is then refused as an already reported error, which
+  `startPlaylist`, Next and auto-advance treat as the end of the playing state.
 - A song that is unlisted, or graded at or above the threshold, plays without comment. The format has
   no "unknown" grade: a lane that was not measured cannot be encoded.
 - The opening of the next and previous tracks is warmed past songs the playlist would skip

@@ -13,6 +13,7 @@ import {
   ROM_LISTED_DIALOG_TITLE,
   romListedDialogText,
   romListedSkippedNotice,
+  romUnplayableSkippedNotice,
 } from "@/pages/playFiles/romDependencyGate";
 
 describe("decideRomListedPlayback", () => {
@@ -65,6 +66,15 @@ describe("decideRomListedPlayback for a song the phone cannot play at all", () =
     expect(decideRomListedPlayback({ c64Usable: true, skipEnabled: true, autoAdvance: false, playable: false })).toBe(
       "c64",
     );
+  });
+});
+
+describe("wording for a song only a C64 can play", () => {
+  it("names the song, says why it was skipped and does not send the listener to a setting that would not help", () => {
+    const notice = romUnplayableSkippedNotice("Comic Bakery");
+    expect(notice).toContain("Comic Bakery");
+    expect(notice).toContain("Connect your C64");
+    expect(notice).not.toContain("Skip songs that need the C64 ROMs");
   });
 });
 

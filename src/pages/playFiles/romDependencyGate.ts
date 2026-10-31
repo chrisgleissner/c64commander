@@ -56,6 +56,9 @@ export const romListedSkippedNotice = (label: string) =>
   `Skipped “${label}”: it needs the C64 ROMs. Connect your C64 to play it, or turn off ` +
   `“Skip songs that need the C64 ROMs” in Settings → Play and disk.`;
 
+export const romUnplayableSkippedNotice = (label: string) =>
+  `Skipped “${label}”: it needs the C64 ROMs to start, which this phone does not have. Connect your C64 to play it.`;
+
 export const ROM_LISTED_DIALOG_TITLE = "Needs the C64 ROMs";
 
 export const romListedDialogText = (label: string) =>

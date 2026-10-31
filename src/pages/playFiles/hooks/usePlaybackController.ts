@@ -27,7 +27,6 @@ import {
   SupersededMachineTransitionError,
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
 import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -67,6 +66,8 @@ import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBrid
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { playPassingOver, type RomDependencyAsk } from "@/pages/playFiles/resolveLocalRoute";
 import type { RomDialogKind } from "@/pages/playFiles/romDependencyGate";
+import { rejectRefusedLaunch } from "@/pages/playFiles/refusedLaunch";
+import { reportPlaybackStartFailure } from "@/pages/playFiles/reportPlaybackStartFailure";
 import { resolveLaunchRoute } from "@/pages/playFiles/resolveLaunchRoute";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
@@ -836,13 +837,14 @@ export function usePlaybackController({
             });
           }
         }
+        const passOver = options?.origin === "auto" || options?.passOverRomDependent === true;
         const launchRoute = await resolveLaunchRoute({
           item,
           request: effectiveRequest,
           path: effectivePath,
           deviceOutOfReach,
           takePrefetched: (id) => nextTunePrefetch.take(id),
-          passOver: options?.origin === "auto" || options?.passOverRomDependent === true,
+          passOver,
           accepted: options?.romDependencyAccepted === true,
           ask: resolveRomDependencyDecision && ((kind) => resolveRomDependencyDecision(item, kind)),
           stillWanted: () =>
@@ -1070,7 +1072,7 @@ export function usePlaybackController({
           // The pre-render key names the renderer, so it waits for the probe: keyed before it answered,
           // the first tune after a launch was pre-rendered under reSIDfp's key and never found again.
           await probeSidRenderers();
-          await getLocalSidPlayback().play(
+          const launched = await getLocalSidPlayback().play(
             effectiveRequest.file!,
             // `songNr` is one-based everywhere it is stored, shown or looked up; the engine's
             // `songIndex` is zero-based. Handing one straight to the other played the tune after
@@ -1101,6 +1103,7 @@ export function usePlaybackController({
               outgoingEndsAtSeconds: options?.outgoingSonglengthMs ? options.outgoingSonglengthMs / 1000 : undefined,
             },
           );
+          if (launched.romRequired) return rejectRefusedLaunch(item, passOver, resolveRomDependencyDecision);
           // Warm the tracks either side of this one. A track started from a warmed opening plays out
           // of memory while the renderer catches up, instead of having to out-run the speaker from a
           // standing start — which it only just manages, and audibly failed to a second or two in.
@@ -1283,35 +1286,6 @@ export function usePlaybackController({
     ],
   );
 
-  // A foreground play start that is superseded/aborted by a routing change must
-  // still give the user feedback, but as a notice rather than a destructive
-  // error: the device target changed mid-start, so "press Play again" is the
-  // correct recovery, not an alarm (ERROR_POLICY §2 vs §3 boundary).
-  const reportPlaybackStartFailure = useCallback(
-    (report: { operation: string; title: string; error: unknown; context?: Record<string, unknown> }) => {
-      if (isPlaybackErrorReported(report.error)) return;
-      if (isAbortLikeError(report.error)) {
-        reportUserError({
-          operation: report.operation,
-          title: "Playback interrupted",
-          description: "The connection changed while starting playback. Press Play again.",
-          error: report.error,
-          context: report.context,
-          severity: "S2",
-        });
-        return;
-      }
-      reportUserError({
-        operation: report.operation,
-        title: report.title,
-        description: (report.error as Error).message,
-        error: report.error,
-        context: report.context,
-      });
-    },
-    [],
-  );
-
   usePlaybackEngineSwitch({
     selectedEngineRef,
     stopCountRef,
@@ -1439,7 +1413,6 @@ export function usePlaybackController({
       playItem,
       playlistTraversal,
       playStartInFlightRef,
-      reportPlaybackStartFailure,
       playedClockRef,
       setAutoAdvanceDueAtMs,
       setIsPaused,
@@ -1485,7 +1458,6 @@ export function usePlaybackController({
       currentIndex,
       playItem,
       playlist,
-      reportPlaybackStartFailure,
       startPlaylist,
       trace,
       playStartInFlightRef,
@@ -1839,7 +1811,6 @@ export function usePlaybackController({
       rearmAutoAdvanceOnResume,
       cancelPendingUserSkip,
       playItem,
-      reportPlaybackStartFailure,
     ],
   );
 
@@ -1933,7 +1904,6 @@ export function usePlaybackController({
     finishPlaylistPlayback,
     playItem,
     playedClockRef,
-    reportPlaybackStartFailure,
     playlistTraversal,
     setAutoAdvanceDueAtMs,
     setIsPaused,
