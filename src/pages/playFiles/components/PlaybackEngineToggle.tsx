@@ -21,6 +21,8 @@ import { useActivePlayback } from "@/hooks/useActivePlayback";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { saveMirrorC64Audio } from "@/lib/config/appSettings";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSurfaceVisible } from "@/lib/appMode/surfaces";
 
 /**
  * "Listen: [Here] [C64] [Both]" (spec §12.5, Track B / LE2).
@@ -51,7 +53,7 @@ import { saveMirrorC64Audio } from "@/lib/config/appSettings";
  */
 type ListenTarget = "c64" | "both" | "local";
 
-export function PlaybackEngineToggle({ className }: { className?: string }) {
+function PlaybackEngineChoice({ className }: { className?: string }) {
   const { engine, setEngine } = usePlaybackEngine();
   const { deviceInfo } = useConnectionState();
   const { audioLive, session } = useAvMirror();
@@ -205,4 +207,10 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
       </PopoverContent>
     </Popover>
   );
+}
+
+/** Where the music goes is a question only when there is a C64 to send it to. */
+export function PlaybackEngineToggle({ className }: { className?: string }) {
+  const appMode = useAppMode();
+  return isSurfaceVisible("play:engine-choice", appMode) ? <PlaybackEngineChoice className={className} /> : null;
 }

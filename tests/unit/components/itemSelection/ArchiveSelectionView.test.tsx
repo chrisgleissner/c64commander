@@ -491,3 +491,38 @@ describe("ArchiveSelectionView", () => {
     await waitFor(() => expect(search).toHaveBeenCalledWith(expect.objectContaining({ category: "", name: "test" })));
   });
 });
+
+describe("ArchiveSelectionView in SID Player (SPM-PLAY-08)", () => {
+  const renderIn = async (mode: "sid-player" | "full") => {
+    const store = await import("@/lib/appMode/appModeStore");
+    store.saveStartupModeByUser(mode === "sid-player" ? "sid-player" : "default");
+    const search = vi.fn();
+    vi.mocked(useOnlineArchive).mockReturnValue({ ...baseReturn, search } as never);
+    render(
+      <ArchiveSelectionView
+        config={defaultConfig}
+        selection={new Map()}
+        onToggleSelect={vi.fn()}
+        onSelectAll={vi.fn()}
+        onClearSelection={vi.fn()}
+      />,
+    );
+    return search;
+  };
+
+  it("SPM-PLAY-08 searches only the sid type and hides the Type choice", async () => {
+    const search = await renderIn("sid-player");
+    expect(screen.queryByText("Type")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Last Ninja" } });
+    fireEvent.click(screen.getByRole("button", { name: /Search/ }));
+    await waitFor(() => expect(search).toHaveBeenCalledWith(expect.objectContaining({ type: "sid" })));
+  });
+
+  it("SPM-PLAY-08 keeps every type in the Full App", async () => {
+    const search = await renderIn("full");
+    expect(screen.getByText("Type")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Last Ninja" } });
+    fireEvent.click(screen.getByRole("button", { name: /Search/ }));
+    await waitFor(() => expect(search).toHaveBeenCalledWith(expect.objectContaining({ type: "" })));
+  });
+});

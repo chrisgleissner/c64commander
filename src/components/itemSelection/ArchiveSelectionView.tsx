@@ -26,6 +26,9 @@ import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import type { ArchiveRequestFailure } from "@/lib/archive/client";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { addLog } from "@/lib/logging";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+
+export const SID_PLAYER_ARCHIVE_TYPE = "sid";
 
 const EMPTY_SEARCH: ArchiveSearchParams = {
   name: "",
@@ -90,7 +93,12 @@ export const ArchiveSelectionView = ({
   onSelectAll,
   onClearSelection,
 }: ArchiveSelectionViewProps) => {
-  const [form, setForm] = useState<ArchiveSearchParams>(EMPTY_SEARCH);
+  const sidOnly = useAppMode() === "sid-player";
+  const [typedForm, setForm] = useState<ArchiveSearchParams>(EMPTY_SEARCH);
+  const form = useMemo(
+    () => (sidOnly ? { ...typedForm, type: SID_PLAYER_ARCHIVE_TYPE } : typedForm),
+    [sidOnly, typedForm],
+  );
   const { presets, presetsLoading, resolvedConfig, state, clearError, search } = useOnlineArchive(config);
   const presetMap = useMemo(() => getPresetMap(presets), [presets]);
   const { isDeveloperModeEnabled } = useDeveloperMode();
@@ -162,7 +170,7 @@ export const ArchiveSelectionView = ({
           </div>
         ))}
 
-        {SELECT_FIELDS.map((field) => {
+        {SELECT_FIELDS.filter((field) => !(sidOnly && field.key === "type")).map((field) => {
           const preset = presetMap.get(field.key);
           return (
             <div key={field.key} className="space-y-1">

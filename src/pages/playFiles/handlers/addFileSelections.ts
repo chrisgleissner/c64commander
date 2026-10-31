@@ -86,6 +86,7 @@ export type AddFileSelectionsDeps = {
   collectSonglengthsCandidates: (paths: string[]) => string[];
   buildHvscLocalPlayFile: (path: string, name: string) => LocalPlayFile | undefined;
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
+  acceptsPath?: (path: string) => boolean;
 };
 
 const INCOMPLETE_SCAN_NOTICE = "Some folders could not be scanned.";
@@ -114,6 +115,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
     mergeSonglengthsFiles,
     collectSonglengthsCandidates,
     archiveConfigs,
+    acceptsPath = () => true,
   } = deps;
 
   const createAbortError = () => {
@@ -437,7 +439,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         for (const selection of selections) {
           const { resultId, category } = parseArchiveSelectionPath(selection.path);
           const entries = await archiveClient.getEntries(resultId, category);
-          const playableEntry = entries.find((entry) => getPlayCategory(entry.path));
+          const playableEntry = entries.find((entry) => getPlayCategory(entry.path) && acceptsPath(entry.path));
           if (!playableEntry) {
             throw new Error(`No playable archive file found for ${selection.name}.`);
           }
@@ -619,7 +621,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       let pendingPlaylistBatch: PlaylistItem[] = [];
       const appendPlayableFile = async (file: SourceEntry) => {
-        if (!getPlayCategory(file.path)) return;
+        if (!getPlayCategory(file.path) || !acceptsPath(file.path)) return;
         if (source.type !== "hvsc") {
           registerSelectedFile(file);
         }

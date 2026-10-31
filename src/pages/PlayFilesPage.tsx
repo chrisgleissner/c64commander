@@ -46,12 +46,7 @@ import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/conn
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { type PlayRequest } from "@/lib/playback/playbackRouter";
-import {
-  formatPlayCategory,
-  getPlayCategory,
-  isSupportedPlayFile,
-  type PlayFileCategory,
-} from "@/lib/playback/fileTypes";
+import { formatPlayCategory, getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
@@ -106,6 +101,8 @@ import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackContr
 import { PlaybackSpectrumCard } from "@/components/playback/SpectrumCard";
 import { PlaybackSoundCard } from "@/components/playback/SoundCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { addItemsAcceptsPath, addItemsEntryFilter, addItemsSourceGroups } from "@/pages/playFiles/addItemsFilter";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
@@ -1043,6 +1040,7 @@ export default function PlayFilesPage() {
     });
   }, [addItemsProgress.status, browserOpen]);
 
+  const appMode = useAppMode();
   const ultimateSource = useUltimateSourceLocation(status.deviceInfo?.product, status.state !== "OFFLINE_NO_DEMO");
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
@@ -1062,8 +1060,17 @@ export default function PlayFilesPage() {
         sources: [createArchiveSourceLocation(archiveConfig)],
       });
     }
-    return groups;
-  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, ultimateSource]);
+    return addItemsSourceGroups(appMode, groups);
+  }, [
+    appMode,
+    archiveConfig,
+    commoserveEnabled,
+    featureFlags,
+    hvscAvailable,
+    hvscRoot.path,
+    localSources,
+    ultimateSource,
+  ]);
 
   const updatePlaylistItemConfigRef = useCallback(
     (
@@ -1404,6 +1411,7 @@ export default function PlayFilesPage() {
   const handleAddFileSelections = useMemo(
     () =>
       createAddFileSelectionsHandler({
+        acceptsPath: addItemsAcceptsPath(appMode),
         addItemsStartedAtRef,
         addItemsOverlayActiveRef,
         addItemsOverlayStartedAtRef,
@@ -1429,6 +1437,7 @@ export default function PlayFilesPage() {
         archiveConfigs,
       }),
     [
+      appMode,
       addItemsSurface,
       applySonglengthsToItems,
       browserOpen,
@@ -1999,6 +2008,7 @@ export default function PlayFilesPage() {
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
     route: soundingRoute,
+    plainLabels: appMode === "sid-player",
     local: {
       index: localVolumeIndex,
       muted: localMuted,
@@ -2907,7 +2917,7 @@ export default function PlayFilesPage() {
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
             onConfirm={handlePickerConfirm}
             onSelectSource={handleHvscSourceSelection}
-            filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
+            filterEntry={addItemsEntryFilter(appMode)}
             allowFolderSelection
             isConfirming={isAddingItems}
             progress={addItemsProgress}

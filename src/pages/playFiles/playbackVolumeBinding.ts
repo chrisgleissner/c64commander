@@ -25,7 +25,10 @@ import type { SidVolumeOption } from "@/lib/config/sidVolumeControl";
 import {
   LOCAL_VOLUME_STEPS,
   LOCAL_VOLUME_OFF_LABEL,
+  PLAIN_VOLUME_OFF_LABEL,
+  PLAIN_VOLUME_STEP_COUNT,
   localVolumeLabelForIndex,
+  plainVolumeLabelForIndex,
 } from "@/lib/playback/localPlaybackVolume";
 import type { PlaybackRoute } from "@/lib/playback/playbackEngineRouting";
 import type { VolumeControlsProps } from "@/pages/playFiles/components/VolumeControls";
@@ -93,28 +96,35 @@ export const resolvePlaybackVolumeBinding = ({
   route,
   local,
   device,
+  plainLabels = false,
 }: {
+  plainLabels?: boolean;
   route: PlaybackRoute;
   local: LocalVolumeRouting;
   device: DeviceVolumeRouting;
 }): PlaybackVolumeBinding => {
   if (route === "local") {
+    const labelFor = plainLabels ? plainVolumeLabelForIndex : localVolumeLabelForIndex;
     return {
       volumeMuted: local.muted,
       // The scale is the app's own, so it is available whether or not an Ultimate is connected —
       // which is the ordinary case for a station played on this device.
       canControlVolume: true,
       onToggleMute: local.onToggleMute,
-      volumeStepsCount: LOCAL_VOLUME_STEPS.length,
-      volumeIndex: local.index,
+      volumeStepsCount: plainLabels ? PLAIN_VOLUME_STEP_COUNT : LOCAL_VOLUME_STEPS.length,
+      volumeIndex: plainLabels ? Math.min(local.index, PLAIN_VOLUME_STEP_COUNT - 1) : local.index,
       // Draft, preview and commit are the same act here: there is no device to spare a round trip to,
       // and the gain change is a ramp inside the sink, so following the finger costs nothing.
       onVolumeDraftChange: local.onIndexChange,
       onVolumePreview: local.onIndexChange,
       onVolumeCommit: local.onIndexChange,
       // The slider keeps the step that unmuting returns to; the readout says what is heard, as the C64 route's does.
-      volumeLabel: local.muted ? LOCAL_VOLUME_OFF_LABEL : localVolumeLabelForIndex(local.index),
-      volumeValueFormatter: (value: number) => localVolumeLabelForIndex(Math.round(value)),
+      volumeLabel: local.muted
+        ? plainLabels
+          ? PLAIN_VOLUME_OFF_LABEL
+          : LOCAL_VOLUME_OFF_LABEL
+        : labelFor(local.index),
+      volumeValueFormatter: (value: number) => labelFor(Math.round(value)),
     };
   }
 

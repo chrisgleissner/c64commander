@@ -90,6 +90,7 @@ import {
   firstPlayableWithoutDevice,
   isDeviceOutOfReach,
   reachableFollowing,
+  reachableStartIndex,
 } from "@/pages/playFiles/playableWithoutDevice";
 import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { useNextTunePrefetch } from "@/pages/playFiles/hooks/useNextTunePrefetch";
@@ -1402,7 +1403,7 @@ export function usePlaybackController({
         const following = reachableFollowing(resolvedItems, playlistTraversal(resolvedItems).next);
         try {
           const played = await playPassingOver(
-            startIndex,
+            reachableStartIndex(resolvedItems, startIndex),
             (index) =>
               playItem(resolvedItems[index], {
                 playlistIndex: index,
@@ -1458,8 +1459,9 @@ export function usePlaybackController({
 
   const handlePlay = useCallback(
     trace(async function handlePlay() {
-      const targetIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
-      if (targetIndex === null) return;
+      const requestedIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
+      if (requestedIndex === null) return;
+      const targetIndex = reachableStartIndex(playlist, requestedIndex);
       if (currentIndex < 0) {
         // startPlaylist handles its own single-flight and guard cancellation.
         await startPlaylist(playlist, targetIndex, { passOver: true });

@@ -162,3 +162,34 @@ describe("rendersOnPhone", () => {
     expect(rendersOnPhone("c64", false)).toBe(false);
   });
 });
+
+describe("SPM-PLAY-09 plain volume labels", () => {
+  const bind = (plainLabels: boolean, local: Partial<LocalVolumeRouting> = {}) =>
+    resolvePlaybackVolumeBinding({ route: "local", plainLabels, local: buildLocal(local), device: buildDevice() });
+
+  it("SID Player labels volume steps as levels", () => {
+    const top = LOCAL_VOLUME_STEPS.findIndex((step) => step.numeric === 0);
+    const binding = bind(true, { index: 4 });
+    expect(binding.volumeLabel).toBe("4");
+    expect(binding.volumeValueFormatter?.(0)).toBe("Off");
+    expect(binding.volumeValueFormatter?.(1)).toBe("1");
+    expect(binding.volumeValueFormatter?.(top)).toBe("Max");
+    expect(bind(true, { index: 9, muted: true }).volumeLabel).toBe("Off");
+  });
+
+  it("SID Player stops the scale at unity gain and every label fits the five-character box", () => {
+    const top = LOCAL_VOLUME_STEPS.findIndex((step) => step.numeric === 0);
+    const binding = bind(true, { index: LOCAL_VOLUME_STEPS.length - 1 });
+    expect(binding.volumeStepsCount).toBe(top + 1);
+    expect(binding.volumeIndex).toBe(top);
+    for (let index = 0; index < binding.volumeStepsCount; index += 1) {
+      expect(binding.volumeValueFormatter?.(index).length).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("Full App keeps dB labels", () => {
+    const binding = bind(false, { index: 4 });
+    expect(binding.volumeLabel).toBe(LOCAL_VOLUME_STEPS[4].label);
+    expect(binding.volumeValueFormatter?.(0)).toBe("OFF");
+  });
+});
