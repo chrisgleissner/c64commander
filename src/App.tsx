@@ -15,6 +15,7 @@ import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useAppMode } from "@/lib/appMode/appModeStore";
 import { deviceKeypadShortcuts } from "@/lib/appMode/deviceKeypadShortcuts";
+import { ModeDialogs } from "@/components/appMode/ModeDialogs";
 import { HiddenRouteRedirect } from "@/components/HiddenRouteRedirect";
 import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -367,6 +368,7 @@ const AppRoutes = () => {
             <T9FieldListener />
             <SearchOverlayHost />
             <TourHost />
+            <ModeDialogs />
             <NotificationPermissionMoment />
             <ConnectionController />
             <DemoModeInterstitial />

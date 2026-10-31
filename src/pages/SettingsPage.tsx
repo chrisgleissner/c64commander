@@ -55,6 +55,7 @@ import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSectio
 import { AudioProcessingSettingsSection } from "@/pages/settings/AudioProcessingSettingsSection";
 import { Slider } from "@/components/ui/slider";
 
+import { AppModeSettingsSection } from "@/pages/settings/AppModeSettingsSection";
 import { PlayAndDiskSettingsSection } from "@/pages/settings/PlayAndDiskSettingsSection";
 
 import { SettingsSection } from "@/pages/settings/SettingsSection";
@@ -1095,6 +1096,7 @@ export default function SettingsPage() {
           {/* Compact tightens the space between closed cards: 13 px between 39 px cards is a third
               of the list's height spent on gaps. */}
           <div className={cn(isCompactProfile ? "space-y-1.5" : "space-y-3")} data-testid="settings-top-layout">
+            <AppModeSettingsSection />
             {/* 1. Appearance */}
             <SettingsSection
               id="appearance"

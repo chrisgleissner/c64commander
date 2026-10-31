@@ -7,6 +7,8 @@
  */
 
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
+import { deviceKeypadShortcuts } from "@/lib/appMode/deviceKeypadShortcuts";
+import { subscribeMachineCommand } from "@/lib/input/keypadCommands";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState } from "react";
@@ -1065,6 +1067,40 @@ describe("FocusNavigationProvider global shortcuts", () => {
 
     fireEvent.keyDown(document.body, { code: "Digit9" });
     expect(machineReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("SPM-NAV-03 keys 8 and 9 do nothing in SID Player: no machine command, no toast", () => {
+    const commands: string[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => commands.push(command));
+    const jumpToTab = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab, ...deviceKeypadShortcuts("sid-player") }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    unsubscribe();
+
+    expect(commands).toEqual([]);
+    expect(jumpToTab).not.toHaveBeenCalled();
+  });
+
+  it("SPM-NAV-03 keys 8 and 9 still reach the machine in the Full App", () => {
+    const commands: string[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => commands.push(command));
+    render(
+      <FocusNavigationProvider shortcuts={{ ...deviceKeypadShortcuts("full") }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    unsubscribe();
+
+    expect(commands).toEqual(["pauseResume", "reset"]);
   });
 
   it("leaves the machine keys to T9 while editing a text field", () => {

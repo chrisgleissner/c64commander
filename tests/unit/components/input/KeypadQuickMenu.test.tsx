@@ -19,6 +19,9 @@ vi.mock("@/hooks/use-toast", () => ({ toast }));
 const mirror = vi.hoisted(() => ({ anyLive: false, stopAll: vi.fn(async () => undefined) }));
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
 
+const connectionState = vi.hoisted(() => ({ current: "UNKNOWN" }));
+vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connectionState.current }) }));
+
 const variantId = vi.hoisted(() => ({ current: "c64commander" }));
 vi.mock("@/generated/variant", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/generated/variant")>();
@@ -31,6 +34,7 @@ vi.mock("@/generated/variant", async (importOriginal) => {
 });
 
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { requestQuickMenuOpen, subscribeMachineCommand, type MachineCommand } from "@/lib/input/keypadCommands";
 
@@ -466,5 +470,59 @@ describe("KeypadQuickMenu in SID Player", () => {
 
     expect(screen.getByTestId("keypad-quick-menu-function-summary")).toBeInTheDocument();
     expect(screen.queryByTestId("keypad-quick-menu-configure-function-keys")).toBeNull();
+  });
+
+  it("SPM-QM-01 SID Player lists Leave SID Player and it opens the Leave confirmation", async () => {
+    const seen: ModeDialogKind[] = [];
+    const unsubscribe = subscribeModeDialog((kind) => seen.push(kind));
+    await open();
+
+    expect(screen.queryByTestId("keypad-quick-menu-use-sid-player")).toBeNull();
+    fireEvent.click(screen.getByTestId("keypad-quick-menu-leave-sid-player"));
+    unsubscribe();
+    expect(seen).toEqual(["leave"]);
+  });
+});
+
+describe("KeypadQuickMenu offers SID Player in the Full App", () => {
+  afterEach(() => {
+    connectionState.current = "UNKNOWN";
+    vi.clearAllMocks();
+  });
+
+  const openMenu = async () => {
+    renderMenu();
+    requestQuickMenuOpen();
+    await waitFor(() => expect(screen.getByTestId("keypad-quick-menu")).toBeInTheDocument());
+  };
+
+  it.each(["OFFLINE_NO_DEMO", "DEMO_ACTIVE", "REAL_CONNECTED", "UNKNOWN"])(
+    "SPM-QM-01 the Full App lists SID Player whatever the connection is, and it opens the Enter confirmation: %s",
+    async (state) => {
+      connectionState.current = state;
+      const seen: ModeDialogKind[] = [];
+      const unsubscribe = subscribeModeDialog((kind) => seen.push(kind));
+      await openMenu();
+
+      const entry = screen.getByTestId("keypad-quick-menu-use-sid-player");
+      expect(entry).toHaveTextContent(/^SID Player$/);
+      expect(entry.className).toMatch(/min-h-11/);
+      fireEvent.click(entry);
+      unsubscribe();
+      expect(seen).toEqual(["enter"]);
+      expect(screen.queryByTestId("keypad-quick-menu-leave-sid-player")).toBeNull();
+    },
+  );
+
+  it("SPM-QM-01 the entry sits near the bottom, after Diagnostics and Switch device", async () => {
+    connectionState.current = "REAL_CONNECTED";
+    await openMenu();
+
+    const order = [...screen.getByTestId("keypad-quick-menu").querySelectorAll("[data-testid]")].map((node) =>
+      node.getAttribute("data-testid"),
+    );
+    const entry = order.indexOf("keypad-quick-menu-use-sid-player");
+    expect(entry).toBeGreaterThan(order.indexOf("keypad-quick-menu-diagnostics"));
+    expect(entry).toBeGreaterThan(order.indexOf("keypad-quick-menu-search"));
   });
 });

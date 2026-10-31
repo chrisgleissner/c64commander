@@ -8,7 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { navigateBackOrLeave } from "@/lib/navigation/navigateBack";
+import { clearHistoryBaseline, markHistoryBaseline, navigateBackOrLeave } from "@/lib/navigation/navigateBack";
 import { addLog } from "@/lib/logging";
 import { getPlatform } from "@/lib/native/platform";
 
@@ -26,6 +26,7 @@ describe("navigateBackOrLeave", () => {
     vi.mocked(addLog).mockClear();
     vi.mocked(getPlatform).mockReturnValue("android");
     window.history.replaceState({ idx: 0 }, "");
+    markHistoryBaseline();
   });
 
   it("returns to the previous route when the session has one", () => {
@@ -87,5 +88,45 @@ describe("navigateBackOrLeave", () => {
     expect(addLog).toHaveBeenCalledWith("warn", "Failed to send the app to the background on Back", {
       error: "plugin missing",
     });
+  });
+});
+
+describe("navigateBackOrLeave after entering SID Player", () => {
+  beforeEach(() => {
+    minimizeApp.mockClear();
+    vi.mocked(getPlatform).mockReturnValue("android");
+  });
+
+  it("SPM-NAV-04 Back at the page SID Player was entered on leaves the app instead of walking hidden pages", () => {
+    window.history.replaceState({ idx: 3 }, "");
+    markHistoryBaseline();
+    const navigate = vi.fn();
+
+    navigateBackOrLeave(navigate);
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(minimizeApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("SPM-NAV-04 Back above that page still returns to the previous page", () => {
+    window.history.replaceState({ idx: 3 }, "");
+    markHistoryBaseline();
+    window.history.replaceState({ idx: 4 }, "");
+    const navigate = vi.fn();
+
+    navigateBackOrLeave(navigate);
+
+    expect(navigate).toHaveBeenCalledWith(-1);
+  });
+
+  it("SPM-NAV-04 leaving SID Player makes the earlier history entries reachable again", () => {
+    window.history.replaceState({ idx: 3 }, "");
+    markHistoryBaseline();
+    clearHistoryBaseline();
+    const navigate = vi.fn();
+
+    navigateBackOrLeave(navigate);
+
+    expect(navigate).toHaveBeenCalledWith(-1);
   });
 });

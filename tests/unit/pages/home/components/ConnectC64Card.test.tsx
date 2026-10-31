@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -54,5 +55,25 @@ describe("the card Home shows while no C64 Ultimate is connected", () => {
     expect(screen.getByRole("heading")).toHaveTextContent("C64 Ultimate out of reach");
     expect(screen.getByText(/connects again by itself/)).toBeInTheDocument();
     expect(screen.getByTestId("home-connect-c64-setup")).toHaveTextContent("Connection settings");
+  });
+
+  it("SPM-HOME-04 offline Full App offers Use SID Player, which opens the Enter confirmation", () => {
+    seedSelectedDevice(null);
+    const seen: ModeDialogKind[] = [];
+    const unsubscribe = subscribeModeDialog((kind) => seen.push(kind));
+    renderCard();
+
+    fireEvent.click(screen.getByTestId("home-connect-c64-use-sid-player"));
+    unsubscribe();
+    expect(screen.getByTestId("home-connect-c64-use-sid-player")).toHaveTextContent("Use SID Player");
+    expect(seen).toEqual(["enter"]);
+  });
+
+  it("SPM-HOME-04 a user with a known device that is away is offered it too, as a secondary button", () => {
+    seedSelectedDevice("2026-09-15T10:00:00.000Z");
+    renderCard();
+
+    expect(screen.getByTestId("home-connect-c64-use-sid-player")).toBeInTheDocument();
+    expect(screen.getByTestId("home-connect-c64-setup")).toBeInTheDocument();
   });
 });

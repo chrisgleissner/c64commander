@@ -4300,10 +4300,10 @@ test.describe("App screenshots", () => {
       );
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
-      const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       await expect(dialog).toBeVisible({ timeout: 10000 });
       await captureScreenshot(page, testInfo, "home/03-demo-mode-interstitial.png");
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
       await expect(dialog).toBeHidden();
     },
   );
@@ -4413,9 +4413,9 @@ test.describe("App screenshots", () => {
       );
 
       await page.goto("/play", { waitUntil: "domcontentloaded" });
-      const demoDialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const demoDialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       if (await demoDialog.isVisible()) {
-        await demoDialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+        await demoDialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
         await expect(demoDialog).toHaveCount(0);
       }
       await waitForDemoBadge(page);

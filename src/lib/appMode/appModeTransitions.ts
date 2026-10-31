@@ -6,8 +6,35 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadStartupMode } from "@/lib/appMode/appModeStore";
-import { discoverConnection, pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
+import { loadStartupMode, saveStartupModeByUser } from "@/lib/appMode/appModeStore";
+import { discardDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import { clearHistoryBaseline, markHistoryBaseline } from "@/lib/navigation/navigateBack";
+import { releaseDeviceForSidPlayer } from "@/lib/appMode/deviceRelease";
+import {
+  discoverConnection,
+  pinDemoModeByUserChoice,
+  transitionToOfflineNoDemo,
+} from "@/lib/connection/connectionManager";
+
+export const enterSidPlayer = async (): Promise<void> => {
+  await releaseDeviceForSidPlayer();
+  saveStartupModeByUser("sid-player");
+  markHistoryBaseline();
+  discardDeviceDiscovery();
+  await transitionToOfflineNoDemo("settings");
+};
+
+export const switchToFullApp = async (): Promise<void> => {
+  saveStartupModeByUser("default");
+  clearHistoryBaseline();
+  await discoverConnection("settings");
+};
+
+export const switchToDemoMode = async (): Promise<void> => {
+  saveStartupModeByUser("default");
+  clearHistoryBaseline();
+  await pinDemoModeByUserChoice();
+};
 
 export const startForStartupMode = async (): Promise<void> => {
   if (loadStartupMode() === "demo") {

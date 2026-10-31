@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { MemoryRouter } from "react-router-dom";
 import type { DeviceDiscoveryState } from "@/lib/deviceDiscovery/types";
 
@@ -157,6 +158,20 @@ describe("DeviceDiscoveryInterstitial", () => {
     expect(screen.getByText("Ultimate 64 Elite · u64")).toBeInTheDocument();
     expect(screen.getByText("192.0.2.13 · fw 3.14e · ID 38C1BA")).toBeInTheDocument();
     expect(screen.getByTestId("startup-use-discovered-device-id:38c1ba")).toBeInTheDocument();
+  });
+
+  it("SPM-FRST-01 raises no device dialog over SID Player, with results waiting or none", () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      renderDialog();
+      expect(screen.queryByText("Choose your C64")).toBeNull();
+
+      discoveryState = { ...discoveryState, candidates: [] };
+      renderDialog();
+      expect(screen.queryByText("No C64 found")).toBeNull();
+    } finally {
+      saveStartupModeByUser("default");
+    }
   });
 
   it("keeps automatic startup discovery results visible if a background probe already connected", () => {

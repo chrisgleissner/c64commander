@@ -114,7 +114,28 @@ const connectionBadge = (page: Page) => page.locator('[data-panel-position="1"]'
 const expectConnectionState = async (page: Page, state: string, timeout = 15000) =>
   expect(connectionBadge(page)).toHaveAttribute("data-connection-state", state, { timeout });
 
-const demoDialog = (page: Page) => page.getByRole("dialog", { name: "Demo Mode" });
+/**
+ * A device that has connected before. Without one the offer is the first-run offer, which leads with SID Player and
+ * says nothing about a host; these tests are about the offer a returning user sees.
+ */
+const seedPriorConnection = async (page: Page, host: string) => {
+  await page.addInitScript((deviceHost: string) => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "returning",
+        devices: [
+          { id: "returning", host: deviceHost, httpPort: 80, lastSuccessfulConnectionAt: "2026-01-01T00:00:00.000Z" },
+        ],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+  }, host);
+};
+
+const demoDialog = (page: Page) => page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
 
 /**
  * Click a control that a concurrent re-render may detach mid-click.
@@ -259,6 +280,7 @@ test.describe("Entering Demo Mode", () => {
     // The device server is reachable throughout. Nothing may reach it: with no network there is
     // nothing to discover, and a probe that went out anyway would mean the app was about to
     // report a working device as offline.
+    await seedPriorConnection(page, new URL(device.baseUrl).host);
     await seedHandset(page, {
       deviceHost: new URL(device.baseUrl).host,
       deviceBaseUrl: device.baseUrl,
@@ -370,6 +392,7 @@ test.describe("Entering Demo Mode", () => {
 
     device.setReachable(false);
     const deviceHost = new URL(device.baseUrl).host;
+    await seedPriorConnection(page, deviceHost);
     await seedHandset(page, {
       deviceHost,
       deviceBaseUrl: device.baseUrl,
@@ -541,6 +564,7 @@ test.describe("The Demo Mode offer on a small screen", () => {
         });
       });
 
+      await seedPriorConnection(page, new URL(device.baseUrl).host);
       await seedHandset(page, {
         deviceHost: new URL(device.baseUrl).host,
         deviceBaseUrl: device.baseUrl,

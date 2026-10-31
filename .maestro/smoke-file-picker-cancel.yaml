@@ -55,10 +55,10 @@ env:
 - launchApp
 - runFlow:
     when:
-      visible: "Continue in Demo Mode"
+      visible: "(Continue in Demo Mode|Try Demo Mode)"
     file: subflows/continue-demo.yaml
 - tapOn:
-    text: "Continue in Demo Mode"
+    text: "(Continue in Demo Mode|Try Demo Mode)"
     optional: true
 - runFlow: subflows/dismiss-tour.yaml
 - tapOn:

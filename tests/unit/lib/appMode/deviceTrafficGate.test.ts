@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import {
   assertDeviceTrafficAllowed,
+  MODE_SWITCH_GRACE_MS,
   resetDeviceTrafficGateForTests,
   SidPlayerTrafficBlockedError,
   type DeviceTrafficChannel,
@@ -57,6 +58,8 @@ const CHANNELS: DeviceTrafficChannel[] = ["rest", "ftp", "telnet", "discovery", 
 
 describe("device traffic gate", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-24T12:00:00Z"));
     localStorage.clear();
     saveStartupModeByUser("default");
     resetDeviceTrafficGateForTests();
@@ -66,8 +69,30 @@ describe("device traffic gate", () => {
     mockNative.discover.mockClear();
   });
 
+  afterEach(() => vi.useRealTimers());
+
+  it("a request already queued when the mode switched is logged at info, a stray one later at warn", () => {
+    saveStartupModeByUser("sid-player");
+    expect(() => assertDeviceTrafficAllowed("rest", { host: "c64u" })).toThrow(SidPlayerTrafficBlockedError);
+    expect(vi.mocked(addLog).mock.calls.filter(([level]) => level === "warn")).toHaveLength(0);
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "SID Player blocked device traffic: rest",
+      expect.objectContaining({ orphanedBySwitch: true }),
+    );
+
+    vi.setSystemTime(Date.now() + MODE_SWITCH_GRACE_MS + 1);
+    expect(() => assertDeviceTrafficAllowed("ftp", { host: "c64u" })).toThrow(SidPlayerTrafficBlockedError);
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "SID Player blocked device traffic: ftp",
+      expect.objectContaining({ orphanedBySwitch: false }),
+    );
+  });
+
   it("SPM-NET-03 blocks each channel in SID Player and logs once", () => {
     saveStartupModeByUser("sid-player");
+    vi.setSystemTime(Date.now() + MODE_SWITCH_GRACE_MS + 1);
     for (const channel of CHANNELS) {
       expect(() => assertDeviceTrafficAllowed(channel, { host: "c64u" })).toThrow(SidPlayerTrafficBlockedError);
       expect(() => assertDeviceTrafficAllowed(channel, { host: "c64u" })).toThrow(

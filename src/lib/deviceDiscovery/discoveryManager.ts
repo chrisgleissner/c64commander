@@ -72,6 +72,7 @@ let state: DeviceDiscoveryState = Object.freeze({
   acknowledged: false,
 });
 let activeDiscovery: Promise<DeviceDiscoveryResult> | null = null;
+let scanEpoch = 0;
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((listener) => listener());
@@ -87,6 +88,27 @@ export const subscribeDeviceDiscovery = (listener: () => void) => {
 };
 
 export const getDeviceDiscoveryState = () => state;
+
+/**
+ * Forget the scan in flight and any result it left: a scan that started before the person chose SID Player
+ * may still be running natively, and its late result must not come back as a question about a machine.
+ */
+export const discardDeviceDiscovery = (): void => {
+  scanEpoch += 1;
+  activeDiscovery = null;
+  setState({
+    phase: "idle",
+    trigger: null,
+    startedAt: null,
+    completedAt: null,
+    candidates: [],
+    scannedHosts: 0,
+    elapsedMs: null,
+    error: null,
+    unsupported: false,
+    acknowledged: false,
+  });
+};
 
 export const resetDeviceDiscoveryStateForTests = () => {
   activeDiscovery = null;
@@ -355,9 +377,16 @@ export async function startDeviceDiscovery(
     acknowledged: false,
   });
 
-  activeDiscovery = (async () => {
+  const epoch = scanEpoch;
+  const run: Promise<DeviceDiscoveryResult> = (async () => {
     try {
       const { resolved, lastSeenAt } = await scanAndResolveCandidates(options);
+      if (epoch !== scanEpoch) {
+        addLog("info", "Discarded a device discovery result that arrived after the scan was abandoned", {
+          trigger: options.trigger,
+        });
+        return resolved;
+      }
       setState({
         phase: "complete",
         completedAt: lastSeenAt,
@@ -374,6 +403,7 @@ export async function startDeviceDiscovery(
       });
       return resolved;
     } catch (error) {
+      if (epoch !== scanEpoch) return { candidates: [], scannedHosts: 0, elapsedMs: 0, unsupported: false };
       const message = (error as Error).message || "Device discovery failed";
       setState({
         phase: "error",
@@ -388,11 +418,12 @@ export async function startDeviceDiscovery(
         unsupported: false,
       };
     } finally {
-      activeDiscovery = null;
+      if (epoch === scanEpoch) activeDiscovery = null;
     }
   })();
+  activeDiscovery = run;
 
-  return activeDiscovery;
+  return run;
 }
 
 const PASSWORD_IDENTITY_TIMEOUT_MS = 3000;

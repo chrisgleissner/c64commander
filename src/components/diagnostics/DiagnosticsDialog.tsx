@@ -20,6 +20,8 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
+import { DeviceLessChoices } from "@/components/appMode/DeviceLessChoices";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { DiagnosticsConnectionActions } from "@/components/diagnostics/DiagnosticsConnectionActions";
 
 import {
@@ -1385,6 +1387,7 @@ export function DiagnosticsDialog({
     connectionState.state === "DEMO_ACTIVE"
       ? DEMO_MODE_CONNECTION_LABEL
       : buildConnectionLabel(connectionDisplayName, selectedProductCode);
+  const sidPlayer = useAppMode() === "sid-player";
   // Offered only where it is the answer: the app is not talking to a device, and Demo Mode is
   // available. In Demo Mode already, or connected to real hardware, it would be noise.
   const showSimulatedDeviceOffer =
@@ -1765,59 +1768,65 @@ export function DiagnosticsDialog({
                   >
                     {HEALTH_GLYPHS[healthState.state]} {healthState.state}
                   </p>
-                  <button
-                    type="button"
-                    className="flex min-h-11 w-full items-center text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
-                    data-testid="diagnostics-device-line"
-                    onPointerDown={handleDevicePointerDown}
-                    onPointerUp={handleDevicePointerUp}
-                    onPointerLeave={clearLongPress}
-                    onPointerCancel={clearLongPress}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      openConnectionEdit();
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openConnectionView();
-                      }
-                    }}
-                  >
-                    <span className="min-w-0 truncate">{connectionLabel}</span>
-                  </button>
-                  <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
-                    {formatElapsedAgo("Last check", lastCheckTimestamp)}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-1 h-7 text-xs"
-                    onClick={() => {
-                      setHeaderExpanded(true);
-                      onRunHealthCheck?.();
-                    }}
-                    disabled={!onRunHealthCheck}
-                    data-testid="run-health-check"
-                  >
-                    {healthCheckRunning ? "Restart health check" : "Run health check"}
-                  </Button>
-                  {/* The connection indicator is where a user goes when they notice nothing is
+                  {sidPlayer ? (
+                    <DeviceLessChoices className="mt-1" />
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="flex min-h-11 w-full items-center text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                        data-testid="diagnostics-device-line"
+                        onPointerDown={handleDevicePointerDown}
+                        onPointerUp={handleDevicePointerUp}
+                        onPointerLeave={clearLongPress}
+                        onPointerCancel={clearLongPress}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          openConnectionEdit();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openConnectionView();
+                          }
+                        }}
+                      >
+                        <span className="min-w-0 truncate">{connectionLabel}</span>
+                      </button>
+                      <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
+                        {formatElapsedAgo("Last check", lastCheckTimestamp)}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-1 h-7 text-xs"
+                        onClick={() => {
+                          setHeaderExpanded(true);
+                          onRunHealthCheck?.();
+                        }}
+                        disabled={!onRunHealthCheck}
+                        data-testid="run-health-check"
+                      >
+                        {healthCheckRunning ? "Restart health check" : "Run health check"}
+                      </Button>
+                      {/* The connection indicator is where a user goes when they notice nothing is
                       connected, so it is where the way into Demo Mode belongs. Until now the only
                       one was to know Demo Mode exists and to go looking for it in Settings. */}
-                  {showSimulatedDeviceOffer ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-1 h-7 text-xs"
-                      onClick={() => void pinDemoModeByUserChoice()}
-                      data-testid="use-simulated-device-action"
-                    >
-                      Use the simulated device
-                    </Button>
-                  ) : null}
+                      {showSimulatedDeviceOffer ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-1 h-7 text-xs"
+                          onClick={() => void pinDemoModeByUserChoice()}
+                          data-testid="use-simulated-device-action"
+                        >
+                          Use the simulated device
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
                 {lastHealthCheckResult || liveHealthCheckProbes !== null || healthCheckRunning ? (
                   <Button

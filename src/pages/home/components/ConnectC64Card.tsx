@@ -12,6 +12,8 @@ import { Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { t } from "@/lib/i18n";
+import { MODE_COPY } from "@/lib/appMode/copy";
+import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 
 /**
@@ -60,6 +62,14 @@ export const ConnectC64Card = () => {
           className="min-h-11"
         >
           {knownDevice ? t("home.connect.settings", "Connection settings") : t("home.connect.setUp", "Set up a device")}
+        </Button>
+        <Button
+          onClick={() => requestModeDialog("enter")}
+          data-testid="home-connect-c64-use-sid-player"
+          variant="outline"
+          className="min-h-11"
+        >
+          {MODE_COPY.menu.use}
         </Button>
       </div>
     </section>

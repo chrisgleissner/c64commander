@@ -18,6 +18,7 @@ const startDeviceDiscovery = vi.fn(async () => ({
 vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
   startDeviceDiscovery,
   persistDiscoveredDevice: vi.fn(),
+  discardDeviceDiscovery: vi.fn(),
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
@@ -121,15 +122,19 @@ describe("connection manager in SID Player", () => {
     },
   );
 
-  it("SPM-MODE-01 a background trigger in SID Player does not transition", async () => {
+  it("SPM-MODE-01 a background trigger in SID Player does not transition or probe", async () => {
     const { manager, states } = await loadManager("sid-player");
     await manager.initializeConnectionManager();
+    await manager.discoverConnection("startup");
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     states.length = 0;
+
     await manager.discoverConnection("background");
 
-    expect(manager.getConnectionSnapshot().state).toBe("UNKNOWN");
     expect(states).toEqual([]);
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     expect(fetch).not.toHaveBeenCalled();
+    expect(startDeviceDiscovery).not.toHaveBeenCalled();
   });
 
   it("SPM-MODE-01 a returning network in SID Player starts no discovery", async () => {
@@ -174,6 +179,7 @@ describe("connection manager in SID Player", () => {
     await manager.initializeConnectionManager();
     void manager.discoverConnection("startup");
     await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    await manager.transitionToOfflineNoDemo("settings");
   });
 
   it("SPM-FRST-02 sid-player start-up shows no offer and sends no probe", async () => {
@@ -188,20 +194,40 @@ describe("connection manager in SID Player", () => {
     expect(startDeviceDiscovery).not.toHaveBeenCalled();
   });
 
-  it("SPM-MODE-02 settling in SID Player after Demo Mode was pinned stops the demo server and clears the Demo pin", async () => {
+  it("SPM-MODE-02 entering SID Player from Demo Mode stops the demo server and clears the Demo pin", async () => {
     const { manager } = await loadManager(null);
-    const { saveStartupModeByUser } = await import("@/lib/appMode/appModeStore");
+    const { enterSidPlayer } = await import("@/lib/appMode/appModeTransitions");
     await manager.initializeConnectionManager();
     await manager.pinDemoModeByUserChoice();
     expect(manager.isDemoModePinnedByUser()).toBe(true);
     stopMockServer.mockClear();
 
-    saveStartupModeByUser("sid-player");
-    await manager.discoverConnection("settings");
+    await enterSidPlayer();
 
     expect(stopMockServer).toHaveBeenCalled();
     expect(manager.isDemoModePinnedByUser()).toBe(false);
     expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
+
+  it("SPM-NET-01 entering SID Player ends a discovery that is already running", async () => {
+    startDeviceDiscovery.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return { candidates: [], scannedHosts: 0, elapsedMs: 300, unsupported: false };
+    });
+    const { manager } = await loadManager(null);
+    const { enterSidPlayer } = await import("@/lib/appMode/appModeTransitions");
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.waitFor(() => expect(startDeviceDiscovery).toHaveBeenCalled());
+    const requestsBefore = vi.mocked(fetch).mock.calls.length;
+
+    await enterSidPlayer();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    expect(vi.mocked(fetch).mock.calls.length).toBe(requestsBefore);
+    expect(startDeviceDiscovery).toHaveBeenCalledTimes(1);
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(manager.getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
   it("SPM-MODE-01 a late answer from a device cannot connect the app in SID Player", async () => {

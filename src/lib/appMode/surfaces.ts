@@ -37,6 +37,7 @@ const SECTION_CLASSIFICATIONS = {
   "home:streams": "needs-device",
   "home:config-actions": "needs-device",
   "settings:appearance": "always",
+  "settings:app-mode": "always",
   "settings:connection": "needs-device",
   "settings:diagnostics": "always",
   "settings:play-and-disk": "always",
@@ -86,6 +87,7 @@ const PART_CLASSIFICATIONS = {
   "quick-menu:switch-device": "needs-device",
   "quick-menu:stop-live-view": "needs-device",
   "quick-menu:leave-sid-player": "sid-player-only",
+  "quick-menu:use-sid-player": "always",
 } as const satisfies Record<string, SurfaceClassification>;
 
 export type SectionSurfaceId = keyof typeof SECTION_CLASSIFICATIONS;

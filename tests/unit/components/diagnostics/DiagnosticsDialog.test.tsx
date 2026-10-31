@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
@@ -669,6 +670,47 @@ describe("DiagnosticsDialog", () => {
     } finally {
       connectionStateOverride.state = null;
     }
+  });
+
+  it("SPM-ERR-03 SID Player shows the mode choices instead of the device line and health check", () => {
+    setViewportWidth(600);
+    saveStartupModeByUser("sid-player");
+    try {
+      renderDialog();
+
+      expect(screen.getByTestId("device-less-choices")).toBeInTheDocument();
+      expect(screen.queryByTestId("diagnostics-device-line")).toBeNull();
+      expect(screen.queryByTestId("run-health-check")).toBeNull();
+      expect(screen.queryByTestId("use-simulated-device-action")).toBeNull();
+      expect(screen.getByTestId("diagnostics-header")).toBeInTheDocument();
+    } finally {
+      saveStartupModeByUser("default");
+    }
+  });
+
+  it("SPM-ERR-03 SID Player leaves out Connection details and Manage devices from the overflow menu", async () => {
+    setViewportWidth(600);
+    saveStartupModeByUser("sid-player");
+    try {
+      renderDialog();
+      fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+
+      expect(screen.queryByTestId("diagnostics-connection-details-action")).toBeNull();
+      expect(screen.queryByTestId("diagnostics-manage-devices-action")).toBeNull();
+      expect(screen.getByTestId("open-config-drift-screen")).toBeInTheDocument();
+    } finally {
+      saveStartupModeByUser("default");
+    }
+  });
+
+  it("SPM-ERR-03 the Full App keeps the device line and the overflow device actions", () => {
+    setViewportWidth(600);
+    renderDialog();
+
+    expect(screen.getByTestId("diagnostics-device-line")).toBeInTheDocument();
+    expect(screen.queryByTestId("device-less-choices")).toBeNull();
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
+    expect(screen.getByTestId("diagnostics-connection-details-action")).toBeInTheDocument();
   });
 
   it("opens connection view on tap and connection edit on long press", async () => {

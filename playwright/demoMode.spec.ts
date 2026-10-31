@@ -56,9 +56,9 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
 };
 
 const dismissDemoModeDialogIfVisible = async (page: Page) => {
-  const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+  const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
   if (!(await dialog.isVisible().catch(() => false))) return;
-  const continueButton = dialog.getByRole("button", { name: /Continue in Demo Mode/i }).first();
+  const continueButton = dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/i }).first();
   if (await continueButton.isVisible().catch(() => false)) {
     await clickWithoutNavigationWait(page, continueButton);
   } else {
@@ -345,7 +345,7 @@ test.describe("Automatic Demo Mode", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
 
     // Wait for DEMO_ACTIVE state first – Playwright's locator polling reliably
     // detects attribute changes on existing elements but is slow to observe new
@@ -358,7 +358,7 @@ test.describe("Automatic Demo Mode", () => {
     await snap(page, testInfo, "demo-interstitial-shown");
 
     // Dismiss it
-    await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
@@ -482,13 +482,13 @@ test.describe("Automatic Demo Mode", () => {
     // dialog is portal-rendered, so a probe can return false while it is still being
     // mounted - which would skip the dismissal and leave it covering the card this
     // test then asserts on.
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     const dismissed = await dialog
       .waitFor({ state: "visible", timeout: 5000 })
       .then(() => true)
       .catch(() => false);
     if (dismissed) {
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
       await expect(dialog).toBeHidden();
     }
 
@@ -525,10 +525,10 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     await expect(dialog).toBeHidden();
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
@@ -563,10 +563,10 @@ test.describe("Automatic Demo Mode", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     const dialogVisible = await dialog.isVisible({ timeout: 5000 }).catch(() => false);
     if (dialogVisible) {
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     }
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|DISCOVERING/);

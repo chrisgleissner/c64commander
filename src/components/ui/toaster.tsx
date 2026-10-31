@@ -14,6 +14,7 @@ import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } fro
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { APP_SETTINGS_KEYS, loadNotificationDurationMs } from "@/lib/config/appSettings";
 import { KEYPAD_GUIDANCE_RESERVE_EVENT } from "@/lib/ui/keypadGuidanceReserve";
+import { SKIP_ATTR } from "@/lib/input/discovery";
 
 const TOAST_RESERVED_HEIGHT_VAR = "--app-toast-reserved-height";
 
@@ -128,6 +129,7 @@ function ToastItem({ id, title, description, action, dismiss, informational, var
       // The provider duration is the notice duration, so destructive roots override it (HARD19-037).
       duration={variant === "destructive" ? Infinity : undefined}
       {...props}
+      {...(informational ? { tabIndex: -1, [SKIP_ATTR]: "" } : {})}
       onSwipeEnd={handleSwipeEnd}
     >
       <div className="flex items-start gap-1">

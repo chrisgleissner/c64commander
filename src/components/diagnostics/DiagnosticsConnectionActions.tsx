@@ -7,6 +7,8 @@
  */
 
 import { useNavigate } from "react-router-dom";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSurfaceVisible } from "@/lib/appMode/surfaces";
 
 const ACTION_CLASS =
   "flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted";
@@ -23,6 +25,8 @@ export function DiagnosticsConnectionActions({
   onOpenChange,
 }: DiagnosticsConnectionActionsProps) {
   const navigate = useNavigate();
+  const appMode = useAppMode();
+  if (!isSurfaceVisible("quick-menu:switch-device", appMode)) return null;
 
   return (
     <>

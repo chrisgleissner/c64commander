@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
+import { isSidPlayerActive, msSinceModeChange } from "@/lib/appMode/appModeStore";
 import { addLog } from "@/lib/logging";
 
 export type DeviceTrafficChannel = "rest" | "ftp" | "telnet" | "discovery" | "udp";
@@ -27,6 +27,9 @@ export class SidPlayerTrafficBlockedError extends Error {
 
 const loggedChannels = new Set<DeviceTrafficChannel>();
 
+/** A request already queued when the mode switched is expected to be refused; one long after the switch is a defect. */
+export const MODE_SWITCH_GRACE_MS = 5_000;
+
 export const resetDeviceTrafficGateForTests = (): void => {
   loggedChannels.clear();
 };
@@ -39,7 +42,13 @@ export const assertDeviceTrafficAllowed = (
   const error = new SidPlayerTrafficBlockedError(channel, detail);
   if (!loggedChannels.has(channel)) {
     loggedChannels.add(channel);
-    addLog("warn", error.message, { channel, ...detail, stack: error.stack });
+    const orphanedBySwitch = msSinceModeChange() < MODE_SWITCH_GRACE_MS;
+    addLog(orphanedBySwitch ? "info" : "warn", error.message, {
+      channel,
+      ...detail,
+      orphanedBySwitch,
+      stack: error.stack,
+    });
   }
   throw error;
 };

@@ -21,6 +21,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { TAB_ROUTES, visibleTabIndexes } from "@/lib/navigation/tabRoutes";
 import { useAppMode } from "@/lib/appMode/appModeStore";
+import { MODE_COPY } from "@/lib/appMode/copy";
+import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
 import { isSurfaceVisible } from "@/lib/appMode/surfaces";
 import {
   requestDeviceSwitcherOpen,
@@ -219,6 +221,16 @@ export function KeypadQuickMenu() {
             {fromKeypad ? <ShortcutKey>7</ShortcutKey> : null}
             Search
           </Button>
+          {shows("quick-menu:leave-sid-player") ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-leave-sid-player"
+              onClick={() => run(() => requestModeDialog("leave"))}
+            >
+              {MODE_COPY.menu.leave}
+            </Button>
+          ) : null}
           {toastAction ? (
             <Button
               variant="ghost"
@@ -361,6 +373,16 @@ export function KeypadQuickMenu() {
             >
               {fromKeypad ? <ShortcutKey>#</ShortcutKey> : null}
               Switch device
+            </Button>
+          ) : null}
+          {appMode === "full" ? (
+            <Button
+              variant="ghost"
+              className="min-h-11 justify-start"
+              data-testid="keypad-quick-menu-use-sid-player"
+              onClick={() => run(() => requestModeDialog("enter"))}
+            >
+              {MODE_COPY.menu.quick}
             </Button>
           ) : null}
           {/* Last: reference for the two function keys, not a destination; the entries above are what the menu is opened for. */}

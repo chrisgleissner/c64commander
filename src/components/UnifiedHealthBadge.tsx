@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { resolveAppBarHeightPx } from "@/components/ui/interstitialStyles";
 import { useHealthState } from "@/hooks/useHealthState";
 import { useAppMode } from "@/lib/appMode/appModeStore";
+import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
@@ -595,6 +596,10 @@ export function UnifiedHealthBadge({ className }: Props) {
         return;
       }
       handlePointerButtonClick(event);
+      if (connectivity === "SID Player") {
+        requestModeDialog("sheet");
+        return;
+      }
       // When the device is offline, a tap actively kicks off a reconnect in
       // addition to opening Diagnostics. The passive background re-probe can be
       // slow to recover when the device was unreachable at app launch, so this

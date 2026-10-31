@@ -17,6 +17,7 @@ import {
 } from "@/components/UnifiedHealthBadge";
 import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 import { guidanceLabelFor } from "@/lib/input/guidance";
+import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
@@ -315,6 +316,17 @@ describe("UnifiedHealthBadge", () => {
       });
       expect(screen.queryByTestId("saved-device-switch-dialog")).toBeNull();
       expect(document.querySelector("[role='dialog']")).toBeNull();
+    });
+
+    it("SPM-ERR-02 the badge reads SID Player and a tap opens the mode sheet, not Diagnostics", () => {
+      const seen: ModeDialogKind[] = [];
+      const unsubscribe = subscribeModeDialog((kind) => seen.push(kind));
+      render(<UnifiedHealthBadge />);
+
+      fireEvent.click(screen.getByTestId("unified-health-badge"));
+      unsubscribe();
+      expect(seen).toEqual(["sheet"]);
+      expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
     });
 
     it("SPM-NET-02 SID Player runs no saved-device health check even with several saved devices", () => {

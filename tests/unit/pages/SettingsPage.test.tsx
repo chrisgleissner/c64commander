@@ -2649,6 +2649,30 @@ describe("SettingsPage", () => {
       }
     });
 
+    it("SPM-SWT-01 the App mode section keeps its place, first on the page, when the mode changes", () => {
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+      const order = () =>
+        screen
+          .getAllByTestId(/^settings-section-(?!toggle|body)[a-z-]+$/)
+          .map((section) => section.getAttribute("data-testid")?.replace("settings-section-", ""))
+          .filter((id) => id === "app-mode" || id === "appearance");
+      const before = screen.getByTestId("settings-section-app-mode");
+      expect(order()).toEqual(["app-mode", "appearance"]);
+
+      try {
+        act(() => saveStartupModeByUser("sid-player"));
+        expect(order()).toEqual(["app-mode", "appearance"]);
+        expect(screen.getByTestId("settings-section-app-mode")).toBe(before);
+      } finally {
+        saveStartupModeByUser("default");
+      }
+    });
+
     it("says what each closed section decides, once card descriptions are turned on", () => {
       // Descriptions are off by default: on the smallest supported screen they cost about half the
       // height of every closed card, and the titles already name what each card is. When a reader

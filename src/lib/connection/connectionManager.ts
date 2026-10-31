@@ -700,6 +700,7 @@ const transitionToRealConnected = async (
   // Leaving Demo Mode swaps the simulated device's identity for the one the probe just read from real hardware.
   const leavingDemoMode = snapshot.state === "DEMO_ACTIVE";
   clearPinnedDemoMode();
+  discoveryRunToken += 1;
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-real-connected");
@@ -862,9 +863,10 @@ const tryAutomaticDeviceDiscoveryFallback = async (
   return true;
 };
 
-const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
+export const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   const alreadyOffline = settledConnectionState === "OFFLINE_NO_DEMO";
   clearPinnedDemoMode();
+  discoveryRunToken += 1;
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-offline");

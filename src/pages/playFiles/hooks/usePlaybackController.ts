@@ -59,6 +59,7 @@ import {
 } from "@/lib/playback/localSidPlaybackController";
 import {
   isAnyPlaybackActive,
+  isRemotePlaybackActive,
   isLocalPlaybackActive,
   markRemotePlaybackStarted,
   markRemotePlaybackStopped,
@@ -85,6 +86,7 @@ import { resolvePendingSkipIndices, type PendingUserSkip } from "@/pages/playFil
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
+import { registerDeviceRelease, untilAborted } from "@/lib/appMode/deviceRelease";
 import {
   firstPlayableWithoutDevice,
   isDeviceOutOfReach,
@@ -522,7 +524,12 @@ export function usePlaybackController({
 
   /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
   const stopTuneOnC64 = useCallback(
-    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string) => {
+    async (
+      api: ReturnType<typeof getC64API>,
+      shouldReboot: boolean,
+      itemId?: string,
+      { endMounts = true }: { endMounts?: boolean } = {},
+    ) => {
       // A pause still under way would otherwise freeze the machine after the reset, muted.
       await machineTransitionCoordinatorRef.current.idle();
       const wasPaused = isPausedRef.current;
@@ -534,13 +541,26 @@ export function usePlaybackController({
         });
       if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
       await stopMachineWithGracePeriod(api, shouldReboot);
-      await endPlayLaunchMounts(api);
+      if (endMounts) await endPlayLaunchMounts(api);
       // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
       if (wasPaused && pauseMuteSnapshotRef.current) {
         await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
       }
     },
     [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
+  );
+
+  useEffect(
+    () =>
+      registerDeviceRelease(async (signal) => {
+        if (!isRemotePlaybackActive() && !isPausedRef.current) return;
+        try {
+          await untilAborted(stopTuneOnC64(getC64API(), false, undefined, { endMounts: false }), signal);
+        } finally {
+          markRemotePlaybackStopped();
+        }
+      }),
+    [isPausedRef, stopTuneOnC64],
   );
 
   const resolveSidMetadata = useCallback(

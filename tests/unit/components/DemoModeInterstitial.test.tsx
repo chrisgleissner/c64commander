@@ -45,10 +45,24 @@ vi.mock("@/lib/c64api", () => ({
   getC64APIConfigSnapshot: () => getC64APIConfigSnapshot(),
 }));
 
+let neverConnected = false;
+vi.mock("@/lib/connection/demoOfferMemory", () => ({ hasNeverConnectedDevice: () => neverConnected }));
+
+const enterSidPlayer = vi.fn(async () => undefined);
+vi.mock("@/lib/appMode/appModeTransitions", () => ({ enterSidPlayer: () => enterSidPlayer() }));
+
+let profileName = "medium";
+vi.mock("@/hooks/useDisplayProfile", () => ({ useDisplayProfile: () => ({ profile: profileName }) }));
+
 import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
+import { MODE_COPY } from "@/lib/appMode/copy";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 describe("DemoModeInterstitial", () => {
   beforeEach(() => {
+    neverConnected = false;
+    profileName = "medium";
+    enterSidPlayer.mockClear();
     demoInterstitialVisible = true;
     demoInterstitialReason = "discovery-failed";
     resolveDeviceHostFromStorage.mockReturnValue("mydevice.local");
@@ -177,5 +191,85 @@ describe("DemoModeInterstitial", () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(screen.getByTestId("demo-interstitial-host-error")).toHaveTextContent("network timeout");
+  });
+
+  describe("the first run without a device", () => {
+    beforeEach(() => {
+      neverConnected = true;
+    });
+
+    it("SPM-FRST-01 first run offers SID Player first, then Demo Mode, then a retry", () => {
+      render(<DemoModeInterstitial />);
+
+      expect(screen.getByRole("heading")).toHaveTextContent(MODE_COPY.firstRun.title);
+      expect(screen.getByTestId("demo-interstitial-message")).toHaveTextContent(MODE_COPY.firstRun.body);
+      const labels = screen
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+        .filter((text) => text && !/close/i.test(text));
+      expect(labels.slice(0, 2)).toEqual([MODE_COPY.firstRun.useSidPlayer, MODE_COPY.firstRun.tryDemoMode]);
+      expect(labels).toContain(MODE_COPY.firstRun.retry);
+    });
+
+    it("SPM-FRST-01 first run with no network says the phone has no network", () => {
+      demoInterstitialReason = "no-network";
+      render(<DemoModeInterstitial />);
+
+      expect(screen.getByTestId("demo-interstitial-message")).toHaveTextContent(MODE_COPY.firstRun.noNetworkBody);
+      expect(screen.getByTestId("demo-interstitial-message")).not.toHaveTextContent("switched on");
+    });
+
+    it("SPM-FRST-01 Use SID Player enters SID Player, Try Demo Mode pins Demo Mode, Retry connection retries", () => {
+      const { rerender } = render(<DemoModeInterstitial />);
+      fireEvent.click(screen.getByTestId("demo-interstitial-use-sid-player"));
+      expect(enterSidPlayer).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByTestId("demo-interstitial-continue"));
+      expect(pinDemoModeByUserChoice).toHaveBeenCalledTimes(1);
+
+      rerender(<DemoModeInterstitial />);
+      fireEvent.click(screen.getByTestId("demo-interstitial-retry"));
+      expect(declineDemoMode).toHaveBeenCalledWith({ retry: "manual" });
+    });
+
+    it("SPM-FRST-01 the compact profile uses the short body and drops the host field and Save & retry", () => {
+      profileName = "compact";
+      render(<DemoModeInterstitial />);
+
+      expect(screen.getByTestId("demo-interstitial-message")).toHaveTextContent(MODE_COPY.firstRun.compactBody);
+      expect(screen.queryByTestId("demo-interstitial-host-input")).toBeNull();
+      expect(screen.queryByTestId("demo-interstitial-save-retry")).toBeNull();
+    });
+
+    it("SPM-FRST-01 a larger profile keeps the host field and Save & retry", () => {
+      render(<DemoModeInterstitial />);
+
+      expect(screen.getByTestId("demo-interstitial-host-input")).toBeInTheDocument();
+      expect(screen.getByTestId("demo-interstitial-save-retry")).toBeInTheDocument();
+    });
+
+    it("SPM-FRST-01 closing the offer keeps today's decline semantics", () => {
+      render(<DemoModeInterstitial />);
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      expect(declineDemoMode).toHaveBeenCalledTimes(1);
+      expect(enterSidPlayer).not.toHaveBeenCalled();
+    });
+
+    it("SPM-FRST-01 a Demo Mode start-up is never offered SID Player first", () => {
+      saveStartupModeByUser("demo");
+      try {
+        render(<DemoModeInterstitial />);
+        expect(screen.queryByTestId("demo-interstitial-use-sid-player")).toBeNull();
+      } finally {
+        saveStartupModeByUser("default");
+      }
+    });
+  });
+
+  it("SPM-FRST-01 a user whose device connected before is not offered SID Player first", () => {
+    render(<DemoModeInterstitial />);
+
+    expect(screen.queryByTestId("demo-interstitial-use-sid-player")).toBeNull();
+    expect(screen.getByTestId("demo-interstitial-continue")).toHaveTextContent("Continue in Demo Mode");
   });
 });

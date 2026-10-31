@@ -256,7 +256,8 @@ not-connected / empty / single-device).
   - Recent — button — `home-tile-action.recently-played` — R✅ I✅ `[disabled: nothing has been opened yet]`
   - Live View — button — `home-tile-home.section.live-view` — R✅ I✅ `[disabled: no device, or Live View off]`
 - **Connect a C64** (`home-connect-c64`) — button — `home-connect-c64-setup` — R✅ I✅
-  `[visible only in the offline arrangement, in place of Quick actions]`
+  `[visible only in the offline arrangement, in place of Quick actions]`; Use SID Player — button —
+  `home-connect-c64-use-sid-player` — opens the Enter confirmation (SID Player, `SPM-HOME-04`); not yet verified on hardware
 - **Lighting** — the card naming the look currently on the machine (chips `home-lighting-profile-chip`, `home-lighting-automation-chip`, `home-lighting-lock-chip` are display-only). Code-verified, not yet enumerated on hardware.
   - Why this look? — button — `home-lighting-why` — opens the **Context Lens** sheet
   - Hold look / Resume auto — button — `home-lighting-lock-toggle` — one button, two labels: it holds the current look against automation, or releases it again
@@ -644,7 +645,9 @@ opens on a first visit; every other section starts closed, and which are open is
 section headers, **OK descends** into a section, **Back** leaves it — the same rule the rest of
 the app follows.
 
-Sections, in page order: `appearance`, `connection`, `diagnostics`, `play-and-disk`,
+Sections, in page order: `appearance`, `app-mode` (Full App, Demo Mode or SID Player: buttons
+`device-less-choice-full-app`, `device-less-choice-demo-mode`, `device-less-choice-sid-player`; first on the
+page in SID Player, where `connection` and `device-safety` are absent), `connection`, `diagnostics`, `play-and-disk`,
 `feature-group-stable`, `feature-group-experimental`, `sid-radio`, `hvsc`, `online-archive`,
 `device-safety`, `notifications`, `about`. Every block on the page is one of these — there is no
 always-expanded card left. The two feature-flag chapters carry an "N/M on" badge, so how many
@@ -960,6 +963,18 @@ With no network the dialog drops the hostname field, its error line and Save & r
 neither editing a hostname nor re-saving one can make a device reachable until a network
 comes back, so the only decisions left are to continue or to try again. The route to
 real hardware also stays in **Settings → Device → Connection**.
+
+**Mode dialogs** (`mode-dialog-*`, `mode-sheet`; one host, opened from Settings, the Quick menu, Home's
+connect card, the first-run offer and the SID Player badge): Enter confirmation (`mode-dialog-enter`) —
+confirm `mode-dialog-enter-confirm`, cancel `mode-dialog-cancel`; Leave confirmation (`mode-dialog-leave`) —
+`mode-dialog-leave-full-app`, `mode-dialog-leave-demo-mode`, `mode-dialog-cancel`; mode sheet
+(`mode-sheet`, opened by tapping the SID Player badge) — the three `device-less-choice-*` buttons and
+Diagnostics (`mode-sheet-diagnostics`). Back and the left soft key cancel. Not yet verified on hardware.
+
+In the first-run case (no device has ever connected) the Demo Mode dialog reads "No C64 Ultimate found" and
+leads with Use SID Player (`demo-interstitial-use-sid-player`), then Try Demo Mode
+(`demo-interstitial-continue`) and Retry connection (`demo-interstitial-retry`); on the compact profile the
+hostname field and Save & retry are not shown (`SPM-FRST-01`).
 
 **Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
 startup/resume discovery completes while no configured device is reachable):
@@ -1337,7 +1352,10 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`, `keypad-quick-menu-toast-action`,
-`keypad-quick-menu-stop-live-view` (only while Live View streams; stops picture and sound).
+`keypad-quick-menu-stop-live-view` (only while Live View streams; stops picture and sound),
+`keypad-quick-menu-leave-sid-player` (SID Player only; opens the Leave confirmation) and
+`keypad-quick-menu-use-sid-player` (labeled "SID Player", near the bottom after Diagnostics and Switch device; in the Full App and Demo Mode whatever the connection, and absent in SID Player; at least 44 px; opens the Enter confirmation, the same path as Settings → App mode; `SPM-QM-01`). In SID Player the tab entries are Play, Settings and Docs on keys 1 to 3 and the machine,
+Game Mode and device-switcher entries are absent (`SPM-QM-01`).
 `keypad-quick-menu-game-mode` is absent on a device that cannot stream, such as a U2,
 like the Home Game tile; a function key assigned to Game Mode explains why there instead.
 

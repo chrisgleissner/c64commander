@@ -6,12 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { C64API } from "@/lib/c64api";
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
-import { resetDeviceTrafficGateForTests, SidPlayerTrafficBlockedError } from "@/lib/appMode/deviceTrafficGate";
+import {
+  MODE_SWITCH_GRACE_MS,
+  resetDeviceTrafficGateForTests,
+  SidPlayerTrafficBlockedError,
+} from "@/lib/appMode/deviceTrafficGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", async (importOriginal) => ({
@@ -20,8 +24,14 @@ vi.mock("@/lib/logging", async (importOriginal) => ({
   addErrorLog: vi.fn(),
 }));
 
+const enterSidPlayerLongAgo = () => {
+  saveStartupModeByUser("sid-player");
+  vi.setSystemTime(Date.now() + MODE_SWITCH_GRACE_MS + 1);
+};
+
 describe("C64API in SID Player", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     localStorage.clear();
     saveStartupModeByUser("default");
     resetDeviceTrafficGateForTests();
@@ -30,8 +40,10 @@ describe("C64API in SID Player", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
   });
 
+  afterEach(() => vi.useRealTimers());
+
   it("SPM-NET-03 a REST call in SID Player is refused before dispatch, with one warning", async () => {
-    saveStartupModeByUser("sid-player");
+    enterSidPlayerLongAgo();
     const api = new C64API("http://c64u");
 
     await expect(api.getInfo()).rejects.toBeInstanceOf(SidPlayerTrafficBlockedError);
@@ -51,7 +63,7 @@ describe("C64API in SID Player", () => {
   });
 
   it("SPM-NET-03 the memory and upload methods are refused too, with the host in the gate detail", async () => {
-    saveStartupModeByUser("sid-player");
+    enterSidPlayerLongAgo();
     const api = new C64API("http://c64u");
     const bytes = new Uint8Array([1, 2, 3]);
     const blob = new Blob([bytes]);
@@ -71,7 +83,7 @@ describe("C64API in SID Player", () => {
   });
 
   it("SPM-NET-03 a refused call logs only the gate warning, no request entry and no error", async () => {
-    saveStartupModeByUser("sid-player");
+    enterSidPlayerLongAgo();
     const api = new C64API("http://c64u");
     for (let attempt = 0; attempt < 3; attempt += 1) await expect(api.getInfo()).rejects.toThrow();
     expect(vi.mocked(addErrorLog).mock.calls).toEqual([]);

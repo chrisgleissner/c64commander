@@ -13,7 +13,7 @@ import { addLog } from "@/lib/logging";
 export type StartupMode = "default" | "demo" | "sid-player";
 export type AppMode = "full" | "sid-player";
 
-const STARTUP_MODE_STORAGE_KEY = "c64u_startup_mode";
+export const STARTUP_MODE_STORAGE_KEY = "c64u_startup_mode";
 const STARTUP_MODES: readonly StartupMode[] = ["default", "demo", "sid-player"];
 
 const isStartupMode = (value: unknown): value is StartupMode => STARTUP_MODES.includes(value as StartupMode);
@@ -36,6 +36,11 @@ const readUserChoice = (): StartupMode | null => {
 
 const listeners = new Set<() => void>();
 let userChoice: StartupMode | null = readUserChoice();
+
+let lastModeChangeAtMs = Number.NEGATIVE_INFINITY;
+
+/** How long ago the app mode last changed, for a caller that must tell a request the switch orphaned from a stray one. */
+export const msSinceModeChange = (): number => Date.now() - lastModeChangeAtMs;
 
 export const loadStartupMode = (): StartupMode => userChoice ?? variant.runtime.startupMode;
 
@@ -67,6 +72,7 @@ export const saveStartupModeByUser = (mode: StartupMode): void => {
     }
   }
   if (previous === mode) return;
+  lastModeChangeAtMs = Date.now();
   window.dispatchEvent(
     new CustomEvent("c64u-app-settings-updated", { detail: { key: STARTUP_MODE_STORAGE_KEY, value: mode } }),
   );

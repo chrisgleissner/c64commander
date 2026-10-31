@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, type MutableRefObject } from "react";
 import type { PlaybackEngine } from "@/lib/config/appSettings";
+import { STARTUP_MODE_STORAGE_KEY } from "@/lib/appMode/appModeStore";
 import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
 import type { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
@@ -118,11 +119,16 @@ export function usePlaybackEngineSwitch(options: PlaybackEngineSwitchOptions) {
       }
     };
 
-    const onSettingsUpdated = () => {
+    const onSettingsUpdated = (event: Event) => {
       const current = optionsRef.current;
       const nextEngine = effectivePlaybackEngine();
       if (nextEngine === current.selectedEngineRef.current) return;
       current.selectedEngineRef.current = nextEngine;
+      // Leaving SID Player must not take the music off the phone: the C64 is not connected yet, and the next tune picks up the stored choice.
+      const changedKey = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (changedKey === STARTUP_MODE_STORAGE_KEY && nextEngine === "c64" && current.getLocalSidPlayback().isActive()) {
+        return;
+      }
       latestMoveRef.current += 1;
       void moveTune(latestMoveRef.current, performance.now(), current.stopCountRef.current);
     };

@@ -16,10 +16,10 @@ tags:
     commands:
       - runFlow:
           when:
-            visible: "Continue in Demo Mode"
+            visible: "(Continue in Demo Mode|Try Demo Mode)"
           file: continue-demo.yaml
       - tapOn:
-          text: "Continue in Demo Mode"
+          text: "(Continue in Demo Mode|Try Demo Mode)"
           optional: true
       # Startup device discovery. On a run where no device host has been configured -
       # a fresh install with no smoke-mode config file - the app scans the subnet and
