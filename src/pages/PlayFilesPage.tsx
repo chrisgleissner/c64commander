@@ -221,6 +221,7 @@ import {
   isSongCategory,
   addThenMaybeLaunch,
   resolvePickerConfirm,
+  resolveConfigOverridesAfterChange,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek } from "@/lib/playback/pendingSeekStatus";
@@ -1081,7 +1082,7 @@ export default function PlayFilesPage() {
                 ...item,
                 configRef,
                 configOrigin: options?.origin ?? resolveStoredConfigOrigin(configRef ?? null, null),
-                configOverrides: options?.overrides ?? (configRef ? (item.configOverrides ?? null) : null),
+                configOverrides: resolveConfigOverridesAfterChange(options?.overrides, configRef, item.configOverrides),
                 configCandidates: options?.candidates ?? item.configCandidates ?? null,
               }
             : item,

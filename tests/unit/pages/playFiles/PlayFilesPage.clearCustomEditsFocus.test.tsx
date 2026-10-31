@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -90,5 +90,45 @@ describe("PlayFilesPage's Clear custom edits confirmation", () => {
 
     const dialog = await screen.findByRole("alertdialog", { name: "Clear custom edits?" });
     await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" })));
+  });
+
+  const renderPage = async () => {
+    seedTuneWithCustomEdits();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={["/play"]}>
+          <PlayFilesPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getAllByText(/Commando/).length).toBeGreaterThan(0));
+    act(() => {
+      const candidate: ConfigCandidate = { ref: otherConfig, strategy: "exact-name", distance: 0, confidence: "high" };
+      configSheet.props!.onChooseCandidate({ id: tuneId } as PlaylistItem, candidate);
+    });
+    return screen.findByRole("alertdialog", { name: "Clear custom edits?" });
+  };
+
+  const configChip = () => screen.getByRole("button", { name: /config:/ });
+
+  it("switches to the chosen config and drops the custom edits when Continue is pressed", async () => {
+    const dialog = await renderPage();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Clear custom edits?" })).toBeNull());
+    await waitFor(() => expect(configChip().getAttribute("aria-label")).toContain("Other.cfg"));
+    expect(configChip()).toHaveTextContent("CFG");
+    expect(configChip()).not.toHaveTextContent("CFG*");
+  });
+
+  it("keeps the attached config and its custom edits when Cancel is pressed", async () => {
+    const dialog = await renderPage();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Clear custom edits?" })).toBeNull());
+    expect(configChip().getAttribute("aria-label")).toContain("Commando.cfg");
+    expect(configChip()).toHaveTextContent("CFG*");
   });
 });
