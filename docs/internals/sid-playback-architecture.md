@@ -338,8 +338,11 @@ character ROM that is not) has no applicable measurement, so the lowest grade of
 used: the conservative hint the specification allows (§10.1). libSidplayEZ is not one of the measured
 engine builds either; reading it as reSIDfp, the engine it is built on, is a judgement, not a
 measurement. Either way the verdict is marked `approximate` in the log line. The character
-ROM is stored only after **Read from C64** in Settings has copied it, by briefly running a short
-routine on the C64 (`characterRomReader.ts`; the background read takes KERNAL and BASIC only). With
+ROM is stored only after **Read from C64** in Settings has copied it with **Also read the character
+ROM** on (off by default, `characterRomSettings.ts`), by briefly running a short routine on the C64
+(`characterRomReader.ts`; the background read takes KERNAL and BASIC only). The switch exists because
+the routine pauses the C64 and can disturb a program that uses NMIs, while KERNAL and BASIC alone
+leave one song of HVSC release 85 sounding different (Wacek, Acid_Flashback: grades 242 and 243). With
 all three images authentic this is the reference configuration, where the list restricts nothing.
 Real C64 Ultimate playback never consults the list.
 
