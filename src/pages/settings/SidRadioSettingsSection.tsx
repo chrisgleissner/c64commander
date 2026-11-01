@@ -373,7 +373,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             </div>
           </div>
         ) : null}
-        {developerMode && localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
+        {localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
 
         {developerMode ? (
           <div

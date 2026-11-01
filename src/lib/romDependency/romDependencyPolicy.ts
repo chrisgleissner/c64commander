@@ -62,6 +62,14 @@ export class RomDependentSongSkipped extends Error {
   }
 }
 
+/** Thrown from the play path when the renderer refused a chosen song that needs the C64's ROMs, after the listener was told. */
+export class RomDependentSongRefused extends Error {
+  constructor(readonly label: string) {
+    super(`${label} needs the C64 ROMs; the renderer could not start it`);
+    this.name = "RomDependentSongRefused";
+  }
+}
+
 /**
  * Pick the audited configuration this phone is in (§10.1).
  *

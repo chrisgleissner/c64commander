@@ -12,6 +12,7 @@ import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSett
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { preRouteEngine, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
+import { setMaySoundWrong } from "@/pages/playFiles/maySoundWrongStore";
 import { isC64UsableForSid, resolveLocalRoute, type RomDependencyAsk } from "@/pages/playFiles/resolveLocalRoute";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
@@ -36,6 +37,8 @@ export interface LaunchRoute {
   /** The request, with the bytes the phone needs when they had to be fetched for it. */
   request: PlayRequest;
   simulatedDevice: boolean;
+  /** The song plays on this phone although it needs ROMs the phone lacks: the player says it may sound wrong. */
+  maySoundWrong: boolean;
 }
 
 /** After discovery has had its say (or its bound has passed): is there a C64 to play the song? */
@@ -52,6 +55,12 @@ const settleC64 = async (deviceOutOfReach: boolean): Promise<boolean> => {
  * Nothing that is playing has been touched when this returns, so a null leaves it as it was.
  */
 export const resolveLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute | null> => {
+  const route = await chooseLaunchRoute(input);
+  if (route) setMaySoundWrong(route.maySoundWrong);
+  return route;
+};
+
+const chooseLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute | null> => {
   const { item, path, deviceOutOfReach, notify } = input;
   let request = input.request;
   // Against the simulated device, or with no device at all, the on-device engine is the only
@@ -61,7 +70,8 @@ export const resolveLaunchRoute = async (input: LaunchRouteInput): Promise<Launc
   const simulatedDevice = connectionState === "DEMO_ACTIVE";
   const noDeviceConnected = connectionState === "OFFLINE_NO_DEMO";
   const noMachineForRoms = simulatedDevice || noDeviceConnected;
-  if (!loadLocalEngineEnabled() && !noMachineForRoms) return { routeToLocal: false, request, simulatedDevice };
+  if (!loadLocalEngineEnabled() && !noMachineForRoms)
+    return { routeToLocal: false, request, simulatedDevice, maySoundWrong: false };
   const selection = preRouteEngine({
     category: item.category,
     engine: loadPlaybackEngine(),
@@ -83,9 +93,9 @@ export const resolveLaunchRoute = async (input: LaunchRouteInput): Promise<Launc
   }
   if (selection.route !== "local" || !request.file) {
     if (selection.notice && selection.route !== "local") notify(selection.notice);
-    return { routeToLocal: false, request, simulatedDevice };
+    return { routeToLocal: false, request, simulatedDevice, maySoundWrong: false };
   }
-  const routeToLocal = await resolveLocalRoute({
+  const local = await resolveLocalRoute({
     file: request.file,
     songNr: request.songNr,
     label: item.label,
@@ -100,5 +110,5 @@ export const resolveLaunchRoute = async (input: LaunchRouteInput): Promise<Launc
     notify,
     onDeclined: input.onDeclined,
   });
-  return routeToLocal === null ? null : { routeToLocal, request, simulatedDevice };
+  return local === null ? null : { ...local, request, simulatedDevice };
 };
