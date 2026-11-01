@@ -29,18 +29,23 @@ import * as spectrumRenderer from "@/lib/audio/spectrum/spectrumRenderer";
 
 const makeContext = () => {
   const fills: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const strokedPaths: number[][] = [];
+  let path: number[] = [];
   const gradient = { addColorStop: vi.fn() };
   const ctx = {
     fills,
+    strokedPaths,
     fillStyle: "",
     setTransform: vi.fn(),
     drawImage: vi.fn(),
     fillRect: vi.fn((x: number, y: number, w: number, h: number) => fills.push({ x, y, w, h })),
     clearRect: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
+    beginPath: vi.fn(() => {
+      path = [];
+    }),
+    moveTo: vi.fn((_x: number, y: number) => path.push(y)),
+    lineTo: vi.fn((_x: number, y: number) => path.push(y)),
+    stroke: vi.fn(() => strokedPaths.push([...path])),
     fillText: vi.fn(),
     measureText: vi.fn((text: string) => ({ width: text.length * 4 })),
     createLinearGradient: vi.fn(() => gradient),
@@ -73,6 +78,7 @@ const setup = (
     createLayer?: () => null;
     setEnabled?: () => Promise<boolean>;
     keepCancelledFrame?: boolean;
+    mode?: "bars" | "wave";
   } = {},
 ) => {
   const ctx = makeContext();
@@ -83,7 +89,9 @@ const setup = (
   let pending: ((t: number) => void) | null = null;
   const reads: number[] = [];
   const targets: Array<number | undefined> = [];
-  const requests: Array<{ targetNanos?: number; count?: number; stepNanos?: number } | undefined> = [];
+  const requests: Array<
+    { targetNanos?: number; count?: number; stepNanos?: number; wave?: boolean; bands?: boolean } | undefined
+  > = [];
   const readouts: SpectrumReadout[] = [];
   const active: boolean[] = [];
   const tiers: number[] = [];
@@ -91,10 +99,17 @@ const setup = (
   const view = new SpectrumView({
     canvas,
     profile: options.profile ?? "medium",
+    mode: options.mode,
     onReadout: (r) => readouts.push(r),
     onActiveChange: (a) => active.push(a),
     onTierChange: (t) => tiers.push(t.index),
-    read: async (request?: { targetNanos?: number; count?: number; stepNanos?: number }) => {
+    read: async (request?: {
+      targetNanos?: number;
+      count?: number;
+      stepNanos?: number;
+      wave?: boolean;
+      bands?: boolean;
+    }) => {
       reads.push(nowMs);
       targets.push(request?.targetNanos);
       requests.push(request);
@@ -921,6 +936,113 @@ describe("SpectrumView", () => {
       } finally {
         getContext.mockRestore();
       }
+    });
+  });
+  describe("Wave view", () => {
+    const encodedWave = (value: number) => btoa(String.fromCharCode(...new Array(256).fill(value & 255)));
+    const waveFrames = () => {
+      let sequence = 0;
+      return () =>
+        frame({ sequence: ++sequence, wave: encodedWave(100), waveTriggered: true } as Partial<SpectrumFrame>);
+    };
+    const barFillsBelowMeters = (t: ReturnType<typeof setup>) =>
+      t.ctx.fills.filter((f) => f.y >= spectrumRenderer.METER_AREA_HEIGHT_PX);
+
+    it("asks for the wave and no bands in Wave view, and stops asking when it is switched back to Bars", async () => {
+      const t = setup({ mode: "wave", frames: waveFrames() });
+      t.view.resize(300, 194, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      const waveRequests = t.requests.filter((r) => r !== undefined);
+      expect(waveRequests.length).toBeGreaterThan(2);
+      for (const request of waveRequests) {
+        expect(request).toMatchObject({ wave: true, bands: false });
+      }
+      t.requests.length = 0;
+      t.view.setMode("bars");
+      await t.advance(300);
+      expect(t.requests.length).toBeGreaterThan(2);
+      for (const request of t.requests) {
+        expect(request).not.toHaveProperty("wave");
+        expect(request).not.toHaveProperty("bands");
+      }
+      t.view.dispose();
+    });
+
+    it("keeps asking for bands in Bars view, as before", async () => {
+      const t = setup({ frames: waveFrames() });
+      t.view.resize(300, 194, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(200);
+      expect(t.requests.length).toBeGreaterThan(1);
+      for (const request of t.requests) expect(request ?? {}).not.toHaveProperty("wave");
+      t.view.dispose();
+    });
+
+    it("draws the received wave as a line across the plot and no bars below the meters", async () => {
+      const t = setup({ mode: "wave", frames: waveFrames() });
+      t.view.resize(300, 194, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      expect(t.ctx.lineTo.mock.calls.length).toBeGreaterThanOrEqual(255);
+      expect(barFillsBelowMeters(t)).toEqual([]);
+      t.view.dispose();
+    });
+
+    it("draws bars and no wave line in Bars view", async () => {
+      const t = setup({ frames: waveFrames() });
+      t.view.resize(300, 194, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(300);
+      expect(t.ctx.lineTo).not.toHaveBeenCalled();
+      expect(barFillsBelowMeters(t).length).toBeGreaterThan(0);
+      t.view.dispose();
+    });
+
+    it("redraws the fixed layer without the frequency labels when the view changes, and with them when it changes back", () => {
+      const t = setup();
+      t.view.resize(300, 194, 1);
+      const labels = () => t.layerCtx.fillText.mock.calls.map((call) => call[0]);
+      expect(labels()).toContain("Hz");
+      t.layerCtx.fillText.mockClear();
+      t.view.setMode("wave");
+      expect(t.layerCtx.fillText).toHaveBeenCalled();
+      expect(labels()).not.toContain("Hz");
+      expect(t.layerCtx.stroke).toHaveBeenCalled();
+      t.layerCtx.fillText.mockClear();
+      t.view.setMode("bars");
+      expect(labels()).toContain("Hz");
+    });
+
+    it("does nothing when asked for the view it is already showing", () => {
+      const t = setup({ mode: "wave" });
+      t.view.resize(300, 194, 1);
+      t.layerCtx.fillText.mockClear();
+      t.view.setMode("wave");
+      expect(t.layerCtx.fillText).not.toHaveBeenCalled();
+    });
+
+    it("flattens the line when the source falls silent", async () => {
+      let sounding = true;
+      let sequence = 0;
+      const t = setup({
+        mode: "wave",
+        frames: () =>
+          frame({
+            sequence: sounding ? ++sequence : sequence,
+            wave: encodedWave(100),
+            waveTriggered: true,
+          } as Partial<SpectrumFrame>),
+      });
+      t.view.resize(300, 194, 1);
+      t.view.setState({ visible: true, paused: false });
+      await t.advance(200);
+      sounding = false;
+      await t.advance(1500);
+      const ys = t.ctx.strokedPaths.filter((path) => path.length === 256).at(-1)!;
+      expect(ys).toBeDefined();
+      expect(new Set(ys).size).toBe(1);
+      t.view.dispose();
     });
   });
 });

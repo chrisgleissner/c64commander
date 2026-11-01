@@ -14,6 +14,28 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: () => ({ state: connection.state }),
 }));
 
+const inputRelease = vi.hoisted(() => ({
+  active: false,
+  release: vi.fn(async () => undefined),
+}));
+vi.mock("@/lib/remoteInput/activeInputRelease", () => ({
+  hasActiveInputRelease: () => inputRelease.active,
+  releaseActiveRemoteInput: inputRelease.release,
+}));
+
+const liveView = vi.hoisted(() => ({
+  needsStop: false,
+  stop: vi.fn(async () => undefined),
+}));
+vi.mock("@/lib/connection/deviceRetarget", () => ({
+  readAvMirrorRetargetState: () => ({}),
+  avMirrorNeedsStop: () => liveView.needsStop,
+  stopAvMirrorForDeviceRetarget: liveView.stop,
+}));
+
+const logging = vi.hoisted(() => ({ addLog: vi.fn() }));
+vi.mock("@/lib/logging", () => logging);
+
 import {
   DEVICE_RELEASE_TIMEOUT_MS,
   isReleasingDevice,
@@ -26,6 +48,9 @@ import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackContr
 describe("releasing the device for SID Player", () => {
   beforeEach(() => {
     connection.state = "REAL_CONNECTED";
+    inputRelease.active = false;
+    liveView.needsStop = false;
+    vi.clearAllMocks();
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
@@ -69,6 +94,43 @@ describe("releasing the device for SID Player", () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     remove();
+  });
+
+  it("SPM-MODE-02 held Remote Input is released when entering SID Player", async () => {
+    inputRelease.active = true;
+    const releasing = releaseDeviceForSidPlayer();
+    await vi.advanceTimersByTimeAsync(10);
+    await releasing;
+
+    expect(inputRelease.release).toHaveBeenCalledTimes(1);
+    expect(liveView.stop).not.toHaveBeenCalled();
+  });
+
+  it("SPM-MODE-02 a running Live View is stopped when entering SID Player", async () => {
+    liveView.needsStop = true;
+    const releasing = releaseDeviceForSidPlayer();
+    await vi.advanceTimersByTimeAsync(10);
+    await releasing;
+
+    expect(liveView.stop).toHaveBeenCalledWith(null);
+    expect(inputRelease.release).not.toHaveBeenCalled();
+  });
+
+  it("SPM-MODE-02 a step that fails is logged by name and does not stop the other steps", async () => {
+    inputRelease.active = true;
+    liveView.needsStop = true;
+    inputRelease.release.mockRejectedValueOnce(new Error("pad stuck"));
+    const releasing = releaseDeviceForSidPlayer();
+    await vi.advanceTimersByTimeAsync(10);
+    await releasing;
+
+    expect(liveView.stop).toHaveBeenCalledTimes(1);
+    expect(logging.addLog).toHaveBeenCalledWith(
+      "warn",
+      "Entering SID Player: could not release the device (remote input)",
+      expect.objectContaining({ error: "pad stuck" }),
+    );
+    expect(logging.addLog).toHaveBeenCalledTimes(1);
   });
 
   it("SPM-MODE-02 music playing on the phone is left alone", async () => {

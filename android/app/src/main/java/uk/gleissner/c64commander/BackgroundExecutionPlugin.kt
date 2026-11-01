@@ -76,6 +76,23 @@ open class BackgroundExecutionPlugin : Plugin() {
                 }
             }
 
+    private val seekRequestReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != BackgroundExecutionService.ACTION_SEEK_REQUEST) return
+                    if (!intent.hasExtra(BackgroundExecutionService.EXTRA_SEEK_POSITION_MS)) return
+                    val payload = JSObject()
+                    payload.put(
+                            "positionMs",
+                            intent.getLongExtra(BackgroundExecutionService.EXTRA_SEEK_POSITION_MS, 0L),
+                    )
+                    // Not retained, unlike the transport commands: a seek names an absolute position
+                    // in one tune, so replaying it to a listener that arrives later would jump the
+                    // wrong tune.
+                    notifyListeners("backgroundSeekRequest", payload)
+                }
+            }
+
     override fun load() {
         super.load()
         if (areServiceReceiversRegistered) return
@@ -87,6 +104,10 @@ open class BackgroundExecutionPlugin : Plugin() {
             registerPluginReceiver(
                     transportCommandReceiver,
                     IntentFilter(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND),
+            )
+            registerPluginReceiver(
+                    seekRequestReceiver,
+                    IntentFilter(BackgroundExecutionService.ACTION_SEEK_REQUEST),
             )
             areServiceReceiversRegistered = true
         } catch (e: Exception) {
@@ -127,6 +148,7 @@ open class BackgroundExecutionPlugin : Plugin() {
         // Separately, so a failure on the first does not leak the second.
         unregisterQuietly(autoSkipReceiver)
         unregisterQuietly(transportCommandReceiver)
+        unregisterQuietly(seekRequestReceiver)
         areServiceReceiversRegistered = false
         super.handleOnDestroy()
     }
@@ -217,8 +239,9 @@ open class BackgroundExecutionPlugin : Plugin() {
      * tune's length in milliseconds fits in an Integer until it is about 24 days long. Reading the
      * raw number and widening it here is what keeps the duration from being silently dropped.
      */
-    internal fun readDurationMs(call: PluginCall): Long? =
-            (call.data.opt("durationMs") as? Number)?.toLong()
+    internal fun readDurationMs(call: PluginCall): Long? = readMillis(call, "durationMs")
+
+    private fun readMillis(call: PluginCall, name: String): Long? = (call.data.opt(name) as? Number)?.toLong()
 
     @PluginMethod
     fun setNowPlaying(call: PluginCall) {
@@ -228,6 +251,7 @@ open class BackgroundExecutionPlugin : Plugin() {
                     call.getString("title"),
                     call.getString("artist"),
                     readDurationMs(call),
+                    call.getString("album"),
             )
             call.resolve()
         } catch (e: Exception) {
@@ -240,6 +264,34 @@ open class BackgroundExecutionPlugin : Plugin() {
                     traceFields(call)
             )
             call.reject("Failed to update background now-playing metadata", e)
+        }
+    }
+
+    @PluginMethod
+    fun setPlaybackPosition(call: PluginCall) {
+        val positionMs = readMillis(call, "positionMs")
+        if (positionMs == null) {
+            call.reject("Missing positionMs")
+            return
+        }
+        try {
+            BackgroundExecutionService.setPlaybackPosition(
+                    context,
+                    positionMs,
+                    call.getBoolean("playing") ?: false,
+                    call.getBoolean("seekable") ?: false,
+            )
+            call.resolve()
+        } catch (e: Exception) {
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background playback position",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
+            call.reject("Failed to update background playback position", e)
         }
     }
 

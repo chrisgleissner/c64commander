@@ -348,7 +348,9 @@ test.describe("Playlist filter and item actions on the smallest screen", () => {
     const actions = ["Play", "Review playback config", "Attach local .cfg", "Attach C64U .cfg"];
     const targets = [
       ...details.map((label) => sheet.locator(`dd[data-detail-label="${label}"]`).first()),
-      ...actions.map((name) => sheet.getByRole("button", { name: name === "Play" ? /^Play / : name })),
+      ...actions.map((name) =>
+        name === "Play" ? sheet.getByTestId("action-list-item-sheet-primary") : sheet.getByRole("button", { name }),
+      ),
     ];
     const unreadable: string[] = [];
     for (const target of targets) {

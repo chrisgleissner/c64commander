@@ -87,6 +87,10 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     return undefined;
   }
 
+  async setPlaybackPosition(): Promise<void> {
+    return undefined;
+  }
+
   async heartbeat(): Promise<void> {
     return undefined;
   }

@@ -43,6 +43,7 @@ import {
   canAdvancePrevious,
   DURATION_MIN_SECONDS,
   DURATION_MAX_SECONDS,
+  resolveConfigOverridesAfterChange,
 } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeAudioMixerOptions } from "@/lib/config/audioMixer";
@@ -803,5 +804,28 @@ describe("playFilesUtils", () => {
         expect(canAdvanceNext(playlist, lastIndex, false, true, seed)).toBe(false);
       });
     });
+  });
+});
+
+describe("resolveConfigOverridesAfterChange", () => {
+  const edits = [{ category: "Audio Mixer", item: "Vol Socket 1", value: "0 dB" }];
+  const ref = { kind: "ultimate", fileName: "Other.cfg", path: "/USB0/Other.cfg" } as PlaylistItem["configRef"];
+
+  it("clears the edits when the caller asks for them to be cleared, even though the item has some", () => {
+    expect(resolveConfigOverridesAfterChange(null, ref, edits)).toBeNull();
+  });
+
+  it("uses the edits the caller supplies", () => {
+    const requested = [{ category: "Audio Mixer", item: "Vol Socket 2", value: "-6 dB" }];
+    expect(resolveConfigOverridesAfterChange(requested, ref, edits)).toBe(requested);
+  });
+
+  it("keeps the item's edits when the caller says nothing and a config is still attached", () => {
+    expect(resolveConfigOverridesAfterChange(undefined, ref, edits)).toBe(edits);
+    expect(resolveConfigOverridesAfterChange(undefined, ref, null)).toBeNull();
+  });
+
+  it("drops the edits when the caller says nothing and the config is removed", () => {
+    expect(resolveConfigOverridesAfterChange(undefined, null, edits)).toBeNull();
   });
 });

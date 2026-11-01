@@ -482,4 +482,88 @@ class SpectrumAnalyzerTest {
     val later = speaker.read(true, now + 50_000_000L + 8 * 16_700_000L).sequence
     assertTrue("sequence did not advance: $first then $later", later > first)
   }
+  @Test
+  fun readingWithoutBandsSkipsTheSpectrumAnalysisAndStillReturnsTheMeters() {
+    feedSine(1000.0, 0.5)
+    val frame = analyzer.read(true, bands = false)
+    assertTrue(frame.sequence > 0)
+    assertTrue("bands were analysed", frame.bands.all { it == SpectrumBands.FLOOR_DB })
+    assertEquals(-6.0, frame.peakDb.toDouble(), 1.0)
+    assertEquals(-9.0, frame.rmsDb.toDouble(), 1.0)
+    assertEquals(-9.0, frame.channels[0].rmsDb.toDouble(), 1.0)
+    assertEquals(-6.0, frame.channels[1].peakDb.toDouble(), 1.0)
+  }
+
+  @Test
+  fun readingBandsAfterAReadWithoutThemAtTheSameSequenceAnalysesThemInsteadOfReusingTheEmptyFrame() {
+    feedSine(1000.0, 0.5)
+    val skipped = analyzer.read(true, bands = false)
+    val full = analyzer.read(true)
+    assertEquals(skipped.sequence, full.sequence)
+    assertEquals(bandOf(1000.0), loudestBand(full))
+    assertTrue("1 kHz reads ${full.bands[bandOf(1000.0)]} dB", full.bands[bandOf(1000.0)] >= -12)
+  }
+
+  @Test
+  fun readingWithoutBandsAfterAFullReadAtTheSameSequenceReusesTheAnalysis() {
+    feedSine(1000.0, 0.5)
+    val full = analyzer.read(true)
+    val meters = analyzer.read(true, bands = false)
+    assertEquals(full.sequence, meters.sequence)
+    assertEquals(full.bands.toList(), meters.bands.toList())
+  }
+
+  @Test
+  fun aFrameCarriesNoWaveUnlessOneWasAskedFor() {
+    feedSine(440.0, 0.5)
+    val frame = analyzer.read(true)
+    assertEquals(null, frame.wave)
+    assertFalse(frame.waveTriggered)
+  }
+
+  @Test
+  fun aDisabledAnalyzerCarriesNoWaveEvenWhenOneWasAskedFor() {
+    feedSine(440.0, 0.5)
+    assertEquals(null, analyzer.read(false, wave = true).wave)
+  }
+
+  @Test
+  fun aLiveStreamWaveIsA256PointTriggeredWindowOfTheNewestSound() {
+    val live = SpectrumAnalyzer { now }.also { it.prepareFor(live = true, sourceRate = rate, outputRate = rate) }
+    feedTone(live, 440.0, rate / 2, 0, amplitude = 0.5)
+    val frame = live.read(true, wave = true, bands = false)
+    val wave = frame.wave!!
+    assertEquals(WaveWindow.POINTS, wave.size)
+    assertTrue(frame.waveTriggered)
+    val peak = wave.maxOf { it.toInt() }
+    assertTrue("the wave peaks at $peak of 127", peak in 55..64)
+    assertTrue("the wave troughs at ${wave.minOf { it.toInt() }}", wave.minOf { it.toInt() } in -64..-55)
+  }
+
+  @Test
+  fun theWaveFollowsTheSpeakerPositionAndNeverShowsSoundThatHasNotBeenPlayedYet() {
+    val speaker = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(speaker, 440.0, rate, 0, amplitude = 0.5)
+    feedTone(speaker, 440.0, rate, rate.toLong(), amplitude = 0.0)
+    speaker.presentAt(framesAheadOfSpeaker = rate.toLong(), timestampNanos = now)
+    val heard = speaker.read(true, wave = true)
+    assertTrue("a window of what the speaker plays is triggered", heard.waveTriggered)
+    assertTrue("the wave is silent: ${heard.wave!!.toList()}", heard.wave!!.any { it.toInt() > 40 })
+
+    val newest = SpectrumAnalyzer { now }.also { it.prepareFor(live = false, sourceRate = rate, outputRate = rate) }
+    feedTone(newest, 440.0, rate, 0, amplitude = 0.5)
+    feedTone(newest, 440.0, rate, rate.toLong(), amplitude = 0.0)
+    val unaligned = newest.read(true, wave = true)
+    assertFalse(unaligned.waveTriggered)
+    assertTrue(unaligned.wave!!.all { it.toInt() == 0 })
+  }
+
+  @Test
+  fun aWaveReadBeforeAWindowOfSoundExistsIsPaddedWithSilenceInsteadOfReadingMissingSamples() {
+    feedSine(440.0, 0.5, seconds = 0.01)
+    val wave = analyzer.read(true, wave = true).wave!!
+    assertEquals(WaveWindow.POINTS, wave.size)
+    assertTrue("the start of the window holds silence", wave.take(100).all { it.toInt() == 0 })
+    assertTrue("the end of the window holds the sound", wave.takeLast(100).any { it.toInt() != 0 })
+  }
 }

@@ -999,4 +999,22 @@ describe("PlaybackControlsCard STIL and composer", () => {
     expect(screen.queryByTestId("playback-current-stil")).toBeNull();
     expect(screen.queryByTestId("tune-notes")).toBeNull();
   });
+
+  it("offers Share on the About this tune row only when the page supplies a shareable tune", () => {
+    const share = {
+      title: "Commando",
+      text: "Commando by Rob Hubbard (1985)",
+      url: "https://deepsid.chordian.net/?file=/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+    };
+    const props = buildProps({ hasCurrentItem: true, currentItemLabel: "Commando" });
+    const { rerender } = render(<PlaybackControlsCard {...props} />);
+    expect(screen.queryByTestId("tune-share")).toBeNull();
+
+    rerender(<PlaybackControlsCard {...props} tuneShare={share} />);
+    expect(screen.getByTestId("tune-share")).toHaveAccessibleName("Share Commando");
+    expect(screen.getByTestId("tune-share").parentElement).toBe(
+      screen.getByTestId("tune-details-toggle").parentElement,
+    );
+  });
 });

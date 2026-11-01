@@ -14,6 +14,7 @@ import {
   resolveEffectiveDisplayProfile,
 } from "@/lib/displayProfiles";
 import { variant } from "@/generated/variant";
+import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import {
   DEFAULT_TEXT_SCALE_ID,
@@ -25,6 +26,9 @@ import {
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 const TEXT_SCALE_KEY = "c64u_text_scale";
+const SPECTRUM_VIEW_KEY = "c64u_spectrum_view";
+
+export type SpectrumViewMode = "bars" | "wave";
 
 export const DEFAULT_LIST_PREVIEW_LIMIT = 50;
 export const MIN_LIST_PREVIEW_LIMIT = 1;
@@ -112,4 +116,33 @@ export const setTextScaleId = (value: TextScaleId) => {
 /** Applies the stored setting. Called once during start-up. */
 export const applyStoredTextScale = () => {
   applyTextScaleToDocument(getTextScaleId());
+};
+
+const errorDetail = (error: unknown) => (error instanceof Error ? (error.stack ?? error.message) : String(error));
+
+/** The view the Spectrum card shows: the frequency bars, or the waveform of the sound. */
+export const getSpectrumViewMode = (): SpectrumViewMode => {
+  if (typeof localStorage === "undefined") return "bars";
+  try {
+    return localStorage.getItem(SPECTRUM_VIEW_KEY) === "wave" ? "wave" : "bars";
+  } catch (error) {
+    addLog("warn", "Could not read the remembered spectrum view; showing the bars", {
+      key: SPECTRUM_VIEW_KEY,
+      error: errorDetail(error),
+    });
+    return "bars";
+  }
+};
+
+export const setSpectrumViewMode = (mode: SpectrumViewMode) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(SPECTRUM_VIEW_KEY, mode);
+  } catch (error) {
+    addLog("warn", "Could not remember the spectrum view", {
+      key: SPECTRUM_VIEW_KEY,
+      mode,
+      error: errorDetail(error),
+    });
+  }
 };

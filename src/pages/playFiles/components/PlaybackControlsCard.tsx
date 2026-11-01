@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useStableCallback } from "@/hooks/useStableCallback";
 import type { PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
+import type { TuneSharePayload } from "@/lib/playback/tuneShare";
 import {
   buildStilTuneLine,
   NOW_PLAYING_METADATA_SEPARATOR,
@@ -34,6 +35,8 @@ export type PlaybackControlsCardProps = {
   currentItemMetadataParts?: NowPlayingMetadataSegment[];
   /** Item and subsong of the current tune; the "About this tune" block shuts when it changes. */
   tuneKey?: string | null;
+  /** Text and link for sharing this tune; null or omitted when it has no public link, which hides Share. */
+  tuneShare?: TuneSharePayload | null;
   /** What STIL says about this tune; under a third of the archive has an entry, so usually all null. */
   stil?: {
     title: string | null;
@@ -125,6 +128,7 @@ export const PlaybackControlsCard = ({
   currentItemLabel,
   currentItemMetadataParts = [],
   tuneKey = null,
+  tuneShare = null,
   stil,
   onComposerSelected,
   onTunesSelected,
@@ -376,6 +380,7 @@ export const PlaybackControlsCard = ({
             facts={joinedText(factsParts)}
             tuneLine={stilTuneLine}
             note={stil?.note ?? null}
+            share={tuneShare}
           />
         </div>
       </div>

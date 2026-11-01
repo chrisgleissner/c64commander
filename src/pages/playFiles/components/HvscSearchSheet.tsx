@@ -60,6 +60,13 @@ export type HvscSearchSheetProps = {
    */
   onPlay: (hit: HvscSearchHit) => void;
   /**
+   * Play every listed result in ranked order, starting with the first.
+   *
+   * Handled like {@link onPlay} while a station is running: the tunes play next and the station
+   * carries on afterward.
+   */
+  onPlayAll: (hits: readonly HvscSearchHit[]) => void;
+  /**
    * Start a new station seeded by this tune, or undefined when that is not possible.
    *
    * A tune the similarity corpus has never heard of can be played but cannot seed anything, so the
@@ -174,6 +181,7 @@ export const HvscSearchSheet = ({
   open,
   onOpenChange,
   onPlay,
+  onPlayAll,
   onStartStation,
   canSeedStation,
   onPlayRecent,
@@ -220,6 +228,10 @@ export const HvscSearchSheet = ({
     },
     [onOpenChange, onPlay],
   );
+  const playAll = useCallback(() => {
+    onPlayAll(search.hits);
+    onOpenChange(false);
+  }, [onOpenChange, onPlayAll, search.hits]);
   const seed = useCallback(
     (hit: HvscSearchHit) => {
       onStartStation?.(hit);
@@ -325,11 +337,36 @@ export const HvscSearchSheet = ({
                   onto a second line, which on a phone with the keyboard up costs a whole result row —
                   and the results are ranked, so the best answers are already at the top whether or
                   not the list was capped. */}
-              <p className="pb-2 text-xs text-muted-foreground" data-testid="hvsc-search-count">
-                {search.totalCount > search.hits.length
-                  ? `${search.hits.length} of ${search.totalCount} matches`
-                  : `${search.totalCount} ${search.totalCount === 1 ? "match" : "matches"}`}
-              </p>
+              {search.hits.length >= 2 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mb-2 w-full justify-start"
+                  data-testid="hvsc-search-play-all"
+                  onClick={playAll}
+                >
+                  <Play aria-hidden="true" />
+                  {search.totalCount > search.hits.length ? (
+                    <span>
+                      Play these{" "}
+                      <span className="text-muted-foreground">
+                        {search.hits.length} of {search.totalCount}
+                      </span>
+                    </span>
+                  ) : (
+                    <span>
+                      Play all <span className="text-muted-foreground">{search.totalCount}</span>
+                    </span>
+                  )}
+                </Button>
+              ) : (
+                <p className="pb-2 text-xs text-muted-foreground" data-testid="hvsc-search-count">
+                  {search.totalCount > search.hits.length
+                    ? `${search.hits.length} of ${search.totalCount} matches`
+                    : `${search.totalCount} ${search.totalCount === 1 ? "match" : "matches"}`}
+                </p>
+              )}
               {/* Enough of a gap to read as separate results, and no more. Each row is three lines
                   of its own — title, composer, folder — so without a clear gap between the cards
                   the lines of one result run into the next. The keyboard leaves this list very

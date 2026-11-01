@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { buildFoundTuneItem, insertAfterCurrent, insertAllAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 
 /**
  * Playing one named tune without losing the station.
@@ -50,6 +50,52 @@ describe("insertAfterCurrent", () => {
     const original = [...queue];
     insertAfterCurrent(queue, 1, "x");
     expect(queue).toEqual(original);
+  });
+});
+
+describe("insertAllAfterCurrent", () => {
+  const queue = ["a", "b", "c"];
+  const block = ["x", "y", "z"];
+
+  it("puts the whole block directly after the tune playing, in the order given", () => {
+    const result = insertAllAfterCurrent(queue, 1, block);
+
+    expect(result.items).toEqual(["a", "b", "x", "y", "z", "c"]);
+    expect(result.index).toBe(2);
+  });
+
+  it("keeps everything that was queued after the current tune, behind the block", () => {
+    const result = insertAllAfterCurrent(queue, 0, block);
+
+    expect(result.items).toEqual(["a", "x", "y", "z", "b", "c"]);
+    expect(result.index).toBe(1);
+  });
+
+  it("appends the block when the current tune is the last one", () => {
+    expect(insertAllAfterCurrent(queue, 2, block)).toEqual({ items: ["a", "b", "c", "x", "y", "z"], index: 3 });
+  });
+
+  it("appends the block when nothing is playing, as a single tune does", () => {
+    expect(insertAllAfterCurrent(queue, -1, block)).toEqual({ items: ["a", "b", "c", "x", "y", "z"], index: 3 });
+    expect(insertAllAfterCurrent(queue, 9, block).index).toBe(3);
+  });
+
+  it("starts an empty queue with the block", () => {
+    expect(insertAllAfterCurrent([], -1, block)).toEqual({ items: ["x", "y", "z"], index: 0 });
+  });
+
+  it("reports the same start index a single tune would get in the same position", () => {
+    for (const currentIndex of [-1, 0, 1, 2, 9]) {
+      expect(insertAllAfterCurrent(queue, currentIndex, ["x"])).toEqual(insertAfterCurrent(queue, currentIndex, "x"));
+    }
+  });
+
+  it("does not mutate the queue or the block it was given", () => {
+    const originalQueue = [...queue];
+    const originalBlock = [...block];
+    insertAllAfterCurrent(queue, 1, block);
+    expect(queue).toEqual(originalQueue);
+    expect(block).toEqual(originalBlock);
   });
 });
 

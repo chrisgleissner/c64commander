@@ -89,6 +89,7 @@ export const drawStaticLayer = (
   palette: SpectrumPalette,
   ratio: number,
   meterLabels: readonly string[] = ["L", "R"],
+  withSpectrumGrid = true,
 ): void => {
   const { width, height } = layout;
   ctx.clearRect(0, 0, width, height);
@@ -116,6 +117,7 @@ export const drawStaticLayer = (
     ctx.fillRect(x, 52, 1 / ratio, 4);
     ctx.fillStyle = palette.label;
   }
+  if (!withSpectrumGrid) return;
 
   ctx.lineWidth = 1;
   for (const db of GRID_LEVELS_DB) {

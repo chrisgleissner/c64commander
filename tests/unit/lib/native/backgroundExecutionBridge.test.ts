@@ -14,6 +14,7 @@ const { plugin } = vi.hoisted(() => ({
     stop: vi.fn(async () => undefined),
     setPlaybackState: vi.fn(async () => undefined),
     setNowPlaying: vi.fn(async () => undefined),
+    setPlaybackPosition: vi.fn(async () => undefined),
     setDueAtMs: vi.fn(async () => undefined),
     heartbeat: vi.fn(async () => undefined),
     takeLaunchCommand: vi.fn(async () => ({ command: null })),
@@ -28,7 +29,7 @@ vi.mock("@capacitor/core", async (importOriginal) => ({
   registerPlugin: () => plugin,
 }));
 
-import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { BackgroundExecution, onBackgroundSeekRequest } from "@/lib/native/backgroundExecution";
 
 /**
  * The two calls HARD27-007 and HARD27-040 added to the bridge. Each one forwards its options to
@@ -48,7 +49,7 @@ describe("background execution bridge", () => {
   });
 
   it("forwards a now-playing publish with a trace context", async () => {
-    const info = { title: "Commando", artist: "Rob Hubbard", durationMs: 214000 };
+    const info = { title: "Commando", artist: "Rob Hubbard", durationMs: 214000, album: "Tune 3 of 19" };
 
     await BackgroundExecution.setNowPlaying(info);
 
@@ -60,10 +61,20 @@ describe("background execution bridge", () => {
   // Every field is nullable: a SID header names no author more often than not, and a length is
   // only known once the songlength database has been consulted.
   it("forwards a now-playing publish that names nothing", async () => {
-    await BackgroundExecution.setNowPlaying({ title: null, artist: null, durationMs: null });
+    await BackgroundExecution.setNowPlaying({ title: null, artist: null, durationMs: null, album: null });
 
     expect(plugin.setNowPlaying).toHaveBeenCalledWith(
-      expect.objectContaining({ title: null, artist: null, durationMs: null }),
+      expect.objectContaining({ title: null, artist: null, durationMs: null, album: null }),
+    );
+  });
+
+  it("QW-LS-02: forwards a playback-position publish with a trace context", async () => {
+    const position = { positionMs: 61_000, playing: true, seekable: true };
+
+    await BackgroundExecution.setPlaybackPosition(position);
+
+    expect(plugin.setPlaybackPosition).toHaveBeenCalledWith(
+      expect.objectContaining({ ...position, traceContext: expect.anything() }),
     );
   });
 
@@ -79,5 +90,19 @@ describe("background execution bridge", () => {
 
     expect(plugin.heartbeat).toHaveBeenCalledTimes(1);
     expect(plugin.takeLaunchCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the position of a lock-screen seek request to the listener, and nothing else of the event", async () => {
+    const listener = vi.fn();
+    await onBackgroundSeekRequest(listener);
+
+    expect(plugin.addListener).toHaveBeenCalledWith("backgroundSeekRequest", expect.any(Function));
+    const registered = (plugin.addListener.mock.calls as unknown as [string, (event: unknown) => void][]).find(
+      ([name]) => name === "backgroundSeekRequest",
+    )![1];
+    registered({ positionMs: 93_000, extra: "ignored" });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(93_000);
   });
 });

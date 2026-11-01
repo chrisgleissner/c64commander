@@ -17,6 +17,7 @@ const view = vi.hoisted(() => ({
   setState: vi.fn(),
   resize: vi.fn(),
   refreshTheme: vi.fn(),
+  setMode: vi.fn(),
   setDocumentShowing: vi.fn(),
   dispose: vi.fn(),
 }));

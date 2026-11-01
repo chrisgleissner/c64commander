@@ -8,6 +8,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { savePlaybackEngine, type PlaybackEngine } from "@/lib/config/appSettings";
 import {
   isRemotePlaybackActive,
@@ -133,6 +134,30 @@ describe("usePlaybackEngineSwitch", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("leaving SID Player keeps the tune sounding on the phone, because the C64 is not connected yet", async () => {
+    saveStartupModeByUser("sid-player");
+    const h = harness("local");
+    localStorage.setItem("c64u_playback_engine", "c64");
+
+    saveStartupModeByUser("default");
+    await h.settle();
+
+    expect(h.soundsHere()).toBe(true);
+    expect(h.stopOnC64).not.toHaveBeenCalled();
+    expect(h.playItem).not.toHaveBeenCalled();
+  });
+
+  it("a stored C64 choice still moves a sounding tune when it is the engine setting that changed", async () => {
+    saveStartupModeByUser("default");
+    const h = harness("local");
+
+    h.choose("c64");
+    await h.settle();
+
+    expect(h.playItem).toHaveBeenCalledTimes(1);
+    expect(h.soundsHere()).toBe(false);
   });
 
   it("plays only here after Here, C64 and Here again in quick succession", async () => {

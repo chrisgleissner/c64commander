@@ -33,6 +33,7 @@ import type { ActionListItem, ActionListMenuItem } from "./SelectableActionList"
 type MenuAction = Extract<ActionListMenuItem, { type: "action" }>;
 
 export type ItemMenuBlock =
+  | { kind: "note"; text: string }
   | { kind: "details"; label: string | null; rows: { label: string; value: string }[] }
   | { kind: "actions"; entries: MenuAction[] };
 
@@ -42,6 +43,9 @@ export const groupItemMenuEntries = (entries: readonly ActionListMenuItem[]): It
   let current: ItemMenuBlock | null = null;
   for (const entry of entries) {
     if (entry.type === "separator") {
+      current = null;
+    } else if (entry.type === "note") {
+      blocks.push({ kind: "note", text: entry.text });
       current = null;
     } else if (entry.type === "label") {
       current = { kind: "details", label: entry.label, rows: [] };
@@ -60,7 +64,10 @@ export const groupItemMenuEntries = (entries: readonly ActionListMenuItem[]): It
       current.entries.push(entry);
     }
   }
-  return blocks.filter((block) => (block.kind === "details" ? block.rows.length > 0 : block.entries.length > 0));
+  return blocks.filter((block) => {
+    if (block.kind === "note") return true;
+    return block.kind === "details" ? block.rows.length > 0 : block.entries.length > 0;
+  });
 };
 
 const withoutStraySeparators = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] =>
@@ -71,13 +78,17 @@ const withoutStraySeparators = (entries: readonly ActionListMenuItem[]): ActionL
     return previous !== undefined && previous.type !== "separator" && next !== undefined;
   });
 
-/** Actions come first: on a short screen the details are read by scrolling, the actions are what the reader came for. */
+/**
+ * Actions come first: on a short screen the details are read by scrolling, the actions are what the reader came for.
+ * A note says why an action is unavailable, so it stands above them.
+ */
 export const orderActionsFirst = (entries: readonly ActionListMenuItem[]): ActionListMenuItem[] => {
-  const actions = entries.filter((entry) => entry.type === "action");
-  const details = withoutStraySeparators(entries.filter((entry) => entry.type !== "action"));
-  return actions.length > 0 && details.length > 0
-    ? [...actions, { type: "separator" }, ...details]
-    : [...actions, ...details];
+  const head = [
+    ...entries.filter((entry) => entry.type === "note"),
+    ...entries.filter((entry) => entry.type === "action"),
+  ];
+  const details = withoutStraySeparators(entries.filter((entry) => entry.type !== "action" && entry.type !== "note"));
+  return head.length > 0 && details.length > 0 ? [...head, { type: "separator" }, ...details] : [...head, ...details];
 };
 
 const keepMenuOpen = (event: Event) => event.preventDefault();
@@ -106,11 +117,14 @@ const ItemDetailsSheet = ({
 }) => {
   const grouped = groupItemMenuEntries(item.menuItems ?? []);
   const blocks = [
+    ...grouped.filter((block) => block.kind === "note"),
     ...grouped.filter((block) => block.kind === "actions"),
     ...grouped.filter((block) => block.kind === "details"),
   ];
   const unavailable = Boolean(item.isDimmed || item.disableActions);
   const opensOnPrimary = Boolean(item.onAction) && !unavailable;
+  const firstDetailsBlock = blocks.findIndex((block) => block.kind === "details");
+  const firstActionsBlock = blocks.findIndex((block) => block.kind === "actions");
   const run = (action: () => void) => {
     action();
     onOpenChange(false);
@@ -145,7 +159,15 @@ const ItemDetailsSheet = ({
               </Button>
             ) : null}
             {blocks.map((block, index) =>
-              block.kind === "details" ? (
+              block.kind === "note" ? (
+                <p
+                  key={`note-${index}`}
+                  className="text-base text-muted-foreground [overflow-wrap:anywhere]"
+                  data-testid="action-list-item-sheet-note"
+                >
+                  {block.text}
+                </p>
+              ) : block.kind === "details" ? (
                 <section
                   key={`details-${index}`}
                   aria-label={block.label ?? "Details"}
@@ -160,10 +182,7 @@ const ItemDetailsSheet = ({
                       <div
                         key={`${row.label}-${rowIndex}`}
                         tabIndex={0}
-                        {...(index === 0 &&
-                        rowIndex === 0 &&
-                        !opensOnPrimary &&
-                        !blocks.some((entry) => entry.kind === "actions")
+                        {...(index === firstDetailsBlock && rowIndex === 0 && !opensOnPrimary && firstActionsBlock < 0
                           ? { [OPEN_FOCUS_ATTR]: "true" }
                           : {})}
                         className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] content-center gap-x-3 rounded-sm py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -182,7 +201,9 @@ const ItemDetailsSheet = ({
                   {block.entries.map((entry, entryIndex) => (
                     <Button
                       key={entry.label}
-                      {...(index === 0 && entryIndex === 0 && !opensOnPrimary ? { [OPEN_FOCUS_ATTR]: "true" } : {})}
+                      {...(index === firstActionsBlock && entryIndex === 0 && !opensOnPrimary
+                        ? { [OPEN_FOCUS_ATTR]: "true" }
+                        : {})}
                       variant="outline"
                       className={cn(
                         "w-full justify-start whitespace-normal text-left",
@@ -271,6 +292,17 @@ export const ActionListItemMenu = ({ item, testId, presentation }: ActionListIte
               if (entry.type === "separator") return <DropdownMenuSeparator key={`sep-${index}`} />;
               if (entry.type === "label") {
                 return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
+              }
+              if (entry.type === "note") {
+                return (
+                  <p
+                    key={`note-${index}`}
+                    className="px-2 py-1.5 text-base text-muted-foreground [overflow-wrap:anywhere]"
+                    data-testid="action-list-item-menu-note"
+                  >
+                    {entry.text}
+                  </p>
+                );
               }
               if (entry.type === "info") {
                 // Not `disabled`: a menu's arrow keys skip disabled items, so on a keypad the

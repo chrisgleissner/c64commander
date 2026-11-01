@@ -22,6 +22,9 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => diagnostics);
 const profile = vi.hoisted(() => ({ value: "medium" }));
 vi.mock("@/hooks/useDisplayProfile", () => ({ useDisplayProfile: () => ({ profile: profile.value }) }));
 
+const logging = vi.hoisted(() => ({ addErrorLog: vi.fn() }));
+vi.mock("@/lib/logging", () => logging);
+
 import { ModeDialogs } from "@/components/appMode/ModeDialogs";
 import { MODE_COPY } from "@/lib/appMode/copy";
 import { requestModeDialog } from "@/lib/appMode/modeDialogRequests";
@@ -106,6 +109,54 @@ describe("ModeDialogs", () => {
     expect(transitions.switchToFullApp).not.toHaveBeenCalled();
     expect(transitions.switchToDemoMode).not.toHaveBeenCalled();
     expect(screen.queryByTestId("mode-dialog-leave")).toBeNull();
+  });
+
+  it("SPM-ERR-02 a failed leave to the Full App is logged with its operation and reason, and the dialog closes", async () => {
+    transitions.switchToFullApp.mockRejectedValueOnce(new Error("probe timed out"));
+    mount();
+    open("leave");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mode-dialog-leave-full-app"));
+    });
+
+    expect(logging.addErrorLog).toHaveBeenCalledWith(
+      "Mode switch failed: full-app",
+      expect.objectContaining({ error: "probe timed out" }),
+    );
+    expect(screen.queryByTestId("mode-dialog-leave")).toBeNull();
+  });
+
+  it("SPM-ERR-02 a failed Enter is logged, the dialog closes and Play is not opened", async () => {
+    transitions.enterSidPlayer.mockRejectedValueOnce(new Error("release failed"));
+    mount("/settings");
+    open("enter");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("mode-dialog-enter-confirm"));
+    });
+
+    expect(logging.addErrorLog).toHaveBeenCalledWith(
+      "Mode switch failed: enter",
+      expect.objectContaining({ error: "release failed" }),
+    );
+    expect(screen.queryByTestId("mode-dialog-enter")).toBeNull();
+    expect(screen.getByTestId("where").textContent).toBe("/settings");
+  });
+
+  it("SPM-SWT-02 Back (Escape) cancels the Enter confirmation and nothing changes", () => {
+    mount();
+    open("enter");
+    fireEvent.keyDown(screen.getByTestId("mode-dialog-enter"), { key: "Escape" });
+
+    expect(transitions.enterSidPlayer).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("mode-dialog-enter")).toBeNull();
+  });
+
+  it("SPM-ERR-02 Back (Escape) closes the mode sheet", () => {
+    mount();
+    open("sheet");
+    fireEvent.keyDown(screen.getByTestId("mode-sheet"), { key: "Escape" });
+
+    expect(screen.queryByTestId("mode-sheet")).toBeNull();
   });
 
   it("SPM-SWT-02 leaving to the Full App and to Demo Mode run their own transitions", async () => {

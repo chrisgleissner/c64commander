@@ -28,20 +28,39 @@ export type PermissionState = "granted" | "denied" | "prompt" | "prompt-with-rat
 
 export type BackgroundExecutionPermissions = { notifications: PermissionState };
 
+/** A drag on the lock-screen seek bar. Not latched: it names an absolute position in one tune. */
+export type BackgroundSeekRequestEvent = {
+  positionMs: number;
+};
+
 export type BackgroundExecutionEvents = {
   backgroundAutoSkipDue: BackgroundAutoSkipDueEvent;
   backgroundTransportCommand: BackgroundTransportCommandEvent;
+  backgroundSeekRequest: BackgroundSeekRequestEvent;
 };
 
 /**
  * What the lock screen and the notification say is playing. Every field is nullable because a tune
  * can carry none of them: a SID header names no author more often than not, and a length is only
- * known once the songlength database has been consulted.
+ * known once the songlength database has been consulted. The album names the tune within a file
+ * that holds several ("Tune 3 of 19").
  */
 export type NowPlayingInfo = {
   title: string | null;
   artist: string | null;
   durationMs: number | null;
+  album: string | null;
+};
+
+/**
+ * Where the lock-screen control puts its position marker. Android advances it by itself while
+ * `playing`, so this is sent on changes of course, not on a timer.
+ */
+export type PlaybackPositionInfo = {
+  positionMs: number;
+  playing: boolean;
+  /** Whether the system may offer a seek bar that acts. */
+  seekable: boolean;
 };
 
 export type BackgroundExecutionPlugin = {
@@ -58,6 +77,7 @@ export type BackgroundExecutionPlugin = {
    * transport buttons are more than a guess at what is on (HARD27-040).
    */
   setNowPlaying: (options: NowPlayingInfo & { traceContext?: NativeTraceContext }) => Promise<void>;
+  setPlaybackPosition: (options: PlaybackPositionInfo & { traceContext?: NativeTraceContext }) => Promise<void>;
   setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
   /**
    * Tells the foreground service the web layer is alive while it plays. A session that goes quiet
@@ -102,6 +122,11 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+  setPlaybackPosition: (options) =>
+    plugin.setPlaybackPosition({
+      ...options,
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
   setDueAtMs: (options) =>
     plugin.setDueAtMs({
       ...options,
@@ -120,4 +145,8 @@ export const onBackgroundAutoSkipDue = async (listener: (event: BackgroundAutoSk
 
 export const onBackgroundTransportCommand = async (listener: (command: TransportCommand) => void) => {
   return await BackgroundExecution.addListener("backgroundTransportCommand", (event) => listener(event.command));
+};
+
+export const onBackgroundSeekRequest = async (listener: (positionMs: number) => void) => {
+  return await BackgroundExecution.addListener("backgroundSeekRequest", (event) => listener(event.positionMs));
 };

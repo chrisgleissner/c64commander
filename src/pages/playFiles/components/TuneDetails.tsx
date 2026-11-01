@@ -7,8 +7,11 @@
  */
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Share2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { shareTune } from "@/lib/playback/shareTune";
+import type { TuneSharePayload } from "@/lib/playback/tuneShare";
 import { cn } from "@/lib/utils";
 import { TuneNotes } from "./TuneNotes";
 
@@ -25,11 +28,22 @@ export type TuneDetailsProps = {
   tuneLine: string | null;
   /** STIL's prose note about this tune, or null when there is none. */
   note: string | null;
+  /** The text and link to share for this tune, or null when it has no public link (nothing is then rendered). */
+  share?: TuneSharePayload | null;
   className?: string;
 };
 
 /** Everything known about the playing tune in full, folded behind one control below the transport. */
-export const TuneDetails = ({ available, tuneKey, credits, facts, tuneLine, note, className }: TuneDetailsProps) => {
+export const TuneDetails = ({
+  available,
+  tuneKey,
+  credits,
+  facts,
+  tuneLine,
+  note,
+  share = null,
+  className,
+}: TuneDetailsProps) => {
   const [expanded, setExpanded] = useState(false);
   const trimmedNote = note?.trim() ? note : null;
 
@@ -42,23 +56,38 @@ export const TuneDetails = ({ available, tuneKey, credits, facts, tuneLine, note
 
   return (
     <div className={cn("mt-1", className)} data-testid="tune-details">
-      <button
-        type="button"
-        // `id` as well as `data-testid`: automation through the accessibility tree reads the resource id from `id`.
-        id="tune-details-toggle"
-        data-testid="tune-details-toggle"
-        className="flex min-h-11 w-fit items-center gap-2 pr-2 text-left text-xs font-medium text-muted-foreground"
-        aria-expanded={expanded}
-        aria-controls={expanded ? "tune-details-body" : undefined}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        {expanded ? (
-          <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
-        ) : (
-          <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
-        )}
-        <span>About this tune</span>
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          // `id` as well as `data-testid`: automation through the accessibility tree reads the resource id from `id`.
+          id="tune-details-toggle"
+          data-testid="tune-details-toggle"
+          className="flex min-h-11 w-fit items-center gap-2 pr-2 text-left text-xs font-medium text-muted-foreground"
+          aria-expanded={expanded}
+          aria-controls={expanded ? "tune-details-body" : undefined}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? (
+            <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+          )}
+          <span>About this tune</span>
+        </button>
+        {share ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="ml-auto h-auto min-h-11 min-w-11 gap-1 px-2 text-xs font-medium text-muted-foreground"
+            data-testid="tune-share"
+            aria-label={`Share ${share.title}`}
+            onClick={() => void shareTune(share)}
+          >
+            <Share2 className="h-4 w-4" aria-hidden />
+            <span>Share</span>
+          </Button>
+        ) : null}
+      </div>
       {expanded ? (
         <div id="tune-details-body" className="space-y-1" data-testid="tune-details-body">
           {credits ? (

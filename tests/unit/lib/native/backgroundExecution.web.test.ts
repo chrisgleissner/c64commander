@@ -35,9 +35,19 @@ describe("BackgroundExecutionWeb", () => {
     const plugin = new BackgroundExecutionWeb();
 
     await expect(
-      plugin.setNowPlaying({ title: "Commando", artist: "Rob Hubbard", durationMs: 214000 }),
+      plugin.setNowPlaying({ title: "Commando", artist: "Rob Hubbard", durationMs: 214000, album: null }),
     ).resolves.toBeUndefined();
-    await expect(plugin.setNowPlaying({ title: null, artist: null, durationMs: null })).resolves.toBeUndefined();
+    await expect(
+      plugin.setNowPlaying({ title: null, artist: null, durationMs: null, album: null }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("QW-LS-02: accepts a playback-position publish and does nothing with it", async () => {
+    const plugin = new BackgroundExecutionWeb();
+
+    await expect(
+      plugin.setPlaybackPosition({ positionMs: 1_000, playing: true, seekable: false }),
+    ).resolves.toBeUndefined();
   });
 
   it("accepts a heartbeat and has no launch command to hand over", async () => {

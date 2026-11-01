@@ -11,7 +11,7 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { addLog } from "@/lib/logging";
 
-const isShareCancelled = (error: unknown) => /^Share cancel+ed$/i.test((error as Error)?.message ?? "");
+export const isShareCancelled = (error: unknown) => /^Share cancel+ed$/i.test((error as Error)?.message ?? "");
 
 /**
  * Hand the exported settings to the user: a download in a browser, the system share sheet on a phone.

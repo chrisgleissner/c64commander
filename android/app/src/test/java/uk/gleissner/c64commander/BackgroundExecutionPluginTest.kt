@@ -31,6 +31,7 @@ import org.robolectric.annotation.Config
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableBackgroundExecutionPlugin : BackgroundExecutionPlugin() {
     val notifyListenersCalls = mutableListOf<Pair<String?, JSObject?>>()
+    val retainedEvents = mutableListOf<String?>()
 
     public override fun notifyListeners(eventName: String?, data: JSObject?) {
         notifyListenersCalls.add(Pair(eventName, data))
@@ -40,6 +41,7 @@ private open class TestableBackgroundExecutionPlugin : BackgroundExecutionPlugin
     // bypasses the 2-arg override above (static overload resolution) unless also captured here.
     public override fun notifyListeners(eventName: String?, data: JSObject?, retainUntilConsumed: Boolean) {
         notifyListenersCalls.add(Pair(eventName, data))
+        if (retainUntilConsumed) retainedEvents.add(eventName)
     }
 }
 
@@ -442,5 +444,110 @@ class BackgroundExecutionPluginTest {
         val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
         method.isAccessible = true
         method.invoke(target)
+    }
+
+    private fun seekReceiver(): BroadcastReceiver {
+        plugin.load()
+        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("seekRequestReceiver")
+        receiverField.isAccessible = true
+        return receiverField.get(plugin) as BroadcastReceiver
+    }
+
+    @Test
+    fun seekRequestReceiverForwardsThePositionWithoutLatchingIt() {
+        val receiver = seekReceiver()
+        plugin.notifyListenersCalls.clear()
+
+        receiver.onReceive(
+                context,
+                Intent(BackgroundExecutionService.ACTION_SEEK_REQUEST).apply {
+                    putExtra(BackgroundExecutionService.EXTRA_SEEK_POSITION_MS, 93_000L)
+                },
+        )
+
+        val calls = plugin.notifyListenersCalls.filter { it.first == "backgroundSeekRequest" }
+        assertEquals(1, calls.size)
+        assertEquals(93_000L, calls[0].second!!.getLong("positionMs"))
+        assertFalse(
+                "A seek names a position in one tune and must not be replayed to a later listener",
+                plugin.retainedEvents.contains("backgroundSeekRequest"),
+        )
+    }
+
+    @Test
+    fun seekRequestReceiverIgnoresAnIntentWithoutAPosition() {
+        val receiver = seekReceiver()
+        plugin.notifyListenersCalls.clear()
+
+        receiver.onReceive(context, Intent(BackgroundExecutionService.ACTION_SEEK_REQUEST))
+        receiver.onReceive(context, Intent("some.other.action"))
+
+        assertTrue(plugin.notifyListenersCalls.none { it.first == "backgroundSeekRequest" })
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadRegistersTheSeekReceiverOnce() {
+        plugin.load()
+        plugin.load()
+
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        val count =
+                shadowApp.registeredReceivers.count { it.intentFilter.hasAction(BackgroundExecutionService.ACTION_SEEK_REQUEST) }
+        assertEquals(1, count)
+    }
+
+    @Test
+    fun aPositionThatFitsInAnIntegerStillReachesTheService() {
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        plugin.start(mock(PluginCall::class.java))
+        shadowApp.nextStartedService
+        val data = JSObject().apply {
+            put("positionMs", 61_000)
+            put("playing", true)
+            put("seekable", true)
+        }
+        val call = spy(PluginCall(null, "BackgroundExecution", "callback-2", "setPlaybackPosition", data))
+        doNothing().`when`(call).resolve()
+
+        plugin.setPlaybackPosition(call)
+
+        verify(call).resolve()
+        val queued = shadowApp.nextStartedService
+        assertEquals(BackgroundExecutionService.ACTION_SET_PLAYBACK_POSITION, queued?.action)
+        assertEquals(61_000L, queued?.getLongExtra(BackgroundExecutionService.EXTRA_POSITION_MS, -1L))
+        assertTrue(queued?.getBooleanExtra(BackgroundExecutionService.EXTRA_POSITION_PLAYING, false) == true)
+        assertTrue(queued?.getBooleanExtra(BackgroundExecutionService.EXTRA_POSITION_SEEKABLE, false) == true)
+    }
+
+    @Test
+    fun aPositionCallWithoutAPositionIsRejected() {
+        val call = spy(PluginCall(null, "BackgroundExecution", "callback-4", "setPlaybackPosition", JSObject()))
+        doNothing().`when`(call).reject(anyString())
+
+        plugin.setPlaybackPosition(call)
+
+        verify(call).reject(eq("Missing positionMs"))
+        verify(call, never()).resolve()
+    }
+
+    @Test
+    fun anAlbumReachesTheService() {
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        plugin.start(mock(PluginCall::class.java))
+        shadowApp.nextStartedService
+        val data = JSObject().apply {
+            put("title", "Nightshift")
+            put("album", "Tune 3 of 19")
+        }
+        val call = spy(PluginCall(null, "BackgroundExecution", "callback-3", "setNowPlaying", data))
+        doNothing().`when`(call).resolve()
+
+        plugin.setNowPlaying(call)
+
+        assertEquals(
+                "Tune 3 of 19",
+                shadowApp.nextStartedService?.getStringExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_ALBUM),
+        )
     }
 }

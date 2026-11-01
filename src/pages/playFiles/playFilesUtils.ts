@@ -214,6 +214,21 @@ export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: num
 };
 
 /**
+ * The custom value edits an item keeps after its config file changes.
+ *
+ * A caller that passes `null` is clearing the edits, so `null` must be told apart from "not
+ * given", which keeps what the item has as long as it still has a config.
+ */
+export const resolveConfigOverridesAfterChange = (
+  requested: PlaylistItem["configOverrides"] | undefined,
+  configRef: PlaylistItem["configRef"],
+  current: PlaylistItem["configOverrides"],
+): PlaylistItem["configOverrides"] => {
+  if (requested !== undefined) return requested;
+  return configRef ? (current ?? null) : null;
+};
+
+/**
  * Applies the "Default duration" fallback to playlist items that don't have a
  * resolved duration (songlengths/SID header/HVSC md5 lookup), without clobbering
  * items whose duration was actually resolved. An item is eligible if it has no
