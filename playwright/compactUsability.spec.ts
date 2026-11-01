@@ -1046,7 +1046,12 @@ test.describe("Offline surfaces are usable on a 320x427 panel", () => {
     });
 
     await openCompact(page, "/");
-    await auditOne(page, "Demo Mode offer", page.getByRole("dialog", { name: "Demo Mode" }), "confirmation");
+    await auditOne(
+      page,
+      "Demo Mode offer",
+      page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ }),
+      "confirmation",
+    );
   });
 
   test("the device discovery picker fits the panel", async ({ page }) => {

@@ -8,7 +8,8 @@
 
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { isDiscoveryPending, waitForDiscoveryToSettle } from "@/lib/connection/connectionSettle";
-import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled } from "@/lib/config/appSettings";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { preRouteEngine, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
@@ -74,7 +75,7 @@ const chooseLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute |
     return { routeToLocal: false, request, simulatedDevice, maySoundWrong: false };
   const selection = preRouteEngine({
     category: item.category,
-    engine: loadPlaybackEngine(),
+    engine: effectivePlaybackEngine(),
     localSupported: LocalSidPlaybackController.isSupported(),
     simulatedDevice,
     noDeviceConnected,

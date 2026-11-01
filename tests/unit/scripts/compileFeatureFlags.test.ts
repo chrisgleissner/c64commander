@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import yaml from "js-yaml";
 import {
   CompileError,
   compileFeatureFlags,
@@ -38,7 +39,10 @@ const validRegistry = () => ({
       enabled: true,
       visible_to_user: true,
       developer_only: false,
+      requires_device: false,
       group: "experimental",
+      owner: "maintainers",
+      removal_condition: "Remove when promoted to stable.",
       title: "HVSC downloads",
       description: "Show HVSC download and ingest controls on the Play page.",
     },
@@ -62,6 +66,8 @@ describe("compile-feature-flags", () => {
         enabled: true,
         visible_to_user: true,
         developer_only: false,
+        requires_device: false,
+        requires_device: false,
         group: "experimental",
         title: "HVSC downloads",
         description: "Show HVSC download and ingest controls on the Play page.",
@@ -115,6 +121,12 @@ describe("compile-feature-flags", () => {
       expect(() => validateRegistry(raw)).toThrow(/must contain at least one entry/);
     });
 
+    it.each(["owner", "removal_condition"])("rejects a feature without %s", (field) => {
+      const raw = validRegistry();
+      delete (raw.features[0] as Record<string, unknown>)[field];
+      expect(() => validateRegistry(raw)).toThrow(new RegExp(`${field} must be a non-empty string`));
+    });
+
     it("rejects unknown feature fields", () => {
       const raw = validRegistry();
       (raw.features[0] as Record<string, unknown>).unexpected = true;
@@ -152,6 +164,12 @@ describe("compile-feature-flags", () => {
       expect(() => validateRegistry(raw)).toThrow(/developer_only: true requires visible_to_user: false/);
     });
 
+    it("SPM-SET-03 rejects a feature without requires_device", () => {
+      const raw = validRegistry();
+      delete (raw.features[0] as Record<string, unknown>).requires_device;
+      expect(() => validateRegistry(raw)).toThrow(/requires_device must be a boolean/);
+    });
+
     it("rejects empty titles and descriptions", () => {
       const raw = validRegistry();
       raw.features[0].title = "";
@@ -173,7 +191,10 @@ describe("compile-feature-flags", () => {
           "    enabled: true",
           "    visible_to_user: true",
           "    developer_only: false",
+          "    requires_device: false",
           "    group: experimental",
+          "    owner: maintainers",
+          "    removal_condition: Remove when promoted to stable.",
           "    title: HVSC downloads",
           "    description: Show HVSC download and ingest controls on the Play page.",
           "",
@@ -217,7 +238,10 @@ describe("compile-feature-flags", () => {
           "    enabled: true",
           "    visible_to_user: true",
           "    developer_only: false",
+          "    requires_device: false",
           "    group: experimental",
+          "    owner: maintainers",
+          "    removal_condition: Remove when promoted to stable.",
           "    title: HVSC downloads",
           "    description: Show HVSC download and ingest controls on the Play page.",
           "",
@@ -244,7 +268,10 @@ describe("compile-feature-flags", () => {
           "    enabled: true",
           "    visible_to_user: true",
           "    developer_only: false",
+          "    requires_device: false",
           "    group: experimental",
+          "    owner: maintainers",
+          "    removal_condition: Remove when promoted to stable.",
           "    title: HVSC downloads",
           "    description: Show HVSC download and ingest controls on the Play page.",
           "",
@@ -271,7 +298,10 @@ describe("compile-feature-flags", () => {
           "    enabled: true",
           "    visible_to_user: true",
           "    developer_only: false",
+          "    requires_device: false",
           "    group: experimental",
+          "    owner: maintainers",
+          "    removal_condition: Remove when promoted to stable.",
           "    title: HVSC downloads",
           "    description: Show HVSC download and ingest controls on the Play page.",
           "",
@@ -298,7 +328,10 @@ describe("compile-feature-flags", () => {
           "    enabled: true",
           "    visible_to_user: true",
           "    developer_only: false",
+          "    requires_device: false",
           "    group: experimental",
+          "    owner: maintainers",
+          "    removal_condition: Remove when promoted to stable.",
           "    title: HVSC downloads",
           "    description: Show HVSC download and ingest controls on the Play page.",
           "",
@@ -309,5 +342,16 @@ describe("compile-feature-flags", () => {
       writeFileSync(outputPath, "// stale\n", "utf8");
       expect(() => compileFeatureFlags({ yamlPath, outputPath, check: true })).toThrow(/out of date/);
     });
+  });
+
+  it("every flag in the real registry names its owner and its removal condition", () => {
+    const real = yaml.load(readFileSync(path.resolve(process.cwd(), "src/lib/config/feature-flags.yaml"), "utf8")) as {
+      features: Array<{ id: string; owner?: string; removal_condition?: string }>;
+    };
+
+    const incomplete = real.features.filter((feature) => !feature.owner?.trim() || !feature.removal_condition?.trim());
+
+    expect(real.features.length).toBeGreaterThan(0);
+    expect(incomplete.map((feature) => feature.id)).toEqual([]);
   });
 });

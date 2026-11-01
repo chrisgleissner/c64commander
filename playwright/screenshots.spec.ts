@@ -2977,6 +2977,100 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture SID Player screenshots",
+    { tag: "@screenshots-sid-player" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const sections = await registerScreenshotSections("sid-player", ["playing-playlist", "mode-sheet", "settings"]);
+      const profiles = ["medium", "compact"] as const;
+      for (const profile of profiles) {
+        await page.addInitScript((profileName) => {
+          localStorage.setItem("c64u_display_profile_override", profileName);
+          localStorage.setItem("c64u_startup_mode", "sid-player");
+          localStorage.setItem("c64u_playback_engine", "local");
+          localStorage.setItem("c64u_local_engine_enabled", "1");
+        }, profile);
+        await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profile].viewport);
+        await page.goto("/play");
+        await expect(page.getByTestId("unified-health-badge")).toContainText("SID Player");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const base = `sid-player/profiles/${profile}`;
+        const filename = (section: string) => {
+          const order = sections.get(section) ?? 1;
+          return `${base}/${String(order).padStart(2, "0")}-${section}.png`;
+        };
+        await page.addInitScript((seed: typeof FEATURED_SID) => {
+          localStorage.setItem(
+            seed.playlistKey,
+            JSON.stringify({
+              items: [
+                {
+                  source: "hvsc",
+                  path: seed.path,
+                  name: seed.name,
+                  durationMs: seed.durationMs,
+                  subsongCount: seed.songCount,
+                  songNr: 1,
+                },
+                {
+                  source: "local",
+                  path: "/SID/Last_Ninja.sid",
+                  name: "Last_Ninja.sid",
+                  title: "The Last Ninja",
+                  durationMs: 180000,
+                },
+                {
+                  source: "local",
+                  path: "/SID/Wizball.sid",
+                  name: "Wizball.sid",
+                  title: "Wizball",
+                  durationMs: 215000,
+                },
+              ],
+              currentIndex: 0,
+            }),
+          );
+          sessionStorage.setItem(
+            seed.sessionKey,
+            JSON.stringify({
+              playlistKey: seed.playlistKey,
+              currentItemId: null,
+              currentItemLabel: seed.name,
+              currentIndex: 0,
+              isPlaying: true,
+              isPaused: false,
+              elapsedMs: seed.elapsedMs,
+              playedMs: seed.elapsedMs,
+              durationMs: seed.durationMs,
+              autoAdvanceDueAtMs: null,
+              shuffleEnabled: false,
+              repeatEnabled: false,
+              randomSeed: 1,
+              updatedAt: seed.nowIso,
+            }),
+          );
+        }, FEATURED_SID);
+        await page.reload();
+        await expect(page.getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
+        await expect(page.getByTestId("playlist-list")).toContainText("Wizball");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await captureScreenshot(page, testInfo, filename("playing-playlist"));
+
+        await page.getByTestId("tab-settings").click();
+        const modeSection = page.getByTestId("settings-section-app-mode");
+        await modeSection.scrollIntoViewIfNeeded();
+        if (!(await page.getByTestId("device-less-choice-full-app").isVisible())) {
+          await modeSection.getByRole("button").first().click();
+        }
+        await page.getByTestId("device-less-choice-full-app").click();
+        await expect(page.getByTestId("mode-dialog-leave-full-app")).toBeVisible();
+        await captureScreenshot(page, testInfo, filename("mode-sheet"));
+        await page.keyboard.press("Escape");
+        await captureScreenshot(page, testInfo, filename("settings"));
+      }
+    },
+  );
+
+  test(
     "capture spectrum screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -3608,6 +3702,7 @@ test.describe("App screenshots", () => {
       // Everything after this shot is about the controls themselves, so put the chapters back.
       await page.evaluate(() => {
         const ids = [
+          "app-mode",
           "appearance",
           "connection",
           "diagnostics",
@@ -4300,10 +4395,10 @@ test.describe("App screenshots", () => {
       );
 
       await page.goto("/", { waitUntil: "domcontentloaded" });
-      const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       await expect(dialog).toBeVisible({ timeout: 10000 });
       await captureScreenshot(page, testInfo, "home/03-demo-mode-interstitial.png");
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
       await expect(dialog).toBeHidden();
     },
   );
@@ -4413,9 +4508,9 @@ test.describe("App screenshots", () => {
       );
 
       await page.goto("/play", { waitUntil: "domcontentloaded" });
-      const demoDialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const demoDialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       if (await demoDialog.isVisible()) {
-        await demoDialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+        await demoDialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
         await expect(demoDialog).toHaveCount(0);
       }
       await waitForDemoBadge(page);

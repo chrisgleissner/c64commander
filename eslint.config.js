@@ -4,6 +4,25 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
+export const APP_MODE_INTERNALS = [
+  "@/lib/appMode/appModeTransitions",
+  "@/lib/appMode/deviceRelease",
+  "@/lib/appMode/deviceKeypadShortcuts",
+  "@/lib/appMode/modeDialogRequests",
+];
+
+export const APP_MODE_INTERNALS_ALLOWED_IMPORTERS = [
+  "src/lib/appMode/**",
+  "src/components/appMode/**",
+  "src/App.tsx",
+  "src/components/ConnectionController.tsx",
+  "src/components/DemoModeInterstitial.tsx",
+  "src/components/UnifiedHealthBadge.tsx",
+  "src/components/input/KeypadQuickMenu.tsx",
+  "src/pages/home/components/ConnectC64Card.tsx",
+  "src/pages/playFiles/hooks/useTuneReleaseOnSidPlayer.ts",
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -115,6 +134,23 @@ export default tseslint.config(
           selector: "CatchClause[param=null]",
           message:
             "Bind the caught error (`catch (error)`) and either log it, rethrow it, or call reportFallback() from @/lib/diagnostics/fallbackReporter. REVIEW.md \u00a77 treats a silent catch as a release blocker.",
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: APP_MODE_INTERNALS_ALLOWED_IMPORTERS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: APP_MODE_INTERNALS,
+              message: "These modules are internal to the app mode machinery. Use the public API of @/lib/appMode.",
+            },
+          ],
         },
       ],
     },

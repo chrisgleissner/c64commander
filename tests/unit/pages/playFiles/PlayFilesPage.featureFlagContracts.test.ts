@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 const testFilePath = fileURLToPath(import.meta.url);
 const playFilesPagePath = resolve(dirname(testFilePath), "../../../../src/pages/PlayFilesPage.tsx");
 const playFilesPageSource = readFileSync(playFilesPagePath, "utf8");
+const hvscLifecycleSource = readFileSync(
+  resolve(dirname(testFilePath), "../../../../src/pages/playFiles/hooks/useHvscPreparationLifecycle.ts"),
+  "utf8",
+);
 
 describe("PlayFilesPage feature-flag contracts", () => {
   it("derives background execution from the feature-flag policy before touching the native bridge", () => {
@@ -21,8 +25,10 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain(
       "shouldOpenHvscPreparation(featureFlags, source.type, hvsc.hvscPreparationState)",
     );
-    expect(playFilesPageSource).toContain(
-      "shouldCancelHvscLifecycleOnDisable(hvscControlsEnabled, hvsc.hvscPreparationState)",
+    expect(playFilesPageSource).toContain("useHvscPreparationLifecycle({");
+    expect(playFilesPageSource).toContain("controlsEnabled: hvscControlsEnabled,");
+    expect(hvscLifecycleSource).toContain(
+      "shouldCancelHvscLifecycleOnDisable(controlsEnabled, hvsc.hvscPreparationState)",
     );
   });
 
@@ -187,6 +193,6 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(backgroundFlags).toBeGreaterThanOrEqual(2);
     // startBackgroundExecution degradation and HVSC disable-cancel failures are S2 notices.
     expect(playFilesPageSource).toMatch(/operation: "startBackgroundExecution",[\s\S]{0,400}severity: "S2",/);
-    expect(playFilesPageSource).toMatch(/operation: "HVSC_CANCEL",[\s\S]{0,400}severity: "S2",/);
+    expect(hvscLifecycleSource).toMatch(/operation: "HVSC_CANCEL",[\s\S]{0,400}severity: "S2",/);
   });
 });

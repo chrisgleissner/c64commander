@@ -212,6 +212,7 @@ export const webServerVariantConfig = {
         rightCap: "Menu",
         rightSoft: "Menu key",
       },
+      startupMode: "default",
     },
     theme: {
       backgroundColor: "#6C7EB7",

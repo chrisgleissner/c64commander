@@ -52,6 +52,23 @@ export const estimateHvscInstallBytes = (archiveBytes: number): HvscStorageEstim
   };
 };
 
+/** The HVSC #85 baseline archive: 84,827,547 bytes, listed as 81M in the release index. Used only until the real size is read. */
+export const HVSC_TYPICAL_ARCHIVE_BYTES = 81 * 1024 * 1024;
+
+export type HvscInstallRequirement = { sizeLabel: string; spaceLabel: string };
+
+/**
+ * What to tell a person before the download: its size when the release states one, otherwise the measured
+ * size of the baseline archive, and the free space the install needs, estimated from the same figure.
+ */
+export const describeHvscInstallRequirement = (archiveBytes: number | null): HvscInstallRequirement => {
+  const basis = archiveBytes ?? HVSC_TYPICAL_ARCHIVE_BYTES;
+  return {
+    sizeLabel: `${archiveBytes === null ? "about " : ""}${Math.round(basis / (1024 * 1024))} MB`,
+    spaceLabel: `about ${formatBytes(estimateHvscInstallBytes(basis).requiredBytes)} of free space`,
+  };
+};
+
 const formatBytes = (bytes: number) => `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 
 export const buildInsufficientStorageMessage = (requiredBytes: number, availableBytes: number) =>

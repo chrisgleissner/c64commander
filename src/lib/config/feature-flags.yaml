@@ -9,6 +9,9 @@
 #   enabled          registry default when no explicit user override exists
 #   visible_to_user  whether the row is shown in standard (non-developer) Settings
 #   developer_only   hides the row from standard users; requires visible_to_user: false
+#   requires_device  true when the feature needs a C64 Ultimate; resolved off while SID Player is active
+#   owner            who answers for the flag (required)
+#   removal_condition  when the flag must be deleted (required); no dead flag stays after it is met
 #   group            logical grouping key for Settings sections (must exist under groups)
 #
 # Standard-user toggleability is derived, not authored:
@@ -34,7 +37,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: HVSC downloads
     description: Show the HVSC source in Add items.
 
@@ -42,7 +48,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: CommoServe
     description: Show the CommoServe source in Add items.
 
@@ -50,7 +59,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Demo Mode
     description: Allow the built-in simulated device mode in Settings and connection flows.
 
@@ -58,7 +70,10 @@ features:
     enabled: true
     visible_to_user: false
     developer_only: true
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Background execution
     description: Allow native background playback timing and auto-advance scheduling.
 
@@ -66,7 +81,10 @@ features:
     enabled: false
     visible_to_user: false
     developer_only: true
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Lighting Studio
     description: Enable Lighting Studio entry points and dialog access.
 
@@ -74,7 +92,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Remote Input
     description: >-
       A second-screen joystick and keyboard for the C64. Joystick control needs
@@ -84,7 +105,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: RAM snapshots
     description: Show the Backup and Restore actions on Home.
 
@@ -92,7 +116,10 @@ features:
     enabled: false
     visible_to_user: false
     developer_only: true
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: REU snapshots
     description: Enable Save REU and Restore REU snapshot functionality on Home. Depends on the Telnet interface.
 
@@ -100,7 +127,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Home advanced config actions
     description: Show advanced Home config actions (file save/load and Clear Flash). Depends on the Telnet interface.
 
@@ -108,7 +138,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Home drive shortcut actions
     description: Adds drive shortcuts on Home (reset, Soft IEC, drive B). Depends on the Telnet interface.
 
@@ -116,7 +149,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Home printer shortcut actions
     description: Show printer shortcut actions on Home (turn on, flush/eject, reset). Depends on the Telnet interface.
 
@@ -124,7 +160,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Home power cycle action
     description: Show the Power Cycle quick action on Home. Depends on the Telnet interface.
 
@@ -132,7 +171,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: Home clear-RAM reboot action
     description: Show the Reboot (Clr Mem) quick action on Home. Depends on the Telnet interface.
 
@@ -140,7 +182,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Keyboard and keypad navigation
     description: >-
       Drive the app with a hardware keyboard, remote, or keypad. Numeric T9 text
@@ -153,7 +198,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Launch Safety
     description: >-
       Keeps a freezer cartridge from hijacking Run/Load into its own menu. A
@@ -163,7 +211,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Disk Explorer
     description: >-
       Run, Load or Mount & Load a single program inside a disk image, not just
@@ -173,7 +224,10 @@ features:
     enabled: false
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: experimental
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is promoted to stable or dropped.
     title: In-image search
     description: >-
       Search finds programs inside .d64/.d71/.d81 images, not just filenames.
@@ -183,7 +237,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Live View
     description: >-
       See and hear the running machine on Home, Play and Remote Input. Audio
@@ -193,7 +250,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: A/V sync tests
     description: >-
       Adds A/V-sync and tap-latency measurement tools to Live View on Home.
@@ -203,7 +263,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Audio Mirror
     description: >-
       Hear the running machine's audio in Live View, with optional recording.
@@ -212,7 +275,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Video Mirror
     description: >-
       See the running machine's video in Live View, with zoom/pan in Remote
@@ -222,7 +288,10 @@ features:
     enabled: true
     visible_to_user: true
     developer_only: false
+    requires_device: true
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: New disk
     description: Create a formatted blank disk image (D64/D71/D81/DNP) on the device.
 
@@ -230,7 +299,10 @@ features:
     enabled: false
     visible_to_user: false
     developer_only: true
+    requires_device: false
     group: stable
+    owner: maintainers
+    removal_condition: Remove the flag when the feature is permanent and no variant or user needs to turn it off.
     title: Appearance Style Gallery
     description: >-
       Show the /dev/styles route: every widget under every appearance style,

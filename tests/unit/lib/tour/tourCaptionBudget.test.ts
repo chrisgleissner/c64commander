@@ -21,7 +21,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { TOUR_STEPS, stepBody, type TourContext } from "@/lib/tour/steps";
+import { TOUR_STEPS, stepBody, tourStepsFor, type TourContext } from "@/lib/tour/steps";
+
+const ALL_TOURS = [...TOUR_STEPS, ...tourStepsFor("sid-player")];
 
 /** Two lines of body at 320 CSS px. */
 const MAX_BODY_CHARS = 64;
@@ -32,7 +34,7 @@ const MAX_TITLE_CHARS = 20;
 const CONTEXTS: readonly TourContext[] = [{ hvscInstalled: false }, { hvscInstalled: true }];
 
 const everyBody = () =>
-  TOUR_STEPS.flatMap((step) => [
+  ALL_TOURS.flatMap((step) => [
     ...CONTEXTS.map((context) => ({ id: step.id, text: stepBody(step, context) })),
     ...(step.unavailableBody ? [{ id: `${step.id} (unavailable)`, text: step.unavailableBody }] : []),
   ]);
@@ -46,7 +48,7 @@ describe("the tour has to leave the app visible behind it", () => {
   });
 
   it("keeps every caption title on one line", () => {
-    const tooLong = TOUR_STEPS.filter((step) => step.title.length > MAX_TITLE_CHARS).map(
+    const tooLong = ALL_TOURS.filter((step) => step.title.length > MAX_TITLE_CHARS).map(
       (step) => `${step.id}: ${step.title.length} chars`,
     );
     expect(tooLong, `over ${MAX_TITLE_CHARS} characters`).toEqual([]);

@@ -7,7 +7,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
+import {
+  exportSettingsJson,
+  exportSettingsSnapshot,
+  importSettingsJson,
+  SETTINGS_EXPORT_VERSION,
+} from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import {
@@ -135,6 +140,14 @@ describe("settingsTransfer", () => {
       expect(result.appSettings.c64SeekMute).toBe("always");
       expect(result.featureFlags).toEqual({ commoserve_enabled: true });
       expect(result.deviceSafety.mode).toBe("RELAXED");
+    });
+
+    it("SPM-VAR-02 export does not carry the start-up mode", async () => {
+      localStorage.setItem("c64u_startup_mode", "sid-player");
+      const json = await exportSettingsJson();
+      expect(json).not.toContain("c64u_startup_mode");
+      expect(json).not.toContain("sid-player");
+      localStorage.removeItem("c64u_startup_mode");
     });
   });
 

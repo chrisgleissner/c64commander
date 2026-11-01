@@ -1164,17 +1164,17 @@ test.describe("Playback file browser (part 2)", () => {
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
-      await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+      await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toBeHidden();
     }
 
     const dismissDemoDialog = async () => {
-      const demoDialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const demoDialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       if (await demoDialog.isVisible().catch(() => false)) {
-        await demoDialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+        await demoDialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
         await expect(demoDialog).toBeHidden();
       }
     };
@@ -1183,7 +1183,7 @@ test.describe("Playback file browser (part 2)", () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await dismissDemoDialog();
         const stillVisible = await page
-          .getByRole("dialog", { name: "Demo Mode" })
+          .getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })
           .isVisible()
           .catch(() => false);
         if (!stillVisible) break;
@@ -1194,7 +1194,7 @@ test.describe("Playback file browser (part 2)", () => {
     await openAddItemsDialog(page);
     const addDialog = page.getByRole("dialog").filter({ has: page.getByText("Add items") });
     await dismissBlockingDialogs();
-    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toBeHidden();
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device", {
       force: true,
     });

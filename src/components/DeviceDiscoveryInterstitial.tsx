@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, KeyRound, Plus, Settings, Wifi } from "lucide-react";
@@ -96,11 +97,14 @@ export function DeviceDiscoveryInterstitial() {
     () => buildDiscoveryDialogKey(deviceDiscovery.completedAt, deviceDiscovery.candidates),
     [deviceDiscovery.candidates, deviceDiscovery.completedAt],
   );
+  const sidPlayer = useAppMode() === "sid-player";
   const candidates = deviceDiscovery.candidates;
   const hasCandidates = candidates.length > 0;
   // Away from home an empty scan is expected, so the host prompt is for setting up, not for a device that has worked.
   const hasWorkingDevice = savedDevices.devices.some((device) => Boolean(device.lastSuccessfulConnectionAt));
   const shouldOffer =
+    !sidPlayer &&
+    !deviceDiscovery.acknowledged &&
     deviceDiscovery.phase === "complete" &&
     isAutomaticDiscoveryTrigger(deviceDiscovery.trigger) &&
     connection.state !== "DEMO_ACTIVE" &&

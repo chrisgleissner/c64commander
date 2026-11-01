@@ -6,14 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
-import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { TAB_ROUTES, tabIndexForPath, visibleTabIndexes } from "@/lib/navigation/tabRoutes";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { useGuardedNavigate, type GuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,8 @@ export function TabBar() {
   const navRef = useRef<HTMLElement>(null);
   const activeTabRef = useRef<HTMLButtonElement>(null);
   const [iconsOnly, setIconsOnly] = useState(false);
+  const appMode = useAppMode();
+  const shownTabs = useMemo(() => visibleTabIndexes(appMode).map((index) => tabs[index]), [appMode]);
 
   /*
    * Show icons alone, except on the active tab, when the six labels do not fit the bar (a large device
@@ -158,7 +161,7 @@ export function TabBar() {
     observer.observe(nav);
     labels.forEach((label) => observer.observe(label));
     return () => observer.disconnect();
-  }, []);
+  }, [shownTabs]);
 
   /*
    * Keep the selected tab on screen.
@@ -206,7 +209,7 @@ export function TabBar() {
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
       >
-        {tabs.map((tab, index) => (
+        {shownTabs.map((tab, index) => (
           <TabBarButton
             key={tab.path}
             tab={tab}

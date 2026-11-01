@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 import type { TraceActionContext } from "@/lib/tracing/types";
@@ -814,6 +815,7 @@ const applyTelnetConnectPacing = async (hostScope: string, action: TraceActionCo
 };
 
 export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () => Promise<T>): Promise<T> => {
+  assertDeviceTrafficAllowed("ftp", { host: meta.host, path: meta.path });
   if (isGovernorBypassed()) {
     markDeviceRequestStart();
     try {
@@ -933,6 +935,7 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
 };
 
 export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler: () => Promise<T>): Promise<T> => {
+  assertDeviceTrafficAllowed("telnet", { host: meta.host, port: meta.port });
   // HARD18-026 (M4): pause REST polling for the WHOLE telnet interaction, not
   // just the discovery call site useTelnetActions already covered - this is
   // the one central change that closes every remaining telnet call-site

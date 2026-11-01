@@ -17,6 +17,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Guided tour**: A first-run walk through every part of the app.
 - **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
+- **SID Player**: A music-player mode for phones without a C64 Ultimate. It plays SID tunes on the phone, with playlists, HVSC and SID Radio.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
 - **Disk tools**: Mount images, manage multi-disk collections, inspect image contents, and create blank disks.
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
@@ -97,6 +98,8 @@ disks, playback, the HVSC collection, Remote Input and Live View all work agains
 
 Close the offer instead, or choose **Try again** while there is still no network, and the app stays
 offline for the session.
+
+If you only want to listen, choose **SID Player** instead; see [SID Player](#sid-player).
 
 Connect real hardware at any time from **Settings > Device > Connection**. Once the app has reached
 a real device in a session, it never falls back to the simulator.
@@ -223,6 +226,20 @@ For SID music on the go, the built-in player runs entirely on your phone and req
     <td><img src="docs/img/app/play/sid-radio/profiles/medium/01-controls.png" alt="SID Radio and Liked Tunes controls with the heart/cross ranking on the playback card" width="360"/></td>
     <td><img src="docs/img/app/play/sid-radio/profiles/medium/02-stations.png" alt="SID Radio station launcher: song, mood (nine style tiles) and taste seeds" width="360"/></td>
     <td><img src="docs/img/app/settings/sid-radio.png" alt="SID Radio settings: enable stations, ranking, and the experimental on-device playback engine, with the similarity corpus status" width="360"/></td>
+  </tr>
+</table>
+
+### SID Player
+
+No C64 Ultimate? SID Player turns the app into a music player for C64 tunes. Everything runs on your phone: playlists, the HVSC collection, SID Radio, subsong selection and the Spectrum. Nothing is sent to a machine, and the pages that need one are put away: you see Play, Settings and Docs, and nothing else.
+
+Choose SID Player when the app offers it on first start, from **Settings > App mode**, or from **Use SID Player** in the Quick menu. Your playlists and settings are kept when you switch back to Full App.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/sid-player/profiles/medium/02-playing-playlist.png" alt="SID Player playing a tune from a playlist" width="360"/></td>
+    <td><img src="docs/img/app/sid-player/profiles/medium/03-mode-sheet.png" alt="Switching between SID Player and Full App" width="360"/></td>
+    <td><img src="docs/img/app/sid-player/profiles/medium/04-settings.png" alt="SID Player settings" width="360"/></td>
   </tr>
 </table>
 

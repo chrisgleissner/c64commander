@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PanelBottomClose, PanelBottomOpen, PanelTopClose, PanelTopOpen } from "lucide-react";
@@ -27,7 +27,8 @@ import {
   type SpotlightFrame,
 } from "@/lib/tour/spotlight";
 import { isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
-import { TOUR_STEPS, stepBody, tourStepIndex } from "@/lib/tour/steps";
+import { stepBody, tourStepIndex, tourStepsFor } from "@/lib/tour/steps";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { TOUR_ACTIVE_ATTRIBUTE, loadTourState, saveTourState, type TourStartRequest } from "@/lib/tour/tourState";
 
 /**
@@ -104,7 +105,9 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const location = useLocation();
   const { status } = useC64Connection();
 
-  const [stepIndex, setStepIndex] = useState(() => tourStepIndex(request.fromStepId ?? null));
+  const appMode = useAppMode();
+  const steps = useMemo(() => tourStepsFor(appMode), [appMode]);
+  const [stepIndex, setStepIndex] = useState(() => tourStepIndex(request.fromStepId ?? null, steps));
   const [captionElement, setCaptionElement] = useState<HTMLDivElement | null>(null);
   const [captionHeight, setCaptionHeight] = useState(0);
   /*
@@ -118,8 +121,9 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
    * the steps that needed a machine and stops there, rather than carrying on through the rest and
    * repeating what has already been seen. The progress line counts within the range.
    */
-  const firstIndex = tourStepIndex(request.fromStepId ?? null);
-  const lastIndex = request.throughStepId === undefined ? TOUR_STEPS.length - 1 : tourStepIndex(request.throughStepId);
+  const firstIndex = tourStepIndex(request.fromStepId ?? null, steps);
+  const lastIndex =
+    request.throughStepId === undefined ? steps.length - 1 : tourStepIndex(request.throughStepId, steps);
   const stepCount = Math.max(1, lastIndex - firstIndex + 1);
   const [hole, setHole] = useState<Rect | null>(null);
   /** Bumped when the resolver settles, so the spotlight re-measures a slow anchor. */
@@ -131,13 +135,13 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null);
   const [hvscInstalled] = useState(isHvscInstalled);
 
-  const step = TOUR_STEPS[stepIndex];
+  const step = steps[stepIndex];
 
   // Restarted on a fresh request, so asking for the device chapter while the tour is up moves to it.
   useEffect(() => {
     ranWithoutDeviceRef.current = false;
-    setStepIndex(tourStepIndex(request.fromStepId ?? null));
-  }, [request]);
+    setStepIndex(tourStepIndex(request.fromStepId ?? null, steps));
+  }, [request, steps]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -337,13 +341,13 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         ...state,
         completedAt: outcome === "completed" ? Date.now() : state.completedAt,
         skippedAt: outcome === "skipped" ? Date.now() : state.skippedAt,
-        lastStepId: TOUR_STEPS[stepIndex]?.id ?? null,
+        lastStepId: steps[stepIndex]?.id ?? null,
         deviceStepsPending: state.deviceStepsPending || ranWithoutDeviceRef.current,
       });
       setHole(null);
       onFinished();
     },
-    [onFinished, stepIndex],
+    [onFinished, stepIndex, steps],
   );
 
   const next = useCallback(() => {

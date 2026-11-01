@@ -157,12 +157,12 @@ test.describe("Config visibility across modes", () => {
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
-    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toBeHidden();
     const indicator = await waitForConnectivityReady(page);
     await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo Mode)/);
 
@@ -189,12 +189,12 @@ test.describe("Config visibility across modes", () => {
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     const demoButton = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
-    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toBeHidden();
     const indicator = await waitForConnectivityReady(page);
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();

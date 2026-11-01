@@ -31,6 +31,8 @@ import { resolveSearchHandler } from "@/lib/search/handlers";
 import { recordPickedEntry, recordRecentQuery, loadRecentQueries } from "@/lib/search/history";
 import { getSearchEntries } from "@/lib/search/registry";
 import { resolveEntry } from "@/lib/search/requirements";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { isSearchEntryShown } from "@/lib/appMode/searchVisibility";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { markSearchKeystroke, markSearchResultsPainted } from "@/lib/search/latencyProbe";
 import { SEARCH_OVERLAY_TESTID, subscribeSearchClose, type SearchOpenRequest } from "@/lib/search/overlayState";
@@ -152,6 +154,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
    * the row that installs it. The state is a localStorage read, taken once per open.
    */
   const hvscReady = useMemo(() => isHvscInstalled(), [request]);
+  const appMode = useAppMode();
   const ctx = useRequirementContext(hvscReady);
   const { results } = useSearchResults(query, ctx);
   const tier2 = useSearchTier2(query, true);
@@ -160,12 +163,14 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   // the keystroke, and tier 2 lands whenever its debounce returns.
   const tier2Scored = useMemo<ScoredEntry[]>(
     () =>
-      tier2.entries.map((entry) => ({
-        resolved: resolveEntry(entry, ctx),
-        score: 0,
-        title: entryTitle(entry),
-      })),
-    [tier2.entries, ctx],
+      tier2.entries
+        .filter((entry) => isSearchEntryShown(entry, appMode))
+        .map((entry) => ({
+          resolved: resolveEntry(entry, ctx),
+          score: 0,
+          title: entryTitle(entry),
+        })),
+    [tier2.entries, ctx, appMode],
   );
 
   const grouped = useMemo(() => {
@@ -187,9 +192,9 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   const promoted = useMemo(
     () =>
       PROMOTED_ENTRY_IDS.map((id) => getSearchEntries().find((entry) => entry.id === id))
-        .filter((entry): entry is SearchEntry => entry !== undefined)
+        .filter((entry): entry is SearchEntry => entry !== undefined && isSearchEntryShown(entry, appMode))
         .map((entry) => resolveEntry(entry, ctx)),
-    [ctx],
+    [ctx, appMode],
   );
 
   useEffect(() => {

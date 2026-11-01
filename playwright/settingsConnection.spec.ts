@@ -318,6 +318,7 @@ test.describe("Settings connection management", () => {
     // Automatic Demo Mode control (HARD9-090); the canonical control lives in
     // the Connection card, so no separate Config heading remains.
     expect(headings).toEqual([
+      "App mode",
       "Appearance",
       "Connection",
       "Diagnostics",

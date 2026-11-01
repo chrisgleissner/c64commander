@@ -17,6 +17,7 @@ import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
 import { buildGuideChapters } from "@/lib/docs/guide/chapters";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import type { GuideChapter } from "@/lib/docs/guide/types";
 import { variant } from "@/generated/variant";
 import { TourRestartCard } from "@/components/tour/TourRestartCard";
@@ -49,7 +50,8 @@ export default function DocsPage() {
   // Widened to `string`: `variant.id` is generated as a single literal per build, so comparing it
   // against the other variant's literal would not compile on whichever variant was generated.
   const variantId: string = variant.id;
-  const chapters = useMemo(() => buildGuideChapters({ variantId, flags }), [variantId, flags]);
+  const appMode = useAppMode();
+  const chapters = useMemo(() => buildGuideChapters({ variantId, flags, appMode }), [variantId, flags, appMode]);
   const externalResourceLinks = getDocsExternalResourceLinks();
   return (
     <div className={pageShellClassName}>

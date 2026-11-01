@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describe, expect, it } from "vitest";
 import {
   LOCAL_VOLUME_DEFAULT_INDEX,
@@ -49,5 +50,20 @@ describe("the volume scale on-device playback offers", () => {
   it("has an unknown step read as silence rather than as full volume", () => {
     expect(localVolumeGainForIndex(LOCAL_VOLUME_STEPS.length)).toBe(0);
     expect(localVolumeLabelForIndex(LOCAL_VOLUME_STEPS.length)).toBe("—");
+  });
+});
+
+describe("SPM-A11Y-03 sound safety", () => {
+  it("a new installation starts at unity", () => {
+    const controller = new LocalSidPlaybackController(() => {
+      throw new Error("reading the volume must not create an engine");
+    });
+    expect(controller.volume()).toBe(1);
+    expect(localVolumeGainForIndex(LOCAL_VOLUME_DEFAULT_INDEX)).toBe(1);
+    expect(localVolumeIndexForGain(controller.volume())).toBe(LOCAL_VOLUME_DEFAULT_INDEX);
+  });
+
+  it("never offers more than unity, so the app cannot boost by itself", () => {
+    LOCAL_VOLUME_STEPS.forEach((_, index) => expect(localVolumeGainForIndex(index)).toBeLessThanOrEqual(1));
   });
 });

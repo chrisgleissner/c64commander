@@ -10,6 +10,7 @@ import type { HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
 import { DEMO_MODE_DEVICE_LABEL } from "@/lib/connection/demoModeLabels";
 import { HEALTH_CURRENT_WINDOW_MS } from "@/lib/diagnostics/healthTraceWindow";
 
@@ -17,7 +18,8 @@ import { HEALTH_CURRENT_WINDOW_MS } from "@/lib/diagnostics/healthTraceWindow";
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
 
 // §6.8 — Connectivity states (fixed labels)
-export type ConnectivityState = "Online" | "Demo" | "Offline" | "Auth" | "Not yet connected" | "Checking";
+export type ConnectivityState =
+  "Online" | "Demo" | "Offline" | "Auth" | "Not yet connected" | "Checking" | "SID Player";
 
 export type DisplayProfile = "compact" | "medium" | "expanded";
 
@@ -42,6 +44,8 @@ export const getBadgeConnectivityLabel = (connectivity: ConnectivityState, produ
       return connectedDeviceLabel;
     case "Demo":
       return "DEMO";
+    case "SID Player":
+      return "SID Player";
     case "Offline":
       return "Offline";
     case "Auth":
@@ -119,6 +123,10 @@ export const getBadgeTextContract = (
       countLabel: null,
       trailingLabel: profile === "expanded" ? "Device not reachable" : null,
     };
+  }
+
+  if (connectivity === "SID Player") {
+    return { leadingLabel, glyph: "", countLabel: null, trailingLabel: null };
   }
 
   if (connectivity === "Auth") {
@@ -244,7 +252,9 @@ export const deriveConnectivityState = (
   connectionState: string,
   authRequired = false,
   revalidating = false,
+  sidPlayer = isSidPlayerActive(),
 ): ConnectivityState => {
+  if (sidPlayer && connectionState === "OFFLINE_NO_DEMO") return "SID Player";
   switch (connectionState) {
     case "REAL_CONNECTED":
       return revalidating ? "Checking" : "Online";
@@ -591,7 +601,7 @@ export const rollUpHealth = (
   // §7.2 — Offline (and its auth-rejected sub-case) override health to Unavailable
   if (connectivity === "Offline" || connectivity === "Auth") return "Unavailable";
   // §7.5 — Not yet connected → Idle
-  if (connectivity === "Not yet connected") return "Idle";
+  if (connectivity === "Not yet connected" || connectivity === "SID Player") return "Idle";
 
   const states = Object.values(contributors).map((c) => c.state);
   if (states.some((s) => s === "Unavailable")) return "Unavailable";
@@ -775,6 +785,7 @@ export const getBadgeAriaLabel = (
   product?: string | null,
   connectedDeviceLabel?: string | null,
 ): string => {
+  if (connectivity === "SID Player") return "SID Player";
   if (connectivity === "Auth") return "Password required";
   if (connectivity === "Offline") return "Offline, device not reachable";
   if (connectivity === "Not yet connected") return "Not yet connected";
@@ -804,6 +815,7 @@ export const getBadgeGuidanceLabel = (
   product?: string | null,
   connectedDeviceLabel?: string | null,
 ): string => {
+  if (connectivity === "SID Player") return "SID Player";
   if (connectivity === "Auth") return "Password required";
   if (connectivity === "Offline") return "Offline";
   if (connectivity === "Not yet connected") return "Not connected";
