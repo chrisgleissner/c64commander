@@ -186,9 +186,9 @@ interface sent a frame needs root on the bench host.
 ## Not handled
 
 - **Different subnets.** When Ethernet and Wi-Fi are on different subnets and the phone is only on
-  the Wi-Fi one, multicast from the Ethernet port does not reach the phone. The firmware would route
-  a unicast stream through the Ethernet gateway, but the app streams only to the multicast groups, so
-  Live View does not work in that setup.
+  the Wi-Fi one, multicast from the Ethernet port does not reach the phone. The app asks for a
+  unicast stream to the phone's own address, which the firmware sends through the Ethernet gateway
+  when the phone is on another subnet, so Live View can work there; this has not been tried.
 - **No Ethernet cable.** Live View cannot work at all; the app now says why.
 - **Duplicate identities.** Two devices given the same custom `unique_id` and the same hostname are
   treated as one machine by the identity checks above.
