@@ -18,6 +18,9 @@ vi.mock("@/lib/appMode/appModeTransitions", () => transitions);
 const connection = vi.hoisted(() => ({ state: "REAL_CONNECTED" }));
 vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connection.state }) }));
 
+const logging = vi.hoisted(() => ({ addErrorLog: vi.fn() }));
+vi.mock("@/lib/logging", () => logging);
+
 import { DeviceLessChoices } from "@/components/appMode/DeviceLessChoices";
 import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
@@ -88,6 +91,38 @@ describe("DeviceLessChoices", () => {
 
     expect(transitions.switchToFullApp).not.toHaveBeenCalled();
     expect(requests).toEqual(["leave"]);
+  });
+
+  it("SPM-SWT-01 choosing Demo Mode from Full App switches straight away without asking", () => {
+    render(<DeviceLessChoices />);
+    fireEvent.click(screen.getByTestId("device-less-choice-demo-mode"));
+
+    expect(transitions.switchToDemoMode).toHaveBeenCalledTimes(1);
+    expect(transitions.switchToFullApp).not.toHaveBeenCalled();
+    expect(requests).toEqual([]);
+  });
+
+  it("SPM-SWT-01 choosing Full App from Demo Mode switches straight away without asking", () => {
+    connection.state = "DEMO_ACTIVE";
+    render(<DeviceLessChoices />);
+    fireEvent.click(screen.getByTestId("device-less-choice-full-app"));
+
+    expect(transitions.switchToFullApp).toHaveBeenCalledTimes(1);
+    expect(transitions.switchToDemoMode).not.toHaveBeenCalled();
+    expect(requests).toEqual([]);
+  });
+
+  it("SPM-SWT-01 a switch that fails is logged with the choice and the reason", async () => {
+    transitions.switchToDemoMode.mockRejectedValueOnce(new Error("no simulator"));
+    render(<DeviceLessChoices />);
+    fireEvent.click(screen.getByTestId("device-less-choice-demo-mode"));
+
+    await vi.waitFor(() =>
+      expect(logging.addErrorLog).toHaveBeenCalledWith(
+        "Switching the app mode failed",
+        expect.objectContaining({ choice: "demo-mode", error: "no simulator" }),
+      ),
+    );
   });
 
   it("SPM-ARCH-06 choosing the current mode does nothing", () => {
