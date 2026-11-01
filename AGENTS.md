@@ -257,6 +257,26 @@ At completion, summarize:
 - which screenshot files or folders were updated, if any
 - why broader validation or screenshot refresh was not needed, when relevant
 
+### Delegating simple work to Luna
+
+Codex's Luna model (`gpt-6-luna`) costs about a tenth of Claude Sonnet, so use it for work that is
+straightforward and cheap to verify. The slug `luna` alone is rejected for a ChatGPT-account login.
+
+    codex exec -m gpt-6-luna -s workspace-write -C <worktree> "<prompt>" < /dev/null
+
+Good uses: mechanical edits across many files, renames, running a command and summarizing its output,
+collecting log excerpts or CI failure causes, resolving trivial merge conflicts, adding tests that follow an
+existing pattern, and fact-finding searches.
+
+Do not give Luna work that carries risk or needs judgment: design decisions, root-cause analysis, concurrency
+or protocol code, merge-conflict resolution where both sides changed behavior, the quality gates, and release
+steps. Do not give it prose for the README, the manual, PR descriptions or commit messages; its writing is
+weak. Write those yourself.
+
+Its sandbox cannot open loopback sockets, so Playwright and local servers do not run in it; run those
+yourself. State the exact files, the commands to run and the expected output in the prompt, tell it not to
+commit, and review its diff before keeping it. Its output is a draft, not evidence: run the tests yourself.
+
 ## Validation: what to run, and what CI actually runs
 
 ### Platform build scope

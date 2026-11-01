@@ -500,6 +500,38 @@ Preferred path: Diagnostics from the badge.
 
 Some parts of the app have more to them than a recipe can hold. This chapter covers them in full.
 
+### SID Player
+
+Not everyone who loves C64 music owns a C64 Ultimate. SID Player turns C64 Commander into a music player. The tunes play on your phone or tablet itself, and the app never reaches out to a machine.
+
+While SID Player is on, you see three pages at the bottom of the screen: **Play**, **Settings** and **Docs**. Everything that needs a C64 Ultimate is put away rather than greyed out, so there is nothing on screen that cannot work. The header badge reads **SID Player**.
+
+#### Starting SID Player
+
+You can reach SID Player in three ways:
+
+1. When the app finds no C64 Ultimate at start-up, it offers **Use SID Player**. Choose it.
+2. Open **Settings**, find **App mode**, and choose **SID Player**.
+3. While no C64 Ultimate is connected, open the **Quick menu** and choose **Use SID Player**.
+
+![The App mode section in Settings, with SID Player chosen](../../img/app/sid-player/profiles/medium/04-settings.png)
+
+#### Listening
+
+Open **Play**. On a new install the page invites you to start listening: you can download the free HVSC collection (the page shows its size, and Wi-Fi is the better choice for the download), add tunes from your own files, or start a **SID Radio** station. From then on everything works as described in the Play and SID Radio chapters: the playlist, shuffle and repeat, subsong choice, the sleep timer, liked tunes and the Spectrum.
+
+![A tune playing from a SID Player playlist](../../img/app/sid-player/profiles/medium/02-playing-playlist.png)
+
+A small percentage of tunes need the KERNAL or BASIC ROM of a real C64. SID Player tells you when one does, and you may add ROM files in **Settings** so that it can play them. Tunes that need no ROM, which is most of them, play straight away.
+
+#### Leaving SID Player
+
+Tap the **SID Player** badge, or open **Settings → App mode**, and choose **Full App**. Your playlists, liked tunes, saved devices and settings are exactly as you left them, and the app looks for your C64 Ultimate again. You can return to SID Player whenever you like.
+
+![The question asked before leaving SID Player](../../img/app/sid-player/profiles/medium/03-mode-sheet.png)
+
+SID Player and Demo Mode are different things. Demo Mode pretends to be a C64 Ultimate so that you can try every page. SID Player has no machine at all and is meant for listening.
+
 ### SID Music
 
 The **SID**, short for **Sound Interface Device**, is the sound chip in every Commodore 64. It has three voices, and people are still writing music for it today. The files that hold that music are called SIDs too: each is a small program that plays the chip. Tens of thousands of them live in one free archive, the **High Voltage SID Collection**, or **HVSC**.
@@ -1092,6 +1124,38 @@ Preferred path: Diagnostics from the badge.
 ## In Depth
 
 Some parts of the app have more to them than a recipe can hold. This chapter covers them in full.
+
+### SID Player
+
+Not everyone who loves C64 music owns a C64 Ultimate. SID Player turns C64 Commander into a music player. The tunes play on your phone or tablet itself, and the app never reaches out to a machine.
+
+While SID Player is on, you see three pages at the bottom of the screen: **Play**, **Settings** and **Docs**. Everything that needs a C64 Ultimate is put away rather than greyed out, so there is nothing on screen that cannot work. The header badge reads **SID Player**.
+
+#### Starting SID Player
+
+You can reach SID Player in three ways:
+
+1. When the app finds no C64 Ultimate at start-up, it offers **Use SID Player**. Choose it.
+2. Open **Settings**, find **App mode**, and choose **SID Player**.
+3. While no C64 Ultimate is connected, open the **Quick menu** and choose **Use SID Player**.
+
+![The App mode section in Settings, with SID Player chosen](../../img/app/sid-player/profiles/medium/04-settings.png)
+
+#### Listening
+
+Open **Play**. On a new install the page invites you to start listening: you can download the free HVSC collection (the page shows its size, and Wi-Fi is the better choice for the download), add tunes from your own files, or start a **SID Radio** station. From then on everything works as described in the Play and SID Radio chapters: the playlist, shuffle and repeat, subsong choice, the sleep timer, liked tunes and the Spectrum.
+
+![A tune playing from a SID Player playlist](../../img/app/sid-player/profiles/medium/02-playing-playlist.png)
+
+A small percentage of tunes need the KERNAL or BASIC ROM of a real C64. SID Player tells you when one does, and you may add ROM files in **Settings** so that it can play them. Tunes that need no ROM, which is most of them, play straight away.
+
+#### Leaving SID Player
+
+Tap the **SID Player** badge, or open **Settings → App mode**, and choose **Full App**. Your playlists, liked tunes, saved devices and settings are exactly as you left them, and the app looks for your C64 Ultimate again. You can return to SID Player whenever you like.
+
+![The question asked before leaving SID Player](../../img/app/sid-player/profiles/medium/03-mode-sheet.png)
+
+SID Player and Demo Mode are different things. Demo Mode pretends to be a C64 Ultimate so that you can try every page. SID Player has no machine at all and is meant for listening.
 
 ### SID Music
 

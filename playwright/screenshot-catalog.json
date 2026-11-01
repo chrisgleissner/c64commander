@@ -95,6 +95,7 @@
     "diagnostics-and-sharing-logs",
     "external-resources"
   ],
+  "sid-player": ["empty-play", "playing-playlist", "mode-sheet", "settings"],
   "styles": [
     "app-bar",
     "cards",
