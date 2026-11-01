@@ -146,36 +146,28 @@ node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawto
   and the tone stimulus is heard as one burst instead of eight. `preflight` now resets the machine
   before anything else, the same reset `silenceC64` already performs between the audible stages.
 
-### `av-clarity` fails on the Pixel 4 test phone, and the fault is not in the app's audio data
+### A loudspeaker on the C64U makes every audible stage look like a defect
 
-On 1 November 2026 `av-clarity` graded 70 to 82 of 82 notes defective on the Pixel 4 test phone (a
-`userdebug` Android 17 image) with the 1.2.0 build, and graded 75 of 82 defective with the 1.1.5-rc2
-release build installed on the same phone. The stage therefore does not separate a regression from
-the phone's own behavior. What was measured:
+The microphone hears the room, so anything audible other than the phone under test is graded as if
+the phone had produced it. A loudspeaker wired to the C64U's own audio output plays the stimulus
+live, and the phone plays the same stimulus about 190 ms later, so every note is heard twice. On
+1 November 2026 this made `av-clarity` grade 70 to 82 of 82 notes defective on the Pixel 4, on the
+current build and on the 1.1.5-rc2 release alike. With the loudspeaker switched off the same stage
+graded 82 tones, 0 defective, 0% dropout, three runs in a row.
 
-- **The grader and microphone are sound.** The clean `wire.wav` of a failing run, played through the
-  phone's speaker with Web Audio (`AudioContext`) and graded from the microphone, gave 0 of 81 notes
-  defective and 4.0 ms of timing jitter.
-- **The app hands the speaker a clean signal.** `StreamUdp.startAudioCapture` and `readAudioCapture`
-  record the PCM the app writes to its `AudioTrack`. Armed during a failing run and graded with
-  `audio_e2e_probe.py analyse`, that capture had 0 of 121 notes defective and 3.2 ms of timing jitter.
-- **The same PCM is clean through another output path.** The captured PCM played through the stock
-  media path of the phone and graded from the microphone had 3 of 120 notes flagged, each 10 ms too
-  long, which is under the stage's 10% limit.
-- **AudioFlinger reports no underruns during a failing run.** The counters in
-  `dumpsys media.audio_flinger` (FastMixer underruns and overruns, HAL FIFO underruns) did not change
-  across a run. Requesting `PERFORMANCE_MODE_NONE` instead of `PERFORMANCE_MODE_LOW_LATENCY` for the
-  track did not change the result.
-- **Only the microphone recording of the app's live output is smeared.** The recording shows notes
-  that last 54 to 323 ms instead of 160 ms, with a tail of 10 to 20 dB below the note running into the
-  next slot. Steady-tone stages (`sid-remote`, `sid-local`) cannot see this, because the smear is a
-  change at note onsets and offsets, and they pass.
-- **Video makes it worse but is not the cause.** With the video mirror off, one run gave 44 of 82
-  notes defective and another gave one tone out of order.
+Several measurements were consistent with a fault in the phone and were not:
 
-The cause below the app's `AudioTrack` was not isolated. To tell a regression from this behavior, run
-`--only av-clarity` with the previous release installed on the same phone and compare, and arm the
-output capture during the run to confirm that the app's own PCM is clean.
+- The PCM the app hands to its `AudioTrack` (`StreamUdp.startAudioCapture` and `readAudioCapture`,
+  graded with `audio_e2e_probe.py analyse`) was clean: 0 of 121 notes defective.
+- A clean reference played through the phone with Web Audio graded 0 of 81 defective.
+- `dumpsys media.audio_flinger` showed no underruns during the failing runs.
+- The result changed with the phone's screen state and with the video mirror, because those change
+  how loud and when the phone's own copy arrives relative to the live sound.
+
+Before trusting a failing audible stage, check the room: with both phones idle and `Vol Master` at
+its default, `audio_e2e_probe.py run` must report no tone bursts, and the microphone floor in
+300-6000 Hz should sit near -60 dBFS. Two faint bursts at -40 dBFS or below are the loudspeaker or
+another phone leaking in; a phone's own output sits near -30 dBFS.
 
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The
