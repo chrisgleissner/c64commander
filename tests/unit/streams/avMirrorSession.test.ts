@@ -70,6 +70,19 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
     deps: Captured["deps"];
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
+    getSnapshot = vi.fn(() => ({
+      renderResidenceMs: 0,
+      presented: 0,
+      decimated: 0,
+      backlogReplacements: 0,
+      completeFrames: 0,
+      partialConcealed: 0,
+      repeatedFrames: 0,
+      framesLost: 0,
+      droppedPackets: 0,
+      standard: "PAL",
+    }));
+    setKeepFraction = vi.fn();
     adoptSender = vi.fn(async () => {});
     abandonReconnect = vi.fn();
     constructor(deps: Captured["deps"]) {
@@ -89,12 +102,12 @@ vi.mock("@/lib/streams/streamReceiver", async (importOriginal) => ({
 
 import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 
 vi.mock("@/lib/logging", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/logging")>();
-  return { ...actual, addLog: vi.fn() };
+  return { ...actual, addLog: vi.fn(), addErrorLog: vi.fn() };
 });
 
 const makeSession = () => {
@@ -111,6 +124,97 @@ describe("AvMirrorSession", () => {
   beforeEach(() => {
     audioInstances.length = 0;
     videoInstances.length = 0;
+  });
+
+  describe("protecting the audio from the video", () => {
+    const lostPackets = (audio: Captured, count: { value: number }) => {
+      audio.getSignals = vi.fn(() => ({
+        audioBufferMs: 100,
+        audioUnderruns: 0,
+        audioConcealed: 0,
+        audioLostPackets: count.value,
+        audioRejectedPackets: 0,
+      }));
+    };
+    const bothLive = (audio: Captured, video: Captured) => {
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null });
+      video.deps.onChange({ state: "live", fps: 50, error: null });
+    };
+    /** Tick once a second, losing `perSecond` of the 250 audio packets a second, for `seconds`. */
+    const run = (session: AvMirrorSession, count: { value: number }, perSecond: number, seconds: number) => {
+      for (let t = 0; t <= seconds; t++) {
+        session.tick(t * 1000);
+        count.value += perSecond;
+      }
+    };
+
+    it("stops the video and says why when the audio keeps losing packets while both stream", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await Promise.resolve();
+
+      expect(video.stop).toHaveBeenCalledTimes(1);
+      expect(session.getSnapshot().videoPausedForAudio).toMatch(/Video paused to keep the sound clean: 17%/);
+      expect(audio.stop).not.toHaveBeenCalled();
+    });
+
+    it("leaves the video running on the loss a healthy link shows", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 7, 30);
+
+      expect(video.stop).not.toHaveBeenCalled();
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("does not touch the video when only the audio streams", () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null });
+
+      run(session, count, 125, 10);
+
+      expect(video.stop).not.toHaveBeenCalled();
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("clears the notice when the video is started again", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+      run(session, count, 43, 4);
+      await Promise.resolve();
+      expect(session.getSnapshot().videoPausedForAudio).not.toBeNull();
+
+      await session.startVideo();
+
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("logs the failure when the video cannot be stopped", async () => {
+      const { session, audio, video } = makeSession();
+      video.stop.mockRejectedValueOnce(new Error("device did not answer"));
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Could not stop the video that was costing the audio its packets",
+          expect.objectContaining({ error: "device did not answer" }),
+        ),
+      );
+    });
   });
 
   describe("setAudioWanted", () => {
@@ -182,6 +286,7 @@ describe("AvMirrorSession", () => {
     const unsubscribe = session.subscribe((snap) => seen.push(snap));
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
+      videoPausedForAudio: null,
       audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
       video: {
         state: "off",

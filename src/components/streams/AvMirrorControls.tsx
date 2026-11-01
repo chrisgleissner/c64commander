@@ -45,7 +45,16 @@ export function AvMirrorControls({
   session,
   className,
 }: AvMirrorControlsProps) {
-  const { audioLive, videoLive, audio, video, toggleAudio, toggleVideo, session: mirror } = useAvMirror(session);
+  const {
+    audioLive,
+    videoLive,
+    audio,
+    video,
+    videoPausedForAudio,
+    toggleAudio,
+    toggleVideo,
+    session: mirror,
+  } = useAvMirror(session);
 
   // The session reports the failures it knows how to describe (a blocked route, a refused
   // start) through its own snapshot, but a toggle can still reject — a socket that will not
@@ -148,6 +157,11 @@ export function AvMirrorControls({
         >
           {describeSenderAdoption(mismatch)}
         </Button>
+      )}
+      {videoPausedForAudio && (
+        <span role="status" className="text-xs text-muted-foreground" data-testid="av-mirror-video-paused-notice">
+          {videoPausedForAudio}
+        </span>
       )}
       {audio.foreignSenderNotice && (
         <span role="status" className="text-xs text-muted-foreground" data-testid="av-mirror-foreign-sender-notice">
