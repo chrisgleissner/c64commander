@@ -25,7 +25,7 @@ export const SkipRomDependentSongsRow = () => {
         <HelperText>
           A few songs sound wrong on this device without the C64&apos;s own ROMs. With no C64 to play them on, they are
           skipped when a playlist or station moves on, and you are asked first when you pick one. Turn off to play them
-          anyway.
+          anyway; the player then marks them May sound wrong.
         </HelperText>
       </div>
       <Switch

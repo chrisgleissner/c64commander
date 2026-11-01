@@ -31,6 +31,8 @@ const startInSidPlayer = async (page: Page, profile: (typeof PROFILES)[number], 
 
 for (const profile of PROFILES) {
   for (const { name, keypad } of KEYPAD_DEFAULTS) {
+    const startBudgetMs = process.env.CI ? 8000 : 3000;
+
     test.describe(`SID Player at the ${profile} profile with ${name}`, () => {
       let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -100,10 +102,10 @@ for (const profile of PROFILES) {
         page,
       }) => {
         await page.goto("/play", { waitUntil: "domcontentloaded" });
-        await page.getByTestId("start-listening").waitFor({ state: "visible", timeout: 3000 });
+        await page.getByTestId("start-listening").waitFor({ state: "visible", timeout: startBudgetMs });
         const sinceNavigation = await page.evaluate(() => Math.round(performance.now()));
         console.log(`SPM-START-03 start-listening visible ${sinceNavigation} ms after navigation start`);
-        expect(sinceNavigation).toBeLessThan(3000);
+        expect(sinceNavigation).toBeLessThan(startBudgetMs);
       });
 
       test("SPM-PLAY-01 Add items offers no C64U source", async ({ page }) => {

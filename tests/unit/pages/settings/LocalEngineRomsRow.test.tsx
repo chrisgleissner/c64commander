@@ -15,6 +15,7 @@ vi.mock("@/lib/roms/romFetchService", () => ({ fetchSystemRomsFromDevice: vi.fn(
 
 import { addLog } from "@/lib/logging";
 import { fetchSystemRomsFromDevice } from "@/lib/roms/romFetchService";
+import { loadCharacterRomRead, saveCharacterRomRead } from "@/lib/config/characterRomSettings";
 import { LocalEngineRomsRow } from "@/pages/settings/LocalEngineRomsRow";
 
 const readFromDevice = async () => {
@@ -29,11 +30,11 @@ describe("LocalEngineRomsRow reading from the machine", () => {
     vi.mocked(fetchSystemRomsFromDevice).mockResolvedValue({ ok: true, outcomes: [] });
   });
 
-  it("labels the capture with the connected host and asks for the character ROM too", async () => {
+  it("labels the capture with the connected host and does not ask for the character ROM by default", async () => {
     render(<LocalEngineRomsRow deviceHost="c64u.local" />);
     await readFromDevice();
     expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith({ fake: "api" }, "c64u.local", {
-      includeCharacterRom: true,
+      includeCharacterRom: false,
     });
   });
 
@@ -41,7 +42,49 @@ describe("LocalEngineRomsRow reading from the machine", () => {
     render(<LocalEngineRomsRow deviceHost="" />);
     await readFromDevice();
     expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith({ fake: "api" }, "connected C64", {
+      includeCharacterRom: false,
+    });
+  });
+
+  it("offers the character ROM read as a switch that is off until the user turns it on", () => {
+    render(<LocalEngineRomsRow deviceHost="c64u.local" />);
+
+    expect(screen.getByTestId("settings-roms-read-chargen")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("warns beside the switch that the read pauses the C64 and may disturb a program that uses NMIs", () => {
+    render(<LocalEngineRomsRow deviceHost="c64u.local" />);
+
+    const row = screen.getByTestId("settings-roms-read-chargen-row");
+    expect(row).toHaveTextContent(/character ROM/);
+    expect(row).toHaveTextContent(/pauses the C64 briefly/);
+    expect(row).toHaveTextContent(/may disturb a program that uses NMIs/);
+  });
+
+  it("asks for the character ROM once the user has turned the switch on, and remembers the choice", async () => {
+    const { unmount } = render(<LocalEngineRomsRow deviceHost="c64u.local" />);
+    fireEvent.click(screen.getByTestId("settings-roms-read-chargen"));
+    expect(loadCharacterRomRead()).toBe(true);
+
+    await readFromDevice();
+    expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith({ fake: "api" }, "c64u.local", {
       includeCharacterRom: true,
+    });
+
+    unmount();
+    render(<LocalEngineRomsRow deviceHost="c64u.local" />);
+    expect(screen.getByTestId("settings-roms-read-chargen")).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("stops asking for the character ROM when the user turns the switch off again", async () => {
+    saveCharacterRomRead(true);
+    render(<LocalEngineRomsRow deviceHost="c64u.local" />);
+    fireEvent.click(screen.getByTestId("settings-roms-read-chargen"));
+
+    await readFromDevice();
+
+    expect(fetchSystemRomsFromDevice).toHaveBeenCalledWith({ fake: "api" }, "c64u.local", {
+      includeCharacterRom: false,
     });
   });
 

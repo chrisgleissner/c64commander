@@ -23,7 +23,8 @@
  * The character ROM ($D000) cannot be read that way: under default banking
  * that address is I/O, and only the C64's own CPU can bank the character ROM
  * in. So it is read only when the caller asks (`includeCharacterRom`, which
- * only the Settings action does), by briefly running a copy routine on the machine
+ * only the Settings action sets, and only when the user has turned on "Also read
+ * the character ROM"), by briefly running a copy routine on the machine
  * (`characterRomReader.ts`), and only after KERNAL and BASIC have just read
  * back valid — proof the machine is in its default banking. It is optional:
  * no tune's audio depends on it, so a failure here never fails the fetch.
