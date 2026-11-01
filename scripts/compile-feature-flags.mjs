@@ -28,7 +28,18 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 export const DEFAULT_YAML_PATH = path.join(REPO_ROOT, "src/lib/config/feature-flags.yaml");
 export const DEFAULT_OUTPUT_PATH = path.join(REPO_ROOT, "src/lib/config/featureFlagsRegistry.generated.ts");
 
-const FEATURE_FIELDS = ["id", "enabled", "visible_to_user", "developer_only", "group", "title", "description"];
+const FEATURE_FIELDS = [
+  "id",
+  "enabled",
+  "visible_to_user",
+  "developer_only",
+  "requires_device",
+  "group",
+  "title",
+  "description",
+  "owner",
+  "removal_condition",
+];
 
 const ID_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -119,6 +130,7 @@ export const validateRegistry = (raw) => {
     requireBoolean(entry.enabled, `feature "${id}".enabled`);
     requireBoolean(entry.visible_to_user, `feature "${id}".visible_to_user`);
     requireBoolean(entry.developer_only, `feature "${id}".developer_only`);
+    requireBoolean(entry.requires_device, `feature "${id}".requires_device`);
 
     requireNonEmptyString(entry.group, `feature "${id}".group`);
     if (!Object.prototype.hasOwnProperty.call(groups, entry.group)) {
@@ -126,6 +138,8 @@ export const validateRegistry = (raw) => {
     }
     requireNonEmptyString(entry.title, `feature "${id}".title`);
     requireNonEmptyString(entry.description, `feature "${id}".description`);
+    requireNonEmptyString(entry.owner, `feature "${id}".owner`);
+    requireNonEmptyString(entry.removal_condition, `feature "${id}".removal_condition`);
 
     if (entry.developer_only && entry.visible_to_user) {
       fail(`feature "${id}" violates invariant: developer_only: true requires visible_to_user: false`);
@@ -136,6 +150,7 @@ export const validateRegistry = (raw) => {
       enabled: entry.enabled,
       visible_to_user: entry.visible_to_user,
       developer_only: entry.developer_only,
+      requires_device: entry.requires_device,
       group: entry.group,
       title: entry.title,
       description: entry.description,
@@ -196,6 +211,7 @@ export const renderRegistryModule = (registry) => {
     enabled: ${f.enabled},
     visible_to_user: ${f.visible_to_user},
     developer_only: ${f.developer_only},
+    requires_device: ${f.requires_device},
     group: ${renderStringLiteral(f.group)},
     title: ${renderStringLiteral(f.title)},
     description: ${renderStringLiteral(f.description)},
@@ -222,6 +238,7 @@ export interface FeatureFlagDefinition {
   readonly enabled: boolean;
   readonly visible_to_user: boolean;
   readonly developer_only: boolean;
+  readonly requires_device: boolean;
   readonly group: string;
   readonly title: string;
   readonly description: string;

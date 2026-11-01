@@ -31,6 +31,7 @@ export const ALLOWED_ENDPOINT_KEYS = ["device_host", "hvsc_base_url", "commoserv
 const ALLOWED_DEFAULT_DISPLAY_PROFILES = ["auto", "compact", "medium", "expanded"];
 const ALLOWED_JOYSTICK_KEY_LAYOUTS = ["diamond8", "classicT9", "custom"];
 const ALLOWED_GAME_MODE_JOYSTICK = ["auto", "visible", "hidden"];
+export const ALLOWED_STARTUP_MODES = ["default", "demo", "sid-player"];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -415,6 +416,10 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
           `variants.${variantId}.runtime.default_game_mode_joystick`,
         )
       : "auto";
+  const startupMode =
+    runtime.startup_mode !== undefined
+      ? requireOneOf(runtime.startup_mode, ALLOWED_STARTUP_MODES, `variants.${variantId}.runtime.startup_mode`)
+      : "default";
 
   const platform = {
     android: {
@@ -502,6 +507,7 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       defaultJoystickKeyLayout,
       defaultGameModeOnLaunch,
       defaultGameModeJoystick,
+      startupMode,
       keyLabels: normalizeKeyLabels(runtime.key_labels, variantId),
       endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
     },

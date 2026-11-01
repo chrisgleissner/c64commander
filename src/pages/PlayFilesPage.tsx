@@ -36,12 +36,7 @@ import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/conn
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { type PlayRequest } from "@/lib/playback/playbackRouter";
-import {
-  formatPlayCategory,
-  getPlayCategory,
-  isSupportedPlayFile,
-  type PlayFileCategory,
-} from "@/lib/playback/fileTypes";
+import { formatPlayCategory, getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { useUltimateSourceLocation } from "@/lib/sourceNavigation/useUltimateSourceLocation";
@@ -81,6 +76,7 @@ import {
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
 
 import { AppBar } from "@/components/AppBar";
+import { PlayListeningShortcuts } from "@/pages/playFiles/components/PlayListeningShortcuts";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
@@ -94,13 +90,19 @@ import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackContr
 import { PlaybackSpectrumCard } from "@/components/playback/SpectrumCard";
 import { PlaybackSoundCard } from "@/components/playback/SoundCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
+import { useAppMode } from "@/lib/appMode/appModeStore";
+import { addItemsAcceptsPath, addItemsEntryFilter, addItemsSourceGroups } from "@/pages/playFiles/addItemsFilter";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheetHost } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useExternalOpenState } from "@/hooks/useExternalOpenState";
-import { PlayDeepLinks, type PlayDeepLinkHandlers } from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import {
+  PlayDeepLinks,
+  startListeningHandlers,
+  type PlayDeepLinkHandlers,
+} from "@/pages/playFiles/hooks/usePlayDeepLinks";
 import { useLockScreenPlayback } from "@/pages/playFiles/hooks/useLockScreenPlayback";
 import { usePlayTransportCommands } from "@/pages/playFiles/hooks/usePlayTransportCommands";
 import { resolveSeekToFraction } from "@/pages/playFiles/resolveSeekToFraction";
@@ -137,13 +139,13 @@ import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
+import { useHvscDownloadConsent } from "@/pages/playFiles/hooks/useHvscDownloadConsent";
+import { useHvscPreparationLifecycle } from "@/pages/playFiles/hooks/useHvscPreparationLifecycle";
 import { HvscPreparationSheet } from "@/pages/playFiles/components/HvscPreparationSheet";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { useDemoPlaylistCleanup } from "@/pages/playFiles/hooks/useDemoPlaylistCleanup";
 import {
-  shouldAutoRunHvscPreparation,
-  shouldCancelHvscLifecycleOnDisable,
   shouldIncludeHvscSource,
   shouldOpenHvscPreparation,
   shouldShowHvscControls,
@@ -454,7 +456,6 @@ export default function PlayFilesPage() {
   // would otherwise tear down the wake lock owned by the live playback session
   // (BUG-040). Only an instance that genuinely owned playback may release it.
   const hasObservedActivePlaybackRef = useRef(false);
-  const hvscDisableCancellationRequestedRef = useRef(false);
   const [configPickerState, setConfigPickerState] = useState<ConfigPickerState | null>(null);
   const [activeConfigItemId, setActiveConfigItemId] = useState<string | null>(null);
   const [pendingConfigChange, setPendingConfigChange] = useState<PendingConfigChangeState | null>(null);
@@ -658,6 +659,12 @@ export default function PlayFilesPage() {
     },
     openLikedTunes: () => likedTunesSheet.set(true),
     resumeSession: () => transportCommandBus.publish("play"),
+    ...startListeningHandlers({
+      setHvscPreparationOpen,
+      setBrowserOpen,
+      setBrowserInitialSourceId,
+      archiveSourceId: archiveConfig.id,
+    }),
   };
 
   usePlayTransportCommands(
@@ -935,48 +942,18 @@ export default function PlayFilesPage() {
     }
   }, [browserOpen]);
 
-  useEffect(() => {
-    const autoRun = shouldAutoRunHvscPreparation({
-      enabled: hvscControlsEnabled,
-      sheetOpen: hvscPreparationOpen,
-      updating: hvsc.hvscUpdating,
-      preparationState: hvsc.hvscPreparationState,
-    });
-    if (autoRun) void hvsc.runHvscPreparation();
-  }, [hvsc.hvscPreparationState, hvsc.hvscUpdating, hvsc.runHvscPreparation, hvscControlsEnabled, hvscPreparationOpen]);
-
-  useEffect(() => {
-    if (hvscControlsEnabled) {
-      hvscDisableCancellationRequestedRef.current = false;
-      return;
-    }
-
-    if (hvscPreparationOpen) {
-      setHvscPreparationOpen(false);
-    }
-
-    if (!shouldCancelHvscLifecycleOnDisable(hvscControlsEnabled, hvsc.hvscPreparationState)) {
-      hvscDisableCancellationRequestedRef.current = false;
-      return;
-    }
-
-    if (hvscDisableCancellationRequestedRef.current) return;
-    hvscDisableCancellationRequestedRef.current = true;
-
-    void hvsc.handleHvscCancel().catch((error) => {
-      hvscDisableCancellationRequestedRef.current = false;
-      reportUserError({
-        operation: "HVSC_CANCEL",
-        title: "HVSC shutdown failed",
-        description: "HVSC was disabled, but the active preparation task could not be canceled cleanly.",
-        error,
-        context: { preparationState: hvsc.hvscPreparationState },
-        // The disable itself succeeded; a lingering background task is a
-        // notice, not a destructive error (ERROR_POLICY §1 S2).
-        severity: "S2",
-      });
-    });
-  }, [hvsc.handleHvscCancel, hvsc.hvscPreparationState, hvscControlsEnabled, hvscPreparationOpen]);
+  const hvscConsent = useHvscDownloadConsent({
+    preparationState: hvsc.hvscPreparationState,
+    errorReason: hvsc.hvscPreparationErrorReason,
+    sheetOpen: hvscPreparationOpen,
+  });
+  useHvscPreparationLifecycle({
+    hvsc,
+    controlsEnabled: hvscControlsEnabled,
+    sheetOpen: hvscPreparationOpen,
+    setSheetOpen: setHvscPreparationOpen,
+    awaitingConsent: hvscConsent.awaiting,
+  });
 
   useImportNavigationGuards(isImportNavigationBlocked);
 
@@ -1043,6 +1020,7 @@ export default function PlayFilesPage() {
     });
   }, [addItemsProgress.status, browserOpen]);
 
+  const appMode = useAppMode();
   const ultimateSource = useUltimateSourceLocation(status.deviceInfo?.product, status.state !== "OFFLINE_NO_DEMO");
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
@@ -1062,8 +1040,17 @@ export default function PlayFilesPage() {
         sources: [createArchiveSourceLocation(archiveConfig)],
       });
     }
-    return groups;
-  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, ultimateSource]);
+    return addItemsSourceGroups(appMode, groups);
+  }, [
+    appMode,
+    archiveConfig,
+    commoserveEnabled,
+    featureFlags,
+    hvscAvailable,
+    hvscRoot.path,
+    localSources,
+    ultimateSource,
+  ]);
 
   const updatePlaylistItemConfigRef = useCallback(
     (
@@ -1404,6 +1391,7 @@ export default function PlayFilesPage() {
   const handleAddFileSelections = useMemo(
     () =>
       createAddFileSelectionsHandler({
+        acceptsPath: addItemsAcceptsPath(appMode),
         addItemsStartedAtRef,
         addItemsOverlayActiveRef,
         addItemsOverlayStartedAtRef,
@@ -1429,6 +1417,7 @@ export default function PlayFilesPage() {
         archiveConfigs,
       }),
     [
+      appMode,
       addItemsSurface,
       applySonglengthsToItems,
       browserOpen,
@@ -1940,6 +1929,7 @@ export default function PlayFilesPage() {
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
     route: soundingRoute,
+    plainLabels: appMode === "sid-player",
     local: {
       index: localVolumeIndex,
       muted: localMuted,
@@ -2443,6 +2433,10 @@ export default function PlayFilesPage() {
       <AppBar title="Play" />
       <PageContainer>
         <PageStack>
+          <PlayListeningShortcuts
+            playlistEmpty={playlistHydrated && playlist.length === 0}
+            hvscInstalled={hvsc.hvscInstalled}
+          />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div className="flex flex-col gap-4" data-testid="play-primary-column">
               <div
@@ -2857,7 +2851,7 @@ export default function PlayFilesPage() {
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
             onConfirm={handlePickerConfirm}
             onSelectSource={handleHvscSourceSelection}
-            filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
+            filterEntry={addItemsEntryFilter(appMode)}
             allowFolderSelection
             isConfirming={isAddingItems}
             progress={addItemsProgress}
@@ -2905,6 +2899,8 @@ export default function PlayFilesPage() {
             browseLabel={hvscPreparationForRadio ? "Open SID Radio" : undefined}
             onCancel={() => void handleCancelHvscPreparation()}
             onRetry={() => void hvsc.retryHvscPreparation()}
+            awaitingConsent={hvscConsent.awaiting}
+            onConsent={hvscConsent.grant}
           />
 
           <ItemSelectionDialog
@@ -3038,7 +3034,11 @@ export default function PlayFilesPage() {
 
           {hvscControlsEnabled && (
             <div data-testid="play-section-hvsc">
-              <HvscManager hvscControlsEnabled={true} hvsc={hvsc} />
+              <HvscManager
+                hvscControlsEnabled={true}
+                hvsc={hvsc}
+                onOpenPreparation={() => setHvscPreparationOpen(true)}
+              />
             </div>
           )}
         </PageStack>

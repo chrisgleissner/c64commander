@@ -1662,7 +1662,12 @@ describe("usePlaybackPersistence", () => {
   });
 
   // Play page left for the Home tab for 15 s while a tune played on: coming back, the clock read 15 s behind the tune.
-  const restoreSession = async (session: { isPlaying: boolean; isPaused: boolean; playbackDeviceId?: string }) => {
+  const restoreSession = async (session: {
+    isPlaying: boolean;
+    isPaused: boolean;
+    playbackDeviceId?: string;
+    playingOnPhone?: boolean;
+  }) => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
@@ -1704,6 +1709,13 @@ describe("usePlaybackPersistence", () => {
     await waitFor(() => expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true));
     return view.result;
   };
+
+  it("SPM-A11Y-03 a restored session waits paused", async () => {
+    const result = await restoreSession({ isPlaying: true, isPaused: false, playingOnPhone: true });
+
+    expect(result.current.isPaused).toBe(true);
+    expect(result.current.trackStartedAtRef.current).toBeNull();
+  });
 
   it("records the restored tune as sounding after an active restore", async () => {
     const result = await restoreSession({ isPlaying: true, isPaused: false });

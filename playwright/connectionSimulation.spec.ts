@@ -56,12 +56,12 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
 };
 
 const dismissDemoModeDialogIfVisible = async (page: Page) => {
-  const dialog = page.getByRole("dialog", { name: /demo mode/i });
+  const dialog = page.getByRole("dialog", { name: /demo mode|No C64 Ultimate found/i });
   if (!(await dialog.isVisible().catch(() => false))) return;
 
   const continueButton = dialog
     .getByRole("button", {
-      name: /Continue in Demo Mode/i,
+      name: /Continue in Demo Mode|Try Demo Mode/i,
     })
     .first();
   if (await continueButton.isVisible().catch(() => false)) {
@@ -232,9 +232,9 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     if (await dialog.isVisible().catch(() => false)) {
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     }
 
     const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
@@ -292,7 +292,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
       timeout: REACHABLE_DEVICE_DISCOVERY_WINDOW_MS,
     });
-    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toHaveCount(0);
     expect(demoServer.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(false);
 
     await snap(page, testInfo, "real-connected-no-demo");
@@ -327,12 +327,12 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const dialogTitle = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialogTitle = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     await expect(dialogTitle).toBeVisible({ timeout: 30000 });
-    await dialogTitle.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await dialogTitle.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ })).toHaveCount(0);
 
     await snap(page, testInfo, "demo-fallback-once");
   });
@@ -368,7 +368,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await page.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(demoIndicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
 
@@ -429,7 +429,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await page.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     server.setReachable(true);
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
@@ -520,7 +520,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       const demoContinue = page.getByRole("button", {
         name: /continue in demo mode/i,
       });
-      const demoDialog = page.getByRole("dialog", { name: /demo mode/i });
+      const demoDialog = page.getByRole("dialog", { name: /demo mode|No C64 Ultimate found/i });
 
       try {
         await demoDialog.waitFor({ state: "visible", timeout: 1500 });
@@ -537,7 +537,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       if (await demoDialog.isVisible()) {
         const continueButton = demoDialog
           .getByRole("button", {
-            name: /Continue in Demo Mode/i,
+            name: /Continue in Demo Mode|Try Demo Mode/i,
           })
           .first();
         if (await continueButton.isVisible()) {
@@ -561,7 +561,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(saveButton).toBeVisible({ timeout: 15000 });
     await clickWithoutNavigationWait(page, saveButton);
     const postSaveDemo = page.getByRole("button", {
-      name: "Continue in Demo Mode",
+      name: /Continue in Demo Mode|Try Demo Mode/,
     });
     if (await postSaveDemo.isVisible()) {
       await postSaveDemo.click();
@@ -570,7 +570,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     if (await postSaveDialog.isVisible()) {
       const continueButton = postSaveDialog
         .getByRole("button", {
-          name: /Continue in Demo Mode/i,
+          name: /Continue in Demo Mode|Try Demo Mode/i,
         })
         .first();
       if (await continueButton.isVisible()) {
@@ -620,7 +620,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
+    await page.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
     await page.addInitScript(
@@ -684,7 +684,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     }
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
     const continueDemo = page.getByRole("button", {
-      name: /Continue in Demo Mode/i,
+      name: /Continue in Demo Mode|Try Demo Mode/i,
     });
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
@@ -783,12 +783,12 @@ test.describe("Deterministic Connectivity Simulation", () => {
       }
 
       await triggerConnectionRecovery(page, indicator, host);
-      const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       const dialogVisible = await dialog.isVisible().catch(() => false);
       if (dialogVisible) {
         const continueButton = dialog
           .getByRole("button", {
-            name: /Continue in Demo Mode/i,
+            name: /Continue in Demo Mode|Try Demo Mode/i,
           })
           .first();
         if (await continueButton.isVisible().catch(() => false)) {
@@ -825,11 +825,11 @@ test.describe("Deterministic Connectivity Simulation", () => {
     if (await saveAndConnectToDemo.isVisible().catch(() => false)) {
       await clickWithoutNavigationWait(page, saveAndConnectToDemo);
     }
-    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
     await dialog.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
     const dialogVisible = await dialog.isVisible().catch(() => false);
     if (dialogVisible) {
-      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
     }
     await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
@@ -937,9 +937,9 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
-    const demoDialog = page.getByRole("dialog", { name: /demo mode/i });
+    const demoDialog = page.getByRole("dialog", { name: /demo mode|No C64 Ultimate found/i });
     const continueInDemoMode = page.getByRole("button", {
-      name: /Continue in Demo Mode/i,
+      name: /Continue in Demo Mode|Try Demo Mode/i,
     });
     if (await continueInDemoMode.isVisible().catch(() => false)) {
       await continueInDemoMode.first().click();

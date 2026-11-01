@@ -22,6 +22,9 @@
  * screen showing. `tourCaptionBudget.test.ts` holds the lengths.
  */
 
+import type { AppMode } from "@/lib/appMode/appModeStore";
+import { isTabPathVisible } from "@/lib/navigation/tabRoutes";
+
 /** What a caption may depend on, read when the step is shown. */
 export interface TourContext {
   /** Whether the HVSC music collection is installed, which SID Radio needs before it can play. */
@@ -52,6 +55,8 @@ export interface TourStep {
   };
   /** True for a step that only makes sense with a machine attached. */
   readonly requiresDevice?: boolean;
+  /** What differs in SID Player: the same step, worded and anchored for a phone with no machine. */
+  readonly sidPlayer?: Partial<Pick<TourStep, "title" | "body" | "anchor">>;
 }
 
 export const TOUR_STEPS: readonly TourStep[] = [
@@ -59,6 +64,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "what-this-is",
     title: "Welcome",
     body: "Controls your C64, and plays C64 music by itself too.",
+    sidPlayer: { body: "Plays C64 music on this phone." },
   },
   {
     id: "search",
@@ -78,6 +84,11 @@ export const TOUR_STEPS: readonly TourStep[] = [
         ? "Radio plays C64 tunes right here. No C64 needed."
         : "Radio plays C64 tunes here after a free one-time download.",
     anchor: { path: "/", scope: "home", sectionId: "quick-actions", testIds: ["home-tile-action.sid-radio"] },
+    sidPlayer: {
+      title: "Start listening",
+      body: "Search and Start listening sit at the top of Play.",
+      anchor: { path: "/play", testIds: ["home-search-field"] },
+    },
   },
   {
     id: "your-tunes",
@@ -95,6 +106,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     title: "Build a playlist",
     body: "Add tunes and programs from this device or from your C64.",
     anchor: { path: "/play", testIds: ["add-items-to-playlist"] },
+    sidPlayer: { body: "Add tunes from your files or the music collection." },
   },
   {
     id: "disks",
@@ -141,6 +153,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
     title: "Keys work too",
     body: "1 to 6 open pages, 7 searches, arrows move the highlight.",
     anchor: { path: "/", testIds: ["tab-bar"] },
+    sidPlayer: {
+      body: "1 to 3 open pages, 7 searches, arrows move the highlight.",
+      anchor: { path: "/play", testIds: ["tab-bar"] },
+    },
   },
   {
     id: "docs",
@@ -156,6 +172,17 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
 ];
 
+/**
+ * The steps this mode tours: SID Player words and anchors its own, and leaves out a step that needs a
+ * machine or whose page the mode hides.
+ */
+export const tourStepsFor = (appMode: AppMode): readonly TourStep[] => {
+  if (appMode === "full") return TOUR_STEPS;
+  return TOUR_STEPS.filter((step) => !step.requiresDevice)
+    .map((step) => ({ ...step, ...step.sidPlayer }))
+    .filter((step) => step.anchor === undefined || isTabPathVisible(step.anchor.path, appMode));
+};
+
 /** The caption's body for `step` in `context`. */
 export const stepBody = (step: TourStep, context: TourContext): string =>
   typeof step.body === "function" ? step.body(context) : step.body;
@@ -165,8 +192,8 @@ export const DEVICE_STEP_IDS: readonly string[] = TOUR_STEPS.filter((step) => st
   (step) => step.id,
 );
 
-export const tourStepIndex = (stepId: string | null): number => {
+export const tourStepIndex = (stepId: string | null, steps: readonly TourStep[] = TOUR_STEPS): number => {
   if (stepId === null) return 0;
-  const index = TOUR_STEPS.findIndex((step) => step.id === stepId);
+  const index = steps.findIndex((step) => step.id === stepId);
   return index < 0 ? 0 : index;
 };

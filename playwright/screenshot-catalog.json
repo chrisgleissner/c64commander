@@ -71,7 +71,8 @@
     "stable",
     "experimental",
     "stable-stable-features",
-    "experimental-experimental-features"
+    "experimental-experimental-features",
+    "app-mode"
   ],
   "docs": [
     "contents",

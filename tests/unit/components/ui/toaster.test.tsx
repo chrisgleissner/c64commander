@@ -131,6 +131,17 @@ describe("Toaster", () => {
     expect(vi.mocked(Toast).mock.calls[0][0]).not.toHaveProperty("alwaysVisible");
   });
 
+  it("SPM-NAV-03 an informational hint has no Details and no Close button to take the keypad ring", () => {
+    mockToasts.value = [
+      { id: "hint", title: "Pages are on keys 1 to 3", informational: true } as (typeof mockToasts.value)[number],
+      { id: "err", title: "Mount failed" } as (typeof mockToasts.value)[number],
+    ];
+    render(<Toaster />);
+
+    expect(screen.getAllByTestId("app-toast-details")).toHaveLength(1);
+    expect(screen.getAllByTestId("app-toast-close")).toHaveLength(1);
+  });
+
   it("renders provider and viewport when there are no toasts", () => {
     render(<Toaster />);
     expect(screen.getByTestId("toast-provider")).toBeInTheDocument();

@@ -12,6 +12,7 @@ import { TelnetSocket } from "@/lib/native/telnetSocket";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { assertDeviceTrafficAllowed } from "@/lib/appMode/deviceTrafficGate";
 
 type CreateTelnetClientOptions = {
   connectTimeoutMs?: number;
@@ -96,6 +97,7 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
 
   return {
     async connect(host: string, port: number): Promise<void> {
+      assertDeviceTrafficAllowed("telnet", { host, port });
       try {
         await TelnetSocket.connect({ host, port, timeoutMs: connectTimeoutMs });
         connected = true;

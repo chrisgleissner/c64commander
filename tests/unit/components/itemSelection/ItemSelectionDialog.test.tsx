@@ -592,6 +592,25 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(button.textContent).toContain("U64");
   });
 
+  it("SPM-PLAY-01 offers no Ultimate option when no group carries an Ultimate source", () => {
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={[]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.queryByTestId("import-option-c64u")).toBeNull();
+    expect(screen.queryByTestId("import-option-c64u-unavailable")).toBeNull();
+  });
+
   it("disables the Ultimate source and says a device is needed, without naming one model, while none is connected", () => {
     // Offline this opened an empty browser that said only "No matching items in this folder".
     render(

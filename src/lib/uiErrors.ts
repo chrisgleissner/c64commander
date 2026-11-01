@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { isSidPlayerActive } from "@/lib/appMode/appModeStore";
+import { SidPlayerTrafficBlockedError } from "@/lib/appMode/deviceTrafficGate";
 import React from "react";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
@@ -198,6 +200,14 @@ export const reportUserError = ({
     ...context,
     error: buildErrorDetails(error),
   };
+
+  if (
+    isSidPlayerActive() &&
+    (error instanceof SidPlayerTrafficBlockedError || isRecoverableConnectivityError(description, error))
+  ) {
+    addLog("info", `${operation}: ${title}`, { ...logPayload, suppressedReason: "sid-player-no-device" });
+    return;
+  }
 
   // The badge already says the device is offline, so a failure caused by that is logged, not raised.
   // One neutral notice per offline spell still explains why an action had no effect.

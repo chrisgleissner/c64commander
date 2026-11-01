@@ -17,13 +17,28 @@ const routerHistoryIndex = (): number => {
   return typeof index === "number" ? index : 0;
 };
 
+let historyBaseline = 0;
+
+/**
+ * Entering SID Player makes the current page the first one of the session as far as Back is concerned: the
+ * entries below it belong to pages the mode hides, and walking them only bounced each one back to Play.
+ */
+export const markHistoryBaseline = (): void => {
+  historyBaseline = routerHistoryIndex();
+};
+
+/** Leaving SID Player makes every history entry a page of the app again. */
+export const clearHistoryBaseline = (): void => {
+  historyBaseline = 0;
+};
+
 /**
  * What the Back key does once nothing inside the page is left to close: return to the previous
  * route, or, on the first route of the session, send the app to the background the way Android's
  * own Back does. The app registers a Back listener, which stops Android doing that by itself.
  */
 export const navigateBackOrLeave = (navigate: (delta: number) => void): void => {
-  if (routerHistoryIndex() > 0) {
+  if (routerHistoryIndex() > historyBaseline) {
     navigate(-1);
     return;
   }

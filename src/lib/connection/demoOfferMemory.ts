@@ -36,3 +36,7 @@ const hasSeenDemoOffer = () => {
 
 export const isAwayFromKnownDevice = () =>
   hasSeenDemoOffer() && getSavedDevicesSnapshot().devices.some((device) => Boolean(device.lastSuccessfulConnectionAt));
+
+/** A person who has never reached a device is most likely someone without one, so the offer can lead with SID Player. */
+export const hasNeverConnectedDevice = () =>
+  !getSavedDevicesSnapshot().devices.some((device) => Boolean(device.lastSuccessfulConnectionAt));

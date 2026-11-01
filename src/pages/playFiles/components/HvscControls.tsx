@@ -13,6 +13,8 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
 import type { HvscPreparationPhase, HvscPreparationState } from "@/lib/hvsc";
 import type { HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { HVSC_CANCELED_STATUS_REASON } from "@/lib/hvsc/hvscCancellation";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 import { HvscStageSteps } from "./HvscStageSteps";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 
@@ -94,9 +96,14 @@ export const HvscControls = ({
   onReindex,
   onReset,
 }: HvscControlsProps) => {
+  const sidPlayer = useAppMode() === "sid-player";
   const readyToUseLabel = "Ready to use: Add items -> HVSC.";
   const isReady = hvscPreparationState === "READY";
-  const isError = hvscPreparationState === "ERROR";
+  // In SID Player a download the person stopped is back to where it started, not a failure.
+  const canceled =
+    sidPlayer && hvscPreparationState === "ERROR" && hvscPreparationErrorReason === HVSC_CANCELED_STATUS_REASON;
+  const isError = hvscPreparationState === "ERROR" && !canceled;
+  const statusLabel = canceled ? "Not downloaded" : hvscPreparationStatusLabel;
   const working = hvscPreparationState !== "NOT_PRESENT" && hvscPreparationState !== "READY";
   // The library can be browsed once it is ready, but the pass that reads every tune again for its
   // name, composer and year starts then and runs for minutes. It is a step of the install, so its
@@ -159,10 +166,12 @@ export const HvscControls = ({
         <div className="min-w-[10rem] flex-1">
           {hvscInstalledVersion ? null : (
             <p className="text-xs text-muted-foreground">
-              HVSC will be prepared automatically the first time you choose Add items -&gt; HVSC.
+              {sidPlayer
+                ? "Choose Download to get the free C64 music collection."
+                : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
+          <p className="text-xs text-muted-foreground">Status: {statusLabel}</p>
         </div>
 
         {/* Not `shrink-0`: at the largest Text size the three labels grow with the root, and a
@@ -224,7 +233,7 @@ export const HvscControls = ({
         {isPreparing ? (
           <div className="space-y-2" data-testid="hvsc-progress">
             <div className="flex items-center justify-between gap-2">
-              <span>{analyzing ? "Analyzing songs" : hvscPreparationStatusLabel}</span>
+              <span>{analyzing ? "Analyzing songs" : statusLabel}</span>
             </div>
             <HvscStageSteps
               state={analyzing ? "INGESTING" : hvscPreparationState}
@@ -239,7 +248,9 @@ export const HvscControls = ({
           </div>
         ) : null}
 
-        {hvscPreparationErrorReason ? <p className="text-destructive">{hvscPreparationErrorReason}</p> : null}
+        {hvscPreparationErrorReason && !canceled ? (
+          <p className="text-destructive">{hvscPreparationErrorReason}</p>
+        ) : null}
         {hvscSonglengthSyntaxErrors > 0 ? (
           <p className="text-warning">
             {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.

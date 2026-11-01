@@ -1,3 +1,4 @@
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { openAllCards, resetCardMemory } from "../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,7 +110,7 @@ const chapterText = (chapters: readonly GuideChapter[]) =>
 /** Words that keep their capitals in sentence case: product feature names, acronyms and page names. */
 const PROPER_WORDS = new Set([
   ...["HVSC", "SID", "C64", "T9"],
-  ...["Radio", "Remote", "Input", "Game", "Mode", "Live", "View"],
+  ...["Radio", "Remote", "Input", "Game", "Mode", "Live", "View", "Player", "Full", "App"],
   ...["Home", "Play", "Disks", "Config", "Settings", "Docs"],
 ]);
 
@@ -199,6 +200,20 @@ describe("DocsPage", () => {
       for (const text of [chapter.title, chapter.navLabel, ...headings]) {
         expect(sentenceCaseViolations(text), `"${text}" is not sentence case`).toEqual([]);
       }
+    }
+  });
+
+  it("SPM-DOC-01 the Docs page in SID Player shows the SID Player chapter and no machine chapter", () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      render(<DocsPage />);
+      expect(screen.getByTestId("docs-card-sid-player")).toBeInTheDocument();
+      expect(screen.getByTestId("docs-card-play")).toBeInTheDocument();
+      for (const id of ["disks", "config", "devices", "status-badge", "connection-problems"]) {
+        expect(screen.queryByTestId(`docs-card-${id}`), id).toBeNull();
+      }
+    } finally {
+      saveStartupModeByUser("default");
     }
   });
 

@@ -102,3 +102,16 @@ export const LOCAL_VOLUME_OFF_LABEL = LOCAL_VOLUME_STEPS[0].label;
 
 /** The text beside the slider, e.g. "-6 dB". */
 export const localVolumeLabelForIndex = (index: number): string => LOCAL_VOLUME_STEPS[index]?.label ?? "—";
+
+export const PLAIN_VOLUME_OFF_LABEL = "Off";
+export const PLAIN_VOLUME_TOP_LABEL = "Max";
+
+/** SID Player stops the scale at unity gain: the steps above it ask for the same gain and would only look louder. */
+export const PLAIN_VOLUME_STEP_COUNT = LOCAL_VOLUME_DEFAULT_INDEX + 1;
+
+/** SID Player's wording for a step: "Off", then the step number, with unity gain (where a new install starts) as "Max". */
+export const plainVolumeLabelForIndex = (index: number): string => {
+  if (index <= 0) return PLAIN_VOLUME_OFF_LABEL;
+  if (index >= PLAIN_VOLUME_STEP_COUNT - 1) return PLAIN_VOLUME_TOP_LABEL;
+  return String(index);
+};

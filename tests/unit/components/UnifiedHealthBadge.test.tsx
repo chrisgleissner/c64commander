@@ -17,6 +17,8 @@ import {
 } from "@/components/UnifiedHealthBadge";
 import { SAVED_DEVICE_SWITCH_SUPERSEDED } from "@/lib/savedDevices/savedDeviceSwitchOutcome";
 import { guidanceLabelFor } from "@/lib/input/guidance";
+import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
 
 const mockUseSavedDeviceHealthChecks = vi.fn();
 const mockToast = vi.hoisted(() => vi.fn());
@@ -283,6 +285,66 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     expect(screen.getByTestId("unified-health-badge-demo")).toHaveTextContent("DEMO");
+  });
+
+  describe("in SID Player", () => {
+    beforeEach(() => {
+      saveStartupModeByUser("sid-player");
+      (mockState.healthState as { state: string }).state = "Idle";
+      (mockState.healthState as { connectivity: string }).connectivity = "SID Player";
+      mockState.healthState.problemCount = 0;
+      mockState.connectionStatus.state = "OFFLINE_NO_DEMO";
+    });
+
+    afterEach(() => {
+      saveStartupModeByUser("default");
+    });
+
+    it("SPM-ERR-02 the badge reads SID Player without a severity glyph and offers no device switcher", () => {
+      render(<UnifiedHealthBadge />);
+      const badge = screen.getByTestId("unified-health-badge");
+
+      expect(screen.getByTestId("unified-health-badge-demo")).toHaveTextContent("SID Player");
+      expect(badge).toHaveAttribute("aria-label", "SID Player");
+      expect(badge).toHaveAttribute("data-connectivity-state", "SID Player");
+      expect(badge.querySelector("[data-health-shape]")).toBeNull();
+
+      vi.useFakeTimers();
+      fireEvent.pointerDown(badge, { pointerType: "touch" });
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.queryByTestId("saved-device-switch-dialog")).toBeNull();
+      expect(document.querySelector("[role='dialog']")).toBeNull();
+    });
+
+    it("SPM-ERR-02 the badge reads SID Player and a tap opens the mode sheet, not Diagnostics", () => {
+      const seen: ModeDialogKind[] = [];
+      const unsubscribe = subscribeModeDialog((kind) => seen.push(kind));
+      render(<UnifiedHealthBadge />);
+
+      fireEvent.click(screen.getByTestId("unified-health-badge"));
+      unsubscribe();
+      expect(seen).toEqual(["sheet"]);
+      expect(mockState.requestDiagnosticsOpen).not.toHaveBeenCalled();
+    });
+
+    it("SPM-NET-02 SID Player runs no saved-device health check even with several saved devices", () => {
+      render(<UnifiedHealthBadge />);
+
+      expect(mockUseSavedDeviceHealthChecks).toHaveBeenCalled();
+      for (const call of mockUseSavedDeviceHealthChecks.mock.calls) {
+        expect(call[1]).toBe(false);
+      }
+    });
+
+    it("SPM-NET-02 the same two saved devices are health-checked in Full App", () => {
+      saveStartupModeByUser("default");
+      (mockState.healthState as { connectivity: string }).connectivity = "Offline";
+      render(<UnifiedHealthBadge />);
+
+      expect(mockUseSavedDeviceHealthChecks.mock.calls.some((call) => call[1] === true)).toBe(true);
+    });
   });
 
   it("shows no host label on the compact profile while connected to a real device", () => {

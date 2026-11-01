@@ -6,6 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { saveStartupModeByUser } from "@/lib/appMode/appModeStore";
+import { deviceKeypadShortcuts } from "@/lib/appMode/deviceKeypadShortcuts";
+import { subscribeMachineCommand } from "@/lib/input/keypadCommands";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState } from "react";
@@ -1022,6 +1025,29 @@ describe("FocusNavigationProvider global shortcuts", () => {
     resetInputModality();
   });
 
+  it("SPM-NAV-03 a digit past the visible tabs in SID Player keeps the ring where it is", async () => {
+    saveStartupModeByUser("sid-player");
+    try {
+      const jumpToTab = vi.fn();
+      render(
+        <FocusNavigationProvider shortcuts={{ jumpToTab }}>
+          <button type="button">Page first</button>
+          <button type="button">Page second</button>
+        </FocusNavigationProvider>,
+      );
+      setInputModality("key-navigation");
+      button("Page second").focus();
+      await waitFor(() => expect(button("Page second").getAttribute(SELECTED)).toBe("true"));
+
+      fireEvent.keyDown(document.body, { code: "Digit4" });
+
+      expect(jumpToTab).toHaveBeenCalledWith(3);
+      expect(button("Page second").getAttribute(SELECTED)).toBe("true");
+    } finally {
+      saveStartupModeByUser("default");
+    }
+  });
+
   /*
    * 8 and 9 exist because the same two actions cost ten and eight presses through Home's Quick
    * Actions grid from a cold arrival, measured on the handset. The grid is not moving; these are a
@@ -1041,6 +1067,40 @@ describe("FocusNavigationProvider global shortcuts", () => {
 
     fireEvent.keyDown(document.body, { code: "Digit9" });
     expect(machineReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("SPM-NAV-03 keys 8 and 9 do nothing in SID Player: no machine command, no toast", () => {
+    const commands: string[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => commands.push(command));
+    const jumpToTab = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ jumpToTab, ...deviceKeypadShortcuts("sid-player") }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    unsubscribe();
+
+    expect(commands).toEqual([]);
+    expect(jumpToTab).not.toHaveBeenCalled();
+  });
+
+  it("SPM-NAV-03 keys 8 and 9 still reach the machine in the Full App", () => {
+    const commands: string[] = [];
+    const unsubscribe = subscribeMachineCommand((command) => commands.push(command));
+    render(
+      <FocusNavigationProvider shortcuts={{ ...deviceKeypadShortcuts("full") }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    unsubscribe();
+
+    expect(commands).toEqual(["pauseResume", "reset"]);
   });
 
   it("leaves the machine keys to T9 while editing a text field", () => {

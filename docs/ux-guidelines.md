@@ -296,6 +296,8 @@ The health badge is the element in the top-right of the app bar labeled with the
 - Visually present at all times while an overlay is active.
 - Clearly readable at all times — text, status label, and health glyph must be distinguishable even when a backdrop is present.
 
+In SID Player the badge reads "SID Player" and carries no connectivity severity, because the app does not look for a device. It keeps its position, size and visibility rules, and tapping it opens the app mode sheet.
+
 Rationale: the health badge is the primary connectivity signal. Masking it prevents the user from noticing that the device has become degraded or unreachable while a workflow sheet is open.
 
 #### Badge Safe Zone

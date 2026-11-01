@@ -7,7 +7,9 @@
  */
 
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
-import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { isDiscoveryPending, waitForDiscoveryToSettle } from "@/lib/connection/connectionSettle";
+import { loadLocalEngineEnabled } from "@/lib/config/appSettings";
+import { effectivePlaybackEngine } from "@/lib/playback/effectivePlaybackEngine";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { preRouteEngine, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
@@ -40,6 +42,12 @@ export interface LaunchRoute {
   maySoundWrong: boolean;
 }
 
+/** After discovery has had its say (or its bound has passed): is there a C64 to play the song? */
+const settleC64 = async (deviceOutOfReach: boolean): Promise<boolean> => {
+  await waitForDiscoveryToSettle();
+  return !isDiscoveryPending(getConnectionSnapshot().state) && isC64UsableForSid(deviceOutOfReach);
+};
+
 /**
  * Where a playlist item plays: the C64, or this phone's own engine. Null when it does not play at all,
  * because the listener said Cancel to a song that needs the C64's ROMs, or something overtook it while
@@ -67,7 +75,7 @@ const chooseLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute |
     return { routeToLocal: false, request, simulatedDevice, maySoundWrong: false };
   const selection = preRouteEngine({
     category: item.category,
-    engine: loadPlaybackEngine(),
+    engine: effectivePlaybackEngine(),
     localSupported: LocalSidPlaybackController.isSupported(),
     simulatedDevice,
     noDeviceConnected,
@@ -95,6 +103,7 @@ const chooseLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute |
     selectionNotice: selection.notice,
     noMachineForRoms,
     c64Usable: isC64UsableForSid(deviceOutOfReach),
+    settleC64: isDiscoveryPending(connectionState) ? () => settleC64(deviceOutOfReach) : undefined,
     passOver: input.passOver,
     accepted: input.accepted,
     ask: input.ask,

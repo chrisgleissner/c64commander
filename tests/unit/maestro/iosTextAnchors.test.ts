@@ -1,3 +1,4 @@
+import { MODE_COPY } from "@/lib/appMode/copy";
 import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -107,6 +108,7 @@ const CONNECTION_ANCHOR = "Connection.*";
 const HVSC_FLAG_ANCHOR = "HVSC downloads.*";
 const PLAY_ANCHOR = "(Your playlist|Select a playlist item to start|Playlist)";
 const FEATURE_GROUP_ANCHOR = "Stable.*";
+const DEMO_CONTINUE_ANCHOR = "(Continue in Demo Mode|Try Demo Mode)";
 
 /**
  * Every `scrollUntilVisible` node in a flow, so the guard below can read its options.
@@ -548,10 +550,6 @@ const anchorDerivations = (): { selector: string; name: string }[] => [
     selector: "Choose source",
     name: elementText("src/components/itemSelection/ItemSelectionDialog.tsx", "Choose source"),
   },
-  {
-    selector: "Continue in Demo Mode",
-    name: elementText("src/components/DemoModeInterstitial.tsx", "Continue in Demo Mode"),
-  },
 ];
 
 describe("iOS CI flow anchors are all bound to production", () => {
@@ -592,7 +590,7 @@ describe("iOS CI flow anchors are all bound to production", () => {
       expect(matchesWholeText(selector, name), `${selector} does not match production's "${name}"`).toBe(true);
     }
     // The alternation anchors are checked against their own production strings above.
-    const checkedElsewhere = new Set([PLAY_ANCHOR, FEATURE_GROUP_ANCHOR]);
+    const checkedElsewhere = new Set([PLAY_ANCHOR, FEATURE_GROUP_ANCHOR, DEMO_CONTINUE_ANCHOR]);
 
     const unbound: string[] = [];
     for (const flow of ciFlowPaths()) {
@@ -604,6 +602,15 @@ describe("iOS CI flow anchors are all bound to production", () => {
     }
 
     expect(unbound, "a CI flow steers on an anchor no test binds to production").toEqual([]);
+  });
+
+  it("binds the Demo Mode continue anchor to both words the dialog uses, the usual one and the first-run one", () => {
+    expect(elementText("src/components/DemoModeInterstitial.tsx", "Continue in Demo Mode")).toBe(
+      "Continue in Demo Mode",
+    );
+    expect(matchesWholeText(DEMO_CONTINUE_ANCHOR, "Continue in Demo Mode")).toBe(true);
+    expect(matchesWholeText(DEMO_CONTINUE_ANCHOR, MODE_COPY.firstRun.tryDemoMode)).toBe(true);
+    expect(readSource("src/components/DemoModeInterstitial.tsx")).toContain("MODE_COPY.firstRun.tryDemoMode");
   });
 
   it("proves the C64U source anchor matches the name the Play page gives the mock's product", () => {

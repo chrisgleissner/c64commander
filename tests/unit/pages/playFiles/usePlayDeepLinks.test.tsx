@@ -15,6 +15,7 @@ import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 import {
   usePlayDeepLinks,
   useTransportCommands,
+  startListeningHandlers,
   type PlayDeepLinkHandlers,
 } from "@/pages/playFiles/hooks/usePlayDeepLinks";
 
@@ -24,6 +25,9 @@ const noopHandlers = (): PlayDeepLinkHandlers => ({
   openFindATune: vi.fn(),
   openLikedTunes: vi.fn(),
   resumeSession: vi.fn(),
+  openCollection: vi.fn(),
+  openAddItems: vi.fn(),
+  openArchive: vi.fn(),
 });
 
 const DeepLinkProbe = ({ handlers }: { handlers: PlayDeepLinkHandlers }) => {
@@ -48,6 +52,9 @@ describe("usePlayDeepLinks", () => {
     ["find", "openFindATune"],
     ["liked", "openLikedTunes"],
     ["resume", "resumeSession"],
+    ["collection", "openCollection"],
+    ["add", "openAddItems"],
+    ["archive", "openArchive"],
   ] as const)("runs %s once", async (param, handlerName) => {
     const handlers = noopHandlers();
     renderAt(`/play?${param}=1`, handlers);
@@ -239,5 +246,31 @@ describe("a transport command that arrives before the page is ready", () => {
 
     expect(ran).toEqual(["next"]);
     transportCommandBus.reset();
+  });
+});
+
+describe("startListeningHandlers", () => {
+  const setup = () => {
+    const calls: string[] = [];
+    const handlers = startListeningHandlers({
+      setHvscPreparationOpen: (open) => calls.push(`hvsc:${open}`),
+      setBrowserOpen: (open) => calls.push(`browser:${open}`),
+      setBrowserInitialSourceId: (id) => calls.push(`source:${id}`),
+      archiveSourceId: "commoserve-main",
+    });
+    return { calls, handlers };
+  };
+
+  it("SPM-START-01 the collection action opens the download sheet", () => {
+    const { calls, handlers } = setup();
+    handlers.openCollection();
+    expect(calls).toEqual(["hvsc:true"]);
+  });
+
+  it("SPM-START-01 Add items opens with no source chosen, and the archive action opens on the online archive", () => {
+    const { calls, handlers } = setup();
+    handlers.openAddItems();
+    handlers.openArchive();
+    expect(calls).toEqual(["source:null", "browser:true", "source:commoserve-main", "browser:true"]);
   });
 });

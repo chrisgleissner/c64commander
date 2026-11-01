@@ -420,9 +420,9 @@ test.describe("Home interactions", () => {
       const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
       await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
 
-      const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+      const dialog = page.getByRole("dialog", { name: /Demo Mode|No C64 Ultimate found/ });
       if (await dialog.isVisible().catch(() => false)) {
-        await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+        await dialog.getByRole("button", { name: /Continue in Demo Mode|Try Demo Mode/ }).click();
         await expect(dialog).toBeHidden();
       }
 

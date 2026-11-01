@@ -30,6 +30,7 @@ import {
 } from "@/lib/diagnostics/healthTraceStore";
 import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 import { buildSavedDevicePrimaryLabel } from "@/lib/savedDevices/store";
+import { useAppMode } from "@/lib/appMode/appModeStore";
 
 const contributorHealthFromProbe = (outcome: HealthCheckProbeOutcome, problemCount: number): ContributorHealth => ({
   state:
@@ -92,6 +93,7 @@ export function useHealthState(): OverallHealthState {
     isRevalidatingConnection,
     isRevalidatingConnection,
   );
+  const appMode = useAppMode();
   const healthCheckState = useHealthCheckState();
   const savedDevices = useSavedDevices();
   const {
@@ -114,6 +116,7 @@ export function useHealthState(): OverallHealthState {
       connectionSnapshot.state,
       connectionSnapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR,
       revalidatingConnection,
+      appMode === "sid-player",
     );
     const host = getConfiguredHost();
     const latestHealthCheck = healthCheckState.latestResult;
@@ -227,6 +230,7 @@ export function useHealthState(): OverallHealthState {
     connectionSnapshot.state,
     connectionSnapshot.lastProbeError,
     revalidatingConnection,
+    appMode,
     deviceInfo?.firmware_version,
     deviceInfo?.product,
     healthCheckState.latestResult,
