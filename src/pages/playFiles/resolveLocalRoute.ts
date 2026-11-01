@@ -35,19 +35,30 @@ import {
   type RomDependencyVerdict,
 } from "@/lib/romDependency/romDependencyPolicy";
 import { isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import type { PlaylistItem } from "@/pages/playFiles/types";
 import {
   decideRomListedPlayback,
   romListedSkippedNotice,
+  romUnplayableSkippedNotice,
   type RomDialogKind,
   type RomListedDialogChoice,
 } from "@/pages/playFiles/romDependencyGate";
 
 export type RomDependencyAsk = (kind: RomDialogKind) => Promise<RomListedDialogChoice>;
 
+export type RomDependencyDecider = (item: PlaylistItem, kind: RomDialogKind) => ReturnType<RomDependencyAsk>;
+
 /** The skip notice is shown once per session: a run of skipped songs is not news. */
 let skipNoticeShown = false;
 export const resetRomSkipNoticeForTests = () => {
   skipNoticeShown = false;
+};
+
+export const announceSkippedSong = (label: string, basicUnmet: boolean) => {
+  if (skipNoticeShown) return;
+  skipNoticeShown = true;
+  const description = basicUnmet ? romUnplayableSkippedNotice(label) : romListedSkippedNotice(label);
+  toast({ title: "Song skipped", description });
 };
 
 /**
@@ -95,8 +106,9 @@ const readRomFidelity = async (sidBytes: Uint8Array, songNr: number | null | und
  * The list is the one already loaded for the song playing, so this costs one MD5.
  */
 export const wouldPassOver = async (sidBytes: Uint8Array, songNr: number | null | undefined) => {
-  if (!loadSkipRomDependentSongs() || isC64UsableForSid(isDeviceOutOfReach())) return false;
-  return (await readRomFidelity(sidBytes, songNr, false)).low;
+  if (isC64UsableForSid(isDeviceOutOfReach())) return false;
+  const { low, basicUnmet } = await readRomFidelity(sidBytes, songNr, false);
+  return low && (basicUnmet || loadSkipRomDependentSongs());
 };
 
 export interface LocalRouteInput {
@@ -126,23 +138,29 @@ export interface LocalRouteInput {
   onDeclined: () => void;
 }
 
+export interface LocalRoute {
+  /** True when the song is to play on this device, false when the C64 takes it. */
+  routeToLocal: boolean;
+  /** The song plays here although it needs ROMs this device lacks, so the player says it may sound wrong. */
+  maySoundWrong: boolean;
+}
+
 /**
- * Resolves true when the song is to play on this device, false when the C64 takes it, and null when it is
- * not played at all: the listener said Cancel, or something overtook it while they were asked. Throws
- * {@link RomDependentSongSkipped} when a playlist moving on passes over a song that needs the C64's ROMs.
+ * Where the song plays, or null when it is not played at all: the listener said Cancel, or something
+ * overtook it while they were asked. Throws {@link RomDependentSongSkipped} when a playlist moving on
+ * passes over a song that needs the C64's ROMs.
  */
-export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean | null> => {
+export const resolveLocalRoute = async (input: LocalRouteInput): Promise<LocalRoute | null> => {
   const { notify } = input;
   let routeToLocal = false;
+  let basicUnmet = false;
   // `skip`, `ask`, `phone` and `continue` are carried out below, outside the try whose catch would swallow a skip.
   let later: "skip" | "ask" | "blocked" | "phone" | "continue" | null = null;
   try {
     const sidBytes = new Uint8Array(await input.file.arrayBuffer());
-    const { romsReady, romRequired, verdict, low, basicUnmet } = await readRomFidelity(
-      sidBytes,
-      input.songNr,
-      input.c64Usable,
-    );
+    const fidelity = await readRomFidelity(sidBytes, input.songNr, input.c64Usable);
+    const { romsReady, romRequired, verdict, low } = fidelity;
+    basicUnmet = fidelity.basicUnmet;
     if (low) {
       const outcome = decideRomListedPlayback({
         c64Usable: input.c64Usable,
@@ -196,10 +214,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
     });
   }
   if (later === "skip") {
-    if (!skipNoticeShown) {
-      skipNoticeShown = true;
-      toast({ title: "Song skipped", description: romListedSkippedNotice(input.label) });
-    }
+    announceSkippedSong(input.label, basicUnmet);
     throw new RomDependentSongSkipped(input.label);
   }
   if (later === "blocked") {
@@ -225,7 +240,7 @@ export const resolveLocalRoute = async (input: LocalRouteInput): Promise<boolean
     }
   }
   if (later === "phone") notify("rom-list-played-anyway");
-  return later === null ? routeToLocal : true;
+  return { routeToLocal: later === null ? routeToLocal : true, maySoundWrong: later !== null };
 };
 
 /**

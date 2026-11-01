@@ -20,6 +20,8 @@ import {
   type NowPlayingMetadataSegment,
 } from "@/lib/playback/nowPlayingMetadata";
 import type { PlaybackTimeline } from "@/pages/playFiles/playbackTimeline";
+import { useMaySoundWrong } from "@/pages/playFiles/maySoundWrongStore";
+import { MaySoundWrongChip } from "./MaySoundWrongChip";
 import { TuneDetails } from "./TuneDetails";
 import { PLAY_TRANSPORT_FOCUS_ORDER, PlaybackTransport } from "./PlaybackTransport";
 
@@ -209,6 +211,7 @@ export const PlaybackControlsCard = ({
     );
   };
 
+  const showMaySoundWrong = useMaySoundWrong() && hasCurrentItem && isPlaying;
   const stilTuneLine = buildStilTuneLine({
     title: stil?.title ?? null,
     originalArtist: stil?.originalArtist ?? null,
@@ -267,7 +270,7 @@ export const PlaybackControlsCard = ({
             <>
               {/* Truncated, not wrapped, so a long name never changes the card's height; the full name stays
                   in the document for screen readers and as the tooltip. */}
-              <div className="flex w-full flex-nowrap items-center">
+              <div className="flex w-full flex-nowrap items-center gap-2">
                 <span
                   className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
                   data-testid="playback-current-title"
@@ -275,6 +278,7 @@ export const PlaybackControlsCard = ({
                 >
                   {currentItemLabel}
                 </span>
+                {showMaySoundWrong ? <MaySoundWrongChip /> : null}
               </div>
             </>
           ) : (
