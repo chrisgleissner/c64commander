@@ -7,6 +7,7 @@
  */
 
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isDiscoveryPending, waitForDiscoveryToSettle } from "@/lib/connection/connectionSettle";
 import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { preRouteEngine, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
@@ -39,6 +40,12 @@ export interface LaunchRoute {
   /** The song plays on this phone although it needs ROMs the phone lacks: the player says it may sound wrong. */
   maySoundWrong: boolean;
 }
+
+/** After discovery has had its say (or its bound has passed): is there a C64 to play the song? */
+const settleC64 = async (deviceOutOfReach: boolean): Promise<boolean> => {
+  await waitForDiscoveryToSettle();
+  return !isDiscoveryPending(getConnectionSnapshot().state) && isC64UsableForSid(deviceOutOfReach);
+};
 
 /**
  * Where a playlist item plays: the C64, or this phone's own engine. Null when it does not play at all,
@@ -95,6 +102,7 @@ const chooseLaunchRoute = async (input: LaunchRouteInput): Promise<LaunchRoute |
     selectionNotice: selection.notice,
     noMachineForRoms,
     c64Usable: isC64UsableForSid(deviceOutOfReach),
+    settleC64: isDiscoveryPending(connectionState) ? () => settleC64(deviceOutOfReach) : undefined,
     passOver: input.passOver,
     accepted: input.accepted,
     ask: input.ask,

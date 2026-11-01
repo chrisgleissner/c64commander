@@ -3413,6 +3413,7 @@ describe("usePlaybackController", () => {
     beforeEach(() => localStorage.clear());
     afterEach(() => {
       localStorage.clear();
+      connectionStateOverride.current = null;
       vi.restoreAllMocks();
     });
 
@@ -4084,6 +4085,7 @@ describe("usePlaybackController", () => {
 
     it("falls a ROM-dependent RSID back to the C64 when its ROMs are unavailable", async () => {
       enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
       const controller = fakeController();
       const playlist = [sidItem(rsid)];
       const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
@@ -4146,6 +4148,7 @@ describe("usePlaybackController", () => {
     // An RSID without its required ROMs falls back to the C64; the next local tune must stop it first.
     it("stops the C64 tune when the next tune plays on this device", async () => {
       enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
       const controller = fakeController();
       const machineReset = vi.fn().mockResolvedValue(undefined);
       vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
@@ -4281,6 +4284,7 @@ describe("usePlaybackController", () => {
 
     it("restores the C64's volume after stopping its tune for one that plays on this device", async () => {
       enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
       const controller = fakeController();
       const machineReset = vi.fn().mockResolvedValue(undefined);
       vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
@@ -4330,6 +4334,7 @@ describe("usePlaybackController", () => {
 
     it("does not reset the C64 again once the stop has failed", async () => {
       enableLocal();
+      connectionStateOverride.current = "REAL_CONNECTED";
       const controller = fakeController();
       const machineReset = vi.fn().mockRejectedValue(new Error("Reset timed out"));
       vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
