@@ -566,6 +566,34 @@ describe("AvMirrorSession", () => {
     expect(audio.adoptSender).not.toHaveBeenCalled();
   });
 
+  it("asks for a stream sent straight to this phone, from the selected machine's address, on both feeds", () => {
+    localStorage.removeItem("c64u_stream_transport");
+    const { audio, video } = makeSession();
+    const expected = (audio.deps as { expectedSenderHost: () => string }).expectedSenderHost();
+
+    for (const controller of [audio, video]) {
+      (controller.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+    }
+
+    expect(createStreamReceiverMock).toHaveBeenCalledTimes(2);
+    for (const [options] of createStreamReceiverMock.mock.calls) {
+      expect(options).toMatchObject({ unicastHost: expected });
+    }
+    expect(video.deps).toBeDefined();
+  });
+
+  it("asks for the multicast groups only when the hardware gate has switched the transport", () => {
+    localStorage.setItem("c64u_stream_transport", "multicast");
+    try {
+      const { audio } = makeSession();
+      (audio.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+
+      expect(createStreamReceiverMock.mock.calls[0][0]).toMatchObject({ unicastHost: null });
+    } finally {
+      localStorage.removeItem("c64u_stream_transport");
+    }
+  });
+
   it("keeps accepting the adopted address for the selected device when the streams are restarted", async () => {
     const { session, audio, video } = makeSession();
     const selected = (audio.deps as { expectedSenderHost: () => string }).expectedSenderHost();

@@ -289,6 +289,60 @@ class StreamUdpPlugin : Plugin() {
     }
   }
 
+  private fun wifiManager(): WifiManager? =
+      try {
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+      } catch (error: Exception) {
+        Log.w(logTag, "WifiManager unavailable", error)
+        null
+      }
+
+  /**
+   * Get ready to receive a stream sent straight to this phone, and say which address to ask for.
+   *
+   * The Ultimate sends to a single host only after it has found that host's hardware address on its
+   * wired port: it sends one probe and looks in its ARP table for about 200 ms. A phone whose Wi-Fi
+   * radio is dozing answers too late, and the request fails with "Network Host Resolve Error". A phone
+   * the Ultimate has just heard an ICMP echo from is already in the table, so this holds the radio in
+   * low-latency mode and sends a few echoes before the stream is requested.
+   *
+   * The address is the one this phone uses to reach the Ultimate, read from a connected UDP socket
+   * that sends nothing.
+   */
+  @PluginMethod
+  fun prepareUnicast(call: PluginCall) {
+    val host = call.getString("host")?.trim()
+    if (host.isNullOrEmpty()) {
+      call.reject("host is required")
+      return
+    }
+    executor.execute {
+      try {
+        val target = InetAddress.getByName(host.substringBefore(":"))
+        val address =
+            DatagramSocket().use { probe ->
+              probe.connect(target, UNICAST_PROBE_PORT)
+              (probe.localAddress as? Inet4Address)?.hostAddress
+            }
+        acquireLowLatencyWifi(wifiManager())
+        var reachable = false
+        for (attempt in 1..UNICAST_ECHO_ATTEMPTS) {
+          if (target.isReachable(UNICAST_ECHO_TIMEOUT_MS)) {
+            reachable = true
+            break
+          }
+        }
+        val result = JSObject()
+        result.put("address", address)
+        result.put("reachable", reachable)
+        call.resolve(result)
+      } catch (error: Exception) {
+        Log.w(logTag, "prepareUnicast failed for $host", error)
+        call.reject("Could not prepare a unicast stream to $host: ${error.message}", error)
+      }
+    }
+  }
+
   @PluginMethod
   fun bind(call: PluginCall) {
     val name = call.getString("name")
@@ -316,6 +370,7 @@ class StreamUdpPlugin : Plugin() {
             joinGroup(InetSocketAddress(InetAddress.getByName(group), port), joinedInterface)
           }
         } else {
+          acquireLowLatencyWifi(wifiManager())
           DatagramSocket(null).apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
@@ -1146,6 +1201,9 @@ class StreamUdpPlugin : Plugin() {
   companion object {
     // OS socket receive-buffer request (2 MB) — ~0.8 s of video at the 2.6 MB/s wire rate, ample
     // headroom for a scheduling/GC gap. The kernel may clamp it to net.core.rmem_max.
+    private const val UNICAST_PROBE_PORT = 9
+    private const val UNICAST_ECHO_ATTEMPTS = 3
+    private const val UNICAST_ECHO_TIMEOUT_MS = 400
     private const val RECV_BUFFER_BYTES = 2 * 1024 * 1024
 
     // C64U PAL audio sample rate (rounded to int for AudioTrack; source of truth: audioStream.ts).

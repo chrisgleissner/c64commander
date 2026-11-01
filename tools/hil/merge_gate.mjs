@@ -268,6 +268,33 @@ return JSON.stringify({audio:audio.getAttribute("aria-pressed")==="true",
   return { audio: state.audio, video: state.video };
 };
 
+/**
+ * The script that sets how the page asks the Ultimate to stream. Exported so the value that reaches
+ * the page can be tested: the app reads "multicast" and treats anything else as unicast.
+ */
+export const streamTransportScript = (transport) => {
+  if (transport !== "unicast" && transport !== "multicast") throw new Error(`unknown stream transport "${transport}"`);
+  return `(()=>{localStorage.setItem("c64u_stream_transport","${transport}");return 1})()`;
+};
+
+/**
+ * Run `body` with the mirror asking for the multicast groups, and put the app back on unicast after.
+ *
+ * The app always asks for a stream sent straight to the phone, which a PC cannot see. `wire` and
+ * `av-latency` measure the stream from the PC, so they need it in the groups. The mirror is stopped
+ * first and restarted by the stage, because the transport is read when a stream starts.
+ */
+const withMulticastTransport = async (body) => {
+  await setMirror({ video: false, audio: false });
+  await js(streamTransportScript("multicast"));
+  try {
+    return await body();
+  } finally {
+    await setMirror({ video: false, audio: false });
+    await js(streamTransportScript("unicast"));
+  }
+};
+
 const setMirror = async ({ video, audio }) => {
   const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
@@ -1324,10 +1351,12 @@ return JSON.stringify({samples});})()`);
     // inheriting one, and read "0 packets — is the stream running?" when it did not.
     // Video stays off: this is the audio link's own baseline, and av-clarity is the stage
     // that puts both feeds on the same Wi-Fi on purpose.
-    await setMirror({ video: false, audio: true });
     const args = [path.join("tools", "hil", "av_stream_flow.py"), "--seconds", "8"];
     if (IFACE) args.push("--iface", IFACE);
-    const audio = await run("python3", args);
+    const audio = await withMulticastTransport(async () => {
+      await setMirror({ video: false, audio: true });
+      return run("python3", args);
+    });
     if (!audio.ok) throw new Error(`audio group: ${audio.out.trim().split("\n").slice(-2).join(" | ")}`);
     const loss = number(audio.out, /sequence loss: \d+ packets \(([\d.]+)%\)/, "sequence loss");
     const p99 = number(audio.out, /p99\s+([\d.]+)/, "inter-arrival p99");
@@ -1342,7 +1371,7 @@ return JSON.stringify({samples});})()`);
     await setMirror({ video: true, audio: true });
     audibleSeconds += 20;
     const dir = await evidence.stageDir("av-clarity");
-    const keepArgs = dir ? ["--out", path.join(dir, "mic.wav"), "--wire-out", path.join(dir, "wire.wav")] : [];
+    const keepArgs = dir ? ["--out", path.join(dir, "mic.wav")] : [];
     const probe = await evidence.withAppAudioStats(dir, () =>
       run("python3", [
         path.join("tools", "hil", "audio_e2e_probe.py"),
@@ -1374,22 +1403,24 @@ return JSON.stringify({samples});})()`);
 
   defineStage("av-latency", true, async () => {
     await setVolume(GATE_VOLUME);
-    await setMirror({ video: true, audio: true });
     audibleSeconds += 10;
-    await run("python3", [
-      path.join("tools", "hil", "audio_e2e_probe.py"),
-      "play",
-      "--host",
-      HOST,
-      "--password",
-      PASSWORD,
-    ]);
-    await sleep(2000);
     const dir = await evidence.stageDir("av-latency");
     const args = [path.join("tools", "hil", "mirror_audio_latency_hil.py"), "--seconds", "8"];
     if (IFACE) args.push("--iface", IFACE);
     if (dir) args.push("--keep-dir", dir);
-    const probe = await evidence.withAppAudioStats(dir, () => run("python3", args));
+    const probe = await withMulticastTransport(async () => {
+      await setMirror({ video: true, audio: true });
+      await run("python3", [
+        path.join("tools", "hil", "audio_e2e_probe.py"),
+        "play",
+        "--host",
+        HOST,
+        "--password",
+        PASSWORD,
+      ]);
+      await sleep(2000);
+      return evidence.withAppAudioStats(dir, () => run("python3", args));
+    });
     if (dir) await writeFile(path.join(dir, "probe.txt"), probe.out);
     const graded = gradeLatencyOutput(probe.out);
     if (graded.strength < 0.3) throw new Error(`the microphone and the wire barely correlate (${graded.strength})`);

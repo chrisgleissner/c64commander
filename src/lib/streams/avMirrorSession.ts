@@ -33,6 +33,7 @@ import {
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
   type StreamVideoFrameRateMode,
+  loadStreamTransport,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
@@ -51,6 +52,7 @@ import { StreamLossRestarter } from "./streamLossRecovery";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 import { AudioLossGuard } from "./audioLossGuard";
+import { makeUnicastPathReady, startStreamResolvingHost } from "./unicastStart";
 
 export interface AvMirrorSnapshot {
   /** Why the video was stopped to protect the sound, or null while it was not. Cleared when video starts again. */
@@ -334,7 +336,11 @@ export class AvMirrorSession {
     const startStream =
       deps.startStream ??
       (async (name, destination) => {
-        const result = await getC64API().startStream(name, destination);
+        const result = await startStreamResolvingHost(
+          () => getC64API().startStream(name, destination),
+          destination,
+          () => makeUnicastPathReady(this.expectedSender()),
+        );
         recordDeviceStreamStarted(name, getC64API().getDeviceHost());
         return result;
       });
@@ -375,6 +381,7 @@ export class AvMirrorSession {
             ...opts,
             port: loadStreamAudioPort(),
             expectedSource: this.expectedSender(),
+            unicastHost: loadStreamTransport() === "multicast" ? null : this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       createPlayer: deps.createPlayer,
@@ -422,6 +429,7 @@ export class AvMirrorSession {
             // Accept video only from the selected machine. Every Ultimate defaults to the same
             // multicast group, so a second one streaming into it is assembled into our frames.
             expectedSource: this.expectedSender(),
+            unicastHost: loadStreamTransport() === "multicast" ? null : this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
