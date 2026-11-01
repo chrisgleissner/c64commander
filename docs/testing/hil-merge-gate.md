@@ -164,10 +164,16 @@ Several measurements were consistent with a fault in the phone and were not:
 - The result changed with the phone's screen state and with the video mirror, because those change
   how loud and when the phone's own copy arrives relative to the live sound.
 
-Before trusting a failing audible stage, check the room: with both phones idle and `Vol Master` at
-its default, `audio_e2e_probe.py run` must report no tone bursts, and the microphone floor in
-300-6000 Hz should sit near -60 dBFS. Two faint bursts at -40 dBFS or below are the loudspeaker or
-another phone leaking in; a phone's own output sits near -30 dBFS.
+The Pixel's `preflight` now checks the room. It switches the Pixel's mirror off, plays the probe on
+the C64 for 8 seconds, and fails when the microphone hears more than three of its tones, naming a
+loudspeaker on the Ultimate and a phone still playing as the likely causes. A quiet room still shows
+up to two faint bursts at -40 dBFS or below; a phone's own output sits near -30 dBFS. The same check
+by hand: with both phones idle and `Vol Master` at its default, `audio_e2e_probe.py run` must report
+at most a few bursts, and the microphone floor in 300-6000 Hz should sit near -60 dBFS.
+
+A phone that is listening to the Live View mirror is silent once the gate has reset the C64, because
+the reset ends the stream. A loudspeaker wired to the Ultimate is not affected by that reset, which
+is why the check plays the probe after it.
 
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The

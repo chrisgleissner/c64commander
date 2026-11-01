@@ -369,6 +369,32 @@ const setVolume = async (target) => {
 };
 
 /**
+ * How many of the probe's tones the microphone heard while no phone was playing.
+ *
+ * The room is quiet when this is at most {@link ROOM_MAX_BURSTS}. The faint bursts a quiet room still
+ * shows are at -40 dBFS or below; a phone's own output sits near -30 dBFS, so a loudspeaker wired to
+ * the Ultimate or a phone left playing shows as most of the ladder. Exported and pure for the same
+ * reason as {@link gradeClarityOutput}: refusing to guess is the point.
+ */
+export const ROOM_MAX_BURSTS = 3;
+
+export const gradeRoomOutput = (text) => {
+  const match = /bursts read\s+(\d+)/.exec(text) ?? /only (\d+) tone bursts? found/.exec(text);
+  if (!match)
+    throw new Error(
+      `could not tell how many tones the microphone heard: ${text.trim().split("\n").slice(-2).join(" | ")}`,
+    );
+  return Number(match[1]);
+};
+
+export const roomVerdict = (bursts) =>
+  bursts <= ROOM_MAX_BURSTS
+    ? null
+    : `the microphone heard ${bursts} of the probe's tones with both phones idle, so something other than the phone ` +
+      "under test is audible: a loudspeaker wired to the Ultimate, or a phone still playing. Switch it off or stop " +
+      "it, then run the gate again. Every audible stage would otherwise grade the room, not the phone";
+
+/**
  * Read a verdict out of `audio_e2e_probe.py run`, or refuse to.
  *
  * Exported and pure so the refusal can be tested: this is the one place where a gate that
@@ -1055,9 +1081,29 @@ return JSON.stringify({dismissed:true});})()`);
       masterNote = `, Ultimate master volume was OFF, set to ${master.fallback.trim()}`;
     }
   }
+  let roomNote = "";
+  if (kind === "pixel" && !QUIET) {
+    await setMirror({ video: false, audio: false });
+    const idle = await run("python3", [
+      path.join("tools", "hil", "audio_e2e_probe.py"),
+      "run",
+      "--host",
+      HOST,
+      "--password",
+      PASSWORD,
+      "--seconds",
+      "8",
+      ...(IFACE ? ["--iface", IFACE] : []),
+    ]);
+    await silenceC64();
+    const heard = gradeRoomOutput(idle.out);
+    const refusal = roomVerdict(heard);
+    if (refusal) throw new Error(refusal);
+    roomNote = `, room quiet (${heard} stray tone${heard === 1 ? "" : "s"} with both phones idle)`;
+  }
   return (
     `${kind} ${serial} (${packageName}), route ${page.route}, ${speakerNote}, ` +
-    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
+    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}${roomNote}`
   );
 };
 
