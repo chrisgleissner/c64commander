@@ -2977,6 +2977,100 @@ test.describe("App screenshots", () => {
   });
 
   test(
+    "capture SID Player screenshots",
+    { tag: "@screenshots-sid-player" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const sections = await registerScreenshotSections("sid-player", ["playing-playlist", "mode-sheet", "settings"]);
+      const profiles = ["medium", "compact"] as const;
+      for (const profile of profiles) {
+        await page.addInitScript((profileName) => {
+          localStorage.setItem("c64u_display_profile_override", profileName);
+          localStorage.setItem("c64u_startup_mode", "sid-player");
+          localStorage.setItem("c64u_playback_engine", "local");
+          localStorage.setItem("c64u_local_engine_enabled", "1");
+        }, profile);
+        await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS[profile].viewport);
+        await page.goto("/play");
+        await expect(page.getByTestId("unified-health-badge")).toContainText("SID Player");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const base = `sid-player/profiles/${profile}`;
+        const filename = (section: string) => {
+          const order = sections.get(section) ?? 1;
+          return `${base}/${String(order).padStart(2, "0")}-${section}.png`;
+        };
+        await page.addInitScript((seed: typeof FEATURED_SID) => {
+          localStorage.setItem(
+            seed.playlistKey,
+            JSON.stringify({
+              items: [
+                {
+                  source: "hvsc",
+                  path: seed.path,
+                  name: seed.name,
+                  durationMs: seed.durationMs,
+                  subsongCount: seed.songCount,
+                  songNr: 1,
+                },
+                {
+                  source: "local",
+                  path: "/SID/Last_Ninja.sid",
+                  name: "Last_Ninja.sid",
+                  title: "The Last Ninja",
+                  durationMs: 180000,
+                },
+                {
+                  source: "local",
+                  path: "/SID/Wizball.sid",
+                  name: "Wizball.sid",
+                  title: "Wizball",
+                  durationMs: 215000,
+                },
+              ],
+              currentIndex: 0,
+            }),
+          );
+          sessionStorage.setItem(
+            seed.sessionKey,
+            JSON.stringify({
+              playlistKey: seed.playlistKey,
+              currentItemId: null,
+              currentItemLabel: seed.name,
+              currentIndex: 0,
+              isPlaying: true,
+              isPaused: false,
+              elapsedMs: seed.elapsedMs,
+              playedMs: seed.elapsedMs,
+              durationMs: seed.durationMs,
+              autoAdvanceDueAtMs: null,
+              shuffleEnabled: false,
+              repeatEnabled: false,
+              randomSeed: 1,
+              updatedAt: seed.nowIso,
+            }),
+          );
+        }, FEATURED_SID);
+        await page.reload();
+        await expect(page.getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
+        await expect(page.getByTestId("playlist-list")).toContainText("Wizball");
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await captureScreenshot(page, testInfo, filename("playing-playlist"));
+
+        await page.getByTestId("tab-settings").click();
+        const modeSection = page.getByTestId("settings-section-app-mode");
+        await modeSection.scrollIntoViewIfNeeded();
+        if (!(await page.getByTestId("device-less-choice-full-app").isVisible())) {
+          await modeSection.getByRole("button").first().click();
+        }
+        await page.getByTestId("device-less-choice-full-app").click();
+        await expect(page.getByTestId("mode-dialog-leave-full-app")).toBeVisible();
+        await captureScreenshot(page, testInfo, filename("mode-sheet"));
+        await page.keyboard.press("Escape");
+        await captureScreenshot(page, testInfo, filename("settings"));
+      }
+    },
+  );
+
+  test(
     "capture spectrum screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
