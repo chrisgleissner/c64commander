@@ -29,9 +29,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.startsWith
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
@@ -117,6 +119,73 @@ class StreamUdpPluginTest {
     packet[9] = 4 // bpp
     putU16(10, 0) // enc
     return packet
+  }
+
+  @Test
+  fun prepareUnicastRejectsMissingHost() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn(null)
+    plugin.prepareUnicast(call)
+    verify(call).reject("host is required")
+  }
+
+  @Test
+  fun prepareUnicastRejectsABlankHost() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("   ")
+    plugin.prepareUnicast(call)
+    verify(call).reject("host is required")
+  }
+
+  @Test
+  fun prepareUnicastReportsThisPhonesAddressTowardTheHostAndWhetherItAnswered() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    val done = CountDownLatch(1)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              done.countDown()
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.prepareUnicast(call)
+
+    assertTrue(done.await(5, TimeUnit.SECONDS))
+    assertEquals("127.0.0.1", resolved!!.getString("address"))
+    assertEquals(true, resolved!!.getBoolean("reachable"))
+  }
+
+  @Test
+  fun prepareUnicastIgnoresAPortSuffixOnTheHost() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1:80")
+    val done = CountDownLatch(1)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              done.countDown()
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.prepareUnicast(call)
+
+    assertTrue(done.await(5, TimeUnit.SECONDS))
+    assertEquals("127.0.0.1", resolved!!.getString("address"))
+  }
+
+  @Test
+  fun prepareUnicastRejectsAHostThatCannotBeResolved() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("no-such-host.invalid")
+
+    plugin.prepareUnicast(call)
+
+    verify(call, timeout(5000)).reject(startsWith("Could not prepare a unicast stream to no-such-host.invalid"), any(Exception::class.java))
   }
 
   companion object {
