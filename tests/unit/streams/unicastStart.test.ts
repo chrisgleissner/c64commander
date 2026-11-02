@@ -118,4 +118,15 @@ describe("asking the Ultimate for a unicast stream", () => {
       expect.objectContaining({ host: "192.168.1.146", error: "not implemented on web" }),
     );
   });
+
+  it("logs a failure that is not an Error with its text", async () => {
+    streamUdp.prepareUnicast.mockRejectedValueOnce("radio off");
+
+    await makeUnicastPathReady("192.168.1.146");
+
+    expect(addLog).toHaveBeenCalledWith("warn", "Could not make this phone findable by the Ultimate", {
+      host: "192.168.1.146",
+      error: "radio off",
+    });
+  });
 });

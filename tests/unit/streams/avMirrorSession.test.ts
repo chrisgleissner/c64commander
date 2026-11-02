@@ -200,6 +200,22 @@ describe("AvMirrorSession", () => {
       expect(session.getSnapshot().videoPausedForAudio).toBeNull();
     });
 
+    it("logs a failure that is not an Error with its text, and no stack", async () => {
+      const { session, audio, video } = makeSession();
+      video.stop.mockRejectedValueOnce("device did not answer");
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith("Could not stop the video that was costing the audio its packets", {
+          error: "device did not answer",
+          stack: undefined,
+        }),
+      );
+    });
+
     it("logs the failure when the video cannot be stopped", async () => {
       const { session, audio, video } = makeSession();
       video.stop.mockRejectedValueOnce(new Error("device did not answer"));
@@ -278,6 +294,30 @@ describe("AvMirrorSession", () => {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(presented).toBe(true); // but the frame must still reach the canvas
+  });
+
+  it("asks again through the default start path when the Ultimate could not find this phone", async () => {
+    const api = getC64API();
+    const start = vi
+      .spyOn(api, "startStream")
+      .mockRejectedValueOnce(new Error("Firmware rejected stream audio start: Network Host Resolve Error"))
+      .mockResolvedValueOnce({ errors: [] });
+    vi.useFakeTimers();
+    try {
+      audioInstances.length = 0;
+      videoInstances.length = 0;
+      new AvMirrorSession({});
+      const starting = (
+        audioInstances[0].deps as { startStream: (n: string, d: string) => Promise<unknown> }
+      ).startStream("audio", "192.168.1.247:11001");
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(starting).resolves.toEqual({ errors: [] });
+      expect(start).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      start.mockRestore();
+    }
   });
 
   it("starts with an all-off snapshot and replays it to a new subscriber", () => {
@@ -585,10 +625,15 @@ describe("AvMirrorSession", () => {
   it("asks for the multicast groups only when the hardware gate has switched the transport", () => {
     localStorage.setItem("c64u_stream_transport", "multicast");
     try {
-      const { audio } = makeSession();
-      (audio.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+      const { audio, video } = makeSession();
+      for (const controller of [audio, video]) {
+        (controller.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+      }
 
-      expect(createStreamReceiverMock.mock.calls[0][0]).toMatchObject({ unicastHost: null });
+      expect(createStreamReceiverMock).toHaveBeenCalledTimes(2);
+      for (const [options] of createStreamReceiverMock.mock.calls) {
+        expect(options).toMatchObject({ unicastHost: null });
+      }
     } finally {
       localStorage.removeItem("c64u_stream_transport");
     }

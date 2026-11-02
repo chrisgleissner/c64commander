@@ -108,6 +108,18 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
       );
     });
 
+    it("falls back to the multicast group when preparing fails with something that is not an Error", async () => {
+      streamUdp.prepareUnicast.mockRejectedValueOnce("no radio");
+      const receiver = new NativeUdpStreamReceiver({ name: "audio", port: 11001, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(receiver.destination).toBe("239.0.1.65:11001");
+      expect(addLog).toHaveBeenCalledWith("warn", "Could not prepare a unicast stream; using the multicast group", {
+        host: "192.168.1.146",
+        error: "no radio",
+      });
+    });
+
     it("still asks for multicast when no unicast host is given, and never in Demo Mode", async () => {
       const plain = new NativeUdpStreamReceiver({ name: "video", port: 11000 });
       await plain.ready();

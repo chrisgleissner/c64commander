@@ -24,6 +24,7 @@ const mirror = vi.hoisted(() => ({
   state: {
     audioLive: false,
     videoLive: false,
+    videoPausedForAudio: null as string | null,
     audio: {
       state: "off",
       error: null as string | null,
@@ -40,6 +41,7 @@ vi.mock("@/hooks/useAvMirror", () => ({
     videoLive: mirror.state.videoLive,
     audio: mirror.state.audio,
     video: mirror.state.video,
+    videoPausedForAudio: mirror.state.videoPausedForAudio,
     toggleAudio: mirror.toggleAudio,
     toggleVideo: mirror.toggleVideo,
     session: { adoptSender: mirror.adoptSender },
@@ -54,9 +56,23 @@ describe("AvMirrorControls", () => {
     mirror.state = {
       audioLive: false,
       videoLive: false,
+      videoPausedForAudio: null,
       audio: { state: "off", error: null, foreignSenderNotice: null, senderMismatch: null },
       video: { state: "off", error: null, senderMismatch: null },
     };
+  });
+
+  it("says why the video was paused when the sound was protected, and says nothing otherwise", () => {
+    const { rerender } = render(<AvMirrorControls />);
+    expect(screen.queryByTestId("av-mirror-video-paused-notice")).toBeNull();
+
+    mirror.state.videoPausedForAudio =
+      "Video paused to keep the sound clean: 17% of the audio was lost on this Wi-Fi link. A 5 GHz link can carry both.";
+    rerender(<AvMirrorControls />);
+
+    expect(screen.getByTestId("av-mirror-video-paused-notice")).toHaveTextContent(
+      "Video paused to keep the sound clean: 17% of the audio was lost",
+    );
   });
 
   // HARD27-005: the stream IS arriving, from the Ultimate's other interface. The plugin knows that
