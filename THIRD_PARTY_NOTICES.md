@@ -839,7 +839,7 @@ The Android build compiles these from pinned, checksum-verified source archives 
 | Component | Version | Source (SHA-256 of the archive) | License |
 | --- | --- | --- | --- |
 | libSidplayEZ (`libc64sidplayez.so`), the "Fast & accurate" SID renderer | commit 4c8664c80df8 | [https://github.com/Toddler-Boy/libSidplayEZ/archive/4c8664c80df8d363049e1a3eadf59cd9e52afd1f.tar.gz](https://github.com/Toddler-Boy/libSidplayEZ/archive/4c8664c80df8d363049e1a3eadf59cd9e52afd1f.tar.gz) (`b74103101f95e1635a064147d9b83c54a6f128a28e2ded043e70779513075590`) | [GPL-2.0-or-later](https://spdx.org/licenses/GPL-2.0-or-later.html) |
-| 7-Zip (`lib7zz.so`), used to unpack the HVSC archive | 26.00 | [https://www.7-zip.org/a/7z2600-src.tar.xz](https://www.7-zip.org/a/7z2600-src.tar.xz) (`3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16`) | [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with BSD-3-Clause and BSD-2-Clause parts |
+| 7-Zip (`lib7zz.so`), used to unpack the HVSC archive | 26.00 | [https://github.com/ip7z/7zip/releases/download/26.00/7z2600-src.tar.xz](https://github.com/ip7z/7zip/releases/download/26.00/7z2600-src.tar.xz) (`3e596155744af055a77fc433c703d54e3ea9212246287b5b1436a6beac060f16`) | [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with BSD-3-Clause and BSD-2-Clause parts |
 | LLVM libc++ and libc++abi, linked statically into both libraries by the Android NDK | NDK r27 | [https://github.com/llvm/llvm-project](https://github.com/llvm/llvm-project) | [Apache-2.0 WITH LLVM-exception](https://spdx.org/licenses/LLVM-exception.html) |
 
 ### libSidplayEZ
