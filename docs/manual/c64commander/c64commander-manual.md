@@ -1416,6 +1416,10 @@ Live View needs no setting up. Nothing crosses the network until you press **Wat
 
 The device sends to two network ports, 11000 for the picture and 11001 for the sound. If those are already taken on your network, change them in **Settings → Play and disk**.
 
+Your C64 sends the sound and the picture straight to your phone or tablet, so only one phone or tablet can have Live View on at a time. Start it on a second one and the first loses the stream.
+
+The sound comes first. Sometimes the Wi-Fi cannot carry both together, and a 2.4 GHz connection is more likely to struggle than a 5 GHz one. When the sound starts to lose pieces, Live View stops the picture and the card says **Video paused to keep the sound clean**, with how much of the sound was lost. The sound carries on. Press **Watch** to try the picture again, or move your phone or tablet to a 5 GHz connection.
+
 The **Live View** switch in Settings → Stable Features hides the whole feature. **Audio Mirror** and **Video Mirror**, in Experimental Features, choose which of the two feeds it offers.
 
 #### The immersive screen
