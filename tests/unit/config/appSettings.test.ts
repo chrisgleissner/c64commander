@@ -8,7 +8,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  loadStreamTransport,
   DEFAULT_AUTO_DEMO_MODE_ENABLED,
   DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS,
   DEFAULT_CONFIG_WRITE_INTERVAL_MS,
@@ -240,14 +239,5 @@ describe("appSettings", () => {
   it("returns fallback when localStorage has a non-numeric value for a number setting (BRDA:60)", () => {
     localStorage.setItem(APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY, "not-a-number");
     expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
-  });
-
-  it("asks for unicast streams unless the transport has been set to multicast", () => {
-    expect(loadStreamTransport()).toBe("unicast");
-    localStorage.setItem("c64u_stream_transport", "multicast");
-    expect(loadStreamTransport()).toBe("multicast");
-    localStorage.setItem("c64u_stream_transport", "udp");
-    expect(loadStreamTransport()).toBe("unicast");
-    localStorage.removeItem("c64u_stream_transport");
   });
 });

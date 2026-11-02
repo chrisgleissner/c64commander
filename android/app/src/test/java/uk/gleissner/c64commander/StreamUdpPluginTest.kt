@@ -532,9 +532,13 @@ class StreamUdpPluginTest {
   }
 
   private fun lockHeld(fieldName: String): Boolean {
-    val field = StreamUdpPlugin::class.java.getDeclaredField(fieldName)
+    val delegateField = StreamUdpPlugin::class.java.getDeclaredField("wifiLocks\$delegate")
+    delegateField.isAccessible = true
+    val delegate = delegateField.get(plugin) as Lazy<*>
+    if (!delegate.isInitialized()) return false
+    val field = StreamWifiLocks::class.java.getDeclaredField(fieldName)
     field.isAccessible = true
-    return when (val lock = field.get(plugin)) {
+    return when (val lock = field.get(delegate.value)) {
       is WifiManager.MulticastLock -> lock.isHeld
       is WifiManager.WifiLock -> lock.isHeld
       else -> false

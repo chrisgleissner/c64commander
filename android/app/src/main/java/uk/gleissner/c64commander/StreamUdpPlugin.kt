@@ -13,7 +13,6 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Process
 import android.util.Base64
@@ -96,10 +95,9 @@ class StreamUdpPlugin : Plugin() {
    */
   private val senderFilter = StreamSenderFilter(runInBackground = { executor.execute(it) }, logEvery = FOREIGN_LOG_EVERY)
   private val logTag = "StreamUdpPlugin"
-  private var multicastLock: WifiManager.MulticastLock? = null
 
-  /** Held for the life of a stream so Wi-Fi stops batching our real-time packets — see [acquireLowLatencyWifi]. */
-  private var wifiLock: WifiManager.WifiLock? = null
+  /** Held for the life of a stream so Wi-Fi neither filters multicast nor batches our real-time packets. */
+  private val wifiLocks by lazy { StreamWifiLocks(context.applicationContext) }
 
   /** Published without the receive-path lock so packet handling never waits on AudioFlinger. */
   @Volatile private var audioPipeline: AudioPipeline? = null
@@ -289,26 +287,7 @@ class StreamUdpPlugin : Plugin() {
     }
   }
 
-  private fun wifiManager(): WifiManager? =
-      try {
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-      } catch (error: Exception) {
-        Log.w(logTag, "WifiManager unavailable", error)
-        null
-      }
-
-  /**
-   * Get ready to receive a stream sent straight to this phone, and say which address to ask for.
-   *
-   * The Ultimate sends to a single host only after it has found that host's hardware address on its
-   * wired port: it sends one probe and looks in its ARP table for about 200 ms. A phone whose Wi-Fi
-   * radio is dozing answers too late, and the request fails with "Network Host Resolve Error". A phone
-   * the Ultimate has just heard an ICMP echo from is already in the table, so this holds the radio in
-   * low-latency mode and sends a few echoes before the stream is requested.
-   *
-   * The address is the one this phone uses to reach the Ultimate, read from a connected UDP socket
-   * that sends nothing.
-   */
+  /** See [UnicastPath.prepare]: make this phone findable by the Ultimate and say which address to ask for. */
   @PluginMethod
   fun prepareUnicast(call: PluginCall) {
     val host = call.getString("host")?.trim()
@@ -318,24 +297,8 @@ class StreamUdpPlugin : Plugin() {
     }
     executor.execute {
       try {
-        val target = InetAddress.getByName(host.substringBefore(":"))
-        val address =
-            DatagramSocket().use { probe ->
-              probe.connect(target, UNICAST_PROBE_PORT)
-              (probe.localAddress as? Inet4Address)?.hostAddress
-            }
-        acquireLowLatencyWifi(wifiManager())
-        var reachable = false
-        for (attempt in 1..UNICAST_ECHO_ATTEMPTS) {
-          if (target.isReachable(UNICAST_ECHO_TIMEOUT_MS)) {
-            reachable = true
-            break
-          }
-        }
-        val result = JSObject()
-        result.put("address", address)
-        result.put("reachable", reachable)
-        call.resolve(result)
+        val prepared = UnicastPath.prepare(host) { wifiLocks.acquireLowLatency() }
+        call.resolve(JSObject().put("address", prepared.address).put("reachable", prepared.reachable))
       } catch (error: Exception) {
         Log.w(logTag, "prepareUnicast failed for $host", error)
         call.reject("Could not prepare a unicast stream to $host: ${error.message}", error)
@@ -363,14 +326,14 @@ class StreamUdpPlugin : Plugin() {
       val joinedInterface = if (group != null) siteLocalInterface() else null
       val socket: DatagramSocket =
         if (group != null) {
-          acquireMulticastLock()
+          wifiLocks.acquireForMulticast()
           MulticastSocket(null).apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
             joinGroup(InetSocketAddress(InetAddress.getByName(group), port), joinedInterface)
           }
         } else {
-          acquireLowLatencyWifi(wifiManager())
+          wifiLocks.acquireLowLatency()
           DatagramSocket(null).apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
@@ -398,7 +361,7 @@ class StreamUdpPlugin : Plugin() {
     } catch (error: Exception) {
       // Release the multicast lock if we acquired it above but never got a running socket, so a
       // failed multicast bind cannot leak the Wi-Fi MulticastLock (it is not reference-counted).
-      if (sockets.isEmpty()) releaseMulticastLock()
+      if (sockets.isEmpty()) wifiLocks.release()
       Log.w(logTag, "bind failed for $name:$port (group=$group, assemble=$assemble)", error)
       call.reject("bind failed: ${error.message}", error)
     }
@@ -1054,75 +1017,7 @@ class StreamUdpPlugin : Plugin() {
         Log.d(logTag, "socket close for $name ignored", error)
       }
     }
-    if (sockets.isEmpty()) releaseMulticastLock()
-  }
-
-  private fun acquireMulticastLock() {
-    val wifi =
-      try {
-        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-      } catch (error: Exception) {
-        Log.w(logTag, "WifiManager unavailable", error)
-        null
-      }
-    // Independently, both of them: the mirror binds two streams, and guarding the pair behind one
-    // "already held" check meant the second lock was silently skipped whenever the first was up.
-    if (multicastLock?.isHeld != true) {
-      try {
-        multicastLock =
-          wifi?.createMulticastLock("c64commander-avmirror")?.apply {
-            setReferenceCounted(false)
-            acquire()
-          }
-      } catch (error: Exception) {
-        Log.w(logTag, "MulticastLock acquire failed", error)
-      }
-    }
-    acquireLowLatencyWifi(wifi)
-  }
-
-  /**
-   * Ask Wi-Fi to stop batching our packets for the duration of the mirror.
-   *
-   * A `MulticastLock` only stops the driver *filtering* multicast; it says nothing about when the
-   * packets are handed up. In power-save the chip parks multicast at the access point and releases it
-   * in a clump after a beacon, and that is precisely what was measured on this rig: a stream that
-   * left the Ultimate every 4.00 ms (p99 4.14 ms, no loss, no clumping — sampled on the wire from a
-   * host) reached the phone with **119 ms gaps and 29-packet bursts**. No jitter buffer sized for a
-   * 4 ms cadence survives that, and the listener hears it as crackling.
-   *
-   * `WIFI_MODE_FULL_LOW_LATENCY` is the platform's way to say "this is real-time traffic". It only
-   * takes effect while the screen is on and the app is in the foreground, which is exactly the window
-   * Live View is used in, and it is released the moment the last stream closes so it cannot quietly
-   * cost battery afterwards.
-   */
-  private fun acquireLowLatencyWifi(wifi: WifiManager?) {
-    if (wifiLock?.isHeld == true) return
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-    try {
-      wifiLock =
-        wifi?.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "c64commander-avmirror")?.apply {
-          setReferenceCounted(false)
-          acquire()
-        }
-    } catch (error: Exception) {
-      Log.w(logTag, "Low-latency Wi-Fi lock unavailable; streams may arrive in bursts", error)
-    }
-  }
-
-  private fun releaseMulticastLock() {
-    try {
-      multicastLock?.let { if (it.isHeld) it.release() }
-    } catch (error: Exception) {
-      Log.d(logTag, "MulticastLock release ignored", error)
-    }
-    multicastLock = null
-    try {
-      wifiLock?.let { if (it.isHeld) it.release() }
-    } catch (error: Exception) {
-      Log.d(logTag, "Wi-Fi lock release ignored", error)
-    }
-    wifiLock = null
+    if (sockets.isEmpty()) wifiLocks.release()
   }
 
   /** The active site-local IPv4 interface (Wi-Fi), used to join multicast on the right NIC. */
@@ -1163,7 +1058,7 @@ class StreamUdpPlugin : Plugin() {
    */
   public override fun handleOnPause() {
     super.handleOnPause()
-    releaseMulticastLock()
+    wifiLocks.release()
   }
 
   /**
@@ -1174,7 +1069,7 @@ class StreamUdpPlugin : Plugin() {
   public override fun handleOnResume() {
     super.handleOnResume()
     if (sockets.isEmpty()) return
-    acquireMulticastLock()
+    wifiLocks.acquireForMulticast()
   }
 
   override fun handleOnDestroy() {
@@ -1194,16 +1089,13 @@ class StreamUdpPlugin : Plugin() {
     // Paired with the close above, as closeAudioTrack pairs them: focus kept past a destroyed
     // plugin never tells whatever was interrupted that it may resume.
     abandonPlaybackAudioFocus()
-    releaseMulticastLock()
+    wifiLocks.release()
     executor.shutdownNow()
   }
 
   companion object {
     // OS socket receive-buffer request (2 MB) — ~0.8 s of video at the 2.6 MB/s wire rate, ample
     // headroom for a scheduling/GC gap. The kernel may clamp it to net.core.rmem_max.
-    private const val UNICAST_PROBE_PORT = 9
-    private const val UNICAST_ECHO_ATTEMPTS = 3
-    private const val UNICAST_ECHO_TIMEOUT_MS = 400
     private const val RECV_BUFFER_BYTES = 2 * 1024 * 1024
 
     // C64U PAL audio sample rate (rounded to int for AudioTrack; source of truth: audioStream.ts).

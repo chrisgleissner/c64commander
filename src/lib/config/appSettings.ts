@@ -56,7 +56,6 @@ const BOOT_SETTLE_MS_KEY = "c64u_boot_settle_ms";
 const SEARCH_INSIDE_DISKS_KEY = "c64u_search_inside_disks";
 const STREAM_VIDEO_PORT_KEY = "c64u_stream_video_port";
 const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
-const STREAM_TRANSPORT_KEY = "c64u_stream_transport";
 const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
 const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
 const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
@@ -373,19 +372,6 @@ export const loadStreamAudioPort = () =>
 
 export const saveStreamAudioPort = (value: number) =>
   writeNumber(STREAM_AUDIO_PORT_KEY, clampPort(value, DEFAULT_STREAM_AUDIO_PORT));
-
-export type StreamTransport = "unicast" | "multicast";
-
-/**
- * How Live View asks the Ultimate to send its streams: straight to this phone (unicast), which is
- * what the app always does, or to the multicast groups.
- *
- * There is no control for it. The hardware gate sets it through the page, because the PC that
- * measures the wire can only see the stream in the multicast groups, and it puts it back afterwards.
- * Anything other than "multicast" means unicast.
- */
-export const loadStreamTransport = (): StreamTransport =>
-  readRawString(STREAM_TRANSPORT_KEY) === "multicast" ? "multicast" : "unicast";
 
 /**
  * Audio jitter buffer depth (ms) for Live View — how much audio is held back so a late, reordered

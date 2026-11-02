@@ -33,7 +33,6 @@ import {
   loadStreamVideoFrameRateMode,
   loadStreamVideoPort,
   type StreamVideoFrameRateMode,
-  loadStreamTransport,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
@@ -52,6 +51,7 @@ import { StreamLossRestarter } from "./streamLossRecovery";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 import { AudioLossGuard } from "./audioLossGuard";
+import { loadStreamTransport } from "./streamTransport";
 import { makeUnicastPathReady, startStreamResolvingHost } from "./unicastStart";
 
 export interface AvMirrorSnapshot {
