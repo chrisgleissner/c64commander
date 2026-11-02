@@ -286,6 +286,18 @@ describe("manual generator", () => {
     }
   });
 
+  it("prints each chapter and section heading once in both variants", async () => {
+    const contexts = await contextByVariant();
+
+    for (const context of Object.values(contexts)) {
+      const headings = renderManualMarkdown(context)
+        .split("\n")
+        .filter((line) => /^#{2,3} /.test(line));
+      const repeated = headings.filter((heading, index) => headings.indexOf(heading) !== index);
+      expect(repeated, `${context.variant.id} repeats headings`).toEqual([]);
+    }
+  });
+
   it("documents the always-present feature areas and reference appendices in both variants", async () => {
     const contexts = await contextByVariant();
     const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);
