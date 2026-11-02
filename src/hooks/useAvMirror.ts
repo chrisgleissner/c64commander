@@ -20,6 +20,7 @@ const SHOWN_FIELDS = ["state", "error", "senderMismatch", "foreignSenderNotice",
 const FRAME_RATE_FIELDS = [...SHOWN_FIELDS, "fps", "standard"] as const;
 
 const showsTheSame = (fields: readonly string[], a: AvMirrorSnapshot, b: AvMirrorSnapshot) =>
+  a.videoPausedForAudio === b.videoPausedForAudio &&
   (["audio", "video"] as const).every((stream) =>
     fields.every(
       (field) => (a[stream] as Record<string, unknown>)[field] === (b[stream] as Record<string, unknown>)[field],
@@ -50,6 +51,7 @@ export const useAvMirror = (session: AvMirrorSession = avMirrorSession, options:
     () => ({
       audio: snapshot.audio,
       video: snapshot.video,
+      videoPausedForAudio: snapshot.videoPausedForAudio,
       audioLive: isLive(snapshot.audio.state),
       videoLive: isLive(snapshot.video.state),
       anyLive: isLive(snapshot.audio.state) || isLive(snapshot.video.state),

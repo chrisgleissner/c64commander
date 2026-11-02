@@ -230,6 +230,13 @@ export interface StreamUdpPlugin {
     /** Accept packets only from this host (name or IPv4); omitted/empty accepts any sender. */
     source?: string;
   }): Promise<StreamUdpBindResult>;
+  /**
+   * Prepare to receive a stream sent straight to this phone. Returns the IPv4 address this phone
+   * uses to reach `host`, and whether `host` answered an ICMP echo. The echo is what puts this phone
+   * in the Ultimate's ARP table, which it must be in for the Ultimate to send to it; the call also
+   * holds the Wi-Fi radio in low-latency mode so the phone answers the Ultimate's own probe in time.
+   */
+  prepareUnicast(options: { host: string }): Promise<{ address: string | null; reachable: boolean }>;
   close(options: { name: string }): Promise<void>;
   /**
    * Point an already-bound stream at a different sender, without tearing the socket down.

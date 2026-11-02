@@ -70,6 +70,19 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
     deps: Captured["deps"];
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
+    getSnapshot = vi.fn(() => ({
+      renderResidenceMs: 0,
+      presented: 0,
+      decimated: 0,
+      backlogReplacements: 0,
+      completeFrames: 0,
+      partialConcealed: 0,
+      repeatedFrames: 0,
+      framesLost: 0,
+      droppedPackets: 0,
+      standard: "PAL",
+    }));
+    setKeepFraction = vi.fn();
     adoptSender = vi.fn(async () => {});
     abandonReconnect = vi.fn();
     constructor(deps: Captured["deps"]) {
@@ -89,12 +102,12 @@ vi.mock("@/lib/streams/streamReceiver", async (importOriginal) => ({
 
 import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 
 vi.mock("@/lib/logging", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/logging")>();
-  return { ...actual, addLog: vi.fn() };
+  return { ...actual, addLog: vi.fn(), addErrorLog: vi.fn() };
 });
 
 const makeSession = () => {
@@ -111,6 +124,113 @@ describe("AvMirrorSession", () => {
   beforeEach(() => {
     audioInstances.length = 0;
     videoInstances.length = 0;
+  });
+
+  describe("protecting the audio from the video", () => {
+    const lostPackets = (audio: Captured, count: { value: number }) => {
+      audio.getSignals = vi.fn(() => ({
+        audioBufferMs: 100,
+        audioUnderruns: 0,
+        audioConcealed: 0,
+        audioLostPackets: count.value,
+        audioRejectedPackets: 0,
+      }));
+    };
+    const bothLive = (audio: Captured, video: Captured) => {
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null });
+      video.deps.onChange({ state: "live", fps: 50, error: null });
+    };
+    /** Tick once a second, losing `perSecond` of the 250 audio packets a second, for `seconds`. */
+    const run = (session: AvMirrorSession, count: { value: number }, perSecond: number, seconds: number) => {
+      for (let t = 0; t <= seconds; t++) {
+        session.tick(t * 1000);
+        count.value += perSecond;
+      }
+    };
+
+    it("stops the video and says why when the audio keeps losing packets while both stream", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await Promise.resolve();
+
+      expect(video.stop).toHaveBeenCalledTimes(1);
+      expect(session.getSnapshot().videoPausedForAudio).toMatch(/Video paused to keep the sound clean: 17%/);
+      expect(audio.stop).not.toHaveBeenCalled();
+    });
+
+    it("leaves the video running on the loss a healthy link shows", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 7, 30);
+
+      expect(video.stop).not.toHaveBeenCalled();
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("does not touch the video when only the audio streams", () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      audio.deps.onChange({ state: "live", droppedPackets: 0, error: null });
+
+      run(session, count, 125, 10);
+
+      expect(video.stop).not.toHaveBeenCalled();
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("clears the notice when the video is started again", async () => {
+      const { session, audio, video } = makeSession();
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+      run(session, count, 43, 4);
+      await Promise.resolve();
+      expect(session.getSnapshot().videoPausedForAudio).not.toBeNull();
+
+      await session.startVideo();
+
+      expect(session.getSnapshot().videoPausedForAudio).toBeNull();
+    });
+
+    it("logs a failure that is not an Error with its text, and no stack", async () => {
+      const { session, audio, video } = makeSession();
+      video.stop.mockRejectedValueOnce("device did not answer");
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith("Could not stop the video that was costing the audio its packets", {
+          error: "device did not answer",
+          stack: undefined,
+        }),
+      );
+    });
+
+    it("logs the failure when the video cannot be stopped", async () => {
+      const { session, audio, video } = makeSession();
+      video.stop.mockRejectedValueOnce(new Error("device did not answer"));
+      const count = { value: 0 };
+      lostPackets(audio, count);
+      bothLive(audio, video);
+
+      run(session, count, 43, 4);
+      await vi.waitFor(() =>
+        expect(addErrorLog).toHaveBeenCalledWith(
+          "Could not stop the video that was costing the audio its packets",
+          expect.objectContaining({ error: "device did not answer" }),
+        ),
+      );
+    });
   });
 
   describe("setAudioWanted", () => {
@@ -176,12 +296,37 @@ describe("AvMirrorSession", () => {
     expect(presented).toBe(true); // but the frame must still reach the canvas
   });
 
+  it("asks again through the default start path when the Ultimate could not find this phone", async () => {
+    const api = getC64API();
+    const start = vi
+      .spyOn(api, "startStream")
+      .mockRejectedValueOnce(new Error("Firmware rejected stream audio start: Network Host Resolve Error"))
+      .mockResolvedValueOnce({ errors: [] });
+    vi.useFakeTimers();
+    try {
+      audioInstances.length = 0;
+      videoInstances.length = 0;
+      new AvMirrorSession({});
+      const starting = (
+        audioInstances[0].deps as { startStream: (n: string, d: string) => Promise<unknown> }
+      ).startStream("audio", "192.168.1.247:11001");
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(starting).resolves.toEqual({ errors: [] });
+      expect(start).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      start.mockRestore();
+    }
+  });
+
   it("starts with an all-off snapshot and replays it to a new subscriber", () => {
     const { session } = makeSession();
     const seen: unknown[] = [];
     const unsubscribe = session.subscribe((snap) => seen.push(snap));
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
+      videoPausedForAudio: null,
       audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
       video: {
         state: "off",
@@ -459,6 +604,39 @@ describe("AvMirrorSession", () => {
     await vi.waitFor(() => expect(judgeStreamSender).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(audio.adoptSender).not.toHaveBeenCalled();
+  });
+
+  it("asks for a stream sent straight to this phone, from the selected machine's address, on both feeds", () => {
+    localStorage.removeItem("c64u_stream_transport");
+    const { audio, video } = makeSession();
+    const expected = (audio.deps as { expectedSenderHost: () => string }).expectedSenderHost();
+
+    for (const controller of [audio, video]) {
+      (controller.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+    }
+
+    expect(createStreamReceiverMock).toHaveBeenCalledTimes(2);
+    for (const [options] of createStreamReceiverMock.mock.calls) {
+      expect(options).toMatchObject({ unicastHost: expected });
+    }
+    expect(video.deps).toBeDefined();
+  });
+
+  it("asks for the multicast groups only when the hardware gate has switched the transport", () => {
+    localStorage.setItem("c64u_stream_transport", "multicast");
+    try {
+      const { audio, video } = makeSession();
+      for (const controller of [audio, video]) {
+        (controller.deps as { createReceiver: (o: object) => unknown }).createReceiver({ name: "audio" });
+      }
+
+      expect(createStreamReceiverMock).toHaveBeenCalledTimes(2);
+      for (const [options] of createStreamReceiverMock.mock.calls) {
+        expect(options).toMatchObject({ unicastHost: null });
+      }
+    } finally {
+      localStorage.removeItem("c64u_stream_transport");
+    }
   });
 
   it("keeps accepting the adopted address for the selected device when the streams are restarted", async () => {

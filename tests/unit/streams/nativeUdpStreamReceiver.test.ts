@@ -20,6 +20,8 @@ vi.mock("@capacitor/core", async (importOriginal) => {
   return { ...actual, Capacitor: { ...actual.Capacitor, isPluginAvailable: () => true } };
 });
 
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
 const streamUdp = vi.hoisted(() => {
   const listeners: Record<string, ((event: Record<string, unknown>) => void) | null> = {
     datagram: null,
@@ -28,6 +30,7 @@ const streamUdp = vi.hoisted(() => {
   const remove = vi.fn().mockResolvedValue(undefined);
   return {
     bind: vi.fn().mockResolvedValue({ localIp: "192.0.2.206", port: 11000 }),
+    prepareUnicast: vi.fn().mockResolvedValue({ address: "192.168.1.247", reachable: true }),
     close: vi.fn().mockResolvedValue(undefined),
     readStreamDiagnostics: vi.fn().mockResolvedValue({ rejectedPackets: 0 }),
     setExpectedSource: vi.fn().mockResolvedValue(undefined),
@@ -46,6 +49,7 @@ const streamUdp = vi.hoisted(() => {
 vi.mock("@/lib/native/streamUdp", () => ({
   StreamUdp: {
     bind: streamUdp.bind,
+    prepareUnicast: streamUdp.prepareUnicast,
     close: streamUdp.close,
     addListener: streamUdp.addListener,
     readStreamDiagnostics: streamUdp.readStreamDiagnostics,
@@ -54,6 +58,7 @@ vi.mock("@/lib/native/streamUdp", () => ({
   },
 }));
 
+import { addLog } from "@/lib/logging";
 import { createStreamReceiver, NativeUdpStreamReceiver } from "@/lib/streams/streamReceiver";
 
 const b64 = (...bytes: number[]) => btoa(String.fromCharCode(...bytes));
@@ -66,6 +71,83 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     streamUdp.readStreamDiagnostics.mockClear().mockResolvedValue({ rejectedPackets: 0 });
     streamUdp.setExpectedSource.mockClear().mockResolvedValue(undefined);
     streamUdp.bind.mockResolvedValue({ localIp: "192.0.2.206", port: 11000 });
+    streamUdp.prepareUnicast.mockClear().mockResolvedValue({ address: "192.168.1.247", reachable: true });
+  });
+
+  describe("asking for a stream sent straight to this phone", () => {
+    it("binds a plain socket and makes this phone's own address the destination, with no multicast group", async () => {
+      const receiver = new NativeUdpStreamReceiver({ name: "video", port: 11000, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(streamUdp.prepareUnicast).toHaveBeenCalledWith({ host: "192.168.1.146" });
+      expect(receiver.destination).toBe("192.168.1.247:11000");
+      expect(streamUdp.bind).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "video", port: 11000, group: undefined }),
+      );
+    });
+
+    it("falls back to the multicast group when the plugin cannot say which address to use", async () => {
+      streamUdp.prepareUnicast.mockResolvedValueOnce({ address: null, reachable: false });
+      const receiver = new NativeUdpStreamReceiver({ name: "audio", port: 11001, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(receiver.destination).toBe("239.0.1.65:11001");
+      expect(streamUdp.bind).toHaveBeenCalledWith(expect.objectContaining({ group: "239.0.1.65" }));
+    });
+
+    it("falls back to the multicast group, and says so, when preparing the unicast path fails", async () => {
+      streamUdp.prepareUnicast.mockRejectedValueOnce(new Error("no wifi"));
+      const receiver = new NativeUdpStreamReceiver({ name: "audio", port: 11001, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(receiver.destination).toBe("239.0.1.65:11001");
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Could not prepare a unicast stream; using the multicast group",
+        expect.objectContaining({ error: "no wifi" }),
+      );
+    });
+
+    it("falls back to the multicast group when preparing fails with something that is not an Error", async () => {
+      streamUdp.prepareUnicast.mockRejectedValueOnce("no radio");
+      const receiver = new NativeUdpStreamReceiver({ name: "audio", port: 11001, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(receiver.destination).toBe("239.0.1.65:11001");
+      expect(addLog).toHaveBeenCalledWith("warn", "Could not prepare a unicast stream; using the multicast group", {
+        host: "192.168.1.146",
+        error: "no radio",
+      });
+    });
+
+    it("still asks for multicast when no unicast host is given, and never in Demo Mode", async () => {
+      const plain = new NativeUdpStreamReceiver({ name: "video", port: 11000 });
+      await plain.ready();
+      const demo = new NativeUdpStreamReceiver({
+        name: "video",
+        port: 11000,
+        unicastHost: "192.168.1.146",
+        demoLoopback: true,
+      });
+      await demo.ready();
+
+      expect(plain.destination).toBe("239.0.1.64:11000");
+      expect(streamUdp.prepareUnicast).not.toHaveBeenCalled();
+      expect(demo.destination).toMatch(/:11000$/);
+    });
+
+    it("notes when the Ultimate did not answer the echo but still uses the address it was given", async () => {
+      streamUdp.prepareUnicast.mockResolvedValueOnce({ address: "192.168.1.247", reachable: false });
+      const receiver = new NativeUdpStreamReceiver({ name: "audio", port: 11001, unicastHost: "192.168.1.146" });
+      await receiver.ready();
+
+      expect(receiver.destination).toBe("192.168.1.247:11001");
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "The Ultimate did not answer an ICMP echo before a unicast stream was requested",
+        { host: "192.168.1.146" },
+      );
+    });
   });
 
   it("reports a refused native keep-fraction, so the caller decimates in JS", async () => {

@@ -119,6 +119,14 @@ export interface StreamReceiverOptions {
    */
   expectedSource?: string | null;
   /**
+   * The Ultimate's address as this phone reaches it. When set on a native receiver, the stream is
+   * requested as unicast to this phone instead of multicast: `prepareUnicast` finds the phone's own
+   * address and makes the Ultimate able to find it, and `destination` becomes `<that address>:<port>`
+   * once {@link StreamReceiver.ready} resolves. If the phone's address cannot be read, the receiver
+   * falls back to the multicast group.
+   */
+  unicastHost?: string | null;
+  /**
    * Demo Mode: receive from the mock stream server on loopback instead of joining the real
    * multicast group. Joining a multicast group needs a live network interface ({@link
    * MULTICAST_GROUP} would otherwise fail `StreamUdp.bind` outright with Wi-Fi off / airplane
@@ -146,10 +154,13 @@ export const DEFAULT_VIDEO_PORT = 11000;
 export const DEFAULT_AUDIO_PORT = 11001;
 
 /**
- * The firmware's default (and reliable) stream destinations are **multicast** — a unicast
- * `streams:start` fails with "Network Host Resolve Error" because the device streams from its
- * wired port and cannot ARP-resolve a Wi-Fi client. The receiver joins the group instead
- * (matching the device's `Stream VIC/Audio to` config defaults).
+ * The multicast groups the Ultimate streams to by default (its `Stream VIC/Audio to` config). The
+ * receiver joins them only when it cannot ask for a stream sent straight to this phone.
+ *
+ * Unicast is preferred because Wi-Fi sends multicast once at the access point's basic rate, with no
+ * acknowledgement and no retry. Measured on one access point, the same phone received 585 of 3,657
+ * packets per second of the two streams over 2.4 GHz as multicast and 3,130 of 3,400 as unicast, and
+ * the audio lost 17% of its packets while the video ran.
  */
 export const MULTICAST_GROUP: Record<StreamName, string> = { video: "239.0.1.64", audio: "239.0.1.65" };
 
@@ -239,7 +250,8 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     const port = options.port ?? defaultPortFor(options.name);
     // Demo Mode's mock stream server sends to loopback and never joins a multicast group (see
     // demoLoopback's doc comment) — binding a plain unicast socket needs no network interface.
-    const group = options.demoLoopback ? undefined : MULTICAST_GROUP[options.name];
+    const multicastGroup = options.demoLoopback ? undefined : MULTICAST_GROUP[options.name];
+    const unicastHost = options.demoLoopback ? null : (options.unicastHost ?? null);
     // Native frame assembly is a video-only fast path; audio stays per-packet (~250/s is cheap).
     this.assemble = options.name === "video" && (options.nativeVideoAssembly ?? true);
     // Destination is the multicast group, or loopback in Demo Mode (known up front either way).
@@ -279,13 +291,17 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
         ),
       );
     }
-    this.readyPromise = StreamUdp.bind({
-      name: this.name,
-      port,
-      group,
-      assemble: this.assemble,
-      source: options.expectedSource ?? undefined,
-    })
+    this.readyPromise = this.resolveUnicastAddress(unicastHost)
+      .then((address) => {
+        if (address) this.destination = `${address}:${port}`;
+        return StreamUdp.bind({
+          name: this.name,
+          port,
+          group: address ? undefined : multicastGroup,
+          assemble: this.assemble,
+          source: options.expectedSource ?? undefined,
+        });
+      })
       .then(() => {
         if (!this.closed) this.stateHandler?.("open");
       })
@@ -298,6 +314,24 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
         // that happen silently, with only this warn log to show for it.
         throw error;
       });
+  }
+
+  /** This phone's address toward the Ultimate, or null to use the multicast group instead. */
+  private async resolveUnicastAddress(host: string | null): Promise<string | null> {
+    if (!host) return null;
+    try {
+      const prepared = await StreamUdp.prepareUnicast({ host });
+      if (!prepared.reachable) {
+        addLog("warn", "The Ultimate did not answer an ICMP echo before a unicast stream was requested", { host });
+      }
+      return prepared.address;
+    } catch (error) {
+      addLog("warn", "Could not prepare a unicast stream; using the multicast group", {
+        host,
+        error: (error as Error)?.message ?? String(error),
+      });
+      return null;
+    }
   }
 
   ready(): Promise<void> {

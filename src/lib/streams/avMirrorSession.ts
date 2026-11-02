@@ -19,7 +19,7 @@
 
 import { getC64API } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { Capacitor } from "@capacitor/core";
 
 import { isNativePlatform } from "@/lib/native/platform";
@@ -50,8 +50,13 @@ import { claimPhoneAudio, releasePhoneAudio } from "@/lib/audio/phoneAudioOwners
 import { StreamLossRestarter } from "./streamLossRecovery";
 import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
+import { AudioLossGuard } from "./audioLossGuard";
+import { loadStreamTransport } from "./streamTransport";
+import { makeUnicastPathReady, startStreamResolvingHost } from "./unicastStart";
 
 export interface AvMirrorSnapshot {
+  /** Why the video was stopped to protect the sound, or null while it was not. Cleared when video starts again. */
+  videoPausedForAudio: string | null;
   audio: {
     state: AudioMirrorState;
     droppedPackets: number;
@@ -128,6 +133,7 @@ export interface AvStatsSnapshot {
 export type AvStatsListener = (snapshot: AvStatsSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
+  videoPausedForAudio: null,
   audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
   video: {
     state: "off",
@@ -277,6 +283,7 @@ export class AvMirrorSession {
   private readonly judgeStreamSender: (source: string, selectedHost: string) => Promise<SenderVerdict>;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
+  private readonly audioLossGuard = new AudioLossGuard();
   private lastLocalAudioUnderruns = 0;
   /** Wall time (ms) until which the user is treated as actively driving the C64 → video stays shed. */
   private inputActiveUntilMs = 0;
@@ -329,7 +336,11 @@ export class AvMirrorSession {
     const startStream =
       deps.startStream ??
       (async (name, destination) => {
-        const result = await getC64API().startStream(name, destination);
+        const result = await startStreamResolvingHost(
+          () => getC64API().startStream(name, destination),
+          destination,
+          () => makeUnicastPathReady(this.expectedSender()),
+        );
         recordDeviceStreamStarted(name, getC64API().getDeviceHost());
         return result;
       });
@@ -370,6 +381,7 @@ export class AvMirrorSession {
             ...opts,
             port: loadStreamAudioPort(),
             expectedSource: this.expectedSender(),
+            unicastHost: loadStreamTransport() === "multicast" ? null : this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       createPlayer: deps.createPlayer,
@@ -417,6 +429,7 @@ export class AvMirrorSession {
             // Accept video only from the selected machine. Every Ultimate defaults to the same
             // multicast group, so a second one streaming into it is assembled into our frames.
             expectedSource: this.expectedSender(),
+            unicastHost: loadStreamTransport() === "multicast" ? null : this.expectedSender(),
             demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
@@ -601,6 +614,7 @@ export class AvMirrorSession {
       nowMs,
     );
     this.lastAudioUnderruns = signals.audioUnderruns;
+    this.protectAudioFromVideo(nowMs, signals.audioLostPackets);
     // Input priority caps the governor's target while the user is actively driving the C64, so the
     // telemetry records the fraction the video path ACTUALLY runs at (not just the governor's target).
     const applied = this.effectiveVideoFraction(governor.effectiveFraction, nowMs);
@@ -752,6 +766,26 @@ export class AvMirrorSession {
     }
   }
 
+  /**
+   * Stop the video when it is costing the audio its packets. Presenting fewer frames does not lift the
+   * load, because every video packet is still received; only ending the video stream does.
+   */
+  private protectAudioFromVideo(nowMs: number, audioLostPackets: number): void {
+    const loss = this.audioLossGuard.update(nowMs, audioLostPackets, this.audioLive && this.videoLive);
+    if (loss === null) return;
+    const percent = Math.round(loss * 100);
+    addLog("warn", "Video stopped to protect the audio", { audioLossPercent: percent });
+    this.update({
+      videoPausedForAudio: `Video paused to keep the sound clean: ${percent}% of the audio was lost on this Wi-Fi link. A 5 GHz link can carry both.`,
+    });
+    this.stopVideo().catch((error: unknown) =>
+      addErrorLog("Could not stop the video that was costing the audio its packets", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+    );
+  }
+
   /** Clear stale telemetry + governor pressure when a fresh session begins (§7.10), and apply the saved mode. */
   private beginSessionIfIdle(): void {
     if (this.audioLive || this.videoLive) return;
@@ -859,6 +893,7 @@ export class AvMirrorSession {
     this.videoLossRestarter.cancel();
     return this.serialize(async () => {
       this.beginSessionIfIdle();
+      if (this.snapshot.videoPausedForAudio !== null) this.update({ videoPausedForAudio: null });
       await this.video.start();
     });
   }
