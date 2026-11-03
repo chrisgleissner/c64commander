@@ -365,6 +365,7 @@ test.describe("Playlist controls and advanced features", () => {
   test("duration control syncs slider and input @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
+    await page.getByTestId("play-section-toggle-playback-settings").click();
 
     const slider = page.getByTestId("duration-slider").getByRole("slider");
     const input = page.getByTestId("duration-input");
@@ -381,6 +382,7 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "duration-slider-updated");
 
     await input.fill("3:45");
+    await expect(input).toHaveValue("3:45");
     await input.blur();
     await expect(input).toHaveValue("3:45");
     await snap(page, testInfo, "duration-input-updated");
@@ -392,6 +394,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await snap(page, testInfo, "playlist-ready");
+    await page.getByTestId("play-section-toggle-playback-settings").click();
 
     const counters = page.getByTestId("playback-counters");
     await expect(counters).toContainText("Total: 6:00");

@@ -137,7 +137,7 @@ const tourHome = async (page: Page) => {
   await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1800);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  const systemInfo = page.getByTestId("home-system-info");
+  const systemInfo = page.getByTestId("home-system-info-toggle");
   await smoothScrollToLocator(page, systemInfo, 1200);
   await systemInfo.click();
   await page.waitForTimeout(SHORT_PAUSE_MS);

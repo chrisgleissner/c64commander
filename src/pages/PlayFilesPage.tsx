@@ -9,7 +9,7 @@
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Joystick, Heart, Keyboard, ListMusic, Search } from "lucide-react";
+import { Joystick, Heart, Keyboard, ListMusic, Search, Settings2, Play, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -138,6 +138,7 @@ import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
+import { PlayPageCard } from "@/pages/playFiles/components/PlayPageCard";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
 import { useHvscDownloadConsent } from "@/pages/playFiles/hooks/useHvscDownloadConsent";
 import { useHvscPreparationLifecycle } from "@/pages/playFiles/hooks/useHvscPreparationLifecycle";
@@ -2439,10 +2440,13 @@ export default function PlayFilesPage() {
           />
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div className="flex flex-col gap-4" data-testid="play-primary-column">
-              <div
-                className="bg-card border border-border rounded-panel p-4 space-y-4"
-                data-section-label="Playback controls"
-                data-testid="play-section-playback"
+              <PlayPageCard
+                id="playback-controls"
+                title="Playback controls"
+                summary="Current tune, transport, volume and playback options"
+                icon={Play}
+                defaultOpen
+                testId="play-section-playback"
               >
                 <PlaybackControlsCard
                   hasCurrentItem={Boolean(currentItem)}
@@ -2682,9 +2686,14 @@ export default function PlayFilesPage() {
                     ) : null}
                   </div>
                 ) : null}
-                {/* Above the panel's own settings rather than inside it: this is a decision about the
-                  listening session, not about how a file is played, and it is the one control here
-                  that has to be findable in the dark. */}
+              </PlayPageCard>
+              <PlayPageCard
+                id="playback-settings"
+                title="Playback settings"
+                summary="Sleep timer, default duration and songlengths file"
+                icon={Settings2}
+                testId="play-section-playback-settings"
+              >
                 <SleepTimerControl
                   mode={sleepTimer.mode}
                   onChange={sleepTimer.setMode}
@@ -2746,48 +2755,54 @@ export default function PlayFilesPage() {
                   songlengthsEntryCount={songlengthsSummary.entryCount}
                   songlengthsError={songlengthsSummary.error}
                 />
-              </div>
+              </PlayPageCard>
               {lightingStudioEnabled && lightingResolved.sourceCue ? (
-                <LightingAutomationCue
-                  label={lightingResolved.sourceCue.label}
-                  onOpenStudio={openStudio}
-                  onOpenContextLens={openContextLens}
-                />
+                <PlayPageCard
+                  id="lighting-cue"
+                  title="Lighting automation"
+                  summary={lightingResolved.sourceCue.label}
+                  icon={Lightbulb}
+                  testId="play-lighting-cue"
+                >
+                  <LightingAutomationCue
+                    label={lightingResolved.sourceCue.label}
+                    onOpenStudio={openStudio}
+                    onOpenContextLens={openContextLens}
+                  />
+                </PlayPageCard>
               ) : null}
               <PlaybackSpectrumCard paused={isPaused} />
               <PlaybackSoundCard />
             </div>
 
-            <div data-section-label="Playlist" data-testid="play-section-playlist">
-              <PlaylistPanel
-                previewItems={playlistPreviewListItems}
-                viewAllItems={playlistViewAllListItems}
-                totalItemCount={queryFilteredPlaylist.totalMatchCount}
-                hiddenItemCount={queryFilteredPlaylist.hiddenByFilterCount}
-                selectedCount={selectedPlaylistCount}
-                allSelected={allPlaylistSelected}
-                onToggleSelectAll={toggleSelectAllPlaylist}
-                onRemoveSelected={handleRemoveSelectedPlaylist}
-                maxVisible={listPreviewLimit}
-                playlistTypeFilters={playlistTypeFilters}
-                onToggleFilter={togglePlaylistTypeFilter}
-                hasPlaylist={hasPlaylist}
-                playlistLoading={!playlistHydrated}
-                playlistItemCount={playlistIds.length}
-                onAddItems={handleOpenAddItems}
-                onClearPlaylist={() => {
-                  // A running station tops the playlist up as it empties, so clearing it would
-                  // be undone at once: clearing the playlist ends the station too.
-                  sidRadio.stop();
-                  removePlaylistItemsById(new Set(playlistIds));
-                }}
-                playlistFilterText={playlistFilterInputText}
-                onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
-                hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
-                onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
-                letterIndexSource={playlistLetterIndexSource}
-              />
-            </div>
+            <PlaylistPanel
+              previewItems={playlistPreviewListItems}
+              viewAllItems={playlistViewAllListItems}
+              totalItemCount={queryFilteredPlaylist.totalMatchCount}
+              hiddenItemCount={queryFilteredPlaylist.hiddenByFilterCount}
+              selectedCount={selectedPlaylistCount}
+              allSelected={allPlaylistSelected}
+              onToggleSelectAll={toggleSelectAllPlaylist}
+              onRemoveSelected={handleRemoveSelectedPlaylist}
+              maxVisible={listPreviewLimit}
+              playlistTypeFilters={playlistTypeFilters}
+              onToggleFilter={togglePlaylistTypeFilter}
+              hasPlaylist={hasPlaylist}
+              playlistLoading={!playlistHydrated}
+              playlistItemCount={playlistIds.length}
+              onAddItems={handleOpenAddItems}
+              onClearPlaylist={() => {
+                // A running station tops the playlist up as it empties, so clearing it would
+                // be undone at once: clearing the playlist ends the station too.
+                sidRadio.stop();
+                removePlaylistItemsById(new Set(playlistIds));
+              }}
+              playlistFilterText={playlistFilterInputText}
+              onPlaylistFilterTextChange={handlePlaylistFilterTextChange}
+              hasMoreViewAllItems={queryFilteredPlaylist.hasMoreViewAllResults}
+              onViewAllEndReached={queryFilteredPlaylist.loadMoreViewAllResults}
+              letterIndexSource={playlistLetterIndexSource}
+            />
           </ProfileSplitSection>
 
           <input

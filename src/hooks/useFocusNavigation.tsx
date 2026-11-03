@@ -274,7 +274,8 @@ export const FocusNavigationProvider = ({
         // Radix may hand DOM focus back to a different stop; focusing the stop makes the ring's move hold,
         // and brings a stop the ring moved to on its own into view.
         onSelectionMovedByScan: (id) => {
-          if (getInputModality() === "key-navigation") focusRingElement(ringElementFor(id));
+          if (getInputModality() === "key-navigation" && !defaultStop.isFollowing())
+            focusRingElement(ringElementFor(id));
         },
       }),
     [controller, defaultStop, notifyRing, ringElementFor],

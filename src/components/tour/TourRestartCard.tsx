@@ -9,8 +9,8 @@
 import { Compass } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { requestTourStart } from "@/lib/tour/tourState";
 
@@ -22,24 +22,19 @@ export const TourRestartCard = () => {
   const { profile } = useDisplayProfile();
   const compact = profile === "compact";
   return (
-    <section
-      className={cn(
-        "rounded-panel border border-border bg-card",
-        compact ? "flex items-center justify-between gap-2 p-2" : "space-y-2 p-4",
-      )}
-      data-testid="docs-tour-card"
-      data-section-label="Take the tour"
+    <CollapsibleSection
+      scope="docs"
+      id="tour"
+      title={t("tour.card.title", "Take the tour")}
+      summary="A short walk through what this app does"
+      icon={Compass}
+      testId="docs-tour-card"
     >
-      <h2 className="flex items-center gap-2 text-base font-semibold">
-        <Compass className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-        {t("tour.card.title", "Take the tour")}
-      </h2>
-      <p className={cn("text-sm text-muted-foreground", compact && "sr-only")}>
-        {t("tour.card.body", "A short walk through what this app does. You can leave it at any point.")}
-      </p>
-      <Button onClick={() => requestTourStart()} className="min-h-11" data-testid="docs-tour-start">
-        {compact ? t("tour.card.startShort", "Start") : t("tour.card.start", "Start the tour")}
-      </Button>
-    </section>
+      <div className={compact ? "p-2 pt-0" : "space-y-2 p-4 pt-0"}>
+        <Button onClick={() => requestTourStart()} className="min-h-11" data-testid="docs-tour-start">
+          {compact ? t("tour.card.startShort", "Start") : t("tour.card.start", "Start the tour")}
+        </Button>
+      </div>
+    </CollapsibleSection>
   );
 };

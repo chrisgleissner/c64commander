@@ -2379,63 +2379,72 @@ export const HomeDiskManager = () => {
             Disks
           </h3>
 
-          <div className="bg-card border border-border rounded-panel p-4 space-y-4">
-            <SelectableActionList
-              title="Disk list"
-              stackTitleProfiles={["compact", "medium"]}
-              items={buildDiskListItems(sortedDisks, {
-                onMount: (entry) => {
-                  if (!status.isConnected) {
-                    reportUserError({
-                      operation: "DISK_MOUNT",
-                      title: "Offline",
-                      description: "Connect to mount disks.",
-                    });
-                    return;
-                  }
-                  setActiveDisk(entry);
-                },
-              })}
-              emptyLabel="No disks in the collection yet."
-              selectAllLabel="Select all"
-              deselectAllLabel="Deselect all"
-              removeSelectedLabel="Remove selected items"
-              selectedCount={selectedCount}
-              allSelected={allSelected}
-              onToggleSelectAll={toggleSelectAll}
-              onRemoveSelected={() => setBulkDeleteOpen(true)}
-              maxVisible={listPreviewLimit}
-              viewAllTitle="All disks"
-              filterPlaceholder="Filter disks"
-              listTestId="disk-list"
-              rowTestId="disk-row"
-              viewAllMode="non-empty"
-              headerActions={
-                <div className="flex items-center gap-2">
-                  {newDiskEnabled && (
-                    <Button
+          <CollapsibleSection
+            scope="disks"
+            id="disk-library"
+            title="Disk collection"
+            summary={`${diskLibrary.disks.length} disk${diskLibrary.disks.length === 1 ? "" : "s"}`}
+            icon={HardDrive}
+            defaultOpen
+            testId="disk-library-section"
+          >
+            <div className="space-y-4">
+              <SelectableActionList
+                title="Disk list"
+                stackTitleProfiles={["compact", "medium"]}
+                items={buildDiskListItems(sortedDisks, {
+                  onMount: (entry) => {
+                    if (!status.isConnected) {
+                      reportUserError({
+                        operation: "DISK_MOUNT",
+                        title: "Offline",
+                        description: "Connect to mount disks.",
+                      });
+                      return;
+                    }
+                    setActiveDisk(entry);
+                  },
+                })}
+                emptyLabel="No disks in the collection yet."
+                selectAllLabel="Select all"
+                deselectAllLabel="Deselect all"
+                removeSelectedLabel="Remove selected items"
+                selectedCount={selectedCount}
+                allSelected={allSelected}
+                onToggleSelectAll={toggleSelectAll}
+                onRemoveSelected={() => setBulkDeleteOpen(true)}
+                maxVisible={listPreviewLimit}
+                viewAllTitle="All disks"
+                filterPlaceholder="Filter disks"
+                listTestId="disk-list"
+                rowTestId="disk-row"
+                viewAllMode="non-empty"
+                headerActions={
+                  <div className="flex items-center gap-2">
+                    {newDiskEnabled && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewDiskOpen(true)}
+                        data-testid="new-disk-open"
+                      >
+                        New disk
+                      </Button>
+                    )}
+                    <FocusableDiskButton
+                      focusId="disks-library-add-disks"
+                      focusOrder={DISKS_LIBRARY_FOCUS_ORDER.addDisks}
                       variant="outline"
                       size="sm"
-                      onClick={() => setNewDiskOpen(true)}
-                      data-testid="new-disk-open"
+                      onClick={() => setBrowserOpen(true)}
                     >
-                      New disk
-                    </Button>
-                  )}
-                  <FocusableDiskButton
-                    focusId="disks-library-add-disks"
-                    focusOrder={DISKS_LIBRARY_FOCUS_ORDER.addDisks}
-                    focusGroup="disks-library"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setBrowserOpen(true)}
-                  >
-                    {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
-                  </FocusableDiskButton>
-                </div>
-              }
-            />
-          </div>
+                      {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
+                    </FocusableDiskButton>
+                  </div>
+                }
+              />
+            </div>
+          </CollapsibleSection>
         </section>
       </ProfileSplitSection>
 

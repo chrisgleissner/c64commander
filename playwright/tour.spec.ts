@@ -209,6 +209,7 @@ test.describe("first-run tour", () => {
 
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
     await page.locator("nav.tab-bar").first().waitFor({ state: "visible", timeout: 30_000 });
+    await page.getByTestId("docs-section-toggle-tour").click();
     // The card animates in, so wait for it to settle rather than clicking a node about to be
     // replaced — the first version of this failed with "element was detached from the DOM".
     await expect(page.getByTestId("docs-tour-start")).toBeVisible();

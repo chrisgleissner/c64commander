@@ -25,6 +25,7 @@ import {
   PanelTop,
   Lightbulb,
   Settings2,
+  Headphones,
 } from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
@@ -32,6 +33,7 @@ import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 import { useRemoteInputOpenRequest } from "@/hooks/useRemoteInputOpenRequest";
 import { useArrangementPin } from "@/hooks/useArrangementPin";
@@ -110,7 +112,6 @@ import { buildOptionDomainKey, useDeviceConfigOptionDomains } from "./home/hooks
 import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions, resolveConfigDisplayValue } from "./home/utils/HomeConfigUtils";
 
-import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer, PageStack, ProfileActionGrid } from "@/components/layout/PageContainer";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
@@ -1297,26 +1298,38 @@ function HomePageContent() {
               same rule the search overlay follows: a capability that vanishes when it is
               unavailable teaches nothing about what the app can do. */}
           {offlineArrangement ? (
-            <ProfileActionGrid
-              compactColumns={2}
-              mediumColumns={4}
-              expandedColumns={4}
-              cardDensity="compact"
-              testId="home-promoted-actions"
+            <CollapsibleSection
+              scope="home"
+              id="promoted-actions"
+              title="Listen and play"
+              summary="Play SID tunes, browse music or start a station"
+              icon={Headphones}
+              defaultOpen
+              testId="home-promoted-actions-section"
             >
-              {listenActions.map((action) => (
-                <QuickActionCard
-                  key={action.id}
-                  icon={action.icon}
-                  label={action.label}
-                  description={action.description ?? undefined}
-                  disabled={action.disabled}
-                  onClick={action.onSelect}
-                  dataTestId={action.testId}
-                  focusId={action.focusId}
-                />
-              ))}
-            </ProfileActionGrid>
+              <div className="p-4 pt-0">
+                <ProfileActionGrid
+                  compactColumns={2}
+                  mediumColumns={4}
+                  expandedColumns={4}
+                  cardDensity="compact"
+                  testId="home-promoted-actions"
+                >
+                  {listenActions.map((action) => (
+                    <QuickActionCard
+                      key={action.id}
+                      icon={action.icon}
+                      label={action.label}
+                      description={action.description ?? undefined}
+                      disabled={action.disabled}
+                      onClick={action.onSelect}
+                      dataTestId={action.testId}
+                      focusId={action.focusId}
+                    />
+                  ))}
+                </ProfileActionGrid>
+              </div>
+            </CollapsibleSection>
           ) : null}
 
           {/* After the tiles, as spec.md 6.1 orders it: its copy says "Everything above works without one". */}
@@ -1351,12 +1364,6 @@ function HomePageContent() {
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
           />
-
-          {offlineArrangement ? (
-            <p className="px-2 text-sm text-muted-foreground" data-testid="home-offline-sections-note">
-              Connect a C64 Ultimate to reach its settings.
-            </p>
-          ) : null}
 
           {liveViewEnabled &&
           (audioMirrorEnabled || videoMirrorEnabled) &&

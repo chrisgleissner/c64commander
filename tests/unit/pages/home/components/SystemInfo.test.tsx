@@ -7,7 +7,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemInfo } from "@/pages/home/components/SystemInfo";
 
 const mockUseC64Connection = vi.fn();
@@ -37,14 +37,24 @@ vi.mock("@/lib/buildInfo", () => ({
 
 // framer-motion: render children directly
 vi.mock("framer-motion", () => ({
+  AnimatePresence: ({ children }: any) => children,
   motion: {
     button: ({ children, onClick, ...rest }: any) => (
       <button onClick={onClick} {...rest}>
         {children}
       </button>
     ),
+    div: ({ children, ...rest }: any) => <div {...rest}>{children}</div>,
+    section: ({ children, ...rest }: any) => <section {...rest}>{children}</section>,
+    span: ({ children, ...rest }: any) => <span {...rest}>{children}</span>,
   },
 }));
+
+const openSystemInfo = () => fireEvent.click(screen.getByTestId("home-system-info-toggle"));
+
+beforeEach(() => {
+  window.localStorage.removeItem("c64u_open_sections");
+});
 
 describe("SystemInfo", () => {
   it("names Demo Mode as the device instead of the host name the simulated device reports", () => {
@@ -54,6 +64,7 @@ describe("SystemInfo", () => {
     });
     try {
       render(<SystemInfo />);
+      openSystemInfo();
 
       expect(screen.getByTestId("home-system-device")).toHaveTextContent("Demo Mode");
     } finally {
@@ -98,6 +109,7 @@ describe("SystemInfo", () => {
       status: { isConnected: false, deviceInfo: null },
     });
     render(<SystemInfo />);
+    openSystemInfo();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
     expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3");
   });
@@ -117,6 +129,7 @@ describe("SystemInfo", () => {
       },
     });
     render(<SystemInfo />);
+    openSystemInfo();
     expect(screen.getByTestId("home-system-device")).toHaveTextContent("my-c64");
     expect(screen.getByTestId("home-system-firmware")).toHaveTextContent("3.11");
   });
@@ -129,6 +142,7 @@ describe("SystemInfo", () => {
       },
     });
     render(<SystemInfo />);
+    openSystemInfo();
     expect(screen.getByTestId("home-system-device")).toHaveTextContent("Ultimate 64");
     expect(screen.getByTestId("home-system-firmware")).toHaveTextContent("Not available");
   });
@@ -142,6 +156,7 @@ describe("SystemInfo", () => {
     });
 
     render(<SystemInfo />);
+    openSystemInfo();
 
     expect(screen.getByTestId("home-system-device")).toHaveTextContent("Not available");
     expect(screen.getByTestId("home-system-firmware")).toHaveTextContent("3.11");
@@ -161,10 +176,7 @@ describe("SystemInfo", () => {
       },
     });
     render(<SystemInfo />);
-    expect(screen.queryByTestId("home-system-git")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId("home-system-info"));
-
+    openSystemInfo();
     expect(screen.getByTestId("home-system-git")).toHaveTextContent("abc123");
     expect(screen.getByTestId("home-system-fpga")).toHaveTextContent("fpga1");
     expect(screen.getByTestId("home-system-core")).toHaveTextContent("core1");
@@ -176,7 +188,7 @@ describe("SystemInfo", () => {
       status: { isConnected: false, deviceInfo: null },
     });
     render(<SystemInfo />);
-    fireEvent.click(screen.getByTestId("home-system-info"));
+    openSystemInfo();
     const fpga = screen.getByTestId("home-system-fpga");
     expect(fpga).toHaveTextContent("Not available");
   });

@@ -39,6 +39,7 @@ interface MenuPageSectionProps {
   authoritativeValues: AuthoritativeConfigValueState;
   markChanged: () => void;
   focusOrder: number;
+  defaultOpen?: boolean;
 }
 
 /**
@@ -57,8 +58,9 @@ export const MenuPageSection = memo(function MenuPageSection({
   authoritativeValues,
   markChanged,
   focusOrder,
+  defaultOpen = false,
 }: MenuPageSectionProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const queryClient = useQueryClient();
   const { writeLeaf } = useConfigLeafWrite(authoritativeValues, markChanged);
 
@@ -122,6 +124,7 @@ export const MenuPageSection = memo(function MenuPageSection({
       title={page.label}
       summary={groupLabel ?? undefined}
       icon={configCategoryIcon(page.label)}
+      defaultOpen={defaultOpen}
       headerRef={headerFocusRef}
       toggleTestId={headerId}
       bodyId={sectionId}

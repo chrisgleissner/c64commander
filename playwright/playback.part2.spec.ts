@@ -42,6 +42,11 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 };
 
+const openPlaybackSettings = async (page: Page) => {
+  const toggle = page.getByTestId("play-section-toggle-playback-settings");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+};
+
 const waitForFtpIdle = async (container: Page | Locator) => {
   const loading = container.getByTestId("ftp-loading");
   if (await loading.count()) {
@@ -214,6 +219,7 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
+    await openPlaybackSettings(page);
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();
@@ -233,6 +239,7 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-txt")]);
     await expect(page.getByRole("dialog")).toBeHidden();
+    await openPlaybackSettings(page);
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();
@@ -254,6 +261,7 @@ test.describe("Playback file browser (part 2)", () => {
     const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
+    await openPlaybackSettings(page);
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();

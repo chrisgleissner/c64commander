@@ -78,8 +78,9 @@ test.describe("compact Docs contents and archive search", () => {
 
     const tour = await boxOf(page, "docs-tour-card");
     expect(tour.y, "the tour card follows the contents").toBeGreaterThan(boxes[boxes.length - 1].y);
-    expect((await boxOf(page, "docs-tour-start")).height).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
     expect(tour.height, "the tour card is one row on this screen").toBeLessThan(80);
+    await page.getByTestId("docs-section-toggle-tour").click();
+    expect((await boxOf(page, "docs-tour-start")).height).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
   });
 
   test("archive search shows a plain summary, keeps Search on screen and shows the license sentence with the results", async ({

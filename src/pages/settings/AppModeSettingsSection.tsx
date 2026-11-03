@@ -19,6 +19,7 @@ export function AppModeSettingsSection() {
       title={MODE_COPY.settings.title}
       summary={MODE_COPY.settings.summary}
       icon={Headphones}
+      defaultOpen
       testId="settings-section-app-mode"
     >
       <div className="space-y-3">

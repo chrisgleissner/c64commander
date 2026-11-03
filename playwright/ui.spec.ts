@@ -188,10 +188,12 @@ test.describe("UI coverage", () => {
   test("config group actions stay at top of expanded section", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
-    await page.getByRole("button", { name: "Audio Mixer" }).click();
+    const audioMixer = page.getByRole("button", { name: "Audio Mixer" });
+    if ((await audioMixer.getAttribute("aria-expanded")) !== "true") await audioMixer.click();
     await snap(page, testInfo, "audio-mixer-expanded");
-    const actions = page.getByTestId("config-group-actions");
-    const list = page.getByTestId("config-group-list");
+    const section = page.getByTestId("config-section-audio-mixer");
+    const actions = section.getByTestId("config-group-actions");
+    const list = section.getByTestId("config-group-list");
     const [actionsBox, listBox] = await Promise.all([actions.boundingBox(), list.boundingBox()]);
     expect(actionsBox?.y ?? 0).toBeLessThan(listBox?.y ?? Number.MAX_SAFE_INTEGER);
   });

@@ -151,17 +151,9 @@ const CollapsibleSectionBody = ({
   // A truncating badge gives way instead, so the actions never need a row of their own.
   const stackActions = fitsOneRow === false && !badgeTruncates;
 
-  /*
-   * Closed on every profile, for now.
-   *
-   * Opening sections by default on the roomier profiles is wanted — on a phone or a tablet there is
-   * room to read down the page, and having to open each section to see what a page holds is
-   * friction the cards were meant to remove. It is not switched on here because of what it does to
-   * keypad navigation: a card is a scope the ring enters with OK, and on a page whose cards are
-   * already open that same OK collapses them instead. Four of the Settings keypad-ring tests fail
-   * on it, and the fix belongs with the ring rather than with the default. Until then, the Quick
-   * menu's "Expand all sections" is how a reader opens a page in one action.
-   */
+  // Sections stay closed on a first visit by default. The primary task on a page may opt into an
+  // expanded first visit with `defaultOpen`; secondary sections remain one-line summaries until
+  // the reader opens them or uses the page-wide expand command.
   const resolvedDefaultOpen = defaultOpen ?? false;
 
   // Read once, during the first render, not from an effect. From an effect the card renders

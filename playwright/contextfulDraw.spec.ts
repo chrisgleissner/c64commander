@@ -43,7 +43,7 @@ for (const viewport of [
     const warmSettings = async (page: import("@playwright/test").Page) => {
       await page.goto("/settings");
       const slot = page.locator('[data-slot-active="true"]');
-      await expect(slot.locator('[data-section-scope="settings"][data-body-mounted="true"]')).toHaveCount(12);
+      await expect(slot.locator('[data-section-scope="settings"][data-body-mounted="true"]')).toHaveCount(13);
       await page.keyboard.press("6");
       await expect(page).toHaveURL(/\/docs$/);
       await page.keyboard.press("5");

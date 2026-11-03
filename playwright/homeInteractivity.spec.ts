@@ -446,7 +446,7 @@ test.describe("Home interactions", () => {
       // would let this pass and hand the race straight back to the button wait.
       // The value only renders inside the System Info disclosure, so open it,
       // read it, and put it back the way it was.
-      const systemInfo = page.getByTestId("home-system-info");
+      const systemInfo = page.getByTestId("home-system-info-toggle");
       await systemInfo.click();
       await expect(page.getByTestId("home-system-core")).not.toHaveText(/Not available|Not connected/, {
         timeout: 30000,
