@@ -37,6 +37,20 @@ describe("aligning a ring stop the app has just moved to", () => {
     expect(resolveRingScrollAlignment({ ...pageShell, top: 500, bottom: 700, height: 200 })).toBe("end");
   });
 
+  it("aligns a top-clipped stop to the reserved top edge even when its bottom already fits", () => {
+    expect(
+      resolveRingScrollAlignment({
+        scrollportTop: 49,
+        scrollportBottom: 427,
+        marginTop: 12,
+        marginBottom: 79,
+        top: 29,
+        bottom: 287,
+        height: 258,
+      }),
+    ).toBe("start");
+  });
+
   it("brings a tall card's heading into view when the card was reached from below", () => {
     // Config's Memory & ROMs card, left open and selected by Back from a control inside it: 2810 px
     // tall with its top 2460 px above the screen.
