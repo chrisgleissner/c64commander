@@ -3440,6 +3440,11 @@ test.describe("App screenshots", () => {
       // The sleep timer, which lives with the playback settings rather than on the transport: it is
       // a decision about the listening session, not about how a file is played. Captured as its own
       // locator shot because the settings section is taller than the viewport.
+      const playbackSettingsToggle = getActiveMain(page).getByTestId("play-section-toggle-playback-settings");
+      if ((await playbackSettingsToggle.getAttribute("aria-expanded")) !== "true") {
+        await playbackSettingsToggle.click();
+      }
+      await expect(playbackSettingsToggle).toHaveAttribute("aria-expanded", "true");
       const sleepTimer = getActiveMain(page).getByTestId("sleep-timer");
       await sleepTimer.scrollIntoViewIfNeeded();
       await expect(sleepTimer).toBeVisible();
