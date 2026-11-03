@@ -17,6 +17,7 @@ playwright-report/**
 test-results/**
 .nyc_output/**
 .tmp/**
+.trail/cache/**
 .claude/**
 .kilo/**
 .opencode/**

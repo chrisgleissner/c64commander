@@ -144,7 +144,7 @@ export const PlayListeningShortcuts = ({
 }) =>
   isSurfaceVisible("play:listening-shortcuts", useAppMode()) ? (
     <>
-      <HomeSearchField scope="play" />
+      <HomeSearchField />
       {playlistEmpty ? <StartListening hvscInstalled={hvscInstalled} /> : null}
     </>
   ) : null;

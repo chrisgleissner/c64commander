@@ -107,6 +107,12 @@ test.describe("Play page keyboard reachability", () => {
     test(`${mode} on ${profile}: keyboard reaches settings and continues to the cards below`, async ({ page }) => {
       await startPlayPage(page, server.baseUrl, mode, profile);
 
+      if (mode === "sid-player") {
+        const searchField = page.getByTestId("home-search-field");
+        await expect(searchField).toBeVisible();
+        expect(await searchField.evaluate((element) => element.closest('[data-section-scope="play"]'))).toBeNull();
+      }
+
       const settings = page.getByTestId("play-section-playback-settings");
       const settingsToggle = settings.locator("button[aria-expanded]").first();
       const sleepTimerOff = page.getByTestId("sleep-timer-off");

@@ -2420,11 +2420,13 @@ describe("HomePage offline arrangement", () => {
     resetSavedDevicesCacheForTests();
   };
 
-  it("keeps the Home search card visible without a collapse control", () => {
+  it("keeps the Home search field visible outside all cards", () => {
     renderWithRouter(<HomePage />);
 
-    expect(screen.getByTestId("home-search-card")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Search the app" })).toBeVisible();
+    const searchField = screen.getByRole("button", { name: "Search the app" });
+    expect(searchField).toBeVisible();
+    expect(searchField.closest("[data-section-scope]")).toBeNull();
+    expect(screen.queryByTestId("home-search-card")).toBeNull();
     expect(screen.queryByTestId("home-section-toggle-search")).not.toBeInTheDocument();
   });
 
