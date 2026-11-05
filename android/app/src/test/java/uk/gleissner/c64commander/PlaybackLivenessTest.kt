@@ -14,6 +14,7 @@ import android.content.Intent
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.test.core.app.ApplicationProvider
 import java.util.concurrent.TimeUnit
 import org.junit.After
@@ -185,12 +186,16 @@ class BackgroundExecutionLivenessTest {
 
     private fun idle(ms: Long) = ShadowLooper.shadowMainLooper().idleFor(ms, TimeUnit.MILLISECONDS)
 
-    private fun sessionState(): Int {
-        val session = service.javaClass.getDeclaredField("mediaSession").apply { isAccessible = true }.get(service)
+    private fun publishedPlaybackState(): PlaybackState {
+        val compat =
+            service.javaClass.getDeclaredField("mediaSession").apply { isAccessible = true }.get(service)
+                as MediaSessionCompat
         val field = MediaSession::class.java.getDeclaredField("mPlaybackState")
         field.isAccessible = true
-        return (field.get(session) as PlaybackState).state
+        return field.get(compat.mediaSession as MediaSession) as PlaybackState
     }
+
+    private fun sessionState(): Int = publishedPlaybackState().state
 
     private fun notification(): Notification {
         idle(BackgroundExecutionService.NOTIFICATION_COALESCE_MS)
@@ -291,12 +296,7 @@ class BackgroundExecutionLivenessTest {
         assertNotNull(shadow.savedIntent.getStringExtra(ResumeRequest.EXTRA_TRANSPORT_COMMAND))
     }
 
-    private fun sessionActions(): Long {
-        val session = service.javaClass.getDeclaredField("mediaSession").apply { isAccessible = true }.get(service)
-        val field = MediaSession::class.java.getDeclaredField("mPlaybackState")
-        field.isAccessible = true
-        return (field.get(session) as PlaybackState).actions
-    }
+    private fun sessionActions(): Long = publishedPlaybackState().actions
 
     @Test
     fun aStaleSessionAdvertisesNoPlayThatTheSystemWouldNotLetItAnswer() {
