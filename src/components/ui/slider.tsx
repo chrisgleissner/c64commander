@@ -28,6 +28,7 @@ import {
   type SliderPopupState,
 } from "@/lib/ui/sliderPopupStateMachine";
 import { triggerSliderHaptic } from "@/lib/ui/sliderHaptics";
+import { classifySliderTouch, sliderValueAtX } from "@/lib/ui/sliderTouchGesture";
 
 type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
   thumbClassName?: string;
@@ -116,6 +117,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       keypadFocusDisabled,
       keyboardStep,
       onPointerDown,
+      onPointerMove,
       onPointerUp,
       onPointerCancel,
       onBlur,
@@ -268,6 +270,10 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       [max, min, normalizedMidpoint, step],
     );
 
+    const touchRef = React.useRef<{ pointerId: number; x: number; y: number; sliding: boolean } | null>(null);
+    const touchDeferrable =
+      !props.disabled && !props.inverted && props.orientation !== "vertical" && props.dir !== "rtl";
+
     const handlePointerDown = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
         // A pointer interaction supersedes any in-flight key-driven step. FLUSH the
@@ -276,27 +282,68 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         // drag); the pointer's own change/commit then becomes authoritative. (The
         // global capture listener flips modality to pointer + clears the highlight.)
         flushKeyCommitRef.current();
-        registerPopupInteraction("interaction-start");
         onPointerDown?.(event);
+        if (event.pointerType === "touch" && touchDeferrable && !event.defaultPrevented) {
+          // Radix skips its own handler once default is prevented, so the value stays put
+          // until the touch shows itself to be a slide or a tap rather than a page scroll.
+          event.preventDefault();
+          touchRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, sliding: false };
+          return;
+        }
+        registerPopupInteraction("interaction-start");
       },
-      [onPointerDown, registerPopupInteraction],
+      [onPointerDown, registerPopupInteraction, touchDeferrable],
     );
 
-    const handlePointerUp = React.useCallback(
-      (event: React.PointerEvent<HTMLDivElement>) => {
-        registerPopupInteraction("interaction-end");
+    const touchValueAt = (event: React.PointerEvent<HTMLDivElement>) =>
+      sliderValueAtX(event.clientX, event.currentTarget.getBoundingClientRect(), min, max, step);
+
+    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+      onPointerMove?.(event);
+      const touch = touchRef.current;
+      if (!touch || touch.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      if (!touch.sliding) {
+        const intent = classifySliderTouch(event.clientX - touch.x, event.clientY - touch.y);
+        if (intent === "undecided") return;
+        if (intent === "scroll") {
+          touchRef.current = null;
+          return;
+        }
+        touch.sliding = true;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        registerPopupInteraction("interaction-start");
+      }
+      handleValueChange([touchValueAt(event)]);
+    };
+
+    const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+      const touch = touchRef.current;
+      if (touch && touch.pointerId === event.pointerId) {
+        touchRef.current = null;
+        event.preventDefault();
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        // A touch that never travelled is a deliberate tap on the track.
+        if (!touch.sliding) handleValueChange([touchValueAt(event)]);
+        handleValueCommit([touchValueAt(event)]);
         onPointerUp?.(event);
-      },
-      [onPointerUp, registerPopupInteraction],
-    );
+        return;
+      }
+      registerPopupInteraction("interaction-end");
+      onPointerUp?.(event);
+    };
 
-    const handlePointerCancel = React.useCallback(
-      (event: React.PointerEvent<HTMLDivElement>) => {
-        registerPopupInteraction("interaction-end");
+    const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+      const touch = touchRef.current;
+      if (touch && touch.pointerId === event.pointerId) {
+        touchRef.current = null;
+        if (touch.sliding && lastValueRef.current !== null) handleValueCommit([lastValueRef.current]);
         onPointerCancel?.(event);
-      },
-      [onPointerCancel, registerPopupInteraction],
-    );
+        return;
+      }
+      registerPopupInteraction("interaction-end");
+      onPointerCancel?.(event);
+    };
 
     const handleValueChange = React.useCallback(
       (values: number[]) => {
@@ -451,6 +498,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         // touch-pan-y, not touch-none: this is a horizontal control, so it only needs to

@@ -288,3 +288,61 @@ describe("Slider custom classes", () => {
     expect(root.querySelector("[data-radix-slider-range]") || root.querySelector('[class*="range"]')).toBeTruthy();
   });
 });
+
+describe("Slider touch gestures", () => {
+  const renderTouchSlider = () => {
+    const onValueChange = vi.fn();
+    const onValueCommit = vi.fn();
+    render(
+      <Slider
+        value={[50]}
+        min={0}
+        max={100}
+        step={1}
+        data-testid="touch-slider"
+        onValueChange={onValueChange}
+        onValueCommit={onValueCommit}
+      />,
+    );
+    const root = screen.getByTestId("touch-slider");
+    root.getBoundingClientRect = () => ({ left: 0, width: 100, top: 0, height: 44 }) as DOMRect;
+    return { root, onValueChange, onValueCommit };
+  };
+  const touch = (clientX: number, clientY: number) => ({ pointerType: "touch", pointerId: 7, clientX, clientY });
+
+  it("leaves the value alone when a vertical page scroll starts on the slider", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+
+    fireEvent.pointerDown(root, touch(20, 10));
+    fireEvent.pointerMove(root, touch(22, 40));
+    fireEvent.pointerMove(root, touch(80, 90));
+    fireEvent.pointerCancel(root, touch(80, 90));
+
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onValueCommit).not.toHaveBeenCalled();
+  });
+
+  it("follows a horizontal drag and commits where it ends", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+
+    fireEvent.pointerDown(root, touch(20, 10));
+    fireEvent.pointerMove(root, touch(23, 11));
+    expect(onValueChange).not.toHaveBeenCalled();
+    fireEvent.pointerMove(root, touch(60, 12));
+    fireEvent.pointerUp(root, touch(72, 12));
+
+    expect(onValueChange).toHaveBeenCalledWith([60]);
+    expect(onValueCommit).toHaveBeenCalledTimes(1);
+    expect(onValueCommit).toHaveBeenCalledWith([72]);
+  });
+
+  it("sets the value where a tap lands on the track", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+
+    fireEvent.pointerDown(root, touch(30, 10));
+    fireEvent.pointerUp(root, touch(30, 10));
+
+    expect(onValueChange).toHaveBeenCalledWith([30]);
+    expect(onValueCommit).toHaveBeenCalledWith([30]);
+  });
+});
