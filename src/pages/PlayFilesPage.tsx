@@ -687,12 +687,8 @@ export default function PlayFilesPage() {
   const sleepTimerRef = useRef(sleepTimer);
   sleepTimerRef.current = sleepTimer;
   /**
-   * A tune has ended on its own: advance, unless the sleep timer says that was the last one.
-   *
-   * Every automatic advance goes through here — the foreground timeline reconciliation and the
-   * background watchdog both — so the two cannot disagree about whether the session is over. A
-   * user pressing next is deliberately not routed through this: they are asking for the next tune,
-   * not telling the timer anything.
+   * A tune ended on its own: advance unless the sleep timer made it the last. Both automatic advances (timeline
+   * reconciliation and the background watchdog) come here, so they agree; a user's Next does not, as it tells no timer.
    */
   const advanceOnTrackEnd = useCallback(
     (trackInstanceId?: number) => {
