@@ -63,6 +63,7 @@ import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
 import { useSleepTimerFade } from "@/pages/playFiles/hooks/useSleepTimerFade";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
+import { SleepTimerBadge } from "@/pages/playFiles/components/SleepTimerBadge";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
@@ -2436,7 +2437,7 @@ export default function PlayFilesPage() {
   return (
     <div className={pageShellClassName}>
       <PlayDeepLinks {...deepLinkHandlers} />
-      <AppBar title="Play" />
+      <AppBar title="Play" titleAccessory={<SleepTimerBadge mode={sleepTimer.mode} nowMs={sleepTimer.nowMs} />} />
       <PageContainer>
         <PageStack>
           <PlayListeningShortcuts
