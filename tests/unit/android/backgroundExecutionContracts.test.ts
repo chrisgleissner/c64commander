@@ -51,9 +51,9 @@ describe("Android background execution contracts", () => {
   it("HARD27-040: publishes now-playing metadata to the session the lock screen reads", () => {
     expect(backgroundPluginSource).toContain("fun setNowPlaying(call: PluginCall)");
     expect(mediaSessionPublisherSource).toContain("session.setMetadata(metadata.build())");
-    expect(mediaSessionPublisherSource).toContain("MediaMetadata.METADATA_KEY_TITLE");
-    expect(mediaSessionPublisherSource).toContain("MediaMetadata.METADATA_KEY_ARTIST");
-    expect(mediaSessionPublisherSource).toContain("MediaMetadata.METADATA_KEY_DURATION");
+    expect(mediaSessionPublisherSource).toContain("MediaMetadataCompat.METADATA_KEY_TITLE");
+    expect(mediaSessionPublisherSource).toContain("MediaMetadataCompat.METADATA_KEY_ARTIST");
+    expect(mediaSessionPublisherSource).toContain("MediaMetadataCompat.METADATA_KEY_DURATION");
   });
 
   it("HARD27-040: names the session on the notification, which is what draws the media control", () => {
@@ -72,7 +72,7 @@ describe("Android background execution contracts", () => {
     expect(backgroundServiceSource).toContain("PendingIntent.getBroadcast(");
     expect(backgroundServiceSource).toContain("TRANSPORT_COMMAND_NEXT");
     expect(mediaSessionPublisherSource).toContain("override fun onSkipToNext()");
-    expect(mediaSessionPublisherSource).toContain("PlaybackState.ACTION_SKIP_TO_NEXT");
+    expect(mediaSessionPublisherSource).toContain("PlaybackStateCompat.ACTION_SKIP_TO_NEXT");
   });
 
   it("relays a media button press to the web layer, retained until Play remounts a listener", () => {
