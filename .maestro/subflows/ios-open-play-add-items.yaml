@@ -27,6 +27,8 @@ tags:
 # WKWebView exposes aria-label ("Add items to playlist") instead of inner text
 # ("Add items") in the accessibility tree, so match against the aria-label.
 #
+# Both scrolls set centerElement: the button can first appear at the bottom edge, inside the screen
+# bounds but under the tab bar, where a tap at its centre lands on the Settings tab.
 # Both scrolls state visibilityPercentage rather than inheriting it. The default is also 100, so
 # behaviour is unchanged, but 100 is what made ios-config-persistence fail on the full-width
 # Settings rows. This button is small, is reported inside the screen, and has passed at 100 on
@@ -36,6 +38,7 @@ tags:
       text: "Add items to playlist"
     direction: DOWN
     visibilityPercentage: 100
+    centerElement: true
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
@@ -73,6 +76,7 @@ tags:
                   text: "Add items to playlist"
                 direction: DOWN
                 visibilityPercentage: 100
+                centerElement: true
                 timeout: ${TIMEOUT}
             - tapOn:
                 text: "Add items to playlist"

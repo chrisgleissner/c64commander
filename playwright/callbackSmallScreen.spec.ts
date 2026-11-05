@@ -104,7 +104,7 @@ test("Small Display 480x640 profile supports core interactions without overflow"
     }
 
     await page.getByTestId("tab-home").click();
-    await page.getByTestId("home-system-info").click();
+    await page.getByTestId("home-system-info-toggle").click();
     await expect(page.getByTestId("home-system-git")).toBeVisible();
     const cpuSlider = page.getByTestId("home-cpu-speed-slider").getByRole("slider");
     await cpuSlider.focus();

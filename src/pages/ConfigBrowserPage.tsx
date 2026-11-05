@@ -184,6 +184,7 @@ const CategorySection = memo(function CategorySection({
   onOpenChange,
   markChanged,
   focusOrder,
+  defaultOpen = false,
 }: {
   categoryName: string;
   /** Header label override (e.g. menu page name "Audio mixer"); defaults to categoryName. */
@@ -197,8 +198,9 @@ const CategorySection = memo(function CategorySection({
   onOpenChange: (isOpen: boolean) => void;
   markChanged: () => void;
   focusOrder: number;
+  defaultOpen?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   // Register this category's collapsible header into the keypad focus ring so the
   // touch-off C64U Remote can reach and expand/collapse every config category by
   // d-pad + center. No-op in the default variant (no provider) and unchanged for
@@ -816,6 +818,7 @@ const CategorySection = memo(function CategorySection({
       title={displayTitle ?? categoryName}
       summary={groupLabel ?? undefined}
       icon={configCategoryIcon(categoryName)}
+      defaultOpen={defaultOpen}
       headerRef={categoryHeaderFocusRef}
       toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
@@ -1073,6 +1076,7 @@ export default function ConfigBrowserPage() {
                           onOpenChange={openChangeFor(entry.page.label)}
                           markChanged={markChanged}
                           focusOrder={focusOrder}
+                          defaultOpen={index === 0}
                         />
                       ) : (
                         <MenuPageSection
@@ -1084,6 +1088,7 @@ export default function ConfigBrowserPage() {
                           authoritativeValues={authoritativeValues}
                           markChanged={markChanged}
                           focusOrder={focusOrder}
+                          defaultOpen={index === 0}
                         />
                       )}
                     </motion.div>
@@ -1125,6 +1130,7 @@ export default function ConfigBrowserPage() {
                   onOpenChange={openChangeFor(category)}
                   markChanged={markChanged}
                   focusOrder={CONFIG_CATEGORY_FOCUS_ORDER_BASE + index * CONFIG_CATEGORY_FOCUS_ORDER_STEP}
+                  defaultOpen={index === 0}
                 />
               </motion.div>
             ))

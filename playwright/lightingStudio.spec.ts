@@ -171,6 +171,7 @@ test.describe("Lighting Studio", () => {
     await page.goto("/disks");
     await waitForConnected(page);
 
+    await page.getByTestId("disks-section-toggle-lighting-cue").click();
     const cue = getActiveSlot(page).getByTestId("lighting-automation-cue");
     await expect(cue).toContainText("Disk look");
     await cue.getByRole("button", { name: "Studio" }).click();

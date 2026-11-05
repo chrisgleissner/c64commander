@@ -636,7 +636,7 @@ button:focus-visible,
    bar; only the guidance bar lies over it. Counting the bars again made a card that fits scroll as
    if it did not, leaving its bottom under the guidance bar. */
 [data-app-chrome="sticky"] .keypad-scroll-anchor {
-  scroll-margin-top: 0.5rem;
+  scroll-margin-top: 0.75rem;
   scroll-margin-bottom: calc(var(--keypad-guidance-reserved-height, 0px) + 0.5rem);
 }
 

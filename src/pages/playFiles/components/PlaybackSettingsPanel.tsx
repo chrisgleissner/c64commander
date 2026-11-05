@@ -66,6 +66,9 @@ export const PlaybackSettingsPanel = ({
               onValueCommit={onDurationSliderCommit}
               valueFormatter={(value) => formatDurationSeconds(sliderToDurationSeconds(value))}
               aria-label="Default duration"
+              keypadFocusId="play-duration-slider"
+              keypadFocusGroup="playback-settings"
+              keypadFocusOrder={20}
               data-testid="duration-slider"
             />
           </div>

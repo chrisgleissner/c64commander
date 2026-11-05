@@ -11,12 +11,13 @@ import { t } from "@/lib/i18n";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 
 /**
- * The first of search's three doors, at the top of Home (spec.md D3 and section 5.7).
+ * The first of search's three doors, at the top of Home and SID Player (spec.md D3 and section 5.7).
  *
  * A button that looks like a field, not a field. Tapping it expands into the overlay rather than
  * searching in place, so the results get the whole screen instead of the strip left over above the
  * on-screen keyboard — and the app bar is left alone, where the title zone already wraps at the
- * smallest screen and largest text size.
+ * smallest screen and largest text size. Keep it standalone so it is never hidden by a collapsible
+ * card on either surface.
  */
 export const HomeSearchField = () => (
   <button

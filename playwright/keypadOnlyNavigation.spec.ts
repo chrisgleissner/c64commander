@@ -1119,6 +1119,18 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
       ).toBe(true);
     }
     expect(Math.abs((await scrollTop()) - leftAt), "Play reopened where it was left").toBeLessThan(80);
+    // Content above the restored card can finish laying out after the initial focus reveal.
+    // Reproduce an upward shift while the destination is settling and keep the card clear of chrome.
+    await page.getByTestId("play-section-playlist").evaluate((element) => {
+      element.style.position = "relative";
+      element.style.top = "-40px";
+    });
+    await expect
+      .poll(async () => {
+        const placement = await selectedPlacement();
+        return placement !== null && placement.top >= placement.headerBottom - 1;
+      })
+      .toBe(true);
   });
 
   test("closing Remote Input from its menu after closing Backup returns to the Input tile, not to Backup @layout", async ({

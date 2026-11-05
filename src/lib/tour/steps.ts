@@ -162,7 +162,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "docs",
     title: "Help is built in",
     body: "Docs has short guides, and starts this tour again.",
-    anchor: { path: "/docs", testIds: ["docs-tour-start"] },
+    anchor: { path: "/docs", scope: "docs", sectionId: "tour", testIds: ["docs-tour-start"] },
   },
   {
     id: "making-it-yours",

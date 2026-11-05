@@ -7,7 +7,8 @@
  */
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ListMusic, Plus, Trash2 } from "lucide-react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
@@ -109,7 +110,16 @@ export const PlaylistPanel = ({
   );
 
   return (
-    <div className="bg-card border border-border rounded-panel p-4 space-y-4">
+    <CollapsibleSection
+      scope="play"
+      id="playlist"
+      title="Playlist"
+      summary="Queued tracks and playback actions"
+      icon={ListMusic}
+      defaultOpen
+      badge={playlistLoading ? "Loading…" : `${playlistItemCount} ${playlistItemCount === 1 ? "item" : "items"}`}
+      testId="play-section-playlist"
+    >
       <SelectableActionList
         title="Playlist"
         selectionLabel="items"
@@ -138,6 +148,7 @@ export const PlaylistPanel = ({
         viewAllFilterValue={playlistFilterText}
         onViewAllFilterValueChange={onPlaylistFilterTextChange}
         disableClientFiltering
+        hideTitle
         hasMoreViewAllItems={hasMoreViewAllItems}
         onViewAllEndReached={onViewAllEndReached}
         letterIndexSource={letterIndexSource}
@@ -179,6 +190,6 @@ export const PlaylistPanel = ({
         onOpenChange={setClearConfirmOpen}
         onConfirm={onClearPlaylist}
       />
-    </div>
+    </CollapsibleSection>
   );
 };

@@ -176,7 +176,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
   it("leads the transport row with Game Mode only for a non-song item", () => {
     const row = playFilesPageSource.slice(
       playFilesPageSource.indexOf("gameModeLeadsTransportRow ? ("),
-      playFilesPageSource.indexOf("gameModeLeadsTransportRow ? (") + 400,
+      playFilesPageSource.indexOf("gameModeLeadsTransportRow ? (") + 2000,
     );
     const leadBranch = row.slice(0, row.indexOf(") : ("));
     const followBranch = row.slice(row.indexOf(") : ("));

@@ -17,8 +17,15 @@ tags:
 # SidRadioChip's source caption and PlaybackControlsCard's idle title.
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
-- assertVisible: "Home"
-- runFlow: subflows/dismiss-tour.yaml
+# The first-run tour opens once the app has settled, which can be later than the dismissal at the end
+# of launch-and-wait looks. Its dialog hides the tab bar, so "Home" is only visible after it is closed.
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-tour.yaml
+      - extendedWaitUntil:
+          visible: "Home"
+          timeout: ${TIMEOUT}
 - tapOn:
     id: "tab-settings"
     optional: true
@@ -61,6 +68,8 @@ tags:
 # "Add items" is the dialog title and is matched as one element's whole text, so it does not also
 # match the "Add items to playlist" button on the page behind it. "Close" is the accessible name of
 # the dialog header's close control.
+# centerElement: with the Playlist card open the button first appears at the bottom edge, inside the
+# screen bounds but under the tab bar. A tap at its centre then lands on the Settings tab.
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - retry:
     maxRetries: 3
@@ -82,6 +91,7 @@ tags:
                   text: "Add items to playlist"
                 direction: DOWN
                 visibilityPercentage: 100
+                centerElement: true
                 timeout: ${TIMEOUT}
             - assertVisible: "Add items to playlist"
             - tapOn:

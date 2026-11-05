@@ -7,7 +7,9 @@
  */
 
 import { useEffect, useState } from "react";
+import { Headphones } from "lucide-react";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
@@ -78,48 +80,57 @@ const StartListening = ({ hvscInstalled }: { hvscInstalled: boolean }) => {
   const collectionMissingOffline = flags.hvsc_enabled && !hvscInstalled && !online;
 
   return (
-    <section className="space-y-3" data-testid="start-listening" data-section-label={START_LISTENING_COPY.title}>
-      <h2 className="text-base font-semibold">{START_LISTENING_COPY.title}</h2>
-      <div className="grid gap-2">
-        {actions.map((action) => (
-          <Button
-            key={action.id}
-            type="button"
-            variant={action.primary ? "default" : "outline"}
-            className="min-h-11 w-full justify-start whitespace-normal text-left"
-            data-testid={`start-listening-${action.id}`}
-            onClick={() => navigate(action.link)}
-          >
-            {action.label}
-          </Button>
-        ))}
+    <CollapsibleSection
+      scope="play"
+      id="start-listening"
+      title={START_LISTENING_COPY.title}
+      summary="Download the music collection, start a station or add your own files"
+      icon={Headphones}
+      defaultOpen
+      testId="start-listening"
+    >
+      <div className="space-y-3 p-4 pt-0">
+        <div className="grid gap-2">
+          {actions.map((action) => (
+            <Button
+              key={action.id}
+              type="button"
+              variant={action.primary ? "default" : "outline"}
+              className="min-h-11 w-full justify-start whitespace-normal text-left"
+              data-testid={`start-listening-${action.id}`}
+              onClick={() => navigate(action.link)}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+        {collectionMissingOffline ? (
+          <p className="text-sm text-muted-foreground" data-testid="start-listening-offline-note">
+            {START_LISTENING_COPY.offline}
+          </p>
+        ) : null}
+        <ProfileActionGrid
+          compactColumns={2}
+          mediumColumns={3}
+          expandedColumns={3}
+          cardDensity="compact"
+          testId="play-listening-shortcuts"
+        >
+          {listenActions.map((action) => (
+            <QuickActionCard
+              key={action.id}
+              icon={action.icon}
+              label={action.label}
+              description={action.description ?? undefined}
+              disabled={action.disabled}
+              onClick={action.onSelect}
+              dataTestId={action.testId}
+              focusId={action.focusId}
+            />
+          ))}
+        </ProfileActionGrid>
       </div>
-      {collectionMissingOffline ? (
-        <p className="text-sm text-muted-foreground" data-testid="start-listening-offline-note">
-          {START_LISTENING_COPY.offline}
-        </p>
-      ) : null}
-      <ProfileActionGrid
-        compactColumns={2}
-        mediumColumns={3}
-        expandedColumns={3}
-        cardDensity="compact"
-        testId="play-listening-shortcuts"
-      >
-        {listenActions.map((action) => (
-          <QuickActionCard
-            key={action.id}
-            icon={action.icon}
-            label={action.label}
-            description={action.description ?? undefined}
-            disabled={action.disabled}
-            onClick={action.onSelect}
-            dataTestId={action.testId}
-            focusId={action.focusId}
-          />
-        ))}
-      </ProfileActionGrid>
-    </section>
+    </CollapsibleSection>
   );
 };
 

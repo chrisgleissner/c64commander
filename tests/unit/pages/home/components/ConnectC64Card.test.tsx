@@ -8,11 +8,12 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { subscribeModeDialog, type ModeDialogKind } from "@/lib/appMode/modeDialogRequests";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ConnectC64Card } from "@/pages/home/components/ConnectC64Card";
 import { resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
+import { subscribeSectionOpenRequest } from "@/lib/ui/collapsibleSectionStore";
 
 const seedSelectedDevice = (lastSuccessfulConnectionAt: string | null) => {
   localStorage.setItem(
@@ -28,10 +29,13 @@ const seedSelectedDevice = (lastSuccessfulConnectionAt: string | null) => {
   resetSavedDevicesCacheForTests();
 };
 
+const CurrentPath = () => <span data-testid="current-path">{useLocation().pathname}</span>;
+
 const renderCard = () =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/"]}>
       <ConnectC64Card />
+      <CurrentPath />
     </MemoryRouter>,
   );
 
@@ -75,5 +79,18 @@ describe("the card Home shows while no C64 Ultimate is connected", () => {
 
     expect(screen.getByTestId("home-connect-c64-use-sid-player")).toBeInTheDocument();
     expect(screen.getByTestId("home-connect-c64-setup")).toBeInTheDocument();
+  });
+
+  it("opens the Connection section of Settings when a user asks to set up a device", () => {
+    seedSelectedDevice(null);
+    const requested: string[] = [];
+    const unsubscribe = subscribeSectionOpenRequest((scope, id) => requested.push(`${scope}:${id}`));
+    renderCard();
+
+    fireEvent.click(screen.getByTestId("home-connect-c64-setup"));
+    unsubscribe();
+
+    expect(screen.getByTestId("current-path")).toHaveTextContent("/settings");
+    expect(requested).toEqual(["settings:connection"]);
   });
 });

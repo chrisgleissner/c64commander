@@ -477,6 +477,10 @@ test.describe("Player controls stay put", () => {
       await click("like again", slot.getByTestId("now-playing-like"));
       await click("mute", slot.getByTestId("volume-mute"));
       await click("unmute", slot.getByTestId("volume-mute"));
+      expectUnmoved(
+        `${label}: open playback settings`,
+        await clickWatched(page, slot.getByTestId("play-section-toggle-playback-settings")),
+      );
       for (const key of ["m15", "m30", "off"]) {
         await click(`sleep timer ${key}`, slot.getByTestId(`sleep-timer-${key}`));
       }
@@ -583,6 +587,9 @@ test.describe("Player controls stay put", () => {
       );
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(activeSlot(page).getByTestId("sid-radio-chip")).toBeVisible({ timeout: 30_000 });
+      // The Play controls now live in a default-open card, whose entrance animates on reload.
+      // Measure after that animation settles so this still checks station layout, not card motion.
+      await page.waitForTimeout(300);
       const withStation = await documentPositionOfPlay(page);
       expect(withStation, "play button position in the page with a station").toBe(withoutStation);
     });

@@ -98,7 +98,6 @@ describe("ConfigBrowserPage builds a large category's rows in stages", () => {
 
   it("opening the card builds only its first rows in the opening commit, then every row after the paint", async () => {
     renderPage();
-    act(() => fireEvent.click(screen.getByTestId("config-category-big")));
 
     const firstCommit = builtRows();
     expect(firstCommit.length).toBeGreaterThan(0);
@@ -110,7 +109,6 @@ describe("ConfigBrowserPage builds a large category's rows in stages", () => {
 
   it("a card reopened after all its rows were built builds them in stages again", async () => {
     renderPage();
-    act(() => fireEvent.click(screen.getByTestId("config-category-big")));
     await waitFor(() => expect(builtRows()).toEqual(itemNames));
     act(() => fireEvent.click(screen.getByTestId("config-category-big")));
     expect(builtRows()).toEqual([]);
@@ -123,7 +121,6 @@ describe("ConfigBrowserPage builds a large category's rows in stages", () => {
 
   it("builds the row a search result lands on at once when the card is already open with rows still waiting", () => {
     renderPage();
-    act(() => fireEvent.click(screen.getByTestId("config-category-big")));
     expect(builtRows()).not.toContain("Item 38");
 
     act(() => requestConfigItemFocus("Big", "Item 38"));

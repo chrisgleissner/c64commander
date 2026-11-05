@@ -7,8 +7,10 @@
  */
 
 import { motion } from "framer-motion";
+import { Lightbulb } from "lucide-react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { AppBar } from "@/components/AppBar";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
@@ -26,11 +28,22 @@ export default function DisksPage() {
       <PageContainer>
         <PageStack>
           {lightingStudioEnabled && resolved.sourceCue?.bucket === "disks" ? (
-            <LightingAutomationCue
-              label={resolved.sourceCue.label}
-              onOpenStudio={openStudio}
-              onOpenContextLens={openContextLens}
-            />
+            <CollapsibleSection
+              scope="disks"
+              id="lighting-cue"
+              title="Lighting automation"
+              summary={resolved.sourceCue.label}
+              icon={Lightbulb}
+              testId="disks-lighting-cue"
+            >
+              <div className="p-4 pt-0">
+                <LightingAutomationCue
+                  label={resolved.sourceCue.label}
+                  onOpenStudio={openStudio}
+                  onOpenContextLens={openContextLens}
+                />
+              </div>
+            </CollapsibleSection>
           ) : null}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <HomeDiskManager />

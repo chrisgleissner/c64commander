@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,6 +82,7 @@ const renderPage = () =>
   );
 
 const chooseSonglengthsFile = async () => {
+  fireEvent.click(screen.getByTestId("play-section-toggle-playback-settings"));
   await waitFor(() => expect(page.panel).not.toBeNull());
   await act(async () => {
     await page.panel!.onChooseSonglengthsFile();

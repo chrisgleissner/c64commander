@@ -724,6 +724,7 @@ seedPreviouslyConnectedDevice();
 resetSavedDevicesCacheForTests();
 
 beforeEach(() => {
+  window.localStorage.removeItem("c64u_open_sections");
   resetMachineExecution();
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
@@ -1182,7 +1183,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    const systemInfo = screen.getByTestId("home-system-info");
+    const systemInfo = screen.getByTestId("home-system-info-toggle");
     fireEvent.click(systemInfo);
 
     expect(screen.getByTestId("home-system-version").textContent).toContain("—");
@@ -1215,7 +1216,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    const systemInfo = screen.getByTestId("home-system-info");
+    const systemInfo = screen.getByTestId("home-system-info-toggle");
     fireEvent.click(systemInfo);
 
     expect(screen.getByTestId("home-system-version").textContent).toContain("1.2.3");
@@ -2419,6 +2420,16 @@ describe("HomePage offline arrangement", () => {
     resetSavedDevicesCacheForTests();
   };
 
+  it("keeps the Home search field visible outside all cards", () => {
+    renderWithRouter(<HomePage />);
+
+    const searchField = screen.getByRole("button", { name: "Search the app" });
+    expect(searchField).toBeVisible();
+    expect(searchField.closest("[data-section-scope]")).toBeNull();
+    expect(screen.queryByTestId("home-search-card")).toBeNull();
+    expect(screen.queryByTestId("home-section-toggle-search")).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     seedUntouchedBootstrapDefault();
     statusPayloadRef.current = { isConnected: false, isConnecting: false, deviceInfo: null };
@@ -2470,7 +2481,7 @@ describe("HomePage offline arrangement", () => {
 
   it("says once, above the closed cards, why they are closed", () => {
     renderWithRouter(<HomePage />);
-    expect(screen.getByTestId("home-offline-sections-note").textContent).toContain(
+    expect(screen.getByTestId("home-connect-c64").textContent).toContain(
       "Connect a C64 Ultimate to reach its settings",
     );
   });
