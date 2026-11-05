@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
@@ -116,6 +116,23 @@ const renderPanel = (props?: HarnessProps) =>
   );
 
 describe("PlaylistPanel", () => {
+  beforeEach(() => {
+    window.localStorage.removeItem("c64u_open_sections");
+  });
+
+  it("opens the essential Playlist card by default and removes its body when closed", async () => {
+    renderPanel({ hasPlaylist: false, playlistItemCount: 0, playlistLoading: false });
+    const toggle = screen.getByTestId("play-section-toggle-playlist");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("playlist-empty-label")).toHaveTextContent("No tracks in playlist yet.");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(screen.getByTestId("playlist-empty-label")).not.toBeVisible());
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("says the playlist is loading, not empty, while the saved playlist is still being read", () => {
     renderPanel({ hasPlaylist: false, playlistItemCount: 0, playlistLoading: true });
     expect(screen.getByTestId("playlist-empty-label")).toHaveTextContent("Loading playlist…");
@@ -174,7 +191,7 @@ describe("PlaylistPanel", () => {
     expect(screen.getByTestId("playlist-hidden-item-count")).toHaveTextContent("153");
   });
 
-  it("switches playlist actions and removal label based on playlist state", () => {
+  it("switches playlist actions and removal label based on playlist state", async () => {
     const onAddItems = vi.fn();
     const onClearPlaylist = vi.fn();
 
@@ -189,13 +206,12 @@ describe("PlaylistPanel", () => {
         />
       </DisplayProfileProvider>,
     );
-
     expect(screen.getByTestId("playlist-remove-selected-label")).toHaveTextContent("Remove selected items");
 
     fireEvent.click(screen.getByRole("button", { name: "Add items to playlist" }));
 
     expect(onAddItems).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Clear playlist" })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Clear playlist" })).toBeVisible());
 
     rerender(
       <DisplayProfileProvider>
@@ -207,7 +223,6 @@ describe("PlaylistPanel", () => {
         />
       </DisplayProfileProvider>,
     );
-
     expect(screen.getByTestId("playlist-remove-selected-label")).toHaveTextContent("Remove selected items");
     expect(screen.getByRole("button", { name: "Add items to playlist" })).toHaveTextContent("Add");
     expect(screen.queryByRole("button", { name: "Clear playlist" })).not.toBeInTheDocument();
@@ -224,6 +239,9 @@ describe("PlaylistPanel", () => {
         </FocusNavigationProvider>
       </DisplayProfileProvider>,
     );
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
     const addItems = screen.getByRole("button", { name: "Add items to playlist" });
     for (let step = 0; step < 20 && document.activeElement !== addItems; step += 1) {

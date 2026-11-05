@@ -369,7 +369,9 @@ test.describe("Keypad / T9 input", () => {
     // Down in a timer: a key sent before either lands on the option it was meant to leave.
     const current = page.getByRole("option", { name: before, exact: true });
     await expect(current).toBeFocused();
-    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(150);
+    // This mock selects the last non-empty option, so Up moves to the preceding (empty) choice.
+    await page.keyboard.press("ArrowUp");
     await expect(current).not.toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("listbox")).toHaveCount(0);

@@ -22,6 +22,8 @@ const setPending = (pending: boolean) =>
     JSON.stringify({ completedAt: 1, skippedAt: null, lastStepId: null, deviceStepsPending: pending }),
   );
 
+const openOffer = () => fireEvent.click(screen.getByTestId("home-section-toggle-device-tour-offer"));
+
 describe("DeviceStepsOffer", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -55,6 +57,7 @@ describe("DeviceStepsOffer", () => {
     const release = subscribeTourStart((request) => requests.push(request));
     try {
       render(<DeviceStepsOffer />);
+      openOffer();
       await waitFor(() => expect(screen.getByTestId("home-tour-device-steps-start")).toBeInTheDocument());
       fireEvent.click(screen.getByTestId("home-tour-device-steps-start"));
       // Bounded: the offer is for the steps that needed a machine, not for the rest of the tour
@@ -72,6 +75,7 @@ describe("DeviceStepsOffer", () => {
     setPending(true);
     connectionRef.current = { isConnected: true };
     render(<DeviceStepsOffer />);
+    openOffer();
     await waitFor(() => expect(screen.getByTestId("home-tour-device-steps-start")).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("home-tour-device-steps-start"));
     await waitFor(() => expect(loadTourState().deviceStepsPending).toBe(false));

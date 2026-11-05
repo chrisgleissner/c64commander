@@ -34,5 +34,8 @@ export const resolveRingScrollAlignment = (geometry: RingScrollGeometry): Scroll
   const areaTop = geometry.scrollportTop + geometry.marginTop;
   const areaBottom = geometry.scrollportBottom - geometry.marginBottom;
   if (geometry.height > areaBottom - areaTop) return "start";
+  // `nearest` may leave the stop visible in the scrollport but inside its reserved top margin,
+  // underneath a sticky app bar. Align it below the chrome whenever its top has crossed that edge.
+  if (geometry.top < areaTop) return "start";
   return geometry.bottom > areaBottom ? "end" : "nearest";
 };

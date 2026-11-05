@@ -27,15 +27,29 @@ describe("firstStopInView", () => {
     expect(firstStopInView([{ id: "low", top: 300, bottom: 360 }], area)).toBeNull();
   });
 
+  it("keeps a restored scroll position when a visible stop is clipped slightly by the app bar", () => {
+    expect(firstStopInView([{ id: "near-header", top: 30, bottom: 140 }], area)).toBe("near-header");
+    expect(firstStopInView([{ id: "behind-header", top: 20, bottom: 140 }], area)).toBeNull();
+  });
+
   it("accepts a stop taller than the area when its top is inside it", () => {
     expect(firstStopInView([{ id: "tall", top: 60, bottom: 900 }], area)).toBe("tall");
-    expect(firstStopInView([{ id: "tall", top: 40, bottom: 900 }], area)).toBeNull();
+    expect(firstStopInView([{ id: "tall", top: 20, bottom: 900 }], area)).toBeNull();
   });
 });
 
 describe("DefaultStopFollower", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("defers selection-driven scrolling while a tab jump is settling", () => {
+    const follower = new DefaultStopFollower();
+    follower.arm(100);
+
+    expect(follower.isFollowing(100)).toBe(true);
+    expect(follower.isFollowing(100 + FOLLOW_DEFAULT_STOP_MS)).toBe(true);
+    expect(follower.isFollowing(101 + FOLLOW_DEFAULT_STOP_MS)).toBe(false);
   });
 
   /** A page slot whose scroller is at `scrollTop`, with one 100 px stop per entry of `tops`. */

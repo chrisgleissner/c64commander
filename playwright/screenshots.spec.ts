@@ -1561,15 +1561,18 @@ const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
     const slug = configToggleSlug((await toggle.getAttribute("data-testid")) ?? "");
     if (!slug) continue;
     const order = orderMap.get(slug) ?? index + 1;
+    const wasOpen = (await toggle.getAttribute("aria-expanded")) === "true";
     await scrollHeadingIntoView(page, toggle);
-    await toggle.click();
+    if (!wasOpen) await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await waitForStableRender(page);
     await scrollHeadingIntoView(page, toggle);
     await captureScreenshot(page, testInfo, `config/sections/${String(order).padStart(2, "0")}-${slug}.png`);
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await waitForStableRender(page);
+    if (!wasOpen) {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await waitForStableRender(page);
+    }
   }
 };
 
@@ -1589,8 +1592,25 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
     if (!label) continue;
     const slug = sanitizeSegment(label);
     const order = orderMap.get(slug) ?? index + 1;
+    const sectionId = await section.getAttribute("data-section-id");
+    const toggle = section.locator("button[aria-expanded]").first();
+    const openedForCapture =
+      pageId === "play" &&
+      (sectionId === "playlist" || sectionId === "playback-settings") &&
+      (await toggle.getAttribute("aria-expanded")) !== "true";
+    if (openedForCapture) {
+      await scrollHeadingIntoView(page, section);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await waitForStableRender(page);
+    }
     await scrollHeadingIntoView(page, section);
     await captureScreenshot(page, testInfo, `${pageId}/sections/${String(order).padStart(2, "0")}-${slug}.png`);
+    if (openedForCapture) {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await waitForStableRender(page);
+    }
   }
 };
 
@@ -2922,6 +2942,7 @@ test.describe("App screenshots", () => {
       test.slow();
       testInfo.setTimeout(240000);
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
+      await page.addInitScript(() => localStorage.removeItem("c64u_open_sections"));
       await page.goto("/config");
       await waitForConnected(page);
       // The page title, exactly. `name` is a substring match by default, and the Config cards are
@@ -2930,6 +2951,9 @@ test.describe("App screenshots", () => {
       await expect
         .poll(async () => page.locator('[data-testid^="config-menu-page-"], [data-testid^="config-category-"]').count())
         .toBeGreaterThan(0);
+      await expect(
+        getActiveMain(page).locator('[data-testid^="config-menu-page-"], [data-testid^="config-category-"]').first(),
+      ).toHaveAttribute("aria-expanded", "true");
 
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "config/01-categories.png");
@@ -2943,6 +2967,7 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       test.slow();
       testInfo.setTimeout(240000);
+      await page.addInitScript(() => localStorage.removeItem("c64u_open_sections"));
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/config");
         await applyDisplayProfileViewport(page, profileId);
@@ -2960,6 +2985,11 @@ test.describe("App screenshots", () => {
     await page.goto("/play");
     await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Play", exact: true })).toBeVisible();
+    const playlist = getActiveMain(page).getByTestId("play-section-playlist");
+    const playlistToggle = playlist.locator("button[aria-expanded]").first();
+    if ((await playlistToggle.getAttribute("aria-expanded")) !== "true") {
+      await playlistToggle.click();
+    }
     await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText(/intro/i);
 
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -3051,6 +3081,11 @@ test.describe("App screenshots", () => {
         }, FEATURED_SID);
         await page.reload();
         await expect(page.getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
+        const playlist = page.getByTestId("play-section-playlist");
+        const playlistToggle = playlist.locator("button[aria-expanded]").first();
+        if ((await playlistToggle.getAttribute("aria-expanded")) !== "true") {
+          await playlistToggle.click();
+        }
         await expect(page.getByTestId("playlist-list")).toContainText("Wizball");
         await page.evaluate(() => window.scrollTo(0, 0));
         await captureScreenshot(page, testInfo, filename("playing-playlist"));
@@ -3405,6 +3440,11 @@ test.describe("App screenshots", () => {
       // The sleep timer, which lives with the playback settings rather than on the transport: it is
       // a decision about the listening session, not about how a file is played. Captured as its own
       // locator shot because the settings section is taller than the viewport.
+      const playbackSettingsToggle = getActiveMain(page).getByTestId("play-section-toggle-playback-settings");
+      if ((await playbackSettingsToggle.getAttribute("aria-expanded")) !== "true") {
+        await playbackSettingsToggle.click();
+      }
+      await expect(playbackSettingsToggle).toHaveAttribute("aria-expanded", "true");
       const sleepTimer = getActiveMain(page).getByTestId("sleep-timer");
       await sleepTimer.scrollIntoViewIfNeeded();
       await expect(sleepTimer).toBeVisible();
@@ -4330,10 +4370,13 @@ test.describe("App screenshots", () => {
   );
 
   test("capture docs screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => localStorage.removeItem("c64u_open_sections"));
     await page.goto("/docs");
     await expect(page).toHaveURL(/\/docs$/);
     await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
+    await expect(page.getByTestId("docs-tour-card")).toHaveAttribute("data-open", "false");
+    await expect(page.getByTestId("docs-card-contents")).toHaveAttribute("data-open", "true");
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "docs/01-overview.png");

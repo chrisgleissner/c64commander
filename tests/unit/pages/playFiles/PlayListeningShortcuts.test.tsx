@@ -39,7 +39,10 @@ describe("PlayListeningShortcuts", () => {
     saveStartupModeByUser("sid-player");
     renderShortcuts(true);
 
-    expect(screen.getByTestId("home-search-field")).toBeInTheDocument();
+    const searchField = screen.getByTestId("home-search-field");
+    expect(searchField).toBeInTheDocument();
+    expect(searchField.closest('[data-section-scope="play"]')).toBeNull();
+    expect(screen.queryByTestId("play-search-card")).toBeNull();
     expect(screen.getByTestId("play-listening-shortcuts")).toBeInTheDocument();
     expect(screen.getByTestId("home-tile-action.sid-radio")).toBeInTheDocument();
     expect(screen.getByTestId("home-tile-action.resume-session")).toBeInTheDocument();
@@ -51,7 +54,10 @@ describe("PlayListeningShortcuts", () => {
     saveStartupModeByUser("sid-player");
     renderShortcuts(false);
 
-    expect(screen.getByTestId("home-search-field")).toBeInTheDocument();
+    const searchField = screen.getByTestId("home-search-field");
+    expect(searchField).toBeInTheDocument();
+    expect(searchField.closest('[data-section-scope="play"]')).toBeNull();
+    expect(screen.queryByTestId("play-search-card")).toBeNull();
     expect(screen.queryByTestId("play-listening-shortcuts")).toBeNull();
   });
 

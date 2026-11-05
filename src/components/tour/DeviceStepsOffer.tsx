@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { Compass, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { t } from "@/lib/i18n";
 import { DEVICE_STEP_IDS } from "@/lib/tour/steps";
@@ -38,17 +39,30 @@ export const DeviceStepsOffer = () => {
   if (!pending || !status.isConnected) return null;
 
   return (
-    <section
-      className="flex items-start gap-3 rounded-panel border border-border bg-card p-3"
-      data-testid="home-tour-device-steps-offer"
+    <CollapsibleSection
+      scope="home"
+      id="device-tour-offer"
+      title="Tour steps"
+      summary="See the setup steps that need a connected C64"
+      icon={Compass}
+      testId="home-tour-device-steps-offer"
+      actions={
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={dismiss}
+          aria-label={t("tour.deviceSteps.dismiss", "Dismiss")}
+          className="size-11 shrink-0"
+          data-testid="home-tour-device-steps-dismiss"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      }
     >
-      <Compass className="mt-2 h-5 w-5 shrink-0 text-primary" aria-hidden />
-      <div className="min-w-0 flex-1 space-y-2">
+      <div className="space-y-2 p-4 pt-0">
         <p className="text-sm">
           {t(
             "tour.deviceSteps.offer",
-            // Counted, not written out: the list grows, and "three" was wrong the moment a fourth
-            // step needed a machine.
             `Your C64 is connected. See the ${DEVICE_STEP_IDS.length} tour steps that needed it?`,
           )}
         </p>
@@ -66,16 +80,6 @@ export const DeviceStepsOffer = () => {
           {t("tour.deviceSteps.show", "Show me")}
         </Button>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={dismiss}
-        aria-label={t("tour.deviceSteps.dismiss", "Dismiss")}
-        className="size-11 shrink-0"
-        data-testid="home-tour-device-steps-dismiss"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </section>
+    </CollapsibleSection>
   );
 };

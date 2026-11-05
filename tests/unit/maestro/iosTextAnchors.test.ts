@@ -219,6 +219,33 @@ const retryTapsWhatItScrollsFor = (entryPath: string): string[] => {
   return out;
 };
 
+/**
+ * Every scroll for a button the flow then taps that does not ask for `centerElement`, reported as
+ * `<flow> <anchor>`.
+ *
+ * WKWebView reports the frame of an element that the page's scroll container clips behind the tab
+ * bar, so Maestro counts a button at the bottom edge as fully visible and stops scrolling. The
+ * tap at its centre then lands on the tab beneath it. With the Playlist card open on the Play
+ * page, "Add items to playlist" first appears at that edge, and the tap opened Settings.
+ */
+const TAPPED_BUTTON_ANCHORS = ["Add items to playlist"];
+
+const scrollsWithoutCentering = (entryPath: string): string[] => {
+  const out: string[] = [];
+  for (const file of flowClosure(entryPath)) {
+    const nodes: { [key: string]: JsonValue }[] = [];
+    scrollUntilVisibleNodes(loadAll(readFileSync(file, "utf8")) as JsonValue, nodes);
+    for (const node of nodes) {
+      const anchors: string[] = [];
+      collectTextSelectors(node.element ?? null, anchors);
+      for (const anchor of anchors.filter((candidate) => TAPPED_BUTTON_ANCHORS.includes(candidate))) {
+        if (node.centerElement !== true) out.push(`${path.relative(maestroRoot, file)} ${anchor}`);
+      }
+    }
+  }
+  return out;
+};
+
 describe("iOS Maestro text anchors", () => {
   it("reads the iOS flows and the CI flow list it claims to cover", () => {
     const files = iosFlowFiles();
@@ -357,6 +384,38 @@ describe("iOS Maestro text anchors", () => {
       const reported = retryTapsWhatItScrollsFor(file);
       expect(reported).toHaveLength(1);
       expect(reported[0]).toContain("Add items to playlist");
+    } finally {
+      rmSync(planted, { recursive: true, force: true });
+    }
+  });
+
+  it("centers the Add items button before tapping it, so the tab bar is not under the tap", () => {
+    const uncentered = ciFlowNames().flatMap((name) => scrollsWithoutCentering(path.join(maestroRoot, `${name}.yaml`)));
+    expect(uncentered, uncentered.join("\n")).toEqual([]);
+    expect(
+      ciFlowNames().flatMap((name) => flowClosure(path.join(maestroRoot, `${name}.yaml`))),
+      "the Play subflow that scrolls for the button is not reachable from the CI flows",
+    ).toContain(path.join(maestroRoot, "subflows", "ios-open-play-add-items.yaml"));
+  });
+
+  it("rejects a planted scroll for the Add items button that does not center it", () => {
+    const planted = mkdtempSync(path.join(tmpdir(), "ios-center-scroll-"));
+    const file = path.join(planted, "planted.yaml");
+    writeFileSync(
+      file,
+      [
+        "appId: uk.gleissner.c64commander",
+        "---",
+        "- scrollUntilVisible:",
+        "    element:",
+        '      text: "Add items to playlist"',
+        "    direction: DOWN",
+        "    visibilityPercentage: 100",
+        "",
+      ].join("\n"),
+    );
+    try {
+      expect(scrollsWithoutCentering(file)).toHaveLength(1);
     } finally {
       rmSync(planted, { recursive: true, force: true });
     }

@@ -147,6 +147,14 @@ describe("HomeDiskManager keypad focus ring (C64U Remote)", () => {
     return visited;
   };
 
+  const focusWithKey = (target: HTMLElement, keyCode: "DpadDown" | "DpadUp", maxSteps = 48) => {
+    const isSelected = () => document.querySelector('[data-key-selected="true"]') === target;
+    for (let step = 0; step < maxSteps && !isSelected(); step += 1) {
+      fireEvent.keyDown(document.body, { code: keyCode });
+    }
+    expect(isSelected()).toBe(true);
+  };
+
   it("walks visible drive CTAs in top-to-bottom order and activates the focused drive reset", async () => {
     renderInFocusRing();
 
@@ -164,9 +172,8 @@ describe("HomeDiskManager keypad focus ring (C64U Remote)", () => {
     // asserted below, inside drive A, where the walk starts from a known item.
 
     // Go into drive A and walk its controls.
-    while (document.activeElement !== screen.getByTestId("drive-card-a")) {
-      fireEvent.keyDown(document.body, { code: "DpadDown" });
-    }
+    const driveACard = screen.getByTestId("drive-card-a");
+    focusWithKey(driveACard, "DpadDown");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     const inDriveA = walkDown(12);
     for (const cta of ["drive-mount-toggle-a", "drive-bus-select-a", "drive-type-select-a", "drive-reset-a"]) {
@@ -174,9 +181,7 @@ describe("HomeDiskManager keypad focus ring (C64U Remote)", () => {
     }
     expect(inDriveA.indexOf("drive-mount-toggle-a")).toBeLessThan(inDriveA.indexOf("drive-reset-a"));
 
-    while (document.activeElement !== screen.getByTestId("drive-reset-a")) {
-      fireEvent.keyDown(document.body, { code: "DpadUp" });
-    }
+    focusWithKey(screen.getByTestId("drive-reset-a"), "DpadUp");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
 
@@ -198,16 +203,19 @@ describe("HomeDiskManager keypad focus ring (C64U Remote)", () => {
 
     renderInFocusRing();
 
+    expect(screen.getByTestId("disks-section-toggle-disk-library")).toHaveAttribute("aria-expanded", "true");
+
     // Disconnected, every drive CTA is disabled and the ring skips it. The card headers are
-    // still items — a card can be opened and closed offline — so the walk is asserted as
-    // "no disabled CTA is ever focused, and Add disks is reached".
+    // still items — a card can be opened and closed offline — and the disk library's contents
+    // are reached by entering its card.
     const visited = walkDown(24);
     for (const cta of ["drive-mount-toggle-a", "drive-reset-a", "drive-mount-toggle-b", "drive-reset-b"]) {
       expect(visited).not.toContain(cta);
     }
-    while (document.activeElement !== screen.getByRole("button", { name: "Add disks" })) {
-      fireEvent.keyDown(document.body, { code: "DpadUp" });
-    }
+    const libraryCard = screen.getByTestId("disk-library-section");
+    focusWithKey(libraryCard, "DpadUp");
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    focusWithKey(screen.getByRole("button", { name: "Add disks" }), "DpadDown");
 
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(screen.getByTestId("item-selection-dialog")).toBeInTheDocument();

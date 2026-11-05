@@ -109,6 +109,8 @@ export type SelectableActionListProps = {
   hasMoreViewAllItems?: boolean;
   onViewAllEndReached?: () => void;
   showSelectionControls?: boolean;
+  /** Omit the inline title when a surrounding section already supplies it. */
+  hideTitle?: boolean;
   selectionLabel?: string;
   viewAllMode?: "overflow" | "non-empty";
   /** Profiles on which each row's name gets a line of its own, with the row's controls below it. */
@@ -381,6 +383,7 @@ export const SelectableActionList = ({
   hasMoreViewAllItems = false,
   onViewAllEndReached,
   showSelectionControls = true,
+  hideTitle = false,
   selectionLabel,
   viewAllMode = "overflow",
   stackTitleProfiles = DEFAULT_STACK_TITLE_PROFILES,
@@ -667,7 +670,7 @@ export const SelectableActionList = ({
     <div ref={listRootRef} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
         <div className="min-w-0">
-          <p className="text-sm font-medium">{title}</p>
+          {hideTitle ? null : <p className="text-sm font-medium">{title}</p>}
           {showSelectionControls ? (
             <p className="text-xs text-muted-foreground">
               {selectedCount ? `${selectedCount} selected` : `No ${selectionLabel || title.toLowerCase()} selected`}

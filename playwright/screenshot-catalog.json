@@ -1,5 +1,15 @@
 {
-  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec", "soft-iec-drive"],
+  "disks": [
+    "drives",
+    "disks",
+    "drive-a",
+    "drive-b",
+    "iec",
+    "soft-iec",
+    "soft-iec-drive",
+    "iec-drive-soft-iec-drive",
+    "disk-collection"
+  ],
   "config": [
     "memory-roms",
     "turbo-boost",
@@ -50,7 +60,8 @@
     "printers",
     "sid",
     "streams",
-    "config"
+    "config",
+    "playback-settings"
   ],
   "settings": [
     "appearance",
@@ -93,7 +104,9 @@
     "keypad-cheat-sheet",
     "what-the-status-badge-colors-mean",
     "diagnostics-and-sharing-logs",
-    "external-resources"
+    "external-resources",
+    "take-the-tour",
+    "sid-player"
   ],
   "sid-player": ["empty-play", "playing-playlist", "mode-sheet", "settings"],
   "styles": [

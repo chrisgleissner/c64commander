@@ -62,6 +62,7 @@ import { hasSectionScopeIn, SECTION_SCOPE_SELECTOR } from "@/lib/input/discovery
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { holdsRingOnLoadingPage } from "@/lib/input/pageLoadingStop";
 import { DefaultStopFollower } from "@/lib/input/defaultStopFollower";
+import { useDefaultStopReveal } from "@/hooks/useDefaultStopReveal";
 import {
   dispatchDeviceBackKey,
   installDeviceBackButton,
@@ -179,6 +180,7 @@ export const FocusNavigationProvider = ({
 
   const ringElementFor = useCallback((id: string) => engineRef.current?.elementForId(id) ?? null, []);
   const defaultStop = useMemo(() => new DefaultStopFollower(), []);
+  const revealDefaultStop = useDefaultStopReveal();
 
   const controller = useMemo(() => {
     const created: NavigationController = new NavigationController({
@@ -269,15 +271,16 @@ export const FocusNavigationProvider = ({
           adoptFocusAwaitingRingRef.current();
           notifyRing();
           if (getInputModality() === "key-navigation")
-            defaultStop.afterScan(controller.focus, ringElementFor, focusRingElement);
+            defaultStop.afterScan(controller.focus, ringElementFor, revealDefaultStop);
         },
         // Radix may hand DOM focus back to a different stop; focusing the stop makes the ring's move hold,
         // and brings a stop the ring moved to on its own into view.
         onSelectionMovedByScan: (id) => {
-          if (getInputModality() === "key-navigation") focusRingElement(ringElementFor(id));
+          if (getInputModality() === "key-navigation" && !defaultStop.isFollowing())
+            focusRingElement(ringElementFor(id));
         },
       }),
-    [controller, defaultStop, notifyRing, ringElementFor],
+    [controller, defaultStop, notifyRing, revealDefaultStop, ringElementFor],
   );
   engineRef.current = engine;
 

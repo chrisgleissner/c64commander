@@ -492,12 +492,12 @@ test.describe("Automatic Demo Mode", () => {
       await expect(dialog).toBeHidden();
     }
 
+    await page.getByTestId("home-system-info-toggle").click();
     const notPopulated = /Not available|Not connected/;
     await expect(page.getByTestId("home-system-device")).not.toHaveText(notPopulated, { timeout: 20000 });
     await expect(page.getByTestId("home-system-firmware")).not.toHaveText(notPopulated, { timeout: 20000 });
 
     // FPGA, Core and Core ID only render once the card is expanded.
-    await page.getByTestId("home-system-info").click();
     await expect(page.getByTestId("home-system-fpga")).not.toHaveText(notPopulated, { timeout: 20000 });
     await expect(page.getByTestId("home-system-core")).not.toHaveText(notPopulated, { timeout: 20000 });
     await expect(page.getByTestId("home-system-core-id")).not.toHaveText(notPopulated, { timeout: 20000 });

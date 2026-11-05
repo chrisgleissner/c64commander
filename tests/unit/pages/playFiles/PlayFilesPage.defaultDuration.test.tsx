@@ -34,19 +34,21 @@ const renderPage = () =>
 
 describe("PlayFilesPage Default duration", () => {
   afterEach(() => {
-    localStorage.removeItem("c64u_default_song_duration_ms");
+    localStorage.clear();
   });
 
   it("comes back after a restart showing the default its untimed tracks were given", async () => {
     localStorage.setItem("c64u_default_song_duration_ms", "12000");
 
     renderPage();
+    fireEvent.click(screen.getByTestId("play-section-toggle-playback-settings"));
 
     expect(await screen.findByTestId("duration-input")).toHaveValue("0:12");
   });
 
   it("keeps the default the listener commits, so the next start can show it", async () => {
     renderPage();
+    fireEvent.click(screen.getByTestId("play-section-toggle-playback-settings"));
     const input = await screen.findByTestId("duration-input");
 
     fireEvent.change(input, { target: { value: "0:20" } });
@@ -57,6 +59,7 @@ describe("PlayFilesPage Default duration", () => {
 
   it("shows three minutes when no default has been chosen", async () => {
     renderPage();
+    fireEvent.click(screen.getByTestId("play-section-toggle-playback-settings"));
 
     expect(await screen.findByTestId("duration-input")).toHaveValue("3:00");
   });

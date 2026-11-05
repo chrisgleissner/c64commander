@@ -22,7 +22,10 @@ export type ViewArea = { readonly top: number; readonly bottom: number };
 export const firstStopInView = (stops: readonly StopBox[], area: ViewArea): string | null => {
   const height = area.bottom - area.top;
   const inView = (stop: StopBox) =>
-    stop.top >= area.top - 0.5 &&
+    // A stop clipped slightly beneath the sticky app bar can be revealed with a small scroll. Count
+    // it during a tab restore so the ring keeps its saved position instead of jumping to the page top.
+    stop.top >= area.top - 24 &&
+    stop.bottom > area.top &&
     (stop.bottom <= area.bottom + 0.5 || (stop.bottom - stop.top > height && stop.top < area.bottom));
   return stops.find(inView)?.id ?? null;
 };
@@ -81,6 +84,11 @@ export class DefaultStopFollower {
   arm(now: number = performance.now()): void {
     this.until = now + FOLLOW_DEFAULT_STOP_MS;
     this.chosen = null;
+  }
+
+  /** Whether a tab jump is still settling and its destination may restore a different scroll position. */
+  isFollowing(now: number = performance.now()): boolean {
+    return now <= this.until;
   }
 
   afterScan(
