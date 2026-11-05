@@ -47,7 +47,13 @@ import {
   type HvscStatusSummary,
   type HvscStatus,
 } from "@/lib/hvsc";
-import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import {
+  percentForStep,
+  reportedPercentAfterEvent,
+  stepForStage,
+  type HvscReportedPercent,
+  type HvscStageId,
+} from "@/lib/hvsc/hvscStageModel";
 import { applyHvscStageEvent } from "@/lib/hvsc/hvscStageMetrics";
 import { stageDetailLabel } from "@/lib/hvsc/hvscStageDetail";
 import { logHvscPreparationTransition } from "@/lib/hvsc/hvscPreparationTransitionLog";
@@ -158,7 +164,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
   const [hvscLoading, setHvscLoading] = useState(false);
-  const [hvscProgress, setHvscProgress] = useState<number | null>(null);
+  const [hvscReportedPercent, setHvscReportedPercent] = useState<HvscReportedPercent | null>(null);
   const [hvscStage, setHvscStage] = useState<string | null>(null);
   const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
   const [hvscCurrentFile, setHvscCurrentFile] = useState<string | null>(null);
@@ -455,7 +461,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         hvscProgressThrottleRef.current = nowMs;
         if (event.message) setHvscActionLabel(event.message);
         if (event.stage) setHvscStage(event.stage);
-        if (typeof event.percent === "number") setHvscProgress(event.percent);
+        setHvscReportedPercent((previous) => reportedPercentAfterEvent(previous, event));
         if (event.currentFile) setHvscCurrentFile(event.currentFile);
       }
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
@@ -748,7 +754,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           clearPendingHvscProgress();
           setHvscActiveToken("hvsc-install");
           setHvscLoading(true);
-          setHvscProgress(0);
+          setHvscReportedPercent(null);
           setHvscStage(null);
           setHvscErrorMessage(null);
           setHvscStatus(withoutStoredFailure);
@@ -928,7 +934,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           clearPendingHvscProgress();
           setHvscActiveToken("hvsc-ingest");
           setHvscLoading(true);
-          setHvscProgress(0);
+          setHvscReportedPercent(null);
           setHvscStage(null);
           setHvscErrorMessage(null);
           setHvscStatus(withoutStoredFailure);
@@ -1039,7 +1045,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       hvscIgnoreProgressRef.current = true;
       clearPendingHvscProgress();
       setHvscLoading(false);
-      setHvscProgress(null);
+      setHvscReportedPercent(null);
       setHvscStage(null);
       setHvscActionLabel(null);
       setHvscCurrentFile(null);
@@ -1115,7 +1121,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
             ingestionSummary: null,
           });
           setHvscErrorMessage(null);
-          setHvscProgress(null);
+          setHvscReportedPercent(null);
           setHvscStage(null);
           setHvscActionLabel(null);
           setHvscCurrentFile(null);
@@ -1247,6 +1253,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscExtractionTotal !== null
       ? Math.max(hvscStatusSummary.extraction.totalFiles ?? 0, hvscExtractionTotal)
       : (hvscStatusSummary.extraction.totalFiles ?? null);
+  const hvscProgress = percentForStep(hvscReportedPercent, stepForStage(hvscStage));
   const hvscProgressDerivedFiles =
     hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage) && hvscExtractionTotalFiles && typeof hvscProgress === "number"
       ? Math.max(0, Math.round((hvscProgress / 100) * hvscExtractionTotalFiles))

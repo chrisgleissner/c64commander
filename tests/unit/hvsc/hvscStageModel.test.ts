@@ -17,6 +17,8 @@ import {
   HVSC_STAGE_ORDER,
   activeStepPercent,
   hvscStageSteps,
+  percentForStep,
+  reportedPercentAfterEvent,
   stageCountLabel,
   stepForStage,
   type HvscStageId,
@@ -214,5 +216,61 @@ describe("installing HVSC as five named steps", () => {
     for (const state of ["NOT_PRESENT", "DOWNLOADING", "DOWNLOADED", "INGESTING", "READY", "ERROR"] as const) {
       expect(hvscStageSteps({ state }).map((step) => step.id)).toEqual(HVSC_STAGE_ORDER);
     }
+  });
+});
+
+describe("a percentage belongs to the step that reported it", () => {
+  it("keeps unpacking's 100% from being shown for the steps that follow it", () => {
+    let reported = reportedPercentAfterEvent(null, { stage: "archive_extraction", percent: 100 });
+    expect(percentForStep(reported, "unpack")).toBe(100);
+
+    reported = reportedPercentAfterEvent(reported, { stage: "sid_enumeration" });
+    expect(percentForStep(reported, "scan")).toBeNull();
+    expect(percentForStep(reported, "unpack")).toBeNull();
+
+    reported = reportedPercentAfterEvent(reported, { stage: "songlengths" });
+    expect(percentForStep(reported, "details")).toBeNull();
+    expect(percentForStep(reported, "scan")).toBeNull();
+  });
+
+  it("shows a percentage while its own step is running and keeps it across that step's quieter events", () => {
+    let reported = reportedPercentAfterEvent(null, { stage: "database_insertion", percent: 40 });
+    expect(percentForStep(reported, "scan")).toBe(40);
+
+    reported = reportedPercentAfterEvent(reported, { stage: "sid_enumeration" });
+    expect(percentForStep(reported, "scan")).toBe(40);
+  });
+
+  it("never shows a percentage for the step it was not reported for", () => {
+    const reported = reportedPercentAfterEvent(null, { stage: "sid_metadata_hydration", percent: 100 });
+
+    expect(percentForStep(reported, "analyze")).toBe(100);
+    expect(percentForStep(reported, "details")).toBeNull();
+    expect(percentForStep(reported, null)).toBeNull();
+  });
+
+  it("leaves the record alone for events that belong to no step", () => {
+    const reported = reportedPercentAfterEvent(null, { stage: "download", percent: 55 });
+
+    expect(reportedPercentAfterEvent(reported, { stage: "complete", percent: 100 })).toBe(reported);
+    expect(reportedPercentAfterEvent(reported, { stage: "archive_discovery" })).toBe(reported);
+    expect(reportedPercentAfterEvent(reported, { stage: "start" })).toBe(reported);
+  });
+
+  it("returns the same record for a repeated percentage so a state setter does not re-render", () => {
+    const reported = reportedPercentAfterEvent(null, { stage: "download", percent: 55 });
+
+    expect(reportedPercentAfterEvent(reported, { stage: "download", percent: 55 })).toBe(reported);
+  });
+
+  it("ignores a percentage that is not a number", () => {
+    const reported = reportedPercentAfterEvent(null, { stage: "download", percent: 55 });
+
+    expect(
+      percentForStep(reportedPercentAfterEvent(reported, { stage: "download", percent: Number.NaN }), "download"),
+    ).toBe(55);
+    expect(
+      percentForStep(reportedPercentAfterEvent(null, { stage: "download", percent: null }), "download"),
+    ).toBeNull();
   });
 });

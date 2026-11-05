@@ -44,6 +44,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 import uk.gleissner.c64commander.hvsc.ArchiveProfile
 import uk.gleissner.c64commander.hvsc.ExtractedSong
+import uk.gleissner.c64commander.hvsc.ExtractionPhase
 import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.ExtractionResult
 import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
@@ -1015,6 +1016,40 @@ class HvscIngestionPluginTest {
       // as soon as the last entry is reached instead of leaving the unpack step running.
       val lastEntryIndex = events.indexOfLast { it.has("totalCount") && it.getInt("totalCount") == 1000 }
       assertEquals("sid_enumeration", events[lastEntryIndex + 1].getString("stage"))
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
+  }
+
+  @Test
+  fun ingestHvscReportsOrganizingTheExtractedFilesAsFindSongsProgressWithItsOwnPercent() {
+    // The files are moved into the library layout after the last archive entry is out. That work
+    // used to be reported with no total, so the page kept showing the unpack step's 100%.
+    try {
+      val events = mutableListOf<JSObject>()
+      ingestUpdateResolving(
+              fakeExtractionResult(emptyList()),
+              progress =
+                      listOf(
+                              ExtractionProgress(1000, 1000, "/MUSICIANS/A/Artist/Tiny.sid", 1),
+                              ExtractionProgress(0, 800, null, 0, ExtractionPhase.ORGANIZING),
+                              ExtractionProgress(200, 800, null, 150, ExtractionPhase.ORGANIZING),
+                              ExtractionProgress(800, 800, null, 600, ExtractionPhase.ORGANIZING),
+                      ),
+              eventsOut = events,
+      )
+
+      val organizing =
+              events.filter { it.getString("stage") == "sid_enumeration" && it.has("totalCount") }
+      assertEquals(listOf(0, 200, 800), organizing.map { it.getInt("processedCount") })
+      assertEquals(listOf(0, 25, 100), organizing.map { it.getInt("percent") })
+      assertTrue(organizing.all { it.getInt("totalCount") == 800 })
+      assertEquals(
+              "organizing counts files, not archive entries",
+              listOf("archive_extraction"),
+              events.filter { it.has("totalCount") && it.getInt("totalCount") == 1000 }.map { it.getString("stage") },
+      )
     } finally {
       File(context.filesDir, "hvsc").deleteRecursively()
       File(context.filesDir, "hvsc-cache").deleteRecursively()

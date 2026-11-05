@@ -68,12 +68,23 @@ data class ExtractedSong(
 /** The PSID/RSID v2+ header length, which is what the app's SID header parser requires. */
 const val SID_HEADER_BYTES = 0x7C
 
+enum class ExtractionPhase {
+  /** Entries written to the temporary tree; the count is archive entries, directories included. */
+  UNPACKING,
+  /** Files moved from the temporary tree into the library layout; the count is files. */
+  ORGANIZING,
+}
+
 data class ExtractionProgress(
         val processedEntries: Int,
         val totalEntries: Int?,
         val currentFile: String?,
         val songsExtracted: Int,
+        val phase: ExtractionPhase = ExtractionPhase.UNPACKING,
 )
+
+/** How many files are organized between two [ExtractionPhase.ORGANIZING] progress reports. */
+const val ORGANIZE_PROGRESS_STEP = 500
 
 data class ExtractionResult(
         val profile: ArchiveProfile,
@@ -193,7 +204,7 @@ class DefaultHvscArchiveExtractor(
           throw java.util.concurrent.CancellationException("HVSC extraction cancelled")
         }
 
-        return materializeRelevantFiles(rawRoot, outputDir, profile, mode)
+        return materializeRelevantFiles(rawRoot, outputDir, profile, mode, onProgress)
       } finally {
         rawRoot.deleteRecursively()
       }
@@ -584,6 +595,7 @@ class DefaultHvscArchiveExtractor(
           outputDir: File,
           profile: ArchiveProfile,
           mode: HvscArchiveMode,
+          onProgress: (ExtractionProgress) -> Unit,
   ): ExtractionResult {
     Trace.beginSection("hvsc:materialize")
     try {
@@ -592,14 +604,24 @@ class DefaultHvscArchiveExtractor(
       val deletionPaths = mutableListOf<String>()
       var songlengthFilesWritten = 0
 
-      rawRoot.walkTopDown().forEach { candidate ->
-        if (!candidate.isFile) {
-          return@forEach
-        }
+      val files = rawRoot.walkTopDown().filter { it.isFile }.toList()
+      fun reportOrganized(processed: Int) =
+              onProgress(
+                      ExtractionProgress(
+                              processedEntries = processed,
+                              totalEntries = files.size,
+                              currentFile = null,
+                              songsExtracted = extractedSongs.size,
+                              phase = ExtractionPhase.ORGANIZING,
+                      )
+              )
+
+      files.forEachIndexed { index, candidate ->
+        if (index % ORGANIZE_PROGRESS_STEP == 0) reportOrganized(index)
         val rawRelativePath = candidate.relativeTo(rawRoot).invariantSeparatorsPath
         val normalizedPath = normalizeArchiveEntryPath(rawRelativePath, mode)
         if (normalizedPath.isBlank()) {
-          return@forEach
+          return@forEachIndexed
         }
         val lowered = normalizedPath.lowercase(Locale.US)
 
@@ -638,6 +660,7 @@ class DefaultHvscArchiveExtractor(
           throw IOException("Failed to materialize HVSC entry /$normalizedPath", error)
         }
       }
+      reportOrganized(files.size)
 
       return ExtractionResult(
               profile = profile,

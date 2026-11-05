@@ -203,6 +203,27 @@ describe("hvscStageMetrics", () => {
     expect(stageRatePerSecond(m.unpack, 28_000)).toBe(100);
   });
 
+  it("measures a pass that starts over inside the same step from its own start", () => {
+    // Organizing the files counts to 1,000 and writing the song index then counts from 0 again,
+    // both inside "Find songs". Measured from the first pass's start, the second pass's 500 items
+    // would be spread over the 10 s the first pass took.
+    const m = run([
+      [0, event("sid_enumeration", { processedCount: 0, totalCount: 1_000 })],
+      [10_000, event("sid_enumeration", { processedCount: 1_000, totalCount: 1_000 })],
+      [10_000, event("database_insertion", { processedCount: 0, totalCount: 1_000 })],
+      [12_000, event("database_insertion", { processedCount: 500, totalCount: 1_000 })],
+    ]);
+
+    expect(m.scan).toEqual({
+      startedAtMs: 10_000,
+      finishedAtMs: null,
+      processed: 500,
+      total: 1_000,
+      lastProgressAtMs: 12_000,
+    });
+    expect(stageRatePerSecond(m.scan, 12_000)).toBe(250);
+  });
+
   describe("remaining time guards", () => {
     const base = { startedAtMs: 0, finishedAtMs: null, processed: 100, total: 1000 };
 
