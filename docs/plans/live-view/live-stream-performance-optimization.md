@@ -550,7 +550,7 @@ Select based on:
 - presentation latency,
 - compatibility,
 - native/WebView composition,
-- Callback 8020 compatibility,
+- Keypad handset compatibility,
 - and maintenance cost.
 
 Reuse textures and buffers.
@@ -728,7 +728,7 @@ Startup-only calibration is insufficient because:
 - background load changes,
 - operating-system scheduling changes,
 - battery and charging conditions change,
-- and AppSupport overhead may vary.
+- and the Android compatibility layer overhead may vary.
 
 A previously stable result may be cached as a starting hint.
 

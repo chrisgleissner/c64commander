@@ -7,7 +7,7 @@ review of both, and the release of `1.0.5-rc2`.
 
 One user, and every criterion below is written from their position:
 
-- They hold the 8020-class handset: 480x640 at DPR 1.5, so **320x426.7 CSS px**, no touchscreen, a
+- They hold the keypad handset: 480x640 at DPR 1.5, so **320x426.7 CSS px**, no touchscreen, a
   **physical keypad** (arrows, centre, digits, BACK), no Google Play Services.
 - They **arrive home and leave again, several times a day**. The phone sleeps in a pocket, drops off
   the home network, rejoins it, and the app is backgrounded for minutes to hours in between.
@@ -28,7 +28,7 @@ Two failure shapes matter more than anything else for them, and both are about t
 - Devices: **c64u and u2 only.** The U64 is reserved for Software IEC work by another agent and must
   not be driven, including probes. `AGENTS.md` carries the same rule.
 - Pixel 4, serial `9B081FFAZ001WX`. Both editions may be installed; `uk.gleissner.c64uremote` is the
-  8020 edition and `uk.gleissner.c64commander` is the ordinary one. Stop the one not under test —
+  keypad edition and `uk.gleissner.c64commander` is the ordinary one. Stop the one not under test —
   either will hold an AudioTrack and a DevTools socket.
 - Audible stages are authorised without asking. Phone volume 3 of 25, never above 10.
 - The merge gate needs **native geometry**. If a scenario below sets `wm size`/`wm density`, reset
@@ -194,7 +194,7 @@ Method:
 adb -s 9B081FFAZ001WX shell wm size 480x640 && adb -s 9B081FFAZ001WX shell wm density 240
 # relaunch the app, re-attach adb forward, then:
 node tools/hil/keypad_reachability.mjs --package uk.gleissner.c64uremote --routes 1,2,3,4,5,6 \
-  --out artifacts/keypad-8020.json
+  --out artifacts/keypad-handset.json
 ```
 
 Then repeat in landscape (`wm size 640x480`), reached through Settings → Appearance, because the app

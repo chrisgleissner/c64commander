@@ -121,7 +121,7 @@ Build and deploy with `./build --skip-tests --install-apk` (single variant, defa
   the u64, `f13e69` is the u2. The testids are `startup-use-discovered-device-id:<id>`.
 - Currently installed: `uk.gleissner.c64commander` at `0.9.4-rc4-40758`, `uk.gleissner.c64uremote`
   at `0.9.4-rc4-00526`. Both have HVSC v85 installed (61,157 songs).
-- The Callback 8020 **does not exist**; the Pixel 4 stands in for every phone. Never gate a task
+- The keypad handset **does not exist**; the Pixel 4 stands in for every phone. Never gate a task
   on it.
 
 ---

@@ -31,8 +31,8 @@ render, seek and prerender contracts. Full lint and both Android builds pass.
 ## Silent device validation
 
 Both editions at `94aa8672a` were installed and launched using droidctl: the
-default edition on Pixel 4 and `c64u-remote` on the actual Callback 8020.
-The Callback's Sailfish foreground window was verified. Both installed app
+default edition on Pixel 4 and `c64u-remote` on the actual keypad handset.
+The handset's foreground window was verified. Both installed app
 workers were exercised without an audio sink: `128_Byte_Blues_BASIC.sid` is
 refused without ROMs, opens with local ROMs, and renders 16,000 samples for one
 second at 8 kHz stereo. Arkanoid opens and renders without ROMs. Nonzero PCM
@@ -40,7 +40,7 @@ alone does not establish musical correctness.
 
 | Hardware stage                                           | Result                                                       |
 | -------------------------------------------------------- | ------------------------------------------------------------ |
-| Preflight                                                | Pass, Callback and c64u                                      |
+| Preflight                                                | Pass, handset and c64u                                      |
 | Input                                                    | Pass; held direction moved eight cells; 20 rotation checks   |
 | Search latency                                           | Pass; 120 samples, p50 11.3 ms, p95 15.9 ms, maximum 18.6 ms |
 | Wire                                                     | Not completed; full run stopped to enforce silence           |

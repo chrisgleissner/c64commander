@@ -1028,7 +1028,7 @@ fixture, run before each release and pinned in-repo.
 | Endless queue + background-execution wake lock                       | Inherits existing `backgroundExecutionPolicy` and the `bg-exec` refcount fixes unchanged; §9.3 `--soak-seconds` soak test for long unattended stations.                            |
 | Perf regressions creep in silently                                   | Machine-readable pinned thresholds (§9.2) asserted by HIL exit 1; never auto-rewrite baselines.                                                                                    |
 | Trademark                                                            | Name is **SID Radio**; no product surface says "SidStation"/"SID Station".                                                                                                         |
-| On-device engine risks (licence, ROMs, SailfishOS, background audio) | Covered in the engine section — see **§12.4**.                                                                                                                                     |
+| On-device engine risks (licence, ROMs, the handset OS, background audio) | Covered in the engine section — see **§12.4**.                                                                                                                                     |
 
 ---
 
@@ -1071,16 +1071,15 @@ that works with no Ultimate powered on.
 The choice is a single, obvious control (§12.5). Everything else — playlist, SID
 Radio, songlengths, auto-advance — stays engine-agnostic.
 
-### 12.1 Why WASM, not native NDK — the SailfishOS decision
+### 12.1 Why WASM, not native NDK — the handset OS decision
 
-**Primary rollout route: Android via SailfishOS's Android layer (Alien Dalvik /
-AppSupport) on the Callback 8020.** That constraint decides the engine:
+**Primary rollout route: Android via the handset OS's Android layer (the Android compatibility layer) on the keypad handset.** That constraint decides the engine:
 
 - A **native NDK** build (per-ABI `.so` + JNI + `AudioTrack` + a foreground service)
-  is exactly the class of thing that is fragile or unsupported under SailfishOS's
+  is exactly the class of thing that is fragile or unsupported under the handset OS's
   Android compatibility layer, and it means separate native code for Android vs iOS.
 - A **WASM** build of libsidplayfp runs **inside the Capacitor WebView**, so it runs
-  **identically wherever the WebView runs** — standard Android, **SailfishOS's Android
+  **identically wherever the WebView runs** — standard Android, **the handset OS's Android
   runtime**, iOS (WKWebView), web, and Docker — with **one** implementation and no
   native toolchain per platform.
 
@@ -1113,7 +1112,7 @@ is still libsidplayfp, so the same analysis holds:
   piece is a blocker.
 - **iOS/App-Store note (not Android):** GPL × Apple App Store has historical friction
   (true for _any_ GPL code on iOS, WASM or native). It does **not** gate the primary
-  SailfishOS/Android route; flag a separate legal check before an iOS release.
+  the handset OS/Android route; flag a separate legal check before an iOS release.
 
 **ROMs (functional, not legal).** libsidplayfp needs C64 **KERNAL/BASIC/CHARGEN** ROM
 images for **RSID** and ROM-calling PSID tunes. Those ROMs are Commodore-copyrighted and
@@ -1146,7 +1145,7 @@ without ROMs; tunes needing ROMs are detected and offered **"Play on C64"** inst
 - **v1 = chunked pre-render (recommended, D6 default).** The worker renders N-second
   chunks ahead; the main thread schedules them gaplessly as `AudioBufferSourceNode`s.
   **No `SharedArrayBuffer`, no AudioWorklet, no COOP/COEP headers** — the single biggest
-  portability win; works in any WebView incl. SailfishOS's and the low-end Callback 8020. Songlength drives duration/auto-advance exactly as today.
+  portability win; works in any WebView incl. the handset OS's and the low-end keypad handset. Songlength drives duration/auto-advance exactly as today.
 - **v2 = SAB + AudioWorklet.** sidflow-web's `worklet-player.ts` already does this; SAB
   needs cross-origin isolation the Capacitor server must send. Pursue only if v1 latency
   is ever a problem (it won't be for playback).
@@ -1164,8 +1163,8 @@ Same TDD shape as §7. **L-gates** feed §0.3.
 
 - **LE0 — Licence & feasibility spike.** _Test-first:_ a licence-audit checklist
   (`dist/LICENSE` + residfp + transitive = v2-or-later/permissive) and a feasibility
-  probe that loads `@sidflow/libsidplayfp-wasm` in the app's WebView on the **Callback
-  8020 / SailfishOS** and renders one HVSC PSID to PCM. Add attribution. **Exit (L1):**
+  probe that loads `@sidflow/libsidplayfp-wasm` in the app's WebView on the **keypad
+  handset** and renders one HVSC PSID to PCM. Add attribution. **Exit (L1):**
   WASM instantiates and renders on the primary device; no GPL-2.0-only component.
 - **LE1 — Local engine + chunked Web Audio sink.** _Test-first:_ `localSidEngine.test.ts`
   (load/select/render/position events matching the controller timeline; gapless
@@ -1178,7 +1177,7 @@ Same TDD shape as §7. **L-gates** feed §0.3.
   - Play-page segmented control (`playback-engine-c64` / `playback-engine-local`) +
     Settings mirror; wake lock for foreground playback. **Exit (L3):** switching engines is
     instant/safe; ROM-dependent tunes stay on C64.
-- **LE3 — Polish & synergy + HIL.** Battery/CPU check on the Callback 8020;
+- **LE3 — Polish & synergy + HIL.** Battery/CPU check on the keypad handset;
   background-audio behaviour documented (WebAudio limitation) with the native-sink escape
   hatch noted; **SID Radio end-to-end on the Local engine with no C64 powered on**;
   manual chapter. **Exit (L4):** `tools/hil/sid_radio_hil.py --engine local` soaks a
@@ -1192,8 +1191,8 @@ Same TDD shape as §7. **L-gates** feed §0.3.
 | ROMs unshippable → RSID/PSID gaps                                  | ROM-less v1 covers ROM-independent PSID; per-tune capability check → "Play on C64" fallback; optional user-supplied ROMs later. |
 | SAB/COOP-COEP unavailable in the WebView                           | v1 avoids SAB entirely (chunked pre-render, D6); SAB/worklet is opt-in v2 only.                                                 |
 | Background / screen-off audio (WebAudio in a backgrounded WebView) | Foreground-first UX + wake lock; native `AudioTrack` sink as a scoped escape hatch (D6).                                        |
-| Low-end CPU (Callback 8020) can't keep up                          | SID synth is light; render-ahead buffering absorbs jitter; LE3/§12.6 perf gate on-device; fall back to "Play on C64".           |
-| iOS App-Store × GPL friction                                       | SailfishOS/Android is the primary route; separate legal review before any iOS release.                                          |
+| Low-end CPU (keypad handset) can't keep up                          | SID synth is light; render-ahead buffering absorbs jitter; LE3/§12.6 perf gate on-device; fall back to "Play on C64".           |
+| iOS App-Store × GPL friction                                       | the handset OS/Android is the primary route; separate legal review before any iOS release.                                          |
 | Two audio sources at once (local + mirror)                         | Engine is exclusive; selecting one stops the other for playback.                                                                |
 
 ### 12.5 The user control ("very simple to change")
@@ -1213,7 +1212,7 @@ Same TDD shape as §7. **L-gates** feed §0.3.
 - "**Play on C64 (stream back)**" is simply the other end of this one toggle. Engines are
   exclusive — selecting Local stops any C64 audio mirror for playback, and vice-versa.
 
-### 12.6 Local-engine performance budgets (Pixel 4 + Callback 8020)
+### 12.6 Local-engine performance budgets (Pixel 4 + keypad handset)
 
 Asserted by `tools/hil/sid_radio_hil.py --engine local` (no C64 needed), pinned in
 `ci/perf/sid-radio-perf-thresholds.json` under a `localEngine` block:
@@ -1223,7 +1222,7 @@ Asserted by `tools/hil/sid_radio_hil.py --engine local` (no C64 needed), pinned 
 | Real-time render headroom                   | `renderMsPerSec` | p99   | **< 250 ms per rendered second** (≥ 4× realtime)  |
 | Audio underruns over 3-min PSID             | `audioUnderruns` | count | **0**                                             |
 | Engine switch (C64 ↔ Local) → audio resumes | `engineSwitchMs` | p99   | **< 1500 ms**                                     |
-| On-device CPU during playback               | device CPU %     | p95   | measured-then-pinned (Callback 8020 is the floor) |
+| On-device CPU during playback               | device CPU %     | p95   | measured-then-pinned (keypad handset is the floor) |
 
 ---
 

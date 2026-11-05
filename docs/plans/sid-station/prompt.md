@@ -202,7 +202,7 @@ quick-action (D3).
 ### Track B — Local Playback Engine (parallel, independent) → gates L1–L4
 
 LE0 Licence & feasibility spike (dist/LICENSE + residfp audit; render one PSID to PCM on the
-**Pixel 4** — the phone-side venue for every gate; the Callback 8020 is unreleased and must never
+**Pixel 4** — the phone-side venue for every gate; the keypad handset is unreleased and must never
 be named as a venue, see AGENTS.md) → **L1**.
 LE1 `localSidEngine.ts` + `localSid.worker.ts` + chunked Web Audio sink; gapless play →
 **L2** (zero underruns, `renderMsPerSec` recorded).

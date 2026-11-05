@@ -38,7 +38,7 @@ SID-Radio §9.5 HIL soaks.
 
 - **Phone:** the app runs on a physically-connected Android device over the WebView CDP socket. The HIL
   drives real `data-testid` elements — no raw ADB product input. Pixel 4 (`flame`) is the reference.
-- **Primary rollout device:** the **Commodore Callback 8020** (SailfishOS Android layer) — the device
+- **Primary rollout device:** the **Keypad handset** (the handset OS Android layer) — the device
   L1/L3 must ultimately be proven on, and the perf floor.
 - **C64:** a live **C64 Ultimate** (`c64u`) on the LAN. **Device IPs are DHCP-volatile — always re-read
   `/etc/hosts` first;** a stale IP mimics a dropout. c64u password is `pwd` (X-Password header). **u64 is
@@ -60,7 +60,7 @@ Record every measurement back into `ci/perf/sid-radio-perf-thresholds.json` (`me
 commit, and let the host test keep it honest.
 
 ### 1. LE1 L1 — WASM instantiates + renders on the primary device
-Prove the vendored engine loads and renders one HVSC PSID → PCM **on the Callback 8020 / SailfishOS**
+Prove the vendored engine loads and renders one HVSC PSID → PCM **on the keypad handset / the handset OS**
 (and Pixel 4). This is the last unproven LE0/LE1 claim (bundle load, `renderSeconds` → Int16, audible).
 - On device, Settings → enable "On-device playback engine"; pick a ROM-independent PSID; Play → "This device".
 - Exit gate: WASM instantiates, audio plays, no GPL-2.0-only component loaded.
@@ -74,7 +74,7 @@ Fill in `ci/perf/sid-radio-perf-thresholds.json → localEngine`:
 - `renderMsPerSec` — p99 **< 250 ms/sec** (≥ 4× realtime). Pin the measured p99.
 - `audioUnderruns` — **0** over a 3-min PSID (gapless).
 - `engineSwitchMs` — C64 ↔ Local switch → audio resumes, p99 **< 1500 ms**.
-- Also record on-device **CPU %** (p95) and battery over the soak on the Callback 8020 (§12.6, the floor).
+- Also record on-device **CPU %** (p95) and battery over the soak on the keypad handset (§12.6, the floor).
 
 ### 3. LE2 refinement — clean instant mid-track engine switch + foreground wake lock
 Shipped behaviour today: the Play-page "Play on: C64 / This device" toggle **persists** the choice and it
@@ -117,7 +117,7 @@ Fill in the main `thresholds` block's `null` measured values: `firstCandidateMs`
 `[[hil-physical-power-cycle-minimize-user-involvement]]`.
 
 ## Definition of done for this handover
-All four device passes above measured on the rig (Callback 8020 primary), every `localEngine` and
+All four device passes above measured on the rig (keypad handset primary), every `localEngine` and
 `thresholds` `measured.value` filled from a real run and within its pinned budget, the instant-switch +
 wake-lock refinement landed and verified, and the numbers committed on `feat/sid-radio` (or its successor)
 with the host perf test still green.

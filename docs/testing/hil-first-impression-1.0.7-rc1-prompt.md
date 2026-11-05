@@ -8,7 +8,7 @@ record of completed hardware testing. Preparation reviewed the repository at
 ## Mission and authority
 
 Investigate and improve C64 Commander’s first impression for a new user of a
-Callback 8020: a tiny screen, physical keyboard/keypad, and no assumed touchscreen.
+Keypad handset: a tiny screen, physical keyboard/keypad, and no assumed touchscreen.
 Use the attached Pixel 4 as the phone-side HIL target, against `c64u`, `u64`, and
 `u2`, subject to the hardware reservation below. Make the experience inviting,
 understandable, responsive, and recoverable. Prioritize listening to SID music,
@@ -58,7 +58,7 @@ Resolve these known constraints explicitly:
   not passed or equivalent to C64U. Do not declare the full sweep complete or tag
   the release with that required row unresolved unless the user explicitly narrows
   the release scope.
-- **There is no physical Callback 8020 on the rig.** The Pixel 4 is the stand-in.
+- **There is no physical keypad handset on the rig.** The Pixel 4 is the stand-in.
   Test the screen geometry and key semantics there; report that distinction.
   Do not create a future testing task that waits for the unreleased handset.
   Pixel timings do not prove the eventual handset’s CPU, battery, physical key
@@ -118,7 +118,7 @@ Specific starting observations to verify:
   do not start the newcomer test with a silently prepared music library.
 - C64U Remote currently uses automatic display-profile selection, T9, diamond8,
   hidden game joystick, and automatic Game Mode on user game launch. Commander
-  differs. The historical `docs/testing/hil-game-mode-8020-soak.md` describes older
+  differs. The historical `docs/testing/hil-game-mode-keypad-handset-soak.md` describes older
   defaults and hardware allocations; reproduce its concerns without inheriting
   its obsolete allocation or treating its findings as still open.
 - `startGameMode()` already gates streams using identified capabilities and tracks

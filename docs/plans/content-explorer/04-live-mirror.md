@@ -60,7 +60,7 @@
 > Goal: hear and (optionally) see the running machine inside the app. The device
 > exposes **two independent streams** — audio and video — so we mirror them
 > independently. **Audio is the cheap, first-class case.** **Video is the
-> expensive, optional case**, budgeted for the low-power Callback 8020 target.
+> expensive, optional case**, budgeted for the low-power keypad handset target.
 
 ---
 
@@ -170,7 +170,7 @@ function playChunk(pcm: ArrayBuffer) {
 ### Cost
 
 This is cheap: one `createBuffer` + a de-interleave loop per ~32 ms. Suitable for
-the Callback 8020. **Audio Mirror has no CPU gate.**
+the keypad handset. **Audio Mirror has no CPU gate.**
 
 ---
 
@@ -221,7 +221,7 @@ ctx2d.putImageData(imageData, 0, 0);
 Optional nicety: sample a VIC **border** pixel (offset `(4*384 + 4)`) and tint the
 surrounding UI to match the running program's border.
 
-### Callback 8020 / low-power budget (the point of the separate flag)
+### Keypad handset / low-power budget (the point of the separate flag)
 
 Video is the expensive capability. Degrade in this order:
 
@@ -260,7 +260,7 @@ Use the browser `MediaRecorder` (web) with format fallback. Three modes:
 
 Probe support with `MediaRecorder.isTypeSupported` and pick the first available
 mime for the chosen mode; disable formats the browser can't do. Recording is
-local; no server transcoding. On the Callback 8020, expect audio-only to be the
+local; no server transcoding. On the keypad handset, expect audio-only to be the
 practical recording mode.
 
 ---
@@ -296,7 +296,7 @@ practical recording mode.
 ## 8. Phasing within Live Mirror
 
 1. **Stream infra + Audio Mirror (D)** — de-risks receive/bridge; ships value on
-   every device including the Callback 8020.
+   every device including the keypad handset.
 2. **Video Mirror web (E)** — decode/render/record on the web build.
 3. **Video Mirror native (E)** — native UDP receiver plugin, capability-gated and
    CPU-budgeted.

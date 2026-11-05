@@ -28,7 +28,7 @@ a dark ground, a two-tone band above a list, a white selection row — not a col
 
 ---
 
-## 2. The Callback 8020's design language
+## 2. The keypad handset's design language
 
 Sources: Commodore's own product page and apps article, plus GSMArena, Tom's Hardware, New Atlas,
 It's FOSS and Decoded Magazine coverage. See the sources list at the end.
@@ -82,11 +82,8 @@ the phone. This is the direct justification for the set spanning very neutral to
 
 ### Relevance to this app
 
-Commodore's own product page lists the app this repository builds as a bundled feature:
-
-> "Callback can control your Commodore 64 Ultimate using our included C64U Remote App. Just
-> connect both devices to the same Wi-Fi network and you're good to game. Change the onboard LED
-> colours, load programs, jump into settings, and even engage Turbo Boost."
+The manufacturer's product page lists the app this repository builds as a bundled feature, used
+to load programs, change the LED colors and reach the C64's settings from the phone.
 
 So the appearance work is not cosmetic polish on a side project. It is the appearance of a first
 -party-listed app on a device with a strong and specific design language.
@@ -110,12 +107,3 @@ So the appearance work is not cosmetic polish on a side project. It is the appea
 
 ---
 
-## Sources
-
-- [Callback 8020: The Future of Flip-Phones — Commodore](https://commodore.net/callback/)
-- [Don't Call it Dumb: The Apps of the Commodore Callback — Commodore](https://commodore.net/dont-call-it-dumb-the-apps-of-the-commodore-callback/)
-- [Commodore announces Callback 8020 — GSMArena](https://www.gsmarena.com/commodore_announces_callback_8020_the_mobile_phone_between_dumb_and_smart-news-73304.php)
-- [Commodore announces Linux-based flip phone — Tom's Hardware](https://www.tomshardware.com/phones/commodore-announces-linux-based-flip-phone-with-no-social-media-no-browser-the-callback-8020-will-be-available-in-five-retro-colorways-starting-at-usd499-runs-99-percent-of-android-apps)
-- [Commodore Callback 8020: retro flip phone revival — New Atlas](https://newatlas.com/consumer-tech/commodore-callback-8020-flip-phone/)
-- [Commodore's New Flip Phone Skips Android for Sailfish OS — It's FOSS](https://itsfoss.com/news/commodore-callback-8020-launch/)
-- [Commodore's Callback 8020 and the Art of Switching Off — Decoded Magazine](https://www.decodedmagazine.com/commodores-callback-8020-and-the-art-of-switching-off/)

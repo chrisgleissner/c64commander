@@ -467,9 +467,9 @@ lower because it includes fixed per-chunk overhead that does not scale with the 
 > worth investigating in its own right. `renderMsPerSec` is the engine's own counter and is the
 > figure to trust.
 
-**The Callback 8020 has not been released**, so none of this can be measured on it. For reference it
+**The keypad handset has not been released**, so none of this can be measured on it. For reference it
 is specified as a **MediaTek Helio G81** — 2× Cortex-A75 @ 2.0 GHz + 6× A55 @ 1.8 GHz, 12 nm
-(`docs/plans/callback8020/sailfish-callback-8020-android-compatibility.md`) — roughly **2–3× slower
+(from the manufacturer's published specification) — roughly **2–3× slower
 single-threaded** than the Pixel 4's Cortex-A76 @ 2.84 GHz on 7 nm, which would put reSIDfp at
 ~1240 ms/sec: past realtime.
 
@@ -519,13 +519,13 @@ Reasoning:
 
 1. **A slower handset than the Pixel 4 turning up in the rollout.** WASM holds real time
    comfortably on the Pixel 4, which is the only phone we have and the venue for every phone-side
-   gate. A device roughly 2–3× slower would put that in question — and since SailfishOS is
+   gate. A device roughly 2–3× slower would put that in question — and since the handset OS is
    Linux/ARM, the same cross-compile approach extends there, which is what makes the idea strong
-   rather than Android-only. This is a *contingency*, not scheduled work: the Callback 8020 is
+   rather than Android-only. This is a *contingency*, not scheduled work: the keypad handset is
    unreleased, so no task may be gated on measuring it (AGENTS.md).
 2. **§6.5 turning out to be unfixable** in the wasm target specifically.
 
-If it flips, the shape is: native on Android + SailfishOS via the 7-Zip pattern, WASM retained for
+If it flips, the shape is: native on Android + the handset OS via the 7-Zip pattern, WASM retained for
 web/iOS, both behind the existing `LocalSidPlaybackController` interface so the app contract does not
 change (handover §1.8 item 2).
 

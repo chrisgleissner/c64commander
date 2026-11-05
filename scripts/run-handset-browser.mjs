@@ -3,13 +3,13 @@
 
 import { spawn } from "node:child_process";
 import { chromium } from "@playwright/test";
-import { constrainCallbackCpu } from "../playwright/callbackCpu.ts";
+import { constrainHandsetCpu } from "../playwright/handsetCpu.ts";
 
 const separator = process.argv.indexOf("--");
 const command = separator >= 0 ? process.argv.slice(separator + 1) : [];
-if (!command.length) throw new Error("Usage: node scripts/run-callback-browser.mjs -- <command> [arguments]");
-const referenceMs = Number(process.env.CALLBACK_KERNEL_MS ?? "171.8");
-if (!Number.isFinite(referenceMs) || referenceMs <= 0) throw new Error("CALLBACK_KERNEL_MS must be positive");
+if (!command.length) throw new Error("Usage: node scripts/run-handset-browser.mjs -- <command> [arguments]");
+const referenceMs = Number(process.env.HANDSET_KERNEL_MS ?? "171.8");
+if (!Number.isFinite(referenceMs) || referenceMs <= 0) throw new Error("HANDSET_KERNEL_MS must be positive");
 
 const server = await chromium.launchServer({
   args: [
@@ -30,9 +30,9 @@ try {
   browser = await chromium.connect(server.wsEndpoint());
   const context = await browser.newContext();
   const page = await context.newPage();
-  const calibration = await constrainCallbackCpu(page, referenceMs);
+  const calibration = await constrainHandsetCpu(page, referenceMs);
   console.log(
-    `Callback CPU calibration: ${JSON.stringify({ rate: calibration.rate, measuredMs: calibration.measuredMs, referenceMs })}`,
+    `Handset CPU calibration: ${JSON.stringify({ rate: calibration.rate, measuredMs: calibration.measuredMs, referenceMs })}`,
   );
   const browserSession = await browser.newBrowserCDPSession();
   // Chromium publishes the DevTools socket in its profile when port zero picks a free port.
@@ -50,7 +50,7 @@ try {
   socket = new WebSocket(`ws://127.0.0.1:${port}${socketPath}`);
   await new Promise((resolve, reject) => {
     socket.onopen = resolve;
-    socket.onerror = () => reject(new Error("Could not connect to Callback browser DevTools"));
+    socket.onerror = () => reject(new Error("Could not connect to Handset browser DevTools"));
   });
   let nextId = 0;
   const pending = new Map();
@@ -77,7 +77,7 @@ try {
       }
       await send("Runtime.runIfWaitingForDebugger", {}, sessionId);
     })().catch((error) => {
-      console.error("Applying Callback CPU constraint to a new browser target failed", target, error);
+      console.error("Applying Handset CPU constraint to a new browser target failed", target, error);
       protocolFailure = error;
       child?.kill("SIGTERM");
     });
@@ -86,13 +86,13 @@ try {
   await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
   child = spawn(command[0], command.slice(1), {
     stdio: "inherit",
-    env: { ...process.env, CALLBACK_BROWSER_WS: server.wsEndpoint(), PLAYWRIGHT_WORKERS: "1" },
+    env: { ...process.env, HANDSET_BROWSER_WS: server.wsEndpoint(), PLAYWRIGHT_WORKERS: "1" },
   });
   const result = await new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal }));
   });
-  if (protocolFailure) throw new Error("Callback browser simulation failed", { cause: protocolFailure });
+  if (protocolFailure) throw new Error("Handset browser simulation failed", { cause: protocolFailure });
   process.exitCode = result.code ?? 1;
 } finally {
   socket?.close();

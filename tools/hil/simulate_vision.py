@@ -2,7 +2,7 @@
 """
 Render a device screenshot the way the target user actually sees it.
 
-The Callback 8020's panel is 3.25 inches diagonal at 480x640, so at a normal 14-inch viewing
+The keypad handset's panel is 3.25 inches diagonal at 480x640, so at a normal 14-inch viewing
 distance it subtends about 8 by 10.7 degrees — roughly the size of a credit card held at arm's
 length. A screenshot inspected full-size on a 27-inch monitor tells you almost nothing about
 whether that panel is readable.

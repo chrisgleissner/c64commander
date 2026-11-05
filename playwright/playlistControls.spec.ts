@@ -194,7 +194,7 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(sheet).toBeHidden();
   });
 
-  test("playlist order icons share one accessible 44-pixel row on the Callback viewport @layout", async ({
+  test("playlist order icons share one accessible 44-pixel row on the handset viewport @layout", async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: 320, height: 426 });

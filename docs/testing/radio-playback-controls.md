@@ -1,8 +1,8 @@
 # Radio history and playback controls
 
-## Callback 8020 evidence
+## Keypad handset evidence
 
-Measured on the Callback 8020, using the `c64u-remote` edition, at 320 × 427 CSS
+Measured on the keypad handset, using the `c64u-remote` edition, at 320 × 427 CSS
 pixels (480 × 640 physical pixels, DPR 1.5), with the C64U. Pixel measurements do
 not stand in for these results.
 
@@ -22,7 +22,7 @@ refilling took about five seconds at the limit; the Next measurements above are
 only the subsequent Next operation. The soak demonstrates bounded queue storage,
 not a proof that total process memory can never grow.
 
-The picker uses Android's native key map. On the Callback the right soft key
+The picker uses Android's native key map. On the handset the right soft key
 produces Android Back and the left produces Menu. The app remaps these inside its
 own activity; DocumentsUI does not receive that remapping. Back can first close a
 menu or leave a folder, so the user may need to press the right soft key again.

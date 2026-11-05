@@ -10,12 +10,12 @@
 /**
  * Exhaustive keypad-only reachability and layout gate, driven by real hardware key events.
  *
- * The target device is the Commodore Callback 8020: a 480x640 / DPR 1.5 panel (320 x 426.7 CSS
+ * The target device is the keypad handset: a 480x640 / DPR 1.5 panel (320 x 426.7 CSS
  * px), no Google services, and a physical keypad with the touchscreen disabled by default. The
  * app therefore has to be fully operable with the D-pad, the soft keys and the number keys, and
  * every control has to be both reachable by the focus ring and legible at that size.
  *
- * This walks the ring with `adb shell input keyevent` — the same key codes the Callback's keypad
+ * This walks the ring with `adb shell input keyevent` — the same key codes the handset's keypad
  * produces — and reads the resulting state over CDP after every press. Nothing here dispatches a
  * synthetic DOM event, so a control that only responds to a tap fails the way it would on the
  * real device.
@@ -446,9 +446,9 @@ function grade(routeLabel, { stops, wrapped, final }, descended = new Set()) {
 /**
  * Get the WebView back to its full height before measuring anything.
  *
- * The Pixel that stands in for the Callback has a soft keyboard, and focusing a text field shrinks
+ * The Pixel that stands in for the handset has a soft keyboard, and focusing a text field shrinks
  * the WebView from 427 to 133 CSS px — after which every stop is "off-screen" and the whole sweep
- * is noise. The Callback itself has no IME (physical keypad plus T9), so this is a property of the
+ * is noise. The handset itself has no IME (physical keypad plus T9), so this is a property of the
  * stand-in, not of the app.
  */
 async function dismissKeyboard(evaluate, expectedHeight) {

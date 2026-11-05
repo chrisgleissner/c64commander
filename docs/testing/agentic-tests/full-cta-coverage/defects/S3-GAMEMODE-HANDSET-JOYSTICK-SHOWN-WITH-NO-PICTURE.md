@@ -1,6 +1,6 @@
-# S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE — Game Mode fills a keypad handset's screen with a joystick it cannot operate
+# S3-GAMEMODE-HANDSET-JOYSTICK-SHOWN-WITH-NO-PICTURE — Game Mode fills a keypad handset's screen with a joystick it cannot operate
 
-- ID: S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE
+- ID: S3-GAMEMODE-HANDSET-JOYSTICK-SHOWN-WITH-NO-PICTURE
 - Title: With the picture off, Game Mode shows the on-screen joystick even where the setting says hidden
 - Severity: S3 — nothing breaks, but the screen carries nothing the user can act on
 - Priority: P2
@@ -10,7 +10,7 @@
 - Input method: injected physical key events, no touch
 - Build identity: `0.9.9-rc2-1db2e` (c64u-remote edition, debug)
 - Git SHA: `1db2e0e6`
-- Pixel 4 identity: `9B081FFAZ001WX`, emulating the Callback 8020 at 480x640 @240 dpi (320x427 CSS)
+- Pixel 4 identity: `9B081FFAZ001WX`, emulating the keypad handset at 480x640 @240 dpi (320x427 CSS)
 - Reproduction rate: 1/1, deterministic
 - Preconditions: C64U Remote edition; Live View "Watch" off (the remembered state); launch a `.prg`
   so Game Mode opens by itself.
@@ -18,7 +18,7 @@
 ## What happens
 
 Game Mode opens and the whole screen is an on-screen joystick and a FIRE button, with no C64
-picture. The Callback 8020 has no touchscreen, so **none of it can be operated**. There is nothing
+picture. The keypad handset has no touchscreen, so **none of it can be operated**. There is nothing
 else on the screen.
 
 The variant ships `default_game_mode_joystick: hidden` for exactly this reason. From

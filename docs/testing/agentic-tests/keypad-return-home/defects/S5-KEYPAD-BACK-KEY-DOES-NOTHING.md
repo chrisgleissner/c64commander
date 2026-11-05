@@ -36,7 +36,7 @@ Two separate things were wrong, and each alone is enough to break the key:
    branch before reaching the dispatch that performs the ascend. Dispatching that exact event into
    the page by hand confirmed it: `defaultPrevented` stayed false and the selection did not move.
 
-The consequence for the 8020 user is that OK descends into a card and nothing climbs back out. A
+The consequence for the keypad handset user is that OK descends into a card and nothing climbs back out. A
 card's ring wraps inside itself, so after one OK press on Home the rest of the page — CPU & RAM,
 Ports, Video, Audio, Lighting, Drives, Printers, Streams, Config, System info — could not be
 reached at all without leaving the route with a digit and starting again. The keypad guidance bar

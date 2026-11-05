@@ -12,13 +12,13 @@ about fourteen times the volume of the audio.
 
 Measured on 1 November 2026, one access point, one SSID, two phones, the same C64 Ultimate:
 
-| | Sent by the Ultimate | Pixel 4 (5 GHz) | Callback 8020 (2.4 GHz) |
+| | Sent by the Ultimate | Pixel 4 (5 GHz) | Keypad handset (2.4 GHz) |
 | --- | --- | --- | --- |
 | Multicast, packets/s received at `wlan0` | 3,657 | 3,600 | 585 |
 | Multicast, Mbit/s received at `wlan0` | 22.8 | 23 | 3 |
 | Unicast at the video's rate (3,400 packets/s of 780 bytes), packets/s received | 3,400 | not measured | 3,130 |
 
-The Callback's kernel dropped no packets: they never reached the phone. With multicast and video
+The handset's kernel dropped no packets: they never reached the phone. With multicast and video
 streaming, 17.5% of its audio packets were lost and the audio was concealed and audibly damaged;
 with audio alone, or with unicast, none were. On the Pixel, multicast with video lost about 2.9% of
 the audio, and unicast lost none in a 16 second run.
@@ -52,7 +52,7 @@ keeps succeeding for minutes. A TCP connection to the Ultimate does not put the 
 
 ## The audio guard
 
-A link can be unable to carry both streams. On the Callback's 2.4 GHz link, audio is clean on its
+A link can be unable to carry both streams. On the handset's 2.4 GHz link, audio is clean on its
 own, and loses about 160 packets in the two seconds after the video starts. `AudioLossGuard`
 (`src/lib/streams/audioLossGuard.ts`) stops the video when the audio loses 8% or more of its
 packets in two consecutive one second windows while both streams run, and the Live View controls say

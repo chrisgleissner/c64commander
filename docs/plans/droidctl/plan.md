@@ -172,20 +172,20 @@ on it until phase 7.
       present-but-off-screen, absent. Confirm they fail by removing the `requireOnScreen` intersection —
       the off-screen case must then pass, which is the bug.
 
-## Phase 6 — Resources, the Sailfish stub, and the smoke script
+## Phase 6 — Resources, the handset stub, and the smoke script
 
 **3 source files, 1 script.**
 
 - [ ] `src/resources.ts` — the Android keycode table (name to number, both directions) and the transport
       support matrix from `spec.md` §8.15, served as MCP resources so a caller reads them rather than
       hard-coding a table. `tools/hil/keypad_reachability.mjs:58` is the set that must be present.
-- [ ] `src/transport/sailfish.ts` — the stub. It returns `transport_unavailable` with the §14 probe
+- [ ] `src/transport/ssh.ts` — the stub. It returns `transport_unavailable` with the §14 probe
       procedure in the message. Its comments carry the two rules from `spec.md` §7.4: verify by artifact
-      rather than exit code, because `uiautomator dump` under `appsupport-attach` has been observed
+      rather than exit code, because `uiautomator dump` under `container-attach` has been observed
       returning 0 while writing nothing; and prefer a container adb connection if one can be established,
       because that collapses most of §14.
 - [ ] Unit-test the stub: every capability reports unsupported, and the message names the check that
-      would settle it. **Do not write a task, gate or acceptance item whose venue is a Sailfish device.**
+      would settle it. **Do not write a task, gate or acceptance item whose venue is a Linux handset.**
       `AGENTS.md:1004-1015` is explicit that such an item is not blocked but unrunnable.
 - [ ] `droidctl/scripts/smoke-device.mjs` — the manual hardware script from `spec.md` §11.6. It takes a
       required `--target`, refuses to run without one, and writes an artifact bundle. It is not wired into
@@ -274,5 +274,5 @@ test name, a file path, a pull request number. An item without evidence is not d
 7. `scripts/build-android-apks.mjs` no longer contains a single-device fallback, and
    `tools/hil/merge_gate.mjs` passes an explicit serial.
 8. `droidmind` is absent from `.mcp.json`, and no code path in `c64scope/src/` references it.
-9. The Sailfish stub is present, unit-tested, and its message names the checks from `spec.md` §14. No
-   task, gate or remaining-work item anywhere names a Sailfish device as its venue.
+9. The handset stub is present, unit-tested, and its message names the checks from `spec.md` §14. No
+   task, gate or remaining-work item anywhere names a Linux handset as its venue.

@@ -104,7 +104,7 @@ export interface JoystickVisibilityInput {
  * explicit `hidden`, which on the keypad handset — where that is the shipped default
  * because the device cannot operate a touch control, and Game Mode now opens by itself
  * on launch — filled the screen with a joystick nobody could touch and no picture.
- * `RemoteInputSheet` fills that space instead. S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE.
+ * `RemoteInputSheet` fills that space instead. S3-GAMEMODE-HANDSET-JOYSTICK-SHOWN-WITH-NO-PICTURE.
  */
 export const resolveJoystickVisibility = ({
   setting,

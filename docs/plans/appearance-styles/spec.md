@@ -24,7 +24,7 @@ Seven styles across two modes give **twelve palettes**. Two of the seven are dar
 1. Let the user pick between visibly different experiences without ever producing an app that is
    hard to read.
 2. Draw on the two design languages the product sits between: the hardware console it controls, and
-   the Callback 8020's industrial and on-screen design.
+   the keypad handset's industrial and on-screen design.
 3. Keep the set curated. Every style is authored, reviewed and gated. There is no free-form colour
    picker and no user-defined style.
 4. Make the set extensible **by editing text**, so a style can be added late without touching
@@ -58,7 +58,7 @@ Seven styles across two modes give **twelve palettes**. Two of the seven are dar
 | D3  | Seven styles. Twelve palettes.                                                                                                                                                               | Narrowed from twenty candidates; see §6.                                                                                                                                                                    |
 | D4  | "Match my device" is an eighth entry in the picker. It reads the Ultimate's `Color Scheme` **on connect and on manual refresh**, never on a poll.                                            | The device's network stack is fragile under load, and repainting mid-task is worse than being a few seconds stale.                                                                                          |
 | D5  | One style for the whole app, in its own localStorage key. Not per saved device.                                                                                                              | Style is a statement about the app, not a property of an Ultimate. Also avoids repainting during a device switch, already the app's most delicate transition.                                               |
-| D6  | Both build variants default to `modem-grey`.                                                                                                                                                 | It is today's palette, cleaned up, so nobody's app changes appearance on upgrade. A variant can override the default in `variants.yaml` once there is real 8020 hardware to judge against.                  |
+| D6  | Both build variants default to `modem-grey`.                                                                                                                                                 | It is today's palette, cleaned up, so nobody's app changes appearance on upgrade. A variant can override the default in `variants.yaml` once there is real keypad handset hardware to judge against.                  |
 | D7  | The picker is a list of rows in the existing Settings → Appearance card, each with a live swatch. Selecting applies immediately; the app is the preview.                                     | Matches Text size and Display profile, needs no new route, and is reachable by D-pad in the same number of presses as the settings beside it.                                                               |
 | D8  | A developer-only `/dev/styles` route renders every widget; Playwright screenshots it per style and mode.                                                                                     | Because it mounts the real components, the gallery cannot drift from the app.                                                                                                                               |
 | D9  | Styles are defined in `styles/appearance-styles.yaml`, compiled to `src/generated/appStyles.ts` and a generated CSS layer by `scripts/compile-styles.mjs`, with a `styles:check` drift gate. | The user's requirement, and the established pattern in this repo.                                                                                                                                           |
@@ -120,7 +120,7 @@ rejected. Both change text width, so both can change wrapping, so both would bre
 
 ### 5.3 The focus ring is a first-class token
 
-On the Callback 8020 the touchscreen is off by default and the focus ring **is** the pointer. In
+On the keypad handset the touchscreen is off by default and the focus ring **is** the pointer. In
 the first draft of these palettes the ring was inherited from `--border`, which measured between
 1.30:1 and 1.66:1 against its own surface in six of the seven styles — invisible at arm's length.
 
@@ -143,23 +143,23 @@ Therefore:
 
 ### 6.1 How twenty became seven
 
-Twenty candidates were authored as full token sets, rendered as a real app screen at the Callback
-8020 viewport (320 x 427 CSS px), and inspected side by side before the cut was made.
+Twenty candidates were authored as full token sets, rendered as a real app screen at the handset
+Keypad handset viewport (320 x 427 CSS px), and inspected side by side before the cut was made.
 
 Selection criteria, in order: passes the contrast gates; is distinguishable from the other six at
 a glance; covers a span from very neutral to fairly loud; has a defensible link to either the
-hardware console or the 8020; works at 320 px with a keypad focus ring.
+hardware console or the keypad handset; works at 320 px with a keypad focus ring.
 
 **Cut, and why:**
 
 | Candidate            | Why it was cut                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ProtoPaper           | Its light mode is the 8020 launcher exactly, which is a real virtue — but its dark mode is a generic neutral and the pair collides with both `modem-grey` and `full-sun`. `full-sun` keeps the discipline and adds a reason to exist.                                                                                                                                                                                       |
+| ProtoPaper           | Its light mode is the keypad handset launcher exactly, which is a real virtue — but its dark mode is a generic neutral and the pair collides with both `modem-grey` and `full-sun`. `full-sun` keeps the discipline and adds a reason to exist.                                                                                                                                                                                       |
 | SX Silver            | Handsome, but its dark rendition is indistinguishable from `modem-grey` dark. Hue distinction only in light mode is not enough to earn a row in the picker.                                                                                                                                                                                                                                                             |
 | Nightshift           | A good idea (warm charcoal for night reading) beaten by `amber-glow`, which occupies the same warm-dark territory with far better provenance.                                                                                                                                                                                                                                                                           |
 | Blue Sky             | The nicest light-only candidate of the twenty. Cut because its dark mode duplicates Deep Blue and its light mode duplicates `modem-grey`'s role at higher saturation.                                                                                                                                                                                                                                                   |
 | Phosphor (green CRT) | Green-on-black is the most tired retro trope available, and it is fatiguing over a long file list. Also depended on the texture layer, which was cut.                                                                                                                                                                                                                                                                   |
-| Amber CRT            | Folded into `amber-glow`, which has the same warmth with a real source: the 8020's rear VFD.                                                                                                                                                                                                                                                                                                                            |
+| Amber CRT            | Folded into `amber-glow`, which has the same warmth with a real source: the keypad handset's rear VFD.                                                                                                                                                                                                                                                                                                                            |
 | Deep Blue            | A saturated indigo and periwinkle pair. Its light rendition is washy periwinkle and its dark duplicates Blue Sky. `modem-grey`'s indigo primary already carries this hue.                                                                                                                                                                                                                                               |
 | Workshop             | The only candidate that varied the _rendering idiom_ rather than hue — bevelled panels, period desktop chrome. Genuinely tempting, and it is legal under D2. Cut on three counts: the worst measured contrast of all twenty (2.26:1 primary on surface); 1 px bevel highlights smear at DPR 1.5; and no provenance in either device. Its idiom is preserved as a future `edge: bevel` value that any palette can adopt. |
 | Spectrum             | Claimed the Commodore rainbow and then shipped a purple primary — the rainbow never appeared on screen. The idea survives as `--app-bar-band` (§5.1), which any future style can use properly.                                                                                                                                                                                                                          |
@@ -171,7 +171,7 @@ hardware console or the 8020; works at 320 px with a keypad focus ring.
 
 ### 6.2 The set
 
-Each was rendered at the true 8020 viewport across two screens — page chrome with cards, buttons,
+Each was rendered at the true keypad handset viewport across two screens — page chrome with cards, buttons,
 focus state, badges, switch and progress; and an overlay screen with dialog, bottom sheet, scrim and
 dimmed background — and every palette below passes every gate in §9. Full values are in Appendix A;
 the hex in the tables and the HSL in the appendix are the same colours.
@@ -336,10 +336,10 @@ Maximum contrast, keypad first. Heavy edges, no fill games.
 | Style              | Serves                                                                                                                                     | Provenance                                                                          |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | **Modem Grey**     | The default. Everyone. Deliberately unremarkable.                                                                                          | Today's app, cleaned up.                                                            |
-| **Breadbin Beige** | Daylight reading; the warm end; older users.                                                                                               | The 8020's BASIC Beige body with its royal-blue `C=` key.                           |
+| **Breadbin Beige** | Daylight reading; the warm end; older users.                                                                                               | The keypad handset's BASIC Beige body with its royal-blue `C=` key.                           |
 | **Petrol Teal**    | The cool end. The best-executed light/dark pair of the twenty.                                                                             | The translucent petrol shell colourway.                                             |
 | **Neon Pop**    | Younger users, and the only style that reads as fun. Translucent covers by day, arcade cabinet by night.                                   | Y2K translucent plastics; the dark mode is a games cabinet. |
-| **Amber Glow**     | Night use; the warm dark. Amber is spent only on the primary, the selection and numeric readouts — the things a tube would actually light. | The 8020's rear VFD screen, "inspired by classic Commodore calculators of the 70s". |
+| **Amber Glow**     | Night use; the warm dark. Amber is spent only on the primary, the selection and numeric readouts — the things a tube would actually light. | The keypad handset's rear VFD screen, "inspired by classic Commodore calculators of the 70s". |
 | **Vault Black**    | The machine itself. Split indigo/rust band under the app bar, hairline panel on true black, grey rows with a **white** selection.          | Console hardware, seen in the dark.                                                 |
 | **Full Sun**         | Maximum contrast and the keypad-first case. Heavy edges, no fill games, a ring you cannot miss.                                            | The accessibility entry, and the reference the other six are measured against.      |
 

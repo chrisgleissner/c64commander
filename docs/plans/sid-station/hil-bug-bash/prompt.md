@@ -151,7 +151,7 @@ a PR or touch remote state unless separately instructed — except that you may 
   restore it to ≤10 immediately and say so. At volume 10 a microphone at normal distance is not a
   usable dropout detector (6 dB SNR); put the mic against the grille, take a line feed, or —
   better — instrument the audio path and timestamp the buffer callbacks.
-- The Callback 8020 does not exist. The Pixel 4 stands in for every phone. Never gate work on it.
+- The keypad handset does not exist. The Pixel 4 stands in for every phone. Never gate work on it.
 
 ### Method rules
 

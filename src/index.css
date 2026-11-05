@@ -72,7 +72,7 @@
 /*
  * The smallest supported screen gets a tighter frame.
  *
- * Measured from Commodore's own Callback 8020 renders, the device's UI spends 49 device px (33 CSS
+ * Measured from Commodore's own keypad handset renders, the device's UI spends 49 device px (33 CSS
  * px) on its status bar and 30 device px (20 CSS px) on its soft-key legend — 12.4% of the panel,
  * leaving 87.6% for content. The app's own chrome was more than twice that at the bottom alone.
  * These overrides bring the frame closer to what the handset itself does while keeping every tab

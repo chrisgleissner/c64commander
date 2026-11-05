@@ -30,7 +30,7 @@ question about a different sense", and *Local, Remote, Both* ordered as "a progr
 device outwards". Both render as a `<div role="group">` with a `<Label>` above and a
 `<div className="flex flex-wrap gap-2">` holding three `<Button>`s.
 
-**The problem is the compact display profile.** That is the Callback 8020: a 480x640 panel at a
+**The problem is the compact display profile.** That is the keypad handset: a 480x640 panel at a
 device pixel ratio of 1.5, so the page gets **320x427 CSS pixels**. Type does not shrink there — the
 profile deliberately scales it *up*, so `text-xs` renders at 16px and `text-sm` at 18px — and touch
 targets stay at 44px. The result is that three buttons at 18px type need 305px of width and the
@@ -264,7 +264,7 @@ after a second tap on the selected segment. Every call site must write
 `onValueChange={(next) => { if (next) setX(next); }}` — the shared wrapper in
 `src/components/ui/toggle-group.tsx` does **not** do this for you.
 
-### 4b. Keypad / D-pad — the Callback 8020, which has no touchscreen
+### 4b. Keypad / D-pad — the keypad handset, which has no touchscreen
 
 The app's focus ring is a DOM walk, not a tab-order walk. `src/lib/input/discovery.ts` lists
 `"button"` by tag name and `[role='radio']` in `INTERACTIVE_SELECTOR`, and nothing filters on
@@ -409,7 +409,7 @@ These share the `flex flex-wrap gap-2` markup and nothing else.
 
 ### 5c. Category (c) — out of scope
 
-Developer-mode-only and lab surfaces, which the 8020 user never sees:
+Developer-mode-only and lab surfaces, which the keypad handset user never sees:
 `DeviceSwitchLabPage.tsx:397` (route `/__device-switch__`, test-probe builds only), the three
 `LightingStudioDialog` rows and `HomePage.tsx:1693` (feature flag `lighting_studio_enabled` is
 `developer_only`), and `SidRadioSettingsSection.tsx:190` (SID emulation engine, gated on developer

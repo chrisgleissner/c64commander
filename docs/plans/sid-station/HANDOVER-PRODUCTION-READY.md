@@ -328,7 +328,7 @@ before switching**:
    entirely.
 2. Replace the WASM engine with a **native Android SID engine** (JNI/NDK libsidplayfp) behind the
    same `LocalSidPlaybackController` interface — note this was originally rejected because
-   SailfishOS/Callback 8020 is the primary target, so it must stay a per-platform implementation
+   the handset OS/keypad handset is the primary target, so it must stay a per-platform implementation
    detail, not a change to the app's contract.
 3. Failing both, **withdraw the on-device engine from the release**: keep `DEFAULT_PLAYBACK_ENGINE`
    as `"c64"`, hide the "Play on" control, and ship SID Radio on the C64 path alone. Shipping an
@@ -385,7 +385,7 @@ Also record on-device **CPU % (p95)** and **battery** over the soak (§12.6).
 
 - **G1** — real `.sidcorr` loads/parses on **iOS device** (web + host + Android already ✓).
 - **L1** — **done**: WASM instantiate + render is proven on the **Pixel 4**, which is the phone-side
-  venue. The Callback 8020 is unreleased, so there is no pending item here and none should be
+  venue. The keypad handset is unreleased, so there is no pending item here and none should be
   re-created (AGENTS.md) — its perf floor is a design constraint to build for, not a measurement.
 - **L3** — on-device battery/CPU gate; background-audio behaviour documented; native-sink escape
   hatch noted.

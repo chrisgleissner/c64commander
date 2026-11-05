@@ -576,7 +576,7 @@ test.describe("The Demo Mode offer on a small screen", () => {
     }
   });
 
-  // The Callback 8020's 480x640 panel is 320x426.7 CSS pixels, the narrowest screen this app
+  // The keypad handset's 480x640 panel is 320x426.7 CSS pixels, the narrowest screen this app
   // ships on. The offer is a dialog carrying a paragraph of prose, so it is exactly the shape of
   // thing that overflows there while looking fine on a phone.
   for (const viewport of [

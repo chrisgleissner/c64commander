@@ -22,7 +22,7 @@
 3. **User is always in control.** Every surface that shows the mirror can start and
    stop it. Stopping anywhere stops the shared session everywhere.
 4. **Degrade gracefully.** Audio has no CPU gate. Video is frame-throttleable and
-   size-independent (native 384×272 decode, GPU-scaled), so even the Callback 8020
+   size-independent (native 384×272 decode, GPU-scaled), so even the keypad handset
    can show a check preview; immersive is possible there but heavily throttled.
 5. **Design language.** Reuse existing primitives (cards, `AppSheet`, `Button`,
    `Badge`, icons already in the app). No new visual paradigm.
@@ -103,7 +103,7 @@ canvases (Home check + Remote Input) can render the same stream. The old single-
 
 ## 7. Immersive Screen Control (zoom / pan / follow) — Remote Input game mode
 
-Some devices (e.g. the Callback 8020) are driven entirely by a physical keypad, so the
+Some devices (e.g. the keypad handset) are driven entirely by a physical keypad, so the
 video mirror must become a first-class, controllable screen — not just a picture. This
 lives in the Remote Input sheet's existing **game mode**: when video is on and game mode
 is entered, the mirror maximises to the **full width** of the sheet (height proportional,
@@ -132,7 +132,7 @@ a fixed, obvious role.
 ### 7.2 Zoom & pan
 
 - Native 384×272 decode, **GPU-scaled** (CSS transform) — CPU cost is fixed regardless of
-  zoom, so even the Callback 8020 can zoom in smoothly.
+  zoom, so even the keypad handset can zoom in smoothly.
 - Continuous scale 1×–8×; pan is clamped so the view can't leave the frame.
 - **Gestures:** pinch-zoom (keeps the pinch focal point fixed), one-finger drag to pan,
   double-tap to zoom toward a point, two-finger double-tap / a `⤢` button to reset-to-fit.

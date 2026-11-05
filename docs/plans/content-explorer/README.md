@@ -21,7 +21,7 @@ timings) so the build doesn't re-derive the protocol.
 | [`01-disk-explorer.md`](./01-disk-explorer.md)     | Browse inside images; Run/Load/Mount & Load any file — parser, extraction rule, launch sequences                                           | Implemented |
 | [`02-launch-safety.md`](./02-launch-safety.md)     | Cartridge-parked direct launches + optional boot-menu answer for Mount & Load                                                              | Implemented |
 | [`03-in-image-search.md`](./03-in-image-search.md) | Media-index v2 with in-image child entries, keyed by path+size+mtime; scoped, time-budgeted search                                         | Implemented |
-| [`04-live-mirror.md`](./04-live-mirror.md)         | Audio Mirror (first-class) and Video Mirror (optional, CPU-budgeted) — wire formats, decode, recording, Callback 8020 budget               | Implemented |
+| [`04-live-mirror.md`](./04-live-mirror.md)         | Audio Mirror (first-class) and Video Mirror (optional, CPU-budgeted) — wire formats, decode, recording, keypad handset budget               | Implemented |
 | [`05-new-disk.md`](./05-new-disk.md)               | Create a formatted blank image on the device (endpoint confirmed)                                                                          | Implemented |
 
 ## Capabilities → flags

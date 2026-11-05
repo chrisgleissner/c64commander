@@ -113,7 +113,7 @@ export default defineConfig({
   projects: getActiveProjects(),
   use: {
     baseURL: `http://127.0.0.1:${serverPort}`,
-    ...(process.env.CALLBACK_BROWSER_WS ? { connectOptions: { wsEndpoint: process.env.CALLBACK_BROWSER_WS } } : {}),
+    ...(process.env.HANDSET_BROWSER_WS ? { connectOptions: { wsEndpoint: process.env.HANDSET_BROWSER_WS } } : {}),
     /*
      * Every context starts with the first-run tour already taken.
      *

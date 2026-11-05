@@ -48,7 +48,7 @@ the rule wins.
      target.
    - Every new control fits the `compact` profile (320×426 CSS px) without horizontal scroll.
    - Text stays at or above 14 px (16 px for body text); nothing shrinks to fit.
-   - Verify on the Callback 8020 with the `c64u-remote` APK.
+   - Verify on the keypad handset with the `c64u-remote` APK.
 4. **Wording.** Sentence case and American English. Use product names as they are (SID Radio, Live View, HVSC).
    Labels are verbs that say exactly what happens.
 5. **No silent catch.** Every caught error is logged at WARN or ERROR with context, or rethrown with context.
@@ -198,7 +198,7 @@ the lock screen cannot show elapsed time.
   - Pull down the shade, drag the seek bar with `droid_input.swipe`, and confirm the on-screen counter follows.
     Take a screenshot.
   - Repeat the dispatch on C64 playback against `c64u`.
-- **Callback 8020:** record whether the system shows media controls at all. Not an acceptance gate; this is
+- **Keypad handset:** record whether the system shows media controls at all. Not an acceptance gate; this is
   information for the manual.
 
 ## QW-ALL Play all search results
@@ -443,7 +443,7 @@ the lock screen cannot show elapsed time.
     note.
   - Live View audio from `c64u` also draws.
   - Screenshot both.
-- **Callback 8020** (`c64u-remote` APK): open the card, walk to the group with the keypad, and switch views. The
+- **Keypad handset** (`c64u-remote` APK): open the card, walk to the group with the keypad, and switch views. The
   header fits; record a screenshot at 320×427.
 
 ## Delivery
@@ -462,7 +462,7 @@ the lock screen cannot show elapsed time.
   - `npm run screenshots` for the changed surfaces only. Revert the other drift with explicit paths, never a bulk
     checkout.
 - **Hardware:**
-  - Deploy the default APK to the Pixel 4 and the `c64u-remote` APK to the Callback 8020 through droidctl.
+  - Deploy the default APK to the Pixel 4 and the `c64u-remote` APK to the keypad handset through droidctl.
   - Run the verification steps above.
   - Run the merge gate:
     `node tools/hil/merge_gate.mjs --host c64u --iface <lan ip> --json artifacts/hil-gate.json`.

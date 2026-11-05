@@ -27,7 +27,7 @@ import {
 /**
  * Whether each dialog and sheet is usable on the smallest screen the app supports.
  *
- * `smallScreenLayoutIntegrity.spec.ts` and `callbackSmallScreen.spec.ts` already prove that
+ * `smallScreenLayoutIntegrity.spec.ts` and `keypadHandsetSmallScreen.spec.ts` already prove that
  * nothing is clipped and that text fits. Both passed while the Add items browser was showing one
  * row of a file list on a 320x427 panel, because a surface that spends four fifths of the screen
  * on its own chrome is not clipping anything. This spec measures what is left for the content.

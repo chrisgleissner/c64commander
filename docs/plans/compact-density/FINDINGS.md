@@ -1,7 +1,7 @@
 # Compact profile: where the vertical and horizontal space goes
 
 Measured on the six primary tab routes at the compact profile's reference viewport,
-320 x 426 CSS px (a 480x640 panel at DPR 1.5 — the Callback 8020). Every number below
+320 x 426 CSS px (a 480x640 panel at DPR 1.5 — the keypad handset). Every number below
 comes from `getBoundingClientRect()` and `getComputedStyle()` on the rendered page,
 driven by the existing Playwright harness (`playwright/displayProfileViewports.ts`,
 `playwright/uiMocks.ts`, `tests/mocks/mockC64Server`), not from reading stylesheets.
