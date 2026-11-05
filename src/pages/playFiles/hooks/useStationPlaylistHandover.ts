@@ -27,6 +27,8 @@ import {
   unreadSavedHandover,
   shouldRestorePlaylist,
   withAppendedStationItems,
+  withoutStationItems,
+  withoutUpcomingItems,
   writeHandoverRecord,
   clearHandoverRecord,
   type StationHandover,
@@ -180,6 +182,18 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     if (retainedSelection.size !== queue.selectedPlaylistIds.size) queue.setSelectedPlaylistIds(retainedSelection);
   }, [playlist, currentIndex, stationActive, ready, params.playback.isPlaylistLoading, commit]);
 
+  const dropUpcomingStationItems = useCallback(
+    (shouldDrop: (item: PlaylistItem) => boolean) => {
+      const { queue } = latestRef.current;
+      const { playlist, removedIds } = withoutUpcomingItems(queue.playlist, queue.currentIndex, shouldDrop);
+      if (removedIds.size === 0) return;
+      const current = handoverRef.current;
+      if (current) commit(withoutStationItems(current, removedIds));
+      queue.setPlaylist(playlist);
+    },
+    [commit],
+  );
+
   const requestStop = useCallback(() => {
     setShuffleRequested(false);
     onQueueKeptRef.current = null;
@@ -304,6 +318,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     stationOrdersQueue,
     startStationQueue,
     appendStationItems,
+    dropUpcomingStationItems,
     requestStop,
     requestShuffleQueue: (onKept: () => void) => {
       onQueueKeptRef.current = onKept;

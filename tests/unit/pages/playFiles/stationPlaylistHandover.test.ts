@@ -20,6 +20,8 @@ import {
   restoredPlaylistState,
   shouldRestorePlaylist,
   withAppendedStationItems,
+  withoutStationItems,
+  withoutUpcomingItems,
   writeHandoverRecord,
   type StationHandover,
 } from "@/pages/playFiles/stationPlaylistHandover";
@@ -88,6 +90,18 @@ describe("stationPlaylistHandover", () => {
     expect(isStationQueueEdited(queue, saved.stationItemIds)).toBe(false);
     expect(isStationQueueEdited([...queue, item("a")], saved.stationItemIds)).toBe(true);
     expect(isStationQueueEdited([stationA[0], item("radio:3")], saved.stationItemIds)).toBe(true);
+  });
+
+  it("prunes only items after the current one and keeps the queue reading as the station's own", () => {
+    const queue = [item("radio:1"), item("radio:2"), item("radio:3"), item("radio:4")];
+    const tooShort = new Set(["radio:1", "radio:2", "radio:4"]);
+
+    const { playlist, removedIds } = withoutUpcomingItems(queue, 1, (entry) => tooShort.has(entry.id));
+
+    expect(ids(playlist)).toEqual(["radio:1", "radio:2", "radio:3"]);
+    expect([...removedIds]).toEqual(["radio:4"]);
+    const saved = withoutStationItems(withAppendedStationItems(savedFromMine(), queue.slice(2)), removedIds);
+    expect(isStationQueueEdited([...stationA, item("radio:3")], saved.stationItemIds)).toBe(false);
   });
 
   it("keeps only the tune that is playing, so it ends the queue rather than being cut", () => {

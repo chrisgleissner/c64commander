@@ -1657,6 +1657,7 @@ export default function PlayFilesPage() {
     // The station's `resolvePath` reads an index built as a side effect of loading the HVSC
     // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
+    dropUpcomingItems: (shouldDrop) => stationHandover.dropUpcomingStationItems(shouldDrop),
   });
 
   const sidRadioWhyThisTune = sidRadio.station ? whyThisTuneFor(sidRadio.station) : null;

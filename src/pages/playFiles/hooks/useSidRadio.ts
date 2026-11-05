@@ -23,8 +23,8 @@ import {
 } from "@/lib/sidRadio/rankingStore";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
-import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
-import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
+import { loadSidRadioMinSeconds, SID_RADIO_MIN_SECONDS_KEY } from "@/lib/config/appSettings";
+import { isBelowStationMinimum, StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import { DEFAULT_STATION_BALANCE, type StationSeed } from "@/lib/sidRadio/stationEngine";
 import { loadCollectionPool } from "@/lib/sidRadio/collectionPool";
 import { sidRadioCollectionLabel } from "@/lib/sidRadio/stilCollectionCatalog";
@@ -93,6 +93,11 @@ export interface UseSidRadioParams {
    * can answer. See `StationQueueProviderOptions.ensureResolvable`.
    */
   ensureResolvable?: () => Promise<unknown>;
+  /**
+   * Take not-yet-played items out of the queue. Used when the minimum length is raised while a
+   * station runs, so the lookahead it had already queued obeys the new minimum too.
+   */
+  dropUpcomingItems?: (shouldDrop: (item: PlaylistItem) => boolean) => void;
   randomSeed?: () => number;
 }
 
@@ -143,13 +148,15 @@ export interface UseSidRadioResult {
   dismissNotice: () => void;
 }
 
+const STATION_ITEM_ID_PREFIX = "radio:";
+
 const buildStationItem = (input: {
   virtualPath: string;
   songNr: number;
   trackOrdinal: number;
   durationSeconds: number | null;
 }): PlaylistItem => ({
-  id: `radio:${input.virtualPath}#${input.songNr}`,
+  id: `${STATION_ITEM_ID_PREFIX}${input.virtualPath}#${input.songNr}`,
   request: { source: "hvsc", path: input.virtualPath, songNr: input.songNr },
   category: getPlayCategory(input.virtualPath) ?? "sid",
   label: basename(input.virtualPath),
@@ -356,7 +363,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         initialExclude,
         initialRecent,
         // A collection is a curated list and its size is a promise: every member plays, however short.
-        minSeconds: seed.kind === "collection" ? 0 : loadSidRadioMinSeconds(),
+        minSeconds: seed.kind === "collection" ? 0 : loadSidRadioMinSeconds,
         resolveDuration: params.resolveDurationSeconds,
         ensureResolvable: params.ensureResolvable,
         computeCandidates: async (exclude, recent, count) => {
@@ -816,6 +823,23 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     }
     lastIndexRef.current = currentIndex;
   }, [currentIndex, station]);
+
+  const dropUpcomingItemsRef = useRef(params.dropUpcomingItems);
+  dropUpcomingItemsRef.current = params.dropUpcomingItems;
+  useEffect(() => {
+    if (!station || seedRef.current.seed.kind === "collection") return;
+    const onSettingChanged = (event: Event) => {
+      if ((event as CustomEvent<{ key?: string }>).detail?.key !== SID_RADIO_MIN_SECONDS_KEY) return;
+      const minSeconds = loadSidRadioMinSeconds();
+      dropUpcomingItemsRef.current?.(
+        (item) =>
+          item.id.startsWith(STATION_ITEM_ID_PREFIX) &&
+          isBelowStationMinimum(item.durationMs === undefined ? null : item.durationMs / 1000, minSeconds),
+      );
+    };
+    window.addEventListener("c64u-app-settings-updated", onSettingChanged);
+    return () => window.removeEventListener("c64u-app-settings-updated", onSettingChanged);
+  }, [station]);
 
   useEffect(() => {
     return () => {

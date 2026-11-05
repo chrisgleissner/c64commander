@@ -22,6 +22,7 @@ import type {
 } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { DEFAULT_STATION_BALANCE, type StationResult } from "@/lib/sidRadio/stationEngine";
 import { addLog } from "@/lib/logging";
+import { saveSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { toast } from "@/hooks/use-toast";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
@@ -148,6 +149,27 @@ describe("useSidRadio", () => {
     });
     expect(client.load).not.toHaveBeenCalled();
     expect(result.current.active).toBe(false);
+  });
+
+  it("takes queued station tunes shorter than a raised minimum back out of the queue", async () => {
+    saveSidRadioMinSeconds(5);
+    const client = makeClient();
+    const dropUpcomingItems = vi.fn();
+    const params = baseParams(client, { resolveDurationSeconds: () => 10, dropUpcomingItems });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    const queued = (params.startPlaylist as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(queued.length).toBeGreaterThan(0);
+    expect(dropUpcomingItems).not.toHaveBeenCalled();
+
+    act(() => saveSidRadioMinSeconds(15));
+
+    expect(dropUpcomingItems).toHaveBeenCalledTimes(1);
+    const shouldDrop = dropUpcomingItems.mock.calls[0][0];
+    expect(queued.every((item: unknown) => shouldDrop(item))).toBe(true);
+    expect(shouldDrop({ id: "a", path: "/a.sid", durationMs: 2000 })).toBe(false);
   });
 
   it("stops the station", async () => {
