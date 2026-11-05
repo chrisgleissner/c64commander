@@ -10,8 +10,8 @@ package uk.gleissner.c64commander
 
 import android.content.Context
 import android.media.MediaMetadata
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
@@ -47,29 +47,29 @@ class MediaSessionPublisherTest {
     }
 
     private val liveActions =
-            PlaybackState.ACTION_PLAY or
-                    PlaybackState.ACTION_PAUSE or
-                    PlaybackState.ACTION_PLAY_PAUSE or
-                    PlaybackState.ACTION_STOP or
-                    PlaybackState.ACTION_SKIP_TO_NEXT or
-                    PlaybackState.ACTION_SKIP_TO_PREVIOUS
+            PlaybackStateCompat.ACTION_PLAY or
+                    PlaybackStateCompat.ACTION_PAUSE or
+                    PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                    PlaybackStateCompat.ACTION_STOP or
+                    PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                    PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
 
     @Test
     fun liveSessionOffersTheFullTransport() {
-        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val state = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
-        assertEquals(PlaybackState.STATE_PLAYING, state.state)
+        assertEquals(PlaybackStateCompat.STATE_PLAYING, state.state)
         assertEquals(liveActions, state.actions)
         assertEquals(1.0f, state.playbackSpeed)
     }
 
     @Test
     fun staleSessionOffersStopOnly() {
-        val state = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = true)
+        val state = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = true)
 
-        assertEquals(PlaybackState.STATE_PAUSED, state.state)
-        assertEquals(PlaybackState.ACTION_STOP, state.actions)
-        assertEquals(0L, state.actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS)
+        assertEquals(PlaybackStateCompat.STATE_PAUSED, state.state)
+        assertEquals(PlaybackStateCompat.ACTION_STOP, state.actions)
+        assertEquals(0L, state.actions and PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
     }
 
     @Test
@@ -114,7 +114,7 @@ class MediaSessionPublisherTest {
 
     @Test
     fun metadataCarriesTheAlbumOnlyWhenThereIsOne() {
-        val session = MediaSession(context, "test")
+        val session = MediaSessionCompat(context, "test")
 
         publisher.updateNowPlaying(session, "Commando", null, null, "Tune 3 of 19")
         assertEquals("Tune 3 of 19", RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_ALBUM))
@@ -125,17 +125,17 @@ class MediaSessionPublisherTest {
 
     @Test
     fun theLockScreenHasNoPositionUntilTheWebLayerReportsOne() {
-        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val state = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
-        assertEquals(PlaybackState.PLAYBACK_POSITION_UNKNOWN, state.position)
+        assertEquals(PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, state.position)
     }
 
     @Test
     fun aReportedPositionAdvancesAtSpeedOneWhilePlaying() {
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 61_000L, playing = true, seekable = false)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 61_000L, playing = true, seekable = false)
 
         nowMs += 2_000L
-        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val state = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
         assertEquals(63_000L, state.position)
         assertEquals(1.0f, state.playbackSpeed)
@@ -144,10 +144,10 @@ class MediaSessionPublisherTest {
 
     @Test
     fun aReportedPausedPositionHasSpeedZeroAndStandsStill() {
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 61_000L, playing = false, seekable = false)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 61_000L, playing = false, seekable = false)
 
         nowMs += 30_000L
-        val state = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val state = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
         assertEquals(61_000L, state.position)
         assertEquals(0.0f, state.playbackSpeed)
@@ -155,15 +155,15 @@ class MediaSessionPublisherTest {
 
     @Test
     fun theServicePausingFreezesThePositionWhereItWasAndResumingContinuesFromThere() {
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 10_000L, playing = true, seekable = false)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 10_000L, playing = true, seekable = false)
 
         nowMs += 3_000L
-        val paused = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
+        val paused = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = false)
         nowMs += 60_000L
-        val stillPaused = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
-        val resumed = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val stillPaused = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = false)
+        val resumed = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
         nowMs += 2_000L
-        val running = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val running = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
         assertEquals(13_000L, paused.position)
         assertEquals(0.0f, paused.playbackSpeed)
@@ -175,12 +175,12 @@ class MediaSessionPublisherTest {
 
     @Test
     fun aStaleSessionFreezesThePositionAndContinuesWhenTheWebLayerReturns() {
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 10_000L, playing = true, seekable = true)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 10_000L, playing = true, seekable = true)
 
         nowMs += 4_000L
-        val stale = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = true)
+        val stale = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = true)
         nowMs += 20_000L
-        val back = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val back = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
         assertEquals(14_000L, stale.position)
         assertEquals(0.0f, stale.playbackSpeed)
@@ -189,31 +189,31 @@ class MediaSessionPublisherTest {
 
     @Test
     fun aPositionReportedWhileFrozenRestartsFromTheReportedValue() {
-        publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = false)
+        publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = false)
         nowMs += 5_000L
-        publisher.updatePosition(null, PlaybackState.STATE_PAUSED, false, 70_000L, playing = true, seekable = true)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PAUSED, false, 70_000L, playing = true, seekable = true)
         nowMs += 1_000L
 
-        val resumed = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, stale = false)
+        val resumed = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, stale = false)
 
         assertEquals(70_000L, resumed.position)
     }
 
     @Test
     fun seekToIsOfferedOnlyToASeekableLiveSession() {
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 0L, playing = true, seekable = false)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 0L, playing = true, seekable = false)
         assertEquals(
                 0L,
-                publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, false).actions and PlaybackState.ACTION_SEEK_TO,
+                publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, false).actions and PlaybackStateCompat.ACTION_SEEK_TO,
         )
 
-        publisher.updatePosition(null, PlaybackState.STATE_PLAYING, false, 0L, playing = true, seekable = true)
-        val live = publisher.buildPlaybackState(PlaybackState.STATE_PLAYING, false)
-        assertEquals(PlaybackState.ACTION_SEEK_TO, live.actions and PlaybackState.ACTION_SEEK_TO)
-        assertEquals(liveActions or PlaybackState.ACTION_SEEK_TO, live.actions)
+        publisher.updatePosition(null, PlaybackStateCompat.STATE_PLAYING, false, 0L, playing = true, seekable = true)
+        val live = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PLAYING, false)
+        assertEquals(PlaybackStateCompat.ACTION_SEEK_TO, live.actions and PlaybackStateCompat.ACTION_SEEK_TO)
+        assertEquals(liveActions or PlaybackStateCompat.ACTION_SEEK_TO, live.actions)
 
-        val stale = publisher.buildPlaybackState(PlaybackState.STATE_PAUSED, stale = true)
-        assertEquals(PlaybackState.ACTION_STOP, stale.actions)
+        val stale = publisher.buildPlaybackState(PlaybackStateCompat.STATE_PAUSED, stale = true)
+        assertEquals(PlaybackStateCompat.ACTION_STOP, stale.actions)
     }
 
     @Test
@@ -226,7 +226,7 @@ class MediaSessionPublisherTest {
 
     @Test
     fun metadataCarriesTitleArtistAndDuration() {
-        val session = MediaSession(context, "test")
+        val session = MediaSessionCompat(context, "test")
         publisher.updateNowPlaying(session, "Commando", "Rob Hubbard", 195_000L)
 
         val metadata = RecordingMediaSessionShadow.lastMetadata
@@ -238,7 +238,7 @@ class MediaSessionPublisherTest {
 
     @Test
     fun metadataFallsBackToTheAppNameAndOmitsUnknownFields() {
-        publisher.publishNowPlayingMetadata(MediaSession(context, "test"))
+        publisher.publishNowPlayingMetadata(MediaSessionCompat(context, "test"))
 
         val metadata = RecordingMediaSessionShadow.lastMetadata
         assertEquals(context.getString(R.string.app_name), metadata?.getString(MediaMetadata.METADATA_KEY_TITLE))
@@ -248,7 +248,7 @@ class MediaSessionPublisherTest {
 
     @Test
     fun createdSessionIsActiveWithACallbackAndTheGivenState() {
-        val session = publisher.createSession(PlaybackState.STATE_PAUSED, stale = false)
+        val session = publisher.createSession(PlaybackStateCompat.STATE_PAUSED, stale = false)
 
         assertNotNull(session)
         assertTrue(session!!.isActive)

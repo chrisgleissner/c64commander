@@ -17,7 +17,10 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.os.Build
+import android.os.Bundle
 import android.os.Looper
+import android.os.ResultReceiver
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.*
@@ -132,6 +135,12 @@ class BackgroundExecutionServiceTest {
         field.isAccessible = true
         return field.get(service)
     }
+
+    private fun frameworkSession(): MediaSession? =
+            when (val session = getPrivateField("mediaSession")) {
+                is MediaSessionCompat -> session.mediaSession as MediaSession
+                else -> session as MediaSession?
+            }
 
     private fun startService(startId: Int = 0) {
         service.onStartCommand(Intent(service, BackgroundExecutionService::class.java), 0, startId)
@@ -717,11 +726,40 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
+    fun mediaSessionAnswersTheCompatControllersExtraBinderRequestSoSystemBridgesSeeItsState() {
+        controller.create()
+        startService()
+
+        var reply: Bundle? = null
+        frameworkCallbackOf(frameworkSession())
+                .onCommand(
+                        "android.support.v4.media.session.command.GET_EXTRA_BINDER",
+                        null,
+                        object : ResultReceiver(null) {
+                            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                                reply = resultData
+                            }
+                        },
+                )
+
+        assertNotNull(
+                "A MediaControllerCompat built from this session's token must receive the extra binder",
+                reply?.getBinder("android.support.v4.media.session.EXTRA_BINDER"),
+        )
+    }
+
+    private fun frameworkCallbackOf(session: MediaSession?): MediaSession.Callback {
+        val handler = MediaSession::class.java.getDeclaredField("mCallback").apply { isAccessible = true }.get(session)
+        val callback = handler.javaClass.getDeclaredField("mCallback").apply { isAccessible = true }.get(handler)
+        return callback as MediaSession.Callback
+    }
+
+    @Test
     fun mediaSessionIsGivenACallback() {
         controller.create()
         startService()
 
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
         assertNotNull("Expected a MediaSession once the service is running", session)
         // Without a callback the platform never makes this the media-button session, so a headset
         // or lock-screen press reaches nothing. MediaSession keeps the callback in mCallback;
@@ -789,7 +827,7 @@ class BackgroundExecutionServiceTest {
         setPlaybackState(paused = true)
 
         assertTrue("A paused session must keep its service", BackgroundExecutionService.isRunning)
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
         assertNotNull("A paused session must keep its MediaSession", session)
         assertEquals(
                 "A paused session must advertise STATE_PAUSED",
@@ -823,7 +861,7 @@ class BackgroundExecutionServiceTest {
 
         setPlaybackState(paused = false, startId = 2)
         assertNotNull("Resuming must re-acquire the wake lock", heldWakeLock())
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
         assertEquals(
                 android.media.session.PlaybackState.STATE_PLAYING,
                 playbackStateOf(session),
@@ -910,7 +948,7 @@ class BackgroundExecutionServiceTest {
         startService()
         setPlaybackState(paused = false, startId = 2)
         ShadowLooper.shadowMainLooper().idleFor(PlaybackLiveness.HEARTBEAT_TIMEOUT_MS * 2, TimeUnit.MILLISECONDS)
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
 
         assertEquals(android.media.session.PlaybackState.ACTION_STOP, playbackStateActionsOf(session))
         val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -1184,7 +1222,7 @@ class BackgroundExecutionServiceTest {
         controller.create()
         startService()
 
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
         val actions = playbackStateActionsOf(session)
         assertTrue(
                 "The lock-screen control cannot offer Next unless the state advertises it",
@@ -1248,7 +1286,7 @@ class BackgroundExecutionServiceTest {
     fun aPositionReportReachesTheSessionAndEnablesSeeking() {
         controller.create()
         startService()
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
 
         setPlaybackPosition(61_000L, playing = true, seekable = true)
 
@@ -1265,7 +1303,7 @@ class BackgroundExecutionServiceTest {
     fun pausingFreezesThePositionTheWebLayerLastReported() {
         controller.create()
         startService()
-        val session = getPrivateField("mediaSession") as MediaSession?
+        val session = frameworkSession()
         setPlaybackPosition(61_000L, playing = true, seekable = true)
 
         setPlaybackState(paused = true, startId = 2)
