@@ -19,12 +19,13 @@ import android.os.Bundle
 import android.os.Process
 
 /**
- * Accepts transport commands from the companion "Skip" app, which a phone's function keys can open from anywhere.
+ * Accepts Next and Prev from the companion app, whose entries a phone's function keys can open from anywhere.
  * The reply says whether this app was in front, so the companion can hand the screen back to it.
  */
 open class TransportCommandProvider : ContentProvider() {
   companion object {
     const val METHOD_NEXT = "next"
+    const val METHOD_PREVIOUS = "previous"
     const val RESULT_WAS_IN_FRONT = "wasInFront"
     private const val TAG = "TransportCommandProvider"
   }
@@ -36,14 +37,19 @@ open class TransportCommandProvider : ContentProvider() {
     if (!callerSharesSignature()) {
       throw SecurityException("Transport command '$method' refused: uid ${Binder.getCallingUid()} is signed differently")
     }
-    require(method == METHOD_NEXT) { "Unknown transport command '$method'" }
-    val wasInFront = ForegroundPresence.wasInFront()
+    val command =
+      when (method) {
+        METHOD_NEXT -> BackgroundExecutionService.TRANSPORT_COMMAND_NEXT
+        METHOD_PREVIOUS -> BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS
+        else -> throw IllegalArgumentException("Unknown transport command '$method'")
+      }
+    val wasInFront = ForegroundPresence.answerCompanionCommand()
     context.sendBroadcast(
       Intent(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND)
         .setPackage(context.packageName)
-        .putExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND, BackgroundExecutionService.TRANSPORT_COMMAND_NEXT),
+        .putExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND, command),
     )
-    AppLogger.info(context, TAG, "Companion transport command (next), app in front: $wasInFront", TAG)
+    AppLogger.info(context, TAG, "Companion transport command ($method), app in front: $wasInFront", TAG)
     return Bundle().apply { putBoolean(RESULT_WAS_IN_FRONT, wasInFront) }
   }
 

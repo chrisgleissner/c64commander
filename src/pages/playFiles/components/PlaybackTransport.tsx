@@ -302,7 +302,7 @@ export const PlaybackTransport = memo(
             // a real finger while working under synthetic events.
             style={onSeek ? { touchAction: "none" } : undefined}
             aria-label="Previous"
-            title={onSeek ? "Previous (hold to rewind)" : "Previous"}
+            title={onSeek ? "Previous: restarts after 3 s (hold to rewind)" : "Previous: restarts after 3 s"}
           >
             <SkipBack className="h-4 w-4" />
           </Button>

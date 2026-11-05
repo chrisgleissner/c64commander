@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-package uk.gleissner.c64commander.skipnext;
+package uk.gleissner.c64commander.nextprev;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -34,7 +34,7 @@ import org.robolectric.android.controller.ActivityController;
 import org.robolectric.shadows.ShadowLooper;
 
 @RunWith(RobolectricTestRunner.class)
-public class SkipToNextActivityTest {
+public class TransportShortcutActivityTest {
     private static final String MAIN = BuildConfig.MAIN_APPLICATION_ID;
 
     public static final class FakeTransport extends ContentProvider {
@@ -47,7 +47,7 @@ public class SkipToNextActivityTest {
         public Bundle call(String method, String arg, Bundle extras) {
             calls.add(method);
             Bundle reply = new Bundle();
-            reply.putBoolean(SkipToNextActivity.RESULT_WAS_IN_FRONT, wasInFront);
+            reply.putBoolean(TransportShortcutActivity.RESULT_WAS_IN_FRONT, wasInFront);
             return reply;
         }
 
@@ -75,11 +75,11 @@ public class SkipToNextActivityTest {
     @Test
     public void sendsNextAndHandsTheScreenBackWhenTheMainAppWasInFront() {
         installMainApp(true);
-        ActivityController<SkipToNextActivity> controller = Robolectric.buildActivity(SkipToNextActivity.class).create();
-        SkipToNextActivity activity = controller.get();
+        ActivityController<NextActivity> controller = Robolectric.buildActivity(NextActivity.class).create();
+        NextActivity activity = controller.get();
 
-        assertEquals(List.of(SkipToNextActivity.METHOD_NEXT), FakeTransport.calls);
-        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS - 1, TimeUnit.MILLISECONDS);
+        assertEquals(List.of("next"), FakeTransport.calls);
+        ShadowLooper.idleMainLooper(TransportShortcutActivity.HAND_BACK_DELAY_MS - 1, TimeUnit.MILLISECONDS);
         assertFalse("waits for the system switcher to pass", activity.isFinishing());
         assertNull(shadowOf(activity).peekNextStartedActivity());
 
@@ -91,23 +91,59 @@ public class SkipToNextActivityTest {
     }
 
     @Test
+    public void aPressWhileTheHandBackIsPendingIsSentAndPostponesTheHandBack() {
+        installMainApp(true);
+        ActivityController<NextActivity> controller = Robolectric.buildActivity(NextActivity.class).create();
+        NextActivity activity = controller.get();
+        ShadowLooper.idleMainLooper(500, TimeUnit.MILLISECONDS);
+        FakeTransport.wasInFront = false;
+
+        controller.newIntent(new Intent(Intent.ACTION_MAIN));
+
+        assertEquals(List.of("next", "next"), FakeTransport.calls);
+        ShadowLooper.idleMainLooper(TransportShortcutActivity.HAND_BACK_DELAY_MS - 1, TimeUnit.MILLISECONDS);
+        assertFalse(activity.isFinishing());
+        ShadowLooper.idleMainLooper(1, TimeUnit.MILLISECONDS);
+        assertEquals(MAIN, shadowOf(activity).getNextStartedActivity().getComponent().getPackageName());
+        assertTrue(activity.isFinishing());
+    }
+
+    @Test
+    public void bothEntriesAreSingleTopSoARepeatedLaunchReachesTheWaitingInstance() throws Exception {
+        android.content.pm.PackageManager pm = RuntimeEnvironment.getApplication().getPackageManager();
+        for (Class<?> entry : List.of(NextActivity.class, PrevActivity.class)) {
+            android.content.pm.ActivityInfo info =
+                    pm.getActivityInfo(new ComponentName(RuntimeEnvironment.getApplication(), entry), 0);
+            assertEquals(entry.getSimpleName(), android.content.pm.ActivityInfo.LAUNCH_SINGLE_TOP, info.launchMode);
+        }
+    }
+
+    @Test
     public void sendsNextAndLeavesTheUserWhereTheyWereWhenTheMainAppWasNotInFront() {
         installMainApp(false);
-        SkipToNextActivity activity = Robolectric.buildActivity(SkipToNextActivity.class).create().get();
+        NextActivity activity = Robolectric.buildActivity(NextActivity.class).create().get();
 
-        assertEquals(List.of(SkipToNextActivity.METHOD_NEXT), FakeTransport.calls);
+        assertEquals(List.of("next"), FakeTransport.calls);
         assertTrue(activity.isFinishing());
-        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
+        ShadowLooper.idleMainLooper(TransportShortcutActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
         assertNull(shadowOf(activity).getNextStartedActivity());
+    }
+
+    @Test
+    public void prevSendsPreviousToTheMainApp() {
+        installMainApp(false);
+        Robolectric.buildActivity(PrevActivity.class).create();
+
+        assertEquals(List.of("previous"), FakeTransport.calls);
     }
 
     @Test
     public void finishesWithoutHandingBackWhenTheMainAppIsNotInstalled() {
         FakeTransport.calls.clear();
-        SkipToNextActivity activity = Robolectric.buildActivity(SkipToNextActivity.class).create().get();
+        NextActivity activity = Robolectric.buildActivity(NextActivity.class).create().get();
 
         assertTrue(activity.isFinishing());
-        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
+        ShadowLooper.idleMainLooper(TransportShortcutActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
         assertNull(shadowOf(activity).getNextStartedActivity());
         assertEquals(List.of(), FakeTransport.calls);
     }

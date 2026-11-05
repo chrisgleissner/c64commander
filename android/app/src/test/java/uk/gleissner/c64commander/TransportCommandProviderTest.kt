@@ -11,6 +11,7 @@ package uk.gleissner.c64commander
 import android.content.Context
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
+import java.time.Duration
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 class TransportCommandProviderTest {
@@ -49,6 +51,16 @@ class TransportCommandProviderTest {
   }
 
   @Test
+  fun previousIsRelayedToThisAppAsTheMediaButtonPreviousCommand() {
+    provider().call(TransportCommandProvider.METHOD_PREVIOUS, null, null)
+
+    assertEquals(
+      listOf(context.packageName to BackgroundExecutionService.TRANSPORT_COMMAND_PREVIOUS),
+      sentTransportCommands(),
+    )
+  }
+
+  @Test
   fun theReplySaysTheAppWasInFrontWhenItWasJustPausedByTheCompanion() {
     ForegroundPresence.onResumed()
     ForegroundPresence.onPaused(SystemClock.elapsedRealtime())
@@ -56,6 +68,23 @@ class TransportCommandProviderTest {
     val reply = provider().call(TransportCommandProvider.METHOD_NEXT, null, null)
 
     assertTrue(reply.getBoolean(TransportCommandProvider.RESULT_WAS_IN_FRONT))
+  }
+
+  @Test
+  fun aBurstOfPressesWhileTheCompanionCoversTheAppIsAnsweredInFrontThroughout() {
+    ForegroundPresence.onResumed()
+    ForegroundPresence.onPaused(SystemClock.elapsedRealtime())
+    val step = Duration.ofMillis(ForegroundPresence.RECENT_MS - 500)
+
+    val replies =
+      List(3) {
+        ShadowSystemClock.advanceBy(step)
+        provider().call(TransportCommandProvider.METHOD_PREVIOUS, null, null).getBoolean(
+          TransportCommandProvider.RESULT_WAS_IN_FRONT,
+        )
+      }
+
+    assertEquals(listOf(true, true, true), replies)
   }
 
   @Test

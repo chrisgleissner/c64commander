@@ -34,6 +34,16 @@ internal object ForegroundPresence {
     return resumed || (pausedAt != null && nowMs - pausedAt <= RECENT_MS)
   }
 
+  /**
+   * [wasInFront] for a companion command. One answered "in front" puts the companion on top of this app until it hands
+   * back, so it restarts the window: the next press of a quick burst is then still answered "in front".
+   */
+  fun answerCompanionCommand(nowMs: Long = SystemClock.elapsedRealtime()): Boolean {
+    val inFront = wasInFront(nowMs)
+    if (inFront && !resumed) pausedAtMs = nowMs
+    return inFront
+  }
+
   internal fun reset() {
     resumed = false
     pausedAtMs = null

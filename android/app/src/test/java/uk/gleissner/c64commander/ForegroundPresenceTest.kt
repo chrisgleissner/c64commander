@@ -40,4 +40,21 @@ class ForegroundPresenceTest {
     ForegroundPresence.onPaused(nowMs = 10_000)
     assertFalse(ForegroundPresence.wasInFront(nowMs = 10_001 + ForegroundPresence.RECENT_MS))
   }
+
+  @Test
+  fun aCompanionCommandAnsweredInFrontKeepsTheNextPressOfABurstInFront() {
+    ForegroundPresence.onResumed()
+    ForegroundPresence.onPaused(nowMs = 10_000)
+    val window = ForegroundPresence.RECENT_MS
+
+    assertTrue(ForegroundPresence.answerCompanionCommand(nowMs = 10_000 + window))
+    assertTrue(ForegroundPresence.answerCompanionCommand(nowMs = 10_000 + 2 * window))
+    assertFalse(ForegroundPresence.answerCompanionCommand(nowMs = 10_001 + 3 * window))
+  }
+
+  @Test
+  fun aCompanionCommandFromElsewhereDoesNotOpenTheWindow() {
+    assertFalse(ForegroundPresence.answerCompanionCommand(nowMs = 10_000))
+    assertFalse(ForegroundPresence.wasInFront(nowMs = 10_001))
+  }
 }
