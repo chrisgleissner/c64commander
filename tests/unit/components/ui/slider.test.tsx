@@ -290,6 +290,26 @@ describe("Slider custom classes", () => {
 });
 
 describe("Slider touch gestures", () => {
+  it("keeps the Android native range overlay from taking touches, so a scroll that starts on it cannot set the value", () => {
+    const { rerender } = render(
+      <Slider value={[50]} min={0} max={100} step={1} nativeInputMode="overlay" nativeInputAriaLabel="Overlay" />,
+    );
+    expect(screen.getByLabelText("Overlay")).toHaveClass("pointer-events-none");
+
+    rerender(
+      <Slider
+        value={[50]}
+        min={0}
+        max={100}
+        step={1}
+        nativeInputMode="overlay"
+        nativeInputAriaLabel="Overlay"
+        disabled
+      />,
+    );
+    expect(screen.getByLabelText("Overlay")).not.toHaveClass("pointer-events-none");
+  });
+
   const renderTouchSlider = () => {
     const onValueChange = vi.fn();
     const onValueCommit = vi.fn();

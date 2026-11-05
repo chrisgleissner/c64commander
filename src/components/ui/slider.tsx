@@ -549,6 +549,8 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
             {...{ [SKIP_ATTR]: "true" }}
             className={cn(
               "absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0",
+              // A native range sets its value on touch-down, so it would act before a scroll can be told apart.
+              touchDeferrable && "pointer-events-none",
               nativeInputClassName,
             )}
           />
