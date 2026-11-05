@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { sliderValueAtX } from "@/lib/ui/sliderTouchGesture";
 import { Slider } from "@/components/ui/slider";
 import { SLIDER_POPUP_IDLE_CLOSE_MS, SLIDER_POPUP_MIN_VISIBLE_MS } from "@/lib/ui/sliderPopupStateMachine";
 
@@ -349,6 +350,8 @@ describe("Slider touch gestures", () => {
     fireEvent.pointerMove(root, touch(23, 11));
     expect(onValueChange).not.toHaveBeenCalled();
     fireEvent.pointerMove(root, touch(60, 12));
+    fireEvent.pointerMove(root, touch(65, 12));
+    expect(onValueChange).toHaveBeenLastCalledWith([65]);
     fireEvent.pointerUp(root, touch(72, 12));
 
     expect(onValueChange).toHaveBeenCalledWith([60]);
@@ -364,5 +367,48 @@ describe("Slider touch gestures", () => {
 
     expect(onValueChange).toHaveBeenCalledWith([30]);
     expect(onValueCommit).toHaveBeenCalledWith([30]);
+  });
+  it("ignores movement and release from another pointer while retaining the deferred touch", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+    fireEvent.pointerDown(root, touch(20, 10));
+    fireEvent.pointerMove(root, { ...touch(80, 10), pointerId: 8 });
+    fireEvent.pointerUp(root, { ...touch(80, 10), pointerId: 8 });
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onValueCommit).not.toHaveBeenCalled();
+    fireEvent.pointerMove(root, touch(60, 10));
+    fireEvent.pointerUp(root, touch(70, 10));
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith([60]);
+    expect(onValueCommit).toHaveBeenCalledExactlyOnceWith([70]);
+  });
+
+  it("commits the last horizontal draft on cancellation and clears the touch session", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+    fireEvent.pointerDown(root, touch(20, 10));
+    fireEvent.pointerMove(root, touch(60, 10));
+    fireEvent.pointerCancel(root, touch(90, 10));
+    expect(onValueCommit).toHaveBeenCalledExactlyOnceWith([60]);
+    fireEvent.pointerMove(root, touch(80, 10));
+    fireEvent.pointerUp(root, touch(80, 10));
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith([60]);
+    expect(onValueCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an undecided touch without changing or committing a value", () => {
+    const { root, onValueChange, onValueCommit } = renderTouchSlider();
+    fireEvent.pointerDown(root, touch(20, 10));
+    fireEvent.pointerCancel(root, touch(22, 11));
+    fireEvent.pointerMove(root, touch(80, 10));
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onValueCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe("sliderValueAtX edge geometry", () => {
+  it.each([0, -10])("returns the minimum for a track of width %s", (width) => {
+    expect(sliderValueAtX(50, { left: 10, width }, 5, 100, 1)).toBe(5);
+  });
+
+  it.each([undefined, 0, -1, NaN, Infinity])("keeps the unsnapped position for invalid step %s", (step) => {
+    expect(sliderValueAtX(35, { left: 10, width: 100 }, 10, 20, step)).toBe(12.5);
   });
 });

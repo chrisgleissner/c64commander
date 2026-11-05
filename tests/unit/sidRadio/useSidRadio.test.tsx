@@ -169,7 +169,51 @@ describe("useSidRadio", () => {
     expect(dropUpcomingItems).toHaveBeenCalledTimes(1);
     const shouldDrop = dropUpcomingItems.mock.calls[0][0];
     expect(queued.every((item: unknown) => shouldDrop(item))).toBe(true);
+    expect(shouldDrop({ ...queued[0], durationMs: undefined })).toBe(false);
     expect(shouldDrop({ id: "a", path: "/a.sid", durationMs: 2000 })).toBe(false);
+  });
+
+  it("ignores unrelated settings events while a song station is active", async () => {
+    saveSidRadioMinSeconds(5);
+    const client = makeClient();
+    const dropUpcomingItems = vi.fn();
+    const params = baseParams(client, { resolveDurationSeconds: () => 10, dropUpcomingItems });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    const station = result.current.station;
+    act(() => {
+      window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key: "other-setting" } }));
+      window.dispatchEvent(new CustomEvent("c64u-app-settings-updated"));
+    });
+    expect(dropUpcomingItems).not.toHaveBeenCalled();
+    expect(result.current.station).toBe(station);
+    act(() => saveSidRadioMinSeconds(15));
+    expect(dropUpcomingItems).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a resumed collection queue when the minimum tune duration changes", async () => {
+    saveSidRadioSession({
+      seedKind: "collection",
+      seedLabel: "Classical",
+      seed: { kind: "collection", collectionId: "classical" },
+      styleFilter: null,
+      shuffleSeed: 99,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1],
+    });
+    const client = makeClient();
+    const dropUpcomingItems = vi.fn();
+    const params = baseParams(client, { dropUpcomingItems });
+    const { result } = renderHook(() => useSidRadio(params));
+    await waitFor(() => expect(result.current.station?.seedKind).toBe("collection"));
+    act(() => saveSidRadioMinSeconds(120));
+    expect(dropUpcomingItems).not.toHaveBeenCalled();
+    expect(params.appendItems).not.toHaveBeenCalled();
+    expect(client.compute).not.toHaveBeenCalled();
+    expect(result.current.active).toBe(true);
+    expect(loadSidRadioSession()?.seed).toEqual({ kind: "collection", collectionId: "classical" });
   });
 
   it("stops the station", async () => {

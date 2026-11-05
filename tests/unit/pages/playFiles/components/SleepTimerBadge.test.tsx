@@ -42,6 +42,16 @@ describe("sleepTimerBadgeView", () => {
 });
 
 describe("SleepTimerBadge", () => {
+  it("announces a singular minute and the after-tune stop with their visible labels", () => {
+    const { rerender } = render(<SleepTimerBadge mode={armTimed(15, T0)} nowMs={T0 + 14 * 60_000} />);
+    expect(screen.getByRole("button")).toHaveAccessibleName("Sleep timer: 1 minute left. Open the sleep timer");
+    expect(screen.getByTestId("app-bar-sleep-timer-label")).toHaveTextContent("1m");
+    rerender(<SleepTimerBadge mode={{ kind: "after-tune" }} nowMs={T0} />);
+    expect(screen.getByRole("button")).toHaveAccessibleName("Sleep timer: stops after this tune. Open the sleep timer");
+    expect(screen.getByTestId("app-bar-sleep-timer-label")).toHaveTextContent("Tune");
+    expect(screen.getByTestId("app-bar-sleep-timer-ring")).toHaveAttribute("stroke-dashoffset", "0");
+  });
+
   it("renders nothing while the timer is off", () => {
     render(<SleepTimerBadge mode={SLEEP_TIMER_OFF} nowMs={T0} />);
     expect(screen.queryByTestId("app-bar-sleep-timer")).toBeNull();

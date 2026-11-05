@@ -9,6 +9,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { addLog } from "@/lib/logging";
 import type { PlaybackRoute } from "@/lib/playback/playbackEngineRouting";
 import { SLEEP_TIMER_OFF, type SleepTimerMode } from "@/lib/playback/sleepTimer";
 import { fadedVolumeIndex, SLEEP_TIMER_FADE_MS } from "@/lib/playback/sleepTimerFade";
@@ -117,5 +118,40 @@ describe("useSleepTimerFade", () => {
 
     expect(paused.onVolumePreview).not.toHaveBeenCalled();
     expect(muted.onVolumePreview).not.toHaveBeenCalled();
+  });
+  it.each([new Error("preview unavailable"), "preview unavailable"])(
+    "logs a rejected volume preview with error context (%s) and continues fading",
+    async (error) => {
+      const binding = makeBinding();
+      binding.onVolumePreview.mockRejectedValueOnce(error);
+      renderFade({ mode: timed(T0 + 10_000), playing: true, route: "local", binding });
+      await act(async () => vi.advanceTimersByTime(1_000));
+      expect(addLog).toHaveBeenCalledWith("warn", "Sleep timer fade: lowering the volume failed", {
+        error: "preview unavailable",
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      expect(binding.onVolumeDraftChange).toHaveBeenLastCalledWith(18);
+      await act(async () => vi.advanceTimersByTime(1_000));
+      expect(binding.onVolumePreview).toHaveBeenLastCalledWith(16);
+    },
+  );
+
+  it("logs a rejected restore when the deadline changes and does not retry the abandoned fade", async () => {
+    const binding = makeBinding();
+    const error = new Error("restore unavailable");
+    binding.onVolumeCommit.mockRejectedValueOnce(error);
+    const view = renderFade({ mode: timed(T0 + 10_000), playing: true, route: "local", binding });
+    await act(async () => vi.advanceTimersByTime(5_000));
+    expect(binding.onVolumePreview).toHaveBeenLastCalledWith(10);
+    await act(async () => {
+      view.rerender({ mode: timed(T0 + 900_000), playing: true, route: "local", binding });
+    });
+    expect(binding.onVolumeCommit).toHaveBeenCalledExactlyOnceWith(20);
+    expect(addLog).toHaveBeenCalledWith("warn", "Sleep timer fade: restoring the volume failed", {
+      error: error.message,
+      stack: error.stack,
+    });
+    act(() => view.result.current.finishAfterStop());
+    expect(binding.onVolumeCommit).toHaveBeenCalledTimes(1);
   });
 });
