@@ -61,6 +61,7 @@ import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
 import { useShownNowPlaying } from "@/pages/playFiles/hooks/useShownNowPlaying";
 import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
+import { useSleepTimerFade } from "@/pages/playFiles/hooks/useSleepTimerFade";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { tuneShareForItem } from "@/lib/playback/tuneShare";
@@ -679,10 +680,8 @@ export default function PlayFilesPage() {
     },
     playlist.length > 0 && sessionRestoreSettled,
   );
-  const sleepTimer = useSleepTimer({
-    onExpire: stopPlayback,
-    isPlaying,
-  });
+  const finishSleepFadeRef = useRef<() => void>(() => undefined);
+  const sleepTimer = useSleepTimer({ onExpire: () => (stopPlayback(), finishSleepFadeRef.current()), isPlaying });
   const sleepTimerRef = useRef(sleepTimer);
   sleepTimerRef.current = sleepTimer;
   /**
@@ -1957,6 +1956,12 @@ export default function PlayFilesPage() {
         }),
     },
   });
+  finishSleepFadeRef.current = useSleepTimerFade({
+    mode: sleepTimer.mode,
+    playing: isPlaying && !isPaused,
+    route: soundingRoute,
+    binding: volumeBinding,
+  }).finishAfterStop;
   const knownSubsongCount =
     currentSubsongCount ?? (typeof currentItem?.subsongCount === "number" ? currentItem.subsongCount : null);
   const subsongCount = knownSubsongCount ?? 1;

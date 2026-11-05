@@ -32,6 +32,14 @@ describe("PlayFilesPage feature-flag contracts", () => {
     );
   });
 
+  it("stops at the sleep timer deadline before putting back the volume the fade lowered", () => {
+    expect(playFilesPageSource).toContain(
+      "const sleepTimer = useSleepTimer({ onExpire: () => (stopPlayback(), finishSleepFadeRef.current()), isPlaying });",
+    );
+    expect(playFilesPageSource).toContain("finishSleepFadeRef.current = useSleepTimerFade({");
+    expect(playFilesPageSource).toContain("binding: volumeBinding,");
+  });
+
   it("turns Android background auto-skip callbacks into auto next transitions", () => {
     expect(playFilesPageSource).toContain("const registerBackgroundAutoSkipListener = async () => {");
     expect(playFilesPageSource).toContain("const nextHandle = await onBackgroundAutoSkipDue((event) => {");
