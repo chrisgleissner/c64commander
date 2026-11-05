@@ -869,6 +869,12 @@ const renderKeyboardReference = ({ features, variant }) => {
       ? "Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. Your phone's own keypad settings come first: when they give F1 or F3 a tap, double tap or long press action, the phone keeps that key and the app does not receive it. The Commodore key opens the phone's launcher, so the app never receives it either. To see what your own keys send, open **Diagnostics → Key explorer** and press one."
       : "Press either from any page and the app takes you to Play and does it there. A phone whose own settings give F1 or F3 an action keeps that key, and the app does not receive it. To see what your own keys send, open **Diagnostics → Key explorer** and press one.",
     "",
+    "#### Next song from anywhere on the phone",
+    "",
+    `The keys above work while ${variant.displayName} is in front. To skip to the next song from anywhere on your ${appDeviceName(variant)}, install the companion app **${variant.displayName} - Next Song**. It is attached to every release as \`${variant.exportedFileBasename}-<version>-android-next-song.apk\`. Opening it skips to the next song and does nothing else.`,
+    "",
+    `If your ${appDeviceName(variant)} lets a key open an app, choose **${variant.displayName} - Next Song** for that key in its own keypad settings. The key then skips to the next song wherever you are. If ${variant.displayName} was in front, it comes back about a second later. From anywhere else, your ${appDeviceName(variant)} may show its own list of apps afterwards. Without such a key, put the companion app on your home screen and open it with one tap.`,
+    "",
     "#### Star and Pound",
     "",
     table(

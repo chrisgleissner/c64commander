@@ -42,6 +42,7 @@
             <meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer" tools:node="remove" />
         </provider>
 
+        <provider android:name=".TransportCommandProvider" android:authorities="${applicationId}.transport" android:exported="true" />
         <service android:name=".BackgroundExecutionService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <service android:name=".LibraryInstallService" android:exported="false" android:foregroundServiceType="dataSync" />
     </application>

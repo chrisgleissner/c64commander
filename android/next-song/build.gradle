@@ -1,0 +1,69 @@
+import groovy.json.JsonSlurper
+
+apply plugin: 'com.android.application'
+
+evaluationDependsOn(':app')
+
+def variant = new JsonSlurper().parse(rootProject.file("../src/generated/variant.json")).variant
+def mainApplicationId = variant.platform.android.applicationId.toString()
+def mainApp = project(':app').android
+def appIconDir = layout.buildDirectory.dir("generated/appIcon")
+
+def copyAppIcon = tasks.register("copyAppIcon", Sync) {
+    from(project(':app').file("src/main/res")) {
+        include "mipmap-*/ic_launcher*", "values/ic_launcher_background.xml"
+    }
+    into appIconDir
+}
+
+android {
+    namespace "uk.gleissner.c64commander.nextsong"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "${mainApplicationId}.nextsong"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode mainApp.defaultConfig.versionCode
+        versionName mainApp.defaultConfig.versionName
+        manifestPlaceholders = [mainApplicationId: mainApplicationId]
+        resValue "string", "next_song_label", "${variant.displayName} - Next Song"
+        buildConfigField "String", "MAIN_APPLICATION_ID", "\"${mainApplicationId}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+        resValues true
+    }
+
+    buildTypes {
+        release {
+            signingConfig mainApp.signingConfigs.release
+        }
+    }
+
+    sourceSets {
+        main.res.srcDirs += appIconDir
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            // Robolectric reaches the raw file descriptor through jdk.internal.access; see :app.
+            jvmArgs "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED"
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn copyAppIcon }
+
+dependencies {
+    testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:4.17"
+}
