@@ -61,6 +61,8 @@ tags:
 # "Add items" is the dialog title and is matched as one element's whole text, so it does not also
 # match the "Add items to playlist" button on the page behind it. "Close" is the accessible name of
 # the dialog header's close control.
+# centerElement: with the Playlist card open the button first appears at the bottom edge, inside the
+# screen bounds but under the tab bar. A tap at its centre then lands on the Settings tab.
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - retry:
     maxRetries: 3
@@ -82,6 +84,7 @@ tags:
                   text: "Add items to playlist"
                 direction: DOWN
                 visibilityPercentage: 100
+                centerElement: true
                 timeout: ${TIMEOUT}
             - assertVisible: "Add items to playlist"
             - tapOn:
