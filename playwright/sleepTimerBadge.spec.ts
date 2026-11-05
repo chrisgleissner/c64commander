@@ -58,6 +58,11 @@ test.describe("Sleep timer badge beside the Play title", () => {
     expect(geometry.labelPx).toBeGreaterThanOrEqual(14);
     expect(geometry.pageOverflow).toBeLessThanOrEqual(0);
 
+    if ((await sessionToggle.count()) > 0) {
+      await sessionToggle.click();
+      await expect(sessionToggle).toHaveAttribute("aria-expanded", "false");
+      await expect(page.getByTestId("sleep-timer")).toHaveCount(0);
+    }
     await page.evaluate(() => window.scrollTo(0, 0));
     await badge.click();
     await expect(page.getByTestId("sleep-timer")).toBeInViewport();
