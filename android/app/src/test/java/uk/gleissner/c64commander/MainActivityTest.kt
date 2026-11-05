@@ -342,6 +342,16 @@ class MainActivityTest {
 
   @Test
   @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+  fun onCreateAsksForThemeTaskSnapshotsSoClosingTheTaskNeedsNoLayerCapture() {
+    val controller = Robolectric.buildActivity(BridgeBuilderProbeActivity::class.java)
+
+    runCatching { controller.create() }
+
+    assertEquals(listOf(false), controller.get().recentsScreenshotRequests)
+  }
+
+  @Test
+  @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
   fun aDeadRendererDetachesTheWebViewAndStopsBackgroundPlaybackFromResumingIt() {
     RenderProcessGoneRecovery.processHistory.lastRecreateAtMs = null
     val activity = Robolectric.buildActivity(MainActivity::class.java).get()
@@ -364,6 +374,12 @@ class BridgeBuilderProbeActivity : MainActivity() {
   class BridgeNotBuilt : RuntimeException()
 
   var listenersAtBridgeCreation: List<*> = emptyList<Any>()
+  val recentsScreenshotRequests = mutableListOf<Boolean>()
+
+  override fun setRecentsScreenshotEnabled(enabled: Boolean) {
+    recentsScreenshotRequests += enabled
+    super.setRecentsScreenshotEnabled(enabled)
+  }
 
   override fun load() {
     val listenersField = Bridge.Builder::class.java.getDeclaredField("webViewListeners")

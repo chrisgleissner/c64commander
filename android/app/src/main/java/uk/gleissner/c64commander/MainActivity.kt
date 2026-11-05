@@ -140,6 +140,7 @@ open class MainActivity : BridgeActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    useThemeTaskSnapshots()
     ensureCapacitorPluginAssetPath()
     prewarmMimeMap()
     registerPlugin(BackgroundExecutionPlugin::class.java)
