@@ -38,6 +38,7 @@ import {
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
 import { isPlaybackErrorReported, markPlaybackErrorReported } from "@/pages/playFiles/playbackErrorReported";
+import { currentItemPlayedMs, prevTargetIndex } from "@/pages/playFiles/previousTarget";
 import {
   isLaunchOvertaken,
   isSongCategory,
@@ -403,6 +404,7 @@ export function usePlaybackController({
   const lastLaunchedItemIdRef = useRef<string | null>(null);
   const lastUserSkipTrackInstanceIdRef = useRef<number | null>(null);
   const pendingUserSkipRef = useRef<PendingUserSkip | null>(null);
+  const unsettledUserSkipsRef = useRef(0);
   const flushPendingUserSkipRef = useRef<() => Promise<void>>(async () => undefined);
   const cancelPendingUserSkip = useCallback(() => {
     const pending = pendingUserSkipRef.current;
@@ -1936,7 +1938,13 @@ export function usePlaybackController({
           window.clearTimeout(pending.timer);
         }
         const resolvers = pending?.resolvers ?? [];
-        resolvers.push({ resolve });
+        unsettledUserSkipsRef.current += 1;
+        resolvers.push({
+          resolve: () => {
+            unsettledUserSkipsRef.current -= 1;
+            resolve();
+          },
+        });
         pendingUserSkipRef.current = {
           timer: window.setTimeout(() => {
             const currentPending = pendingUserSkipRef.current;
@@ -2147,13 +2155,20 @@ export function usePlaybackController({
     const activeIndex = currentIndexRef.current;
     const traversal = playlistTraversal(activePlaylist);
     const preceding = traversal.previous;
-    const previousIndex = preceding(activeIndex);
+    const now = Date.now();
+    const playedMs = currentItemPlayedMs({
+      earlierSkipLaunching: unsettledUserSkipsRef.current > 0,
+      trackStartedAtMs: trackStartedAtRef.current,
+      paused: isPausedRef.current,
+      shownElapsedMs: playbackTime.read().elapsedMs,
+      now,
+    });
+    const previousIndex = prevTargetIndex(playedMs, activeIndex, preceding(activeIndex));
     const prevIndex =
-      previousIndex !== null && isDeviceOutOfReach()
+      previousIndex !== null && previousIndex !== activeIndex && isDeviceOutOfReach()
         ? (firstPlayableWithoutDevice(activePlaylist, previousIndex, preceding) ?? previousIndex)
         : previousIndex;
     cancelAutoAdvance();
-    const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     setVisibleCurrentIndex(prevIndex);
@@ -2162,11 +2177,13 @@ export function usePlaybackController({
   }, [
     cancelAutoAdvance,
     playlistTraversal,
+    playbackTime,
     playedClockRef,
     setPlayedMs,
     scheduleUserSkip,
     setVisibleCurrentIndex,
     showChosenTrackWhileStopped,
+    trackStartedAtRef,
   ]);
 
   const shownDuration = useMemo(

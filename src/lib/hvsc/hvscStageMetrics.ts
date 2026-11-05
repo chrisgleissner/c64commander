@@ -47,6 +47,14 @@ const isStepFinishedByEvent = (
   return false;
 };
 
+/**
+ * A count that falls back is a new pass over the work inside the same step, such as writing the song
+ * index after organizing the files. Measuring it from the earlier pass's start would spread its items
+ * over the time the earlier pass took.
+ */
+const countsRestarted = (existing: HvscStageMeasurement, counts: { processed: number | null }) =>
+  counts.processed !== null && existing.processed !== null && counts.processed < existing.processed;
+
 const isStartOfAnalysis = (event: HvscProgressEvent) => event.statusToken === "queued" || event.processedCount === 0;
 
 const finishStepsBefore = (measurements: HvscStageMeasurements, index: number, nowMs: number) => {
@@ -80,6 +88,7 @@ export const applyHvscStageEvent = (
   if (existing?.finishedAtMs != null) return measurements;
 
   const counts = countsOf(stage, event);
+  if (existing && countsRestarted(existing, counts)) existing = undefined;
   const processed = counts.processed ?? existing?.processed ?? null;
   const countMoved = processed !== null && processed !== existing?.processed;
   const lastProgressAtMs = countMoved ? nowMs : existing?.lastProgressAtMs;

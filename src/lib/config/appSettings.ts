@@ -27,7 +27,7 @@ const DEFAULT_SONG_DURATION_MS_KEY = "c64u_default_song_duration_ms";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
 const REPEAT_ONE_ENABLED_KEY = "c64u_repeat_one_enabled";
 
-const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
+export const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
 const FRIENDLY_SID_NAMES_KEY = "c64u_friendly_sid_names";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";

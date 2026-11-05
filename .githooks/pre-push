@@ -6,7 +6,9 @@ set -eu
 # Anything under .git/ cannot be committed, so a contributor can keep private
 # checks there without imposing them on anyone else. exec passes through the ref
 # list git supplies on stdin, and the local hook's exit status becomes this one.
-LOCAL_HOOK="$(git rev-parse --absolute-git-dir)/local-hooks/pre-push"
+# The common dir, not the per-worktree git dir, so a push from a linked worktree
+# runs the same checks as one from the main checkout.
+LOCAL_HOOK="$(cd "$(git rev-parse --git-common-dir)" && pwd)/local-hooks/pre-push"
 if [ -e "$LOCAL_HOOK" ]; then
   if [ -x "$LOCAL_HOOK" ]; then
     exec "$LOCAL_HOOK" "$@"

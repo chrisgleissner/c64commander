@@ -336,6 +336,136 @@ describe("usePlaybackController play transition supersession", () => {
     );
   });
 
+  // The playlist's played clock reads ten minutes in every case: Prev must judge the current item alone.
+  it.each([
+    { state: "playing", itemMs: 0, presses: 1, expected: "/PROGRAMS/track-b.prg" },
+    { state: "playing", itemMs: 2999, presses: 1, expected: "/PROGRAMS/track-b.prg" },
+    { state: "playing", itemMs: 3000, presses: 1, expected: "/PROGRAMS/track-c.prg" },
+    { state: "playing", itemMs: 45_000, presses: 1, expected: "/PROGRAMS/track-c.prg" },
+    { state: "playing", itemMs: 45_000, presses: 2, expected: "/PROGRAMS/track-b.prg" },
+    { state: "paused", itemMs: 1000, presses: 1, expected: "/PROGRAMS/track-b.prg" },
+    { state: "paused", itemMs: 3000, presses: 1, expected: "/PROGRAMS/track-c.prg" },
+  ])(
+    "Prev with the current item $state at $itemMs ms, pressed $presses time(s), plays $expected",
+    async ({ state, itemMs, presses, expected }) => {
+      vi.useFakeTimers();
+      const paused = state === "paused";
+      const startedAtMs = Date.now() - (paused ? 600_000 : itemMs);
+      vi.mocked(getC64API).mockImplementation(() => ({ machineResume: vi.fn().mockResolvedValue(undefined) }) as never);
+      const firstItem = createPlaylistItem("track-a", "/PROGRAMS/track-a.prg");
+      const secondItem = createPlaylistItem("track-b", "/PROGRAMS/track-b.prg");
+      const thirdItem = createPlaylistItem("track-c", "/PROGRAMS/track-c.prg");
+      const playlist = [firstItem, secondItem, thirdItem];
+
+      const { result } = renderHook(() =>
+        usePlaybackController({
+          playlist,
+          setPlaylist: vi.fn(),
+          currentIndex: 2,
+          setCurrentIndex: vi.fn(),
+          isPlaying: true,
+          setIsPlaying: vi.fn(),
+          isPaused: paused,
+          setIsPaused: vi.fn(),
+          setIsPlaylistLoading: vi.fn(),
+          playbackTime: useState(() =>
+            spiedPlaybackTime({ elapsedMs: itemMs, setElapsedMs: vi.fn(), setPlayedMs: vi.fn() }),
+          )[0],
+          durationMs: undefined,
+          setDurationMs: vi.fn(),
+          setCurrentSubsongCount: vi.fn(),
+          setTrackInstanceId: vi.fn(),
+          repeatEnabled: false,
+          localEntriesBySourceId: new Map(),
+          localSourceTreeUris: new Map(),
+          deviceProduct: "C64 Ultimate",
+          ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+          resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
+          applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
+          restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+          applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
+          buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
+          captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
+          snapshotToUpdates: vi.fn().mockReturnValue({}),
+          resolveEnabledSidVolumeItems: vi.fn().mockResolvedValue([]),
+          dispatchVolume: vi.fn(),
+          sidEnablement: {} as never,
+          pauseMuteSnapshotRef: { current: null },
+          pausingFromPauseRef: { current: false },
+          resumingFromPauseRef: { current: false },
+          ensureUnmuted: vi.fn().mockResolvedValue(undefined),
+          playedClockRef: {
+            current: {
+              start: vi.fn(),
+              stop: vi.fn(),
+              pause: vi.fn(),
+              resume: vi.fn(),
+              reset: vi.fn(),
+              current: vi.fn().mockReturnValue(600_000),
+            },
+          },
+          trackStartedAtRef: { current: startedAtMs },
+          ...useSoundingTune(),
+          trackInstanceIdRef: { current: 1 },
+          autoAdvanceGuardRef: { current: null },
+          playStartInFlightRef: { current: false },
+          cancelAutoAdvance: vi.fn(),
+          enqueuePlayTransition: vi.fn().mockImplementation(async (task) => task()),
+          durationSeconds: 45,
+          setAutoAdvanceDueAtMs: vi.fn(),
+          trace: (fn: (...args: unknown[]) => unknown) => fn,
+        }),
+      );
+
+      const skips = Array.from({ length: presses }, () => result.current.handlePrevious());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      });
+      await Promise.all(skips);
+
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ path: expected }),
+        expect.anything(),
+      );
+    },
+  );
+
+  it.each([
+    { first: "handlePrevious", expected: ["/PROGRAMS/track-c.prg", "/PROGRAMS/track-b.prg"] },
+    { first: "handleNext", expected: ["/PROGRAMS/track-d.prg", "/PROGRAMS/track-c.prg"] },
+  ] as const)(
+    "Prev pressed while the item chosen by $first is still launching goes back from that item",
+    async ({ first, expected }) => {
+      vi.useFakeTimers();
+      const playlist = ["a", "b", "c", "d", "e"].map((name) =>
+        createPlaylistItem(`track-${name}`, `/PROGRAMS/track-${name}.prg`),
+      );
+      const firstLaunch = createDeferred<void>();
+      vi.mocked(executePlayPlan).mockImplementationOnce(() => firstLaunch.promise);
+      const { result } = renderSkipController(playlist, vi.fn(), () => ({
+        currentIndex: 2,
+        trackStartedAtRef: { current: Date.now() - 45_000 },
+      }));
+
+      const skips = [result.current[first]()];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+      });
+      skips.push(result.current.handlePrevious());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(USER_TRANSPORT_COALESCE_MS);
+        firstLaunch.resolve();
+        await Promise.all(skips);
+      });
+
+      expect(vi.mocked(executePlayPlan).mock.calls.map(([, plan]) => (plan as { path: string }).path)).toEqual(
+        expected,
+      );
+    },
+  );
+
   it("launches only the latest of several skips that queued behind a launch still in flight", async () => {
     vi.useFakeTimers();
     const playlist = ["a", "b", "c", "d", "e"].map((name) =>

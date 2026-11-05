@@ -116,6 +116,7 @@ describe("release variant split contracts", () => {
     const uploadStep = raw.indexOf("- name: Upload APK artifact (release)");
 
     expect(uploadStep).toBeGreaterThan(-1);
-    expect(raw.slice(uploadStep, uploadStep + 500)).toContain("retention-days: 7");
+    const nextStep = raw.indexOf("- name:", uploadStep + 1);
+    expect(raw.slice(uploadStep, nextStep)).toContain("retention-days: 7");
   });
 });

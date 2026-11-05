@@ -136,6 +136,7 @@ export const playlistChapter = ({ variantId }: GuideContext): GuideChapter => ({
         "Items play in the order you added them. Rows cannot be moved, so add folders in the order you want to hear them.",
         "**Shuffle** (crossed arrows) sits beside volume. Turn it off and on for a fresh order; the current tune, playback position and list stay put.",
         "Press **Repeat** beside Shuffle to cycle **off → playlist → tune → off**. A **1** in the loop means one tune. Highlighted buttons with a dot are on; Shuffle and Repeat work independently.",
+        "**Prev** in the first 3 seconds of an item goes to the previous item. Later, it starts the current item again; press it twice to go back.",
       ],
     },
     {

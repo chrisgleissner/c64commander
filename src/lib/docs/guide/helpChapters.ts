@@ -257,7 +257,7 @@ export const keypadChapter = ({ variantId, appMode }: GuideContext): GuideChapte
                 key: "F1 and F3",
                 action: sidPlayer
                   ? "Play/Pause and Next tune"
-                  : "Play/Pause and Next tune; change them in Settings → **Remote function keys**",
+                  : "Play/Pause and Next tune, unless the phone's keypad settings use the key; change them in Settings → **Remote function keys**",
               }
             : { key: "F1 and F3", action: "Play or pause, and the next tune, on the Play page" },
         ],

@@ -100,6 +100,27 @@ export const withAppendedStationItems = (
   stationItemIds: [...handover.stationItemIds, ...appended.map((item) => item.id)],
 });
 
+/** Drop the station's ids for items it took back out of the queue, so the queue does not read as edited. */
+export const withoutStationItems = (handover: StationHandover, removedIds: ReadonlySet<string>): StationHandover => ({
+  ...handover,
+  stationItemIds: handover.stationItemIds.filter((id) => !removedIds.has(id)),
+});
+
+/** The queue without the not-yet-played items `shouldDrop` selects; the current item and those before it stay. */
+export const withoutUpcomingItems = (
+  playlist: readonly PlaylistItem[],
+  currentIndex: number,
+  shouldDrop: (item: PlaylistItem) => boolean,
+): { playlist: PlaylistItem[]; removedIds: Set<string> } => {
+  const removedIds = new Set<string>();
+  const kept = playlist.filter((item, index) => {
+    if (index <= currentIndex || !shouldDrop(item)) return true;
+    removedIds.add(item.id);
+    return false;
+  });
+  return { playlist: kept, removedIds };
+};
+
 /** True when the listener added to or removed from the queue the station built. */
 export const isStationQueueEdited = (playlist: readonly PlaylistItem[], stationItemIds: readonly string[]): boolean => {
   const stationIds = new Set(stationItemIds);

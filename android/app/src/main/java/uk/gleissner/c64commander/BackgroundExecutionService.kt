@@ -17,7 +17,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.media.session.MediaSession
-import android.media.session.PlaybackState
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -290,7 +291,7 @@ class BackgroundExecutionService : Service() {
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaSessionCompat? = null
 
     /*
      * Audio focus is NOT requested here. This service starts for a tune on the Play page and not for
@@ -300,7 +301,7 @@ class BackgroundExecutionService : Service() {
      */
 
     private val mediaSessionPublisher = MediaSessionPublisher(this, ::relayTransportCommand, ::relaySeekRequest)
-    internal val mediaSessionCallback: MediaSession.Callback
+    internal val mediaSessionCallback: MediaSessionCompat.Callback
         get() = mediaSessionPublisher.callback
 
     private val handler = Handler(Looper.getMainLooper())
@@ -463,12 +464,12 @@ class BackgroundExecutionService : Service() {
         if (paused) {
             livenessWatchdog.cancel()
             releaseWakeLock()
-            publishPlaybackState(PlaybackState.STATE_PAUSED)
+            publishPlaybackState(PlaybackStateCompat.STATE_PAUSED)
             schedulePausedExpiry()
         } else {
             cancelPausedExpiry()
             acquireWakeLock()
-            publishPlaybackState(PlaybackState.STATE_PLAYING)
+            publishPlaybackState(PlaybackStateCompat.STATE_PLAYING)
             armLivenessWatchdog()
         }
         refreshNotification()
@@ -508,7 +509,7 @@ class BackgroundExecutionService : Service() {
     private fun markLivenessStale() {
         livenessStale = true
         releaseWakeLock()
-        publishPlaybackState(PlaybackState.STATE_PAUSED)
+        publishPlaybackState(PlaybackStateCompat.STATE_PAUSED)
         mediaSession?.setSessionActivity(ResumeRequest.activityIntent(this, REQUEST_RESUME_CONTENT))
         schedulePausedExpiry()
         refreshNotification()
@@ -539,7 +540,7 @@ class BackgroundExecutionService : Service() {
             )
 
     private fun sessionPlaybackState() =
-            if (showsPaused()) PlaybackState.STATE_PAUSED else PlaybackState.STATE_PLAYING
+            if (showsPaused()) PlaybackStateCompat.STATE_PAUSED else PlaybackStateCompat.STATE_PLAYING
 
     /** The tune the notification and the session name. */
     private fun updateNowPlayingInternal(title: String?, artist: String?, durationMs: Long?, album: String?) {
@@ -744,7 +745,7 @@ class BackgroundExecutionService : Service() {
 
     private fun finishMediaNotification(builder: Notification.Builder, compactActions: IntArray): Notification {
         val style = Notification.MediaStyle().setShowActionsInCompactView(*compactActions)
-        mediaSession?.sessionToken?.let { style.setMediaSession(it) }
+        (mediaSession?.mediaSession as? MediaSession)?.sessionToken?.let { style.setMediaSession(it) }
         builder.setStyle(style)
         return builder.build()
     }

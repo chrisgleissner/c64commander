@@ -140,6 +140,7 @@ open class MainActivity : BridgeActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    useThemeTaskSnapshots()
     ensureCapacitorPluginAssetPath()
     prewarmMimeMap()
     registerPlugin(BackgroundExecutionPlugin::class.java)
@@ -317,8 +318,14 @@ open class MainActivity : BridgeActivity() {
     return webView.hasFocus() && inputMethods.isActive(webView)
   }
 
+  override fun onResume() {
+    super.onResume()
+    ForegroundPresence.onResumed()
+  }
+
   override fun onPause() {
     super.onPause()
+    ForegroundPresence.onPaused()
     keepWebViewPlaybackAliveDuringBackgroundExecution()
   }
 

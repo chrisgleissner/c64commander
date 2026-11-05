@@ -61,7 +61,9 @@ import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
 import { useShownNowPlaying } from "@/pages/playFiles/hooks/useShownNowPlaying";
 import { useLaunchStopGuard } from "@/pages/playFiles/hooks/useLaunchStopGuard";
 import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
+import { useSleepTimerFade } from "@/pages/playFiles/hooks/useSleepTimerFade";
 import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
+import { SleepTimerBadge } from "@/pages/playFiles/components/SleepTimerBadge";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { tuneShareForItem } from "@/lib/playback/tuneShare";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
@@ -680,19 +682,13 @@ export default function PlayFilesPage() {
     },
     playlist.length > 0 && sessionRestoreSettled,
   );
-  const sleepTimer = useSleepTimer({
-    onExpire: stopPlayback,
-    isPlaying,
-  });
+  const finishSleepFadeRef = useRef<() => void>(() => undefined);
+  const sleepTimer = useSleepTimer({ onExpire: () => (stopPlayback(), finishSleepFadeRef.current()), isPlaying });
   const sleepTimerRef = useRef(sleepTimer);
   sleepTimerRef.current = sleepTimer;
   /**
-   * A tune has ended on its own: advance, unless the sleep timer says that was the last one.
-   *
-   * Every automatic advance goes through here — the foreground timeline reconciliation and the
-   * background watchdog both — so the two cannot disagree about whether the session is over. A
-   * user pressing next is deliberately not routed through this: they are asking for the next tune,
-   * not telling the timer anything.
+   * A tune ended on its own: advance unless the sleep timer made it the last. Both automatic advances (timeline
+   * reconciliation and the background watchdog) come here, so they agree; a user's Next does not, as it tells no timer.
    */
   const advanceOnTrackEnd = useCallback(
     (trackInstanceId?: number) => {
@@ -1658,6 +1654,7 @@ export default function PlayFilesPage() {
     // The station's `resolvePath` reads an index built as a side effect of loading the HVSC
     // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
+    dropUpcomingItems: (shouldDrop) => stationHandover.dropUpcomingStationItems(shouldDrop),
   });
 
   const sidRadioWhyThisTune = sidRadio.station ? whyThisTuneFor(sidRadio.station) : null;
@@ -1957,6 +1954,12 @@ export default function PlayFilesPage() {
         }),
     },
   });
+  finishSleepFadeRef.current = useSleepTimerFade({
+    mode: sleepTimer.mode,
+    playing: isPlaying && !isPaused,
+    route: soundingRoute,
+    binding: volumeBinding,
+  }).finishAfterStop;
   const knownSubsongCount =
     currentSubsongCount ?? (typeof currentItem?.subsongCount === "number" ? currentItem.subsongCount : null);
   const subsongCount = knownSubsongCount ?? 1;
@@ -2431,7 +2434,7 @@ export default function PlayFilesPage() {
   return (
     <div className={pageShellClassName}>
       <PlayDeepLinks {...deepLinkHandlers} />
-      <AppBar title="Play" />
+      <AppBar title="Play" titleAccessory={<SleepTimerBadge mode={sleepTimer.mode} nowMs={sleepTimer.nowMs} />} />
       <PageContainer>
         <PageStack>
           <PlayListeningShortcuts

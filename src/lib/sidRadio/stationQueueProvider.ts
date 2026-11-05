@@ -82,8 +82,10 @@ export interface StationQueueProviderOptions {
    * looking like an exhausted station. This second pass exists because the walk runs in a worker
    * against a bundle that carries no durations, so the authoritative check has to happen where the
    * songlengths actually live.
+   *
+   * A function is read for every candidate, so a station already running obeys a changed setting.
    */
-  minSeconds?: number;
+  minSeconds?: number | (() => number);
   /** Songlength lookup for {@link minSeconds}. Absent → no length filtering here. */
   resolveDuration?: ResolveDurationFn;
   /**
@@ -109,6 +111,20 @@ export interface StationRefillResult {
 }
 
 const DEFAULT_LOOKAHEAD = 10;
+
+/**
+ * The station's length rule, shared by admission and by pruning a queue after the rule changes.
+ *
+ * A known length below the minimum is rejected; a length equal to it is admitted. An unknown or
+ * malformed length is never rejected, because the songlengths being thin is not evidence that a
+ * tune is short. A minimum of 0 or less disables the rule.
+ */
+export const isBelowStationMinimum = (durationSeconds: number | null | undefined, minSeconds: number): boolean =>
+  minSeconds > 0 &&
+  durationSeconds !== null &&
+  durationSeconds !== undefined &&
+  Number.isFinite(durationSeconds) &&
+  durationSeconds < minSeconds;
 
 /**
  * Candidate batch sizing.
@@ -143,7 +159,7 @@ export class StationQueueProvider {
   private exhausted: "no-neighbours" | "exhausted" | null = null;
   readonly lookahead: number;
   readonly recentWindow: number;
-  private readonly minSeconds: number;
+  private readonly readMinSeconds: () => number;
   /** Tracks dropped for being too short — reported so a thin station is explicable, not mysterious. */
   private tooShortSkipped = 0;
   /** Tracks dropped because `md5_48` did not resolve against the installed HVSC. */
@@ -169,7 +185,8 @@ export class StationQueueProvider {
   constructor(private readonly options: StationQueueProviderOptions) {
     this.lookahead = options.lookahead ?? DEFAULT_LOOKAHEAD;
     this.recentWindow = options.recentWindow ?? DEFAULT_STATION_BALANCE.recentWindow;
-    this.minSeconds = Math.max(0, options.minSeconds ?? 0);
+    const minSeconds = options.minSeconds ?? 0;
+    this.readMinSeconds = typeof minSeconds === "function" ? minSeconds : () => minSeconds;
     for (const ordinal of options.initialExclude ?? []) this.excluded.add(ordinal);
     this.recent = [...(options.initialRecent ?? [])].slice(0, this.recentWindow);
   }
@@ -256,18 +273,14 @@ export class StationQueueProvider {
         // again. An unknown length is admitted — never drop a tune because the songlengths are thin.
         const seconds = await this.options.resolveDuration(virtualPath, candidate.songNr);
         durationSeconds = seconds === null || seconds === undefined || !Number.isFinite(seconds) ? null : seconds;
-        if (this.minSeconds <= 0) {
-          // Filtering is off, so nothing is rejected and nothing is counted as an unknown-length
-          // admission — there is no rule for a missing length to slip past.
-        } else if (durationSeconds === null) {
-          // Admitted, and counted as such. A malformed length is treated exactly like a missing one
-          // rather than compared numerically, because `NaN < minSeconds` is false and would admit it
-          // silently through the branch below.
-          this.unknownDurationAdmitted += 1;
-        } else if (durationSeconds < this.minSeconds) {
+        const minSeconds = this.readMinSeconds();
+        if (isBelowStationMinimum(durationSeconds, minSeconds)) {
           this.tooShortSkipped += 1;
           continue;
         }
+        // Counted only while the rule is on: with it off there is no rule for a missing length to
+        // slip past. A malformed length counts exactly like a missing one.
+        if (minSeconds > 0 && durationSeconds === null) this.unknownDurationAdmitted += 1;
       }
       this.itemsEmitted += 1;
       items.push(

@@ -134,6 +134,6 @@ describe("PlayFilesPage on-device controls", () => {
     expect(pageSource).toContain(
       "const soundingRoute = resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local);",
     );
-    expect(pageSource.match(/\n\s*route: soundingRoute,/g)).toHaveLength(2);
+    expect(pageSource.match(/\n\s*route: soundingRoute,/g)).toHaveLength(3);
   });
 });

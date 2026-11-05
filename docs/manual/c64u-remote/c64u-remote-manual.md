@@ -218,6 +218,8 @@ Rows show titles rather than file names: `Bossa_in_Do_2SID.sid` appears as *Boss
 
 The transport controls run the show: play, stop, pause and resume, previous and next, shuffle, repeat, and volume. Beneath them sit a **sleep timer**, a **default duration** for anything whose length is unknown, and a **songlengths file** you can choose by hand if you have one.
 
+**Prev** works like a CD player. Within the first 3 seconds of an item it goes to the previous item. Later than that, it starts the current item again, so press it twice to go back one item.
+
 The volume row holds speaker/mute, the slider, the dB value, **Shuffle** (crossed arrows) and **Repeat** (loop arrows). The mode buttons align with × and heart beside the metadata above the transport. Highlighted buttons with a dot are on; a **1** inside Repeat means only this tune.
 
 Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.
@@ -569,7 +571,7 @@ Songs that are not on the list play as always. Being off the list is not a promi
 
 #### Moving around inside a tune
 
-The same gestures work wherever the tune plays. A short tap on next or previous still skips to the next or previous tune.
+The same gestures work wherever the tune plays. A short tap on next still skips to the next tune, and a short tap on previous does what **Prev** always does (see above).
 
 - **Tap the progress bar** to jump to that spot, or hold and slide along it. The music picks up wherever you let go.
 
@@ -1357,7 +1359,13 @@ Pressing the number of the page you are already on starts that page over from th
 | F1 | Run its normal-navigation assignment (default: Play/Pause) |
 | F3 | Run its normal-navigation assignment (default: Next tune) |
 
-Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one.
+Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. Your phone's own keypad settings come first: when they give F1 or F3 a tap, double tap or long press action, the phone keeps that key and the app does not receive it. The Commodore key opens the phone's launcher, so the app never receives it either. To see what your own keys send, open **Diagnostics → Key explorer** and press one.
+
+#### Next and Prev from anywhere on your phone
+
+The keys above work while C64U Remote is in front. To change the playlist item from anywhere on your phone, install the small companion app. It adds two icons, **Next - C64U Remote** and **Prev - C64U Remote**. Opening one does the same as **Next** or **Prev** on the Play page, for a song, a program or a disk, and nothing else. The companion is attached to every release as `c64u-remote-<version>-android-next-prev.apk`.
+
+If your phone lets a key open an app, choose **Next - C64U Remote** or **Prev - C64U Remote** for that key in its own keypad settings. The key then works wherever you are. If C64U Remote was in front, it comes back about a second later. From anywhere else, your phone may show its own list of apps afterwards. Without such a key, put the icons on your home screen and open them with one tap.
 
 #### Star and Pound
 

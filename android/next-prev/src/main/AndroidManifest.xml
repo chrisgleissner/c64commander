@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <provider android:authorities="${mainApplicationId}.transport" />
+        <package android:name="${mainApplicationId}" />
+    </queries>
+    <application android:allowBackup="false" android:icon="@mipmap/ic_next" android:roundIcon="@mipmap/ic_next" android:label="@string/companion_label">
+        <activity android:name=".NextActivity" android:label="@string/next_label" android:icon="@mipmap/ic_next" android:roundIcon="@mipmap/ic_next" android:exported="true" android:excludeFromRecents="true" android:noHistory="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".PrevActivity" android:label="@string/prev_label" android:icon="@mipmap/ic_prev" android:roundIcon="@mipmap/ic_prev" android:exported="true" android:excludeFromRecents="true" android:noHistory="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

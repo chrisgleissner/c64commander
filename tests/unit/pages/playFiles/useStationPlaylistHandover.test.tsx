@@ -128,6 +128,38 @@ beforeEach(() => {
 });
 
 describe("useStationPlaylistHandover", () => {
+  it("drops only matching upcoming station tunes and keeps Stop from treating the queue as edited", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, [...stationA, item("radio:4")]);
+    act(() => harness.result.current.setCurrentIndex(1));
+    act(() => harness.result.current.handover.dropUpcomingStationItems((entry) => entry.id !== "radio:4"));
+    expect(ids(harness.result.current.playlist)).toEqual(["radio:1", "radio:2", "radio:4"]);
+    expect(harness.result.current.currentIndex).toBe(1);
+    expect(readHandoverRecord()!.stationItemIds).toEqual(["radio:1", "radio:2", "radio:4"]);
+    expect(rememberedHandover()!.items).toEqual(mine);
+    act(() => harness.result.current.handover.requestStop());
+    expect(stationStop).toHaveBeenCalledOnce();
+    expect(harness.result.current.handover.editedPrompt.open).toBe(false);
+  });
+
+  it("preserves the queue and handover references when no upcoming tune matches", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    const playlist = harness.result.current.playlist;
+    const handover = rememberedHandover();
+    act(() => harness.result.current.handover.dropUpcomingStationItems(() => false));
+    expect(harness.result.current.playlist).toBe(playlist);
+    expect(rememberedHandover()).toBe(handover);
+  });
+
+  it("drops matching upcoming items without a saved station handover", () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    act(() => harness.result.current.handover.dropUpcomingStationItems(() => true));
+    expect(ids(harness.result.current.playlist)).toEqual(["a", "b"]);
+    expect(harness.result.current.currentIndex).toBe(1);
+    expect(readHandoverRecord()).toBeNull();
+  });
+
   it("starts a station's queue passing over songs that need the C64 ROMs, since the station chose the first one too", async () => {
     const harness = renderHarness({ stationActive: false, isPlaying: true });
     await startStation(harness, stationA);

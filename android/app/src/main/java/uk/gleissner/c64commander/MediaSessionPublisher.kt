@@ -9,10 +9,10 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
-import android.media.MediaMetadata
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
 import android.os.SystemClock
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 
 internal data class NowPlayingMetadata(
         val title: String?,
@@ -51,7 +51,7 @@ internal class MediaSessionPublisher(
      * nothing about playback, so each press is forwarded to the web layer, which owns the transport.
      */
     val callback =
-            object : MediaSession.Callback() {
+            object : MediaSessionCompat.Callback() {
                 override fun onPlay() = relayTransportCommand(BackgroundExecutionService.TRANSPORT_COMMAND_PLAY)
 
                 override fun onPause() =
@@ -67,9 +67,14 @@ internal class MediaSessionPublisher(
                 override fun onSeekTo(pos: Long) = relaySeekRequest(pos)
             }
 
-    fun createSession(state: Int, stale: Boolean): MediaSession? =
+    /**
+     * A compat session, because a MediaControllerCompat built from a session token treats the
+     * session as ready only once it answers the compat extra-binder request. Until then it reports
+     * no state and no actions, and a system bridge that reads sessions that way shows no controls.
+     */
+    fun createSession(state: Int, stale: Boolean): MediaSessionCompat? =
             try {
-                val session = MediaSession(context, "C64CommanderBackgroundExecution")
+                val session = MediaSessionCompat(context, "C64CommanderBackgroundExecution")
                 session.setCallback(callback)
                 session.setPlaybackState(buildPlaybackState(state, stale))
                 session.isActive = true
@@ -81,7 +86,7 @@ internal class MediaSessionPublisher(
                 null
             }
 
-    fun releaseSession(session: MediaSession) {
+    fun releaseSession(session: MediaSessionCompat) {
         try {
             session.isActive = false
             session.release()
@@ -96,7 +101,7 @@ internal class MediaSessionPublisher(
      * showing an empty lock-screen control. Returns false when nothing changed.
      */
     fun updateNowPlaying(
-            session: MediaSession?,
+            session: MediaSessionCompat?,
             title: String?,
             artist: String?,
             durationMs: Long?,
@@ -115,7 +120,7 @@ internal class MediaSessionPublisher(
         return true
     }
 
-    fun publishPlaybackState(session: MediaSession?, state: Int, stale: Boolean) {
+    fun publishPlaybackState(session: MediaSessionCompat?, state: Int, stale: Boolean) {
         session ?: return
         try {
             session.setPlaybackState(buildPlaybackState(state, stale))
@@ -129,7 +134,7 @@ internal class MediaSessionPublisher(
      * only when it changes course: a tune starts, playback pauses or resumes, a seek lands.
      */
     fun updatePosition(
-            session: MediaSession?,
+            session: MediaSessionCompat?,
             state: Int,
             stale: Boolean,
             positionMs: Long,
@@ -147,7 +152,7 @@ internal class MediaSessionPublisher(
      * position it reached, and the time spent that way is not counted when it plays on.
      */
     private fun positionAt(state: Int, nowMs: Long): Long {
-        if (state == PlaybackState.STATE_PLAYING) {
+        if (state == PlaybackStateCompat.STATE_PLAYING) {
             frozenAtMs?.let { frozenAt ->
                 reported = reported?.let { it.copy(atElapsedMs = it.atElapsedMs + (nowMs - frozenAt)) }
                 frozenAtMs = null
@@ -155,30 +160,30 @@ internal class MediaSessionPublisher(
         } else if (frozenAtMs == null) {
             frozenAtMs = nowMs
         }
-        val position = reported ?: return PlaybackState.PLAYBACK_POSITION_UNKNOWN
+        val position = reported ?: return PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN
         if (!position.playing) return position.positionMs
         val untilMs = frozenAtMs ?: nowMs
         return position.positionMs + (untilMs - position.atElapsedMs).coerceAtLeast(0L)
     }
 
-    fun buildPlaybackState(state: Int, stale: Boolean): PlaybackState {
+    fun buildPlaybackState(state: Int, stale: Boolean): PlaybackStateCompat {
         val nowMs = elapsedRealtimeMs()
         val positionMs = positionAt(state, nowMs)
-        val advancing = state == PlaybackState.STATE_PLAYING && (reported?.playing ?: true)
-        return PlaybackState.Builder()
+        val advancing = state == PlaybackStateCompat.STATE_PLAYING && (reported?.playing ?: true)
+        return PlaybackStateCompat.Builder()
                 .setState(state, positionMs, if (advancing) 1.0f else 0.0f, nowMs)
                 .setActions(
                             if (stale) {
                                 // A Play the system will not let us act on is worse than none.
-                                PlaybackState.ACTION_STOP
+                                PlaybackStateCompat.ACTION_STOP
                             } else {
-                                PlaybackState.ACTION_PLAY or
-                                        PlaybackState.ACTION_PAUSE or
-                                        PlaybackState.ACTION_PLAY_PAUSE or
-                                        PlaybackState.ACTION_STOP or
-                                        PlaybackState.ACTION_SKIP_TO_NEXT or
-                                        PlaybackState.ACTION_SKIP_TO_PREVIOUS or
-                                        (if (reported?.seekable == true) PlaybackState.ACTION_SEEK_TO else 0L)
+                                PlaybackStateCompat.ACTION_PLAY or
+                                        PlaybackStateCompat.ACTION_PAUSE or
+                                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                                        PlaybackStateCompat.ACTION_STOP or
+                                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                                        (if (reported?.seekable == true) PlaybackStateCompat.ACTION_SEEK_TO else 0L)
                             },
                     )
                     .build()
@@ -188,18 +193,18 @@ internal class MediaSessionPublisher(
      * What the lock screen reads. Published even before the web layer names a tune, so the control
      * carries the app name rather than an empty title.
      */
-    fun publishNowPlayingMetadata(session: MediaSession?) {
+    fun publishNowPlayingMetadata(session: MediaSessionCompat?) {
         session ?: return
         try {
             val metadata =
-                    MediaMetadata.Builder()
+                    MediaMetadataCompat.Builder()
                             .putString(
-                                    MediaMetadata.METADATA_KEY_TITLE,
+                                    MediaMetadataCompat.METADATA_KEY_TITLE,
                                     nowPlaying.title ?: context.getString(R.string.app_name)
                             )
-            nowPlaying.artist?.let { metadata.putString(MediaMetadata.METADATA_KEY_ARTIST, it) }
-            nowPlaying.album?.let { metadata.putString(MediaMetadata.METADATA_KEY_ALBUM, it) }
-            nowPlaying.durationMs?.let { metadata.putLong(MediaMetadata.METADATA_KEY_DURATION, it) }
+            nowPlaying.artist?.let { metadata.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, it) }
+            nowPlaying.album?.let { metadata.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, it) }
+            nowPlaying.durationMs?.let { metadata.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, it) }
             session.setMetadata(metadata.build())
         } catch (e: Exception) {
             AppLogger.warn(context, TAG, "Failed to publish now-playing metadata", COMPONENT, e)

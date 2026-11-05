@@ -138,6 +138,38 @@ export const activeStepPercent = (percent: number | null | undefined): number | 
   return Math.min(100, Math.max(0, Math.round(percent)));
 };
 
+/** A percentage together with the install step whose own work it measures. */
+export interface HvscReportedPercent {
+  step: HvscStageId;
+  percent: number;
+}
+
+/**
+ * The percentage on record after a progress event, kept with the step that reported it.
+ *
+ * A percentage belongs to the step that reported it and to no other. Native unpacking ends at 100%,
+ * and the steps after it report no percentage until their own counters start, so a single number
+ * shared across steps showed that 100% for "Find songs" and "Song details". Events for no step
+ * (`start`, `complete`, `archive_discovery`) leave the record alone; entering a step that has not
+ * reported a percentage clears the previous step's.
+ */
+export const reportedPercentAfterEvent = (
+  current: HvscReportedPercent | null,
+  event: { stage?: string | null; percent?: number | null },
+): HvscReportedPercent | null => {
+  const step = stepForStage(event.stage);
+  if (step === null) return current;
+  const percent = event.percent;
+  if (typeof percent === "number" && !Number.isNaN(percent)) {
+    return current?.step === step && current.percent === percent ? current : { step, percent };
+  }
+  return current?.step === step ? current : null;
+};
+
+/** The percentage to show for `step`, which is none unless that step reported it. */
+export const percentForStep = (reported: HvscReportedPercent | null, step: HvscStageId | null): number | null =>
+  reported !== null && step !== null && reported.step === step ? reported.percent : null;
+
 /**
  * "128 / 61,157" for the running step, when both counts are known.
  *

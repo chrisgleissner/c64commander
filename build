@@ -2033,6 +2033,14 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   log "Installing APK to device: $DEVICE_ID"
   adb -s "$DEVICE_ID" install -r "$APK_PATH"
 
+  COMPANION_APK_PATH="$ROOT_DIR/android/next-prev/build/outputs/apk/$APK_VARIANT/next-prev-$APK_VARIANT.apk"
+  if [[ -f "$COMPANION_APK_PATH" ]]; then
+    log "Installing the Next and Prev companion APK to device: $DEVICE_ID"
+    adb -s "$DEVICE_ID" install -r "$COMPANION_APK_PATH"
+  else
+    echo "WARNING: Next and Prev companion APK not found at $COMPANION_APK_PATH; the device has the app without it" >&2
+  fi
+
   log "Launching app"
   adb -s "$DEVICE_ID" shell monkey -p "$(resolve_android_application_id)" -c android.intent.category.LAUNCHER 1
 fi

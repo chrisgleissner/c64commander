@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uk.gleissner.c64commander.hvsc.DefaultHvscArchiveExtractor
 import uk.gleissner.c64commander.hvsc.ExtractedSong
+import uk.gleissner.c64commander.hvsc.ExtractionPhase
 import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
 import uk.gleissner.c64commander.hvsc.HvscArchiveMode
@@ -542,7 +543,17 @@ open class HvscIngestionPlugin : Plugin() {
                                 cancellationToken = cancellationRequested,
                                 memoryBudget = buildMemoryBudget(),
                                 onProgress = { progress: ExtractionProgress ->
-                                  if (progress.processedEntries == progress.totalEntries ||
+                                  if (progress.phase == ExtractionPhase.ORGANIZING) {
+                                    emitProgress(
+                                            stage = "sid_enumeration",
+                                            message = "Organizing the extracted files…",
+                                            processedCount = progress.processedEntries,
+                                            totalCount = progress.totalEntries,
+                                            currentFile = null,
+                                            songsIngested = progress.songsExtracted,
+                                            songsDeleted = 0,
+                                    )
+                                  } else if (progress.processedEntries == progress.totalEntries ||
                                                   progress.processedEntries -
                                                           lastReportedProgress >= progressModulo
                                   ) {

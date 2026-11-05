@@ -424,6 +424,48 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscPreparationState).not.toBe("READY");
   });
 
+  it("shows each step only the percentage that step reported while a native install moves through them", async () => {
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+    const emit = (event: Record<string, unknown>) => act(() => progressListener?.({ message: "", ...event }));
+
+    emit({ stage: "archive_extraction", processedCount: 1000, totalCount: 1000, percent: 100 });
+    await waitFor(() => expect(result.current.hvscStageStep).toBe("unpack"));
+    expect(result.current.hvscStagePercent).toBe(100);
+
+    emit({ stage: "sid_enumeration", processedCount: 0 });
+    await waitFor(() => expect(result.current.hvscStageStep).toBe("scan"));
+    expect(result.current.hvscStagePercent).toBeNull();
+    expect(result.current.hvscStageTotal).toBeNull();
+
+    emit({ stage: "database_insertion", processedCount: 200, totalCount: 800, percent: 25 });
+    await waitFor(() => expect(result.current.hvscStagePercent).toBe(25));
+    expect(result.current.hvscStageDone).toBe(200);
+    expect(result.current.hvscStageTotal).toBe(800);
+
+    emit({ stage: "songlengths" });
+    await waitFor(() => expect(result.current.hvscStageStep).toBe("details"));
+    expect(result.current.hvscStagePercent).toBeNull();
+
+    emit({ stage: "sid_metadata_hydration", processedCount: 0, totalCount: 60, percent: 0, statusToken: "queued" });
+    await waitFor(() => expect(result.current.hvscStageStep).toBe("analyze"));
+    expect(result.current.hvscStagePercent).toBe(0);
+  });
+
+  it("shows no step percentage once the stage no longer belongs to a step", async () => {
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() =>
+      progressListener?.({ stage: "archive_extraction", processedCount: 5, totalCount: 5, percent: 100, message: "" }),
+    );
+    await waitFor(() => expect(result.current.hvscStagePercent).toBe(100));
+
+    act(() => progressListener?.({ stage: "archive_discovery", message: "Looking for the archive" }));
+    await waitFor(() => expect(result.current.hvscStage).toBe("archive_discovery"));
+    expect(result.current.hvscStagePercent).toBeNull();
+  });
+
   it("treats database insertion as indexing progress instead of falling back to extract", async () => {
     let resolveInstall: (() => void) | null = null;
     mocks.installOrUpdateHvscMock.mockImplementation(

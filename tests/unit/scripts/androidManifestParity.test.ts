@@ -24,6 +24,8 @@ const REMOVED_LINE_MARKERS = [
   "android.permission.WAKE_LOCK",
   ".BackgroundExecutionService",
   ".LibraryInstallService",
+  // Relays a transport command to the background service, which the reduced build does not have.
+  ".TransportCommandProvider",
 ];
 
 const normalizeShared = (xml: string): string =>

@@ -34,6 +34,8 @@ type Props = {
   leadingVisual?: ReactNode;
   /** testid on the rendered title, for a page whose title is addressed by name in a spec. */
   titleTestId?: string;
+  /** A small status control right after the title, such as the Play page's sleep timer badge. */
+  titleAccessory?: ReactNode;
   children?: ReactNode;
 };
 
@@ -58,7 +60,15 @@ const writeAppBarHeight = (header: HTMLElement, value: string) => {
   if (target.style.getPropertyValue("--app-bar-height") !== value) target.style.setProperty("--app-bar-height", value);
 };
 
-export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, titleTestId, children }: Props) {
+export function AppBar({
+  title,
+  subtitle: _subtitle,
+  leading,
+  leadingVisual,
+  titleTestId,
+  titleAccessory,
+  children,
+}: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile } = useDisplayProfile();
   // The smallest screen gets a slim status strip instead of a 44 px row: 24 CSS px of the 427 the
@@ -156,6 +166,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
                 >
                   {title}
                 </h1>
+                {titleAccessory}
               </div>
             )}
           </div>

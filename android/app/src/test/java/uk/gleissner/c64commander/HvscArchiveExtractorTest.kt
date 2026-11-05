@@ -10,6 +10,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import uk.gleissner.c64commander.hvsc.DefaultHvscArchiveExtractor
+import uk.gleissner.c64commander.hvsc.ExtractionPhase
+import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.HvscArchiveMode
 import uk.gleissner.c64commander.hvsc.MemoryBudget
 
@@ -103,6 +105,48 @@ class HvscArchiveExtractorTest {
       assertEquals(2, result.extractedSongs.single().songs)
       assertEquals(1, result.extractedSongs.single().startSong)
       assertTrue(File(outputDir, "MUSICIANS/T/Tester/Tiny.sid").exists())
+    } finally {
+      outputDir.deleteRecursively()
+      archive.delete()
+    }
+  }
+
+  @Test
+  fun `organizing the extracted files reports files done out of files to organize`() {
+    val songCount = 1201
+    val archive = File.createTempFile("hvsc-organize-", ".zip")
+    ZipOutputStream(archive.outputStream()).use { zip ->
+      repeat(songCount) { index ->
+        zip.putNextEntry(ZipEntry("HVSC/MUSICIANS/T/Tester/Tune$index.sid"))
+        zip.write("PSID".toByteArray())
+        zip.closeEntry()
+      }
+      zip.putNextEntry(ZipEntry("HVSC/DOCUMENTS/songlengths.md5"))
+      zip.write("; /MUSICIANS/T/Tester/Tune0.sid\nabc=0:10\n".toByteArray())
+      zip.closeEntry()
+    }
+
+    val outputDir = Files.createTempDirectory("hvsc-organize-out-").toFile()
+    try {
+      val reported = mutableListOf<ExtractionProgress>()
+      extractor.extract(
+              archiveFile = archive,
+              outputDir = outputDir,
+              mode = HvscArchiveMode.BASELINE,
+              cancellationToken = AtomicBoolean(false),
+              memoryBudget = MemoryBudget(maxExtractionBytes = 256L * 1024L * 1024L, detail = "zip fixture"),
+              onProgress = { reported.add(it) },
+      )
+
+      val organizing = reported.filter { it.phase == ExtractionPhase.ORGANIZING }
+      val filesToOrganize = songCount + 1
+      assertEquals(listOf(0, 500, 1000, filesToOrganize), organizing.map { it.processedEntries })
+      assertTrue(organizing.all { it.totalEntries == filesToOrganize })
+      assertEquals(songCount, organizing.last().songsExtracted)
+      assertTrue(
+              "organizing starts only after the last archive entry was unpacked",
+              reported.indexOf(organizing.first()) > reported.indexOfLast { it.phase == ExtractionPhase.UNPACKING },
+      )
     } finally {
       outputDir.deleteRecursively()
       archive.delete()

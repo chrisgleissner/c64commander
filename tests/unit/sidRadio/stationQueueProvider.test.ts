@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
+import { isBelowStationMinimum, StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationCandidate, StationResult } from "@/lib/sidRadio/stationEngine";
 
 const candidate = (trackOrdinal: number): StationCandidate => ({
@@ -92,6 +92,32 @@ describe("StationQueueProvider", () => {
 
     expect(items).toHaveLength(2);
     expect(provider.shortTracksSkipped).toBe(0);
+  });
+
+  it("applies a minimum raised while the station runs to the next refill", async () => {
+    let minSeconds = 5;
+    const provider = new StationQueueProvider({
+      computeCandidates: scriptedEngine([1, 2, 3, 4]),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      minSeconds: () => minSeconds,
+      resolveDuration: () => 10,
+      lookahead: 2,
+    });
+
+    expect((await provider.refill()).items).toHaveLength(2);
+    minSeconds = 15;
+    expect((await provider.refill()).items).toHaveLength(0);
+    expect(provider.shortTracksSkipped).toBe(2);
+  });
+
+  it("admits a tune exactly as long as the minimum and rejects one a second shorter", () => {
+    expect(isBelowStationMinimum(15, 15)).toBe(false);
+    expect(isBelowStationMinimum(14, 15)).toBe(true);
+    expect(isBelowStationMinimum(10, 15)).toBe(true);
+    expect(isBelowStationMinimum(null, 15)).toBe(false);
+    expect(isBelowStationMinimum(Number.NaN, 15)).toBe(false);
+    expect(isBelowStationMinimum(1, 0)).toBe(false);
   });
 
   it("plays everything when the minimum is switched off", async () => {
