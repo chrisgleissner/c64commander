@@ -17,8 +17,15 @@ tags:
 # SidRadioChip's source caption and PlaybackControlsCard's idle title.
 # Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
-- assertVisible: "Home"
-- runFlow: subflows/dismiss-tour.yaml
+# The first-run tour opens once the app has settled, which can be later than the dismissal at the end
+# of launch-and-wait looks. Its dialog hides the tab bar, so "Home" is only visible after it is closed.
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow: subflows/dismiss-tour.yaml
+      - extendedWaitUntil:
+          visible: "Home"
+          timeout: ${TIMEOUT}
 - tapOn:
     id: "tab-settings"
     optional: true
