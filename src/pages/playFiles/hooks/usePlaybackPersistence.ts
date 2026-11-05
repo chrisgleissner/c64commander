@@ -526,9 +526,14 @@ export function usePlaybackPersistence({
     const endedRestore =
       pending.isPlaying && pending.playlistEnded === true && !otherDeviceRestore && !staleActiveRestore;
     if (endedRestore) setPlaylistEnded?.(true);
+    // Paused on the phone before the restart: the engine is gone, so no machine holds this pause either.
+    const pausedOnPhoneEndedWithTheApp =
+      !otherDeviceRestore && pending.isPaused && pending.playingOnPhone === true && !isLocalPlaybackActive();
     // A second restart before Resume finds the session paused, and Resume must still start the tune again.
     const resumeStartsAgain =
-      phoneStoppedRestore || (!otherDeviceRestore && pending.isPaused && pending.resumeStartsAgain === true);
+      phoneStoppedRestore ||
+      pausedOnPhoneEndedWithTheApp ||
+      (!otherDeviceRestore && pending.isPaused && pending.resumeStartsAgain === true);
     noteRestartedPhoneTune(resumeStartsAgain ? pending.currentItemId : null);
     if (staleActiveRestore) {
       // The designed outcome for a session that is too old to trust, so not a warning.

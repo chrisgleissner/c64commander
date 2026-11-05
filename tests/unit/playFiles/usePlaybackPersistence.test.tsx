@@ -1947,6 +1947,62 @@ describe("usePlaybackPersistence", () => {
     expect(takeRestartedPhoneTune()).toBe(itemId);
   });
 
+  // Paused on the phone, then the app was closed: Resume sent machine:resume, which SID Player refuses.
+  it.each([
+    { stillPlaying: false, expected: "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid" },
+    { stillPlaying: true, expected: null },
+  ])(
+    "makes Resume start a tune paused on the phone again when the engine is gone (engine still loaded: $stillPlaying)",
+    async ({ stillPlaying, expected }) => {
+      phone.playing = stillPlaying;
+      const playlistStorageKey = buildPlaylistStorageKey("device-1");
+      const itemId = "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid";
+      localStorage.setItem(
+        playlistStorageKey,
+        JSON.stringify({
+          items: [
+            {
+              source: "hvsc",
+              path: "/MUSICIANS/Test/phone.sid",
+              name: "phone.sid",
+              sourceId: "hvsc-library",
+              addedAt: new Date().toISOString(),
+              durationMs: 120000,
+            },
+          ],
+          currentIndex: 0,
+        }),
+      );
+      writeStoredPlaybackSession({
+        playlistKey: playlistStorageKey,
+        currentItemId: itemId,
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: true,
+        elapsedMs: 20000,
+        playedMs: 20000,
+        durationMs: 120000,
+        autoAdvanceDueAtMs: null,
+        playingOnPhone: true,
+        updatedAt: new Date().toISOString(),
+      } as any);
+      noteRestartedPhoneTune(null);
+
+      const { result } = renderHook(() =>
+        usePlaybackPersistenceHarness({
+          playlistStorageKey,
+          localEntriesBySourceId: new Map(),
+          localSourceTreeUris: new Map(),
+        }),
+      );
+
+      await waitFor(() => expect(result.current.isPaused).toBe(true));
+      await waitFor(() => expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true));
+      expect(takeRestartedPhoneTune()).toBe(expected);
+      phone.playing = false;
+    },
+  );
+
   it("downgrades a stale playing session restore to paused instead of auto-advancing (HARD9-064)", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     const durationMs = 60000;
