@@ -15,7 +15,7 @@ Allowed statuses in this ledger: `NOT_STARTED`, `IN_PROGRESS`, `PROVEN`, `FAILED
 - Fallback target: `u64`; inherited infra probe reported Ultimate 64 Elite firmware `3.14e`, unique ID `38C1BA`; fallback only.
 - Current artifact roots: `IN_PROGRESS`; active current-build root `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-af2d795b2361/`; inherited `515e2` evidence remains under `c64scope/artifacts/cta-20260624T235538Z-pixel4-c64u-515e2818ed19/`.
 - Current active blockers under fix: S1 `S1-DISKS-MOUNT-EJECT-RESETS-C64U` remains open and blocks C64U product traffic. Corrected readonly Cycle 1 passed, corrected Cycle 2 failed on key-driven Drive A eject with `Connection reset`, and the later `cf84d` five-cycle replay was blocked before Cycle 1 because the app-visible baseline was `Not connected` despite direct `c64u` HTTP `403`. Open S2 broad `/USB2/test-data` recursive scan stall remains.
-- Missing inherited prompt artifacts: `final-report-2.md`, `cleanup-report-2.md`, `callback-8020-residual-risk.md`, and `cta-runner.md`.
+- Missing inherited prompt artifacts: `final-report-2.md`, `cleanup-report-2.md`, `keypad-handset-residual-risk.md`, and `cta-runner.md`.
 - Continuation handover: `docs/testing/agentic-tests/full-cta-coverage/handover8.md`. `final-report-3.md` is written as `PIXEL4-NO-GO`, not a certification pass.
 
 ## Phase A — Current Build And Device Baseline

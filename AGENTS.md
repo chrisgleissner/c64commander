@@ -197,11 +197,11 @@ Make the smallest coherent change that fully satisfies the task.
 
 For productionization, hardening, exploratory regression, or device-stabilization tasks, do
 not spend the main execution window on broad builds, full-suite tests, or coverage before the
-user-facing device deliverables are working on the intended hardware target. Callback 8020
+user-facing device deliverables are working on the intended hardware target. Keypad handset
 responsiveness, real-time audio/spectrum, keypad and compact-screen evidence must come from
-the Callback itself; Pixel 4 results cannot substitute for those measurements.
+the handset itself; Pixel 4 results cannot substitute for those measurements.
 
-1. Reproduce and stabilize Callback-specific behavior on the Callback 8020. Use the Pixel 4
+1. Reproduce and stabilize Handset-specific behavior on the keypad handset. Use the Pixel 4
    only for checks where the handset model does not matter, or for normal-smartphone behavior.
 2. Choose the Ultimate per [Device preference](#device-preference).
 3. If the chosen Ultimate becomes unavailable during testing, assume first that app-driven
@@ -379,8 +379,8 @@ prompt, do not run `npm run test:coverage` merely because code changes exist.
 
 For these loops:
 
-- Evidence from the intended handset is the primary deliverable. Callback 8020 responsiveness
-  and real-time behavior must be measured on the Callback; the Pixel 4 is not a substitute.
+- Evidence from the intended handset is the primary deliverable. Keypad handset responsiveness
+  and real-time behavior must be measured on the handset; the Pixel 4 is not a substitute.
 - Targeted regression tests are required for confirmed code defects.
 - Coverage and changed-line coverage are finalization or PR-convergence gates only.
 - Do not run coverage while a HIL-capable process is active or while HIL deliverables
@@ -446,10 +446,10 @@ networking as the droidctl target `ssh:defaultuser@192.168.2.15`, with route `co
   the HIL there with the `c64u-remote` APK (`uk.gleissner.c64uremote`, launch activity
   `uk.gleissner.c64commander.MainActivity`).
 - **The Pixel 4 is for normal-smartphone or device-independent checks:** the default edition,
-  touch, the soft keyboard, and non-compact display profiles. Callback 8020 performance,
+  touch, the soft keyboard, and non-compact display profiles. Keypad handset performance,
   real-time responsiveness, keypad and compact-screen acceptance must be measured on the
-  actual Callback. If it is unavailable, record that blocker instead of substituting Pixel evidence.
-- Load the `callback-8020` skill for handset operations and `callback-hil` for target selection
+  actual handset. If it is unavailable, record that blocker instead of substituting Pixel evidence.
+- Load the local handset skill for handset operations, target selection
   and performance evidence. This target restriction applies even when the Pixel is easier to use.
 - **The handset is unique and cannot be repaired here.** Never restart its Android
   container: one restart rebooted the whole phone. Never reboot or flash it, and never
@@ -476,8 +476,8 @@ Two rules apply, and they are scoped to different work. Do not generalize either
   validation; use `u64` (Ultimate 64 Elite, hostname `u64`) if it answers, and fall back to
   `c64u` (Commodore 64 Ultimate, hostname `c64u`) only if it does not.
 
-For device work, choose the handset that represents the behavior being tested. Callback 8020
-responsiveness and constrained-device behavior require the actual Callback. Use the Pixel 4
+For device work, choose the handset that represents the behavior being tested. Keypad handset
+responsiveness and constrained-device behavior require the actual handset. Use the Pixel 4
 only where the model does not matter or where normal-smartphone behavior is the objective.
 Prefer real-device evidence over emulator evidence, record the handset and Ultimate target,
 and do not claim hardware-backed validation when the required target is unavailable.

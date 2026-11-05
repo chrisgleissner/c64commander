@@ -12,15 +12,15 @@ Raw screenshots, geometry dumps and logs are kept out of the repository under
 | --- | --- |
 | Base commit | `4e3253015` (main) |
 | Phone | Pixel 4, serial `9B081FFAZ001WX`, Android 16 (API 36), WebView 150.0.7871.63 |
-| Callback 8020 stand-in | `wm size 480x640`, `wm density 240`: 320 x 427 CSS px at DPR 1.5, `compact` profile |
+| Keypad handset stand-in | `wm size 480x640`, `wm density 240`: 320 x 427 CSS px at DPR 1.5, `compact` profile |
 | System bars at that geometry | status bar 30 CSS px, navigation bar 48 CSS px (C64 Commander); navigation bar hidden in C64U Remote |
 | Ultimates | `c64u` (C64 Ultimate, fw 1.2RC, core 1.4F), `u2` (Ultimate-II+L, fw 3.15, in the c64u's cartridge port), `u64` (Ultimate 64 Elite; during this sweep it ran another session's JTAG-deployed test build of 1541ultimate PR #705, git `893877ce`, which reports itself as 3.15) |
 | Editions | C64 Commander `uk.gleissner.c64commander`, C64U Remote `uk.gleissner.c64uremote`, both debug builds of this branch |
 | Media volume | 3 of 25 throughout |
 | Automation | droidctl for every phone operation; CDP (`scripts/bughunt-cdp.mjs`) for measurement only |
 
-The Pixel 4 stands in for the Callback 8020, which does not exist on the rig. Results here are
-the phone-side results at the 8020's screen geometry and key semantics. They do not prove the
+The Pixel 4 stands in for the keypad handset, which does not exist on the rig. Results here are
+the phone-side results at the keypad handset's screen geometry and key semantics. They do not prove the
 handset's CPU, battery, key matrix or panel readability.
 
 The debug build seeds its saved devices from `VITE_DEBUG_SAVED_DEVICES_JSON` (`c64u`, `u2`), so a

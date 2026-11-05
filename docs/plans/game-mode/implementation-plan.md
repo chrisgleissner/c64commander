@@ -386,7 +386,7 @@ this command is how it is obeyed.
 
 ## Phase 11 — Hardware verification (Pixel 4 + c64u)
 
-Per `AGENTS.md`, nothing here is gated on the 8020.
+Per `AGENTS.md`, nothing here is gated on the keypad handset.
 
 ```bash
 ./build --install-apk                 # then re-attach: a rebuild invalidates the CDP forward

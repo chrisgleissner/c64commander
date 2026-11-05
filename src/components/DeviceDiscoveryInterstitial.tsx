@@ -597,7 +597,7 @@ export function DeviceDiscoveryInterstitial() {
               the fold on a short viewport, and it sits beside "Not now" where the focus ring
               already reaches. `form=` keeps it a submit for the panel above. On a 427x320 handset
               in landscape it was off screen and unreachable by keypad entirely - see
-              docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md */}
+              docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-HANDSET-LANDSCAPE-CONNECT-UNREACHABLE.md */}
           {!hasCandidates && !manualPasswordTarget ? (
             <Button
               type="submit"

@@ -51,7 +51,7 @@ mirror them independently. **Audio is the cheap, high-value case** and gets its
 own flag, on-by-default-eligible even on low-power targets. **Video is the
 expensive case** (≈5.2 M pixels/s to decode and blit at 50 fps) and gets a
 separate flag, default-off on constrained hardware. See §5 for the
-Callback 8020 performance budget.
+Keypad handset performance budget.
 
 **Reset-key automation is not a standalone capability.** Auto-pressing a key
 after a reset only helps one narrow situation: a machine configured with a
@@ -183,9 +183,9 @@ confirmed against the device API; no longer a TODO.)
 
 ---
 
-## 5. Callback 8020 / low-power performance budget
+## 5. Keypad handset / low-power performance budget
 
-The Callback 8020 target (see `docs/plans/callback8020`) is CPU-constrained.
+The keypad handset target (see `docs/plans/keypadHandset`) is CPU-constrained.
 Mirroring must degrade gracefully:
 
 - **Audio and video are separately switchable** at the source: we start/stop

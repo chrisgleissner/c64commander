@@ -513,7 +513,7 @@ a browser, and the wiring is style-independent, so it is proved once.
 **On the default style only — leave exactly as they are:**
 
 `screenshots.spec.ts`, `smallScreenErgonomics.spec.ts`, `compactTextSweep.spec.ts`,
-`smallScreenLayoutIntegrity`, `displayProfiles.spec.ts`, `callbackSmallScreen.spec.ts`,
+`smallScreenLayoutIntegrity`, `displayProfiles.spec.ts`, `keypadHandsetSmallScreen.spec.ts`,
 `layoutOverflow.spec.ts`, `keypadInput.spec.ts`, `keypadOnlyNavigation.spec.ts`,
 `buttonHighlightProof.spec.ts`.
 

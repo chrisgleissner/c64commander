@@ -43,6 +43,12 @@ const sentenceCaseViolations = (text: string): string[] =>
     .flatMap((sentence) => sentence.split(/\s+/).slice(1))
     .filter((word) => /^[A-Z][a-z]/.test(word) && !FEATURE_NAMES.has(word.replace(/[^A-Za-z0-9]/g, "")));
 
+// Encoded so that the repository does not spell out the names it guards against.
+const UNANNOUNCED_HARDWARE = new RegExp(
+  ["Y2FsbGJhY2s=", "c2FpbGZpc2g=", "am9sbGE=", "ODAyMA=="].map((name) => atob(name)).join("|"),
+  "i",
+);
+
 describe("mode copy", () => {
   it("SPM-SWT-03 SID Player copy is sentence case", () => {
     for (const text of strings(MODE_COPY)) {
@@ -53,7 +59,7 @@ describe("mode copy", () => {
   it("SPM-SWT-03 SID Player copy is American English and names no unannounced hardware", () => {
     for (const text of [...strings(MODE_COPY), ...strings(MODE_NAMES)]) {
       expect(text).not.toMatch(BRITISH);
-      expect(text).not.toMatch(/callback|sailfish|jolla|8020/i);
+      expect(text).not.toMatch(UNANNOUNCED_HARDWARE);
     }
   });
 

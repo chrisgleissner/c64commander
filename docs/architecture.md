@@ -35,10 +35,10 @@ This profile layer sits above the existing viewport-validation infrastructure ra
 
 The app is operable entirely by hardware keyboard, D-pad/joystick, and numeric
 keypad as a first-class alternative to mouse/touch — for keypad-first devices
-(e.g. the Callback 8020) and any attached keyboard. The subsystem lives in
+(e.g. the keypad handset) and any attached keyboard. The subsystem lives in
 `src/lib/input/` (pure, DOM-free or DOM-aware-but-stateless, unit-tested) with a
 thin React adapter in `src/hooks/useFocusNavigation.tsx`. The full key map is in
-[docs/plans/callback8020/keymap.md](plans/callback8020/keymap.md).
+[docs/plans/keypadHandset/keymap.md](plans/keypadHandset/keymap.md).
 
 - **Semantic actions, not key codes.** `keyEvent.ts` normalizes a raw key event
   into a `SemanticAction` via a data-driven `keymap.ts` + profiles

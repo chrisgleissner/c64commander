@@ -2,7 +2,7 @@
 import type { Page } from "@playwright/test";
 
 /** Same kernel in the Pixel WebView and CI Chromium; rate 2 on a desktop is not half a Pixel. */
-export const callbackCpuKernel = () => {
+export const handsetCpuKernel = () => {
   let checksum = 0x1234abcd;
   const start = performance.now();
   for (let index = 0; index < 80_000_000; index += 1) {
@@ -11,11 +11,11 @@ export const callbackCpuKernel = () => {
   return { elapsedMs: performance.now() - start, checksum };
 };
 
-export const constrainCallbackCpu = async (page: Page, referenceMs: number) => {
+export const constrainHandsetCpu = async (page: Page, referenceMs: number) => {
   const session = await page.context().newCDPSession(page);
   // Warm the same function rather than repeatedly compiling its source.
-  await page.evaluate(`window.__callbackCpuKernel = ${callbackCpuKernel.toString()}`);
-  const measure = () => page.evaluate<number>("window.__callbackCpuKernel().elapsedMs");
+  await page.evaluate(`window.__handsetCpuKernel = ${handsetCpuKernel.toString()}`);
+  const measure = () => page.evaluate<number>("window.__handsetCpuKernel().elapsedMs");
   await measure();
   await measure();
   const nativeMs = await measure();

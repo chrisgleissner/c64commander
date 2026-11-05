@@ -309,7 +309,7 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(screen.queryByTestId("remote-input-no-picture-panel")).not.toBeInTheDocument();
     });
 
-    // S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE: the keypad handset ships `hidden`
+    // S3-GAMEMODE-HANDSET-JOYSTICK-SHOWN-WITH-NO-PICTURE: the keypad handset ships `hidden`
     // because it cannot operate a touch control, and Game Mode opens by itself on launch.
     // The space carries something usable rather than a joystick nobody there can reach.
     it("honours an explicit hidden with the picture off, and fills the space instead of emptying the sheet", () => {

@@ -3,11 +3,11 @@ import { test, expect } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { enableKeypad } from "./focusRing";
-import { constrainCallbackCpu } from "./callbackCpu";
+import { constrainHandsetCpu } from "./handsetCpu";
 import { disableTraceAssertions } from "./traceUtils";
 import { saveCoverageFromPage } from "./withCoverage";
 
-// Measured with callbackCpuKernel on the Pixel 4 under CDP rate 2; see the performance report.
+// Measured with handsetCpuKernel on the Pixel 4 under CDP rate 2; see the performance report.
 const HALF_PIXEL_KERNEL_MS = 171.8;
 
 for (const viewport of [
@@ -19,7 +19,7 @@ for (const viewport of [
     test.use({ viewport });
     test.beforeEach(async ({ page }, testInfo) => {
       disableTraceAssertions(testInfo, "Rendering and navigation contracts; no device writes.");
-      const calibration = await constrainCallbackCpu(page, HALF_PIXEL_KERNEL_MS);
+      const calibration = await constrainHandsetCpu(page, HALF_PIXEL_KERNEL_MS);
       await testInfo.attach("cpu-calibration", {
         body: JSON.stringify(calibration, (key, value) => (key === "session" ? undefined : value)),
         contentType: "application/json",

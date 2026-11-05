@@ -32,8 +32,8 @@ starting when the MCP Python SDK published a breaking 2.x. The `--with mcp<2` ar
 ## What you are building
 
 Six tool modules and 25 tools over a transport abstraction with two backends: `adb` for the Pixel 4,
-emulators and Waydroid containers, and `sailfish` for a Sailfish OS device running the same Android
-build on Jolla's Android compatibility layer. Both sit behind one interface, so a caller does not branch
+emulators and Waydroid containers, and `ssh` for a Linux handset running the same Android
+build on the handset vendor's Android compatibility layer. Both sit behind one interface, so a caller does not branch
 on transport.
 
 The surface is derived from what this repository already does with `adb` — 39 files, about 242
@@ -56,7 +56,7 @@ invocation lines — not from what an Android automation framework could offer.
    `requireOnScreen` defaults to true. `c64scope/src/cta/uiHelpers.ts:27` treats any non-degenerate
    bounds as visible today, so a node scrolled far off the viewport counts as visible — that is the gap
    spec §9.2 closes. A failed assertion returns `passed: false` with evidence, never an exception.
-4. **Do not gate anything on a Sailfish device.** No such device is on this bench and none can be
+4. **Do not gate anything on a Linux handset.** No such device is on this bench and none can be
    obtained. `AGENTS.md:1004-1015` says an item whose venue is that handset is not blocked but
    unrunnable, and that such items have been repeatedly re-created across sessions. Build the transport
    interface and a stub that returns `transport_unavailable` with the spec §14 probe procedure in its
@@ -128,7 +128,7 @@ evidence rather than quietly picking a different design. In particular, if the t
 find the code path that guessed a target. Do not add an exemption; an exemption makes those tests
 worthless.
 
-Spec §14 is a list of honest unknowns about the Sailfish transport, several of which are unresolved
+Spec §14 is a list of honest unknowns about the handset transport, several of which are unresolved
 because the vendor's own pages could not be reached. Do not resolve one by inventing an API. If you
 cannot establish something, leave it in §14 and say so.
 

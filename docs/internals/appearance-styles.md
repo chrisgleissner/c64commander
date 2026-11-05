@@ -69,7 +69,7 @@ literal `border-{t,r,b,l}-2` is still correct: under `box-sizing: border-box`, a
 element with no content and a fixed size cannot move anything, so it is not a style edge and must
 not be wired to `--edge-width`.
 
-**The focus ring is never derived from `--border`.** On the Callback 8020 the touchscreen is off by
+**The focus ring is never derived from `--border`.** On the keypad handset the touchscreen is off by
 default and the ring is the pointer. `--ring` is declared separately in every palette and gated at
 ≥3:1 against both the surface behind it and the fill of the control it wraps (WCAG 2.1 SC 1.4.11 /
 2.4.11).

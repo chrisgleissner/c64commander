@@ -45,7 +45,7 @@ handset sends them, with `code: ""` and the real key codes. Reverting the whole 
 
 `{ keyCode: 82, action: "openMenu" }` also produced no event at all on this rig: `KEYCODE_MENU`
 never reached the page. On the Pixel 4 that is expected — it has no menu key and the system
-consumes the injected event — so nothing here says whether the Callback's own Menu soft key
+consumes the injected event — so nothing here says whether the handset's own Menu soft key
 delivers it. It is recorded, not fixed.
 
 ## What a user does differently now

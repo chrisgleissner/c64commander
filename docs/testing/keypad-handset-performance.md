@@ -1,4 +1,4 @@
-# Callback 8020 contextful draw measurements
+# Keypad handset contextful draw measurements
 
 Measured on 2026-10-04 using the attached Pixel 4, C64U (firmware 1.2.1RC, core 1.50),
 and the existing saved data, including the HVSC browse index and two SID playlist items.
@@ -13,9 +13,9 @@ that preference would not exercise the adaptive profiles. The harness asserts `c
 and `expanded` before collecting each set.
 
 The Pixel WebView ran with CDP CPU throttling rate **2** throughout the latency measurements.
-The warmed 80-million-iteration kernel in `playwright/callbackCpu.ts` measured **85.0 ms**
+The warmed 80-million-iteration kernel in `playwright/handsetCpu.ts` measured **85.0 ms**
 unthrottled versus **171.8 ms** throttled (medians), with the same checksum.
-[Calibration samples](performance/callback-8020/cpu-calibration.json).
+[Calibration samples](performance/keypad-handset/cpu-calibration.json).
 The browser runner calibrates each host to that 171.8 ms reference; desktop rate 2 alone
 would not establish half-Pixel throughput.
 
@@ -38,9 +38,9 @@ Task, script and layout duration deltas cover the key operation through readines
 ## Warm draw results
 
 Milliseconds, rounded; all samples and CPU counters are retained in
-[baseline](performance/callback-8020/baseline.json),
-[candidate](performance/callback-8020/candidate.json) and
-[comparison](performance/callback-8020/comparison.json).
+[baseline](performance/keypad-handset/baseline.json),
+[candidate](performance/keypad-handset/candidate.json) and
+[comparison](performance/keypad-handset/comparison.json).
 
 | Surface         | Small baseline → candidate |     Change | Tablet baseline → candidate |     Change |
 | --------------- | -------------------------: | ---------: | --------------------------: | ---------: |
@@ -96,8 +96,8 @@ index work but do not make that restore asynchronous.
 Thirty additional trials request each overlay immediately after a tab jump, five times per
 viewport. Baseline lost **8 of 10** device-switcher requests; candidate lost **0 of 10**.
 All thirty candidate overlay draws succeeded.
-[Baseline](performance/callback-8020/baseline-urgent.json) and
-[candidate](performance/callback-8020/candidate-urgent.json).
+[Baseline](performance/keypad-handset/baseline-urgent.json) and
+[candidate](performance/keypad-handset/candidate-urgent.json).
 Timeouts are recorded as failures, not omitted from latency summaries.
 
 One pending switcher intent spans subscriber gaps and expires after 1.5 s if no badge answers it. The departing badge cannot consume it
@@ -124,9 +124,9 @@ runs from the real Android arrow event to two frames after the selected control 
 | 320px  | 199.4 ms |               344.6 ms |         52.6 ms |
 | 800px  | 212.4 ms |               392.0 ms |         50.0 ms |
 
-[Baseline samples](performance/callback-8020/first-key-baseline.json),
-[intermediate samples](performance/callback-8020/first-key-candidate.json), and
-[final samples](performance/callback-8020/first-key-fixed.json). This is one first-action
+[Baseline samples](performance/keypad-handset/first-key-baseline.json),
+[intermediate samples](performance/keypad-handset/first-key-candidate.json), and
+[final samples](performance/keypad-handset/first-key-fixed.json). This is one first-action
 probe, not a guarantee for every later key or a strong tail estimate. An initial final-build
 attempt timed out while Android was dozing with the app in the background; it was retained
 locally and repeated after waking the phone through droidctl.
@@ -144,11 +144,11 @@ node scripts/contextful-draw-perf.mjs --rounds 5 --urgent-only --output artifact
 node scripts/contextful-first-key-perf.mjs artifacts/contextful-draw/first-key.json candidate
 
 # Host Chromium: all created pages are constrained before their scripts run.
-PLAYWRIGHT_DEVICES=phone node scripts/run-callback-browser.mjs -- npx playwright test contextfulDraw.spec.ts
-node scripts/run-callback-browser.mjs -- npm run test:e2e
+PLAYWRIGHT_DEVICES=phone node scripts/run-handset-browser.mjs -- npx playwright test contextfulDraw.spec.ts
+node scripts/run-handset-browser.mjs -- npm run test:e2e
 
 # Physical input needs the native viewport; CPU stays at the simulated reference.
-node scripts/run-callback-hil.mjs -- node tools/hil/merge_gate.mjs \
+node scripts/run-handset-hil.mjs -- node tools/hil/merge_gate.mjs \
   --host c64u --iface <LAN-IP> --json artifacts/hil-gate.json
 ```
 
@@ -183,7 +183,7 @@ or coverage instrumentation were included in the measured APKs.
   thresholds while retaining 91% changed-branch and 94% Codecov patch requirements.
 - No screenshot files changed: labels, controls and documented visible content are unchanged.
 
-The [complete hardware gate](performance/callback-8020/hardware-gate.json) passed on the final
+The [complete hardware gate](performance/keypad-handset/hardware-gate.json) passed on the final
 application source (commit `f5acc5bc2`, debug APK installed through droidctl) with the Pixel 4
 at its native viewport, using c64u. Phone speaker volume stayed at 3/25 and the original volume
 and display state were unchanged afterwards:

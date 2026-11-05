@@ -25,8 +25,8 @@ import { connect } from "../../scripts/remote-input-hil/cdp.mjs";
 import { createDroidDevice } from "./droidctl_device.mjs";
 
 const PACKAGE = "uk.gleissner.c64commander";
-const CALLBACK_SIZE = "480x640";
-const CALLBACK_DENSITY = "240";
+const HANDSET_SIZE = "480x640";
+const HANDSET_DENSITY = "240";
 const MAX_MUSIC_VOLUME_STEP = 5;
 const ROUTES = ["/", "/play", "/disks", "/config", "/settings", "/docs"];
 
@@ -93,7 +93,7 @@ const quietenSpeaker = async () => {
 const geometry = async () => ({ size: await sh("wm size"), density: await sh("wm density") });
 
 const setCallbackGeometry = async () => {
-  await sh(`wm size ${CALLBACK_SIZE}; wm density ${CALLBACK_DENSITY}`);
+  await sh(`wm size ${HANDSET_SIZE}; wm density ${HANDSET_DENSITY}`);
 };
 
 const restoreGeometry = async () => {

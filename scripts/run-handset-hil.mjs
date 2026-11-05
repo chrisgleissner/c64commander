@@ -7,13 +7,13 @@ import { createDroidDevice } from "../tools/hil/droidctl_device.mjs";
 
 const separator = process.argv.indexOf("--");
 const command = separator >= 0 ? process.argv.slice(separator + 1) : [];
-if (!command.length) throw new Error("Usage: node scripts/run-callback-hil.mjs -- <command> [arguments]");
+if (!command.length) throw new Error("Usage: node scripts/run-handset-hil.mjs -- <command> [arguments]");
 const phone = await createDroidDevice({ serial: process.env.ANDROID_SERIAL });
-const port = Number(process.env.CALLBACK_CDP_PORT ?? "9333");
+const port = Number(process.env.HANDSET_CDP_PORT ?? "9333");
 await phone.forwardWebview("uk.gleissner.c64commander", port);
 const pages = await (await fetch(`http://localhost:${port}/json`)).json();
 const page = pages.find((candidate) => candidate.type === "page");
-if (!page) throw new Error("No app WebView found for Callback CPU simulation");
+if (!page) throw new Error("No app WebView found for Handset CPU simulation");
 const client = await connect(page.webSocketDebuggerUrl);
 let child;
 const stopChild = () => child?.kill("SIGTERM");

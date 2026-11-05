@@ -34,7 +34,7 @@ Read the previous hardening artifacts first:
 
 - `docs/testing/agentic-tests/full-cta-coverage/final-report-2.md`
 - `docs/testing/agentic-tests/full-cta-coverage/cleanup-report-2.md`
-- `docs/testing/agentic-tests/full-cta-coverage/callback-8020-residual-risk.md`
+- `docs/testing/agentic-tests/full-cta-coverage/keypad-handset-residual-risk.md`
 - `docs/testing/agentic-tests/full-cta-coverage/cta-runner.md`
 - `docs/testing/agentic-tests/full-cta-coverage/runs/infrastructure-audit.md`
 - `PLANS.md`

@@ -629,7 +629,7 @@ export const TypeKeyboard = ({
           className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-6 pr-0.5"
           data-testid="remote-input-keyboard-scroll"
         >
-          {/* Scroll order for the 8020: cursor pad + immediate RETURN/SPACE, then
+          {/* Scroll order for the keypad handset: cursor pad + immediate RETURN/SPACE, then
               the function keys, then the high-value special keys (edit + system)
               directly below them, then the character grid, and finally a second
               full-width SPACE anchored at the very bottom. */}

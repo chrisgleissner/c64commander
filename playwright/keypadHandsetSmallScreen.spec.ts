@@ -7,14 +7,14 @@
  */
 
 /**
- * Real-browser small-screen layout gate for the Commodore Callback 8020
+ * Real-browser small-screen layout gate for the keypad handset
  * (3.25" / 480x640) and a narrower 320x480 fallback. Complements the
  * deterministic jsdom display-profile contract test
  * (tests/unit/lib/smallScreenLayout.test.ts) with an actual layout engine, and
  * the existing layoutOverflow.spec.ts (compact/medium/expanded profiles).
  *
  * It asserts no horizontal overflow on the offline app shell across every
- * primary tab route — the offline shell is exactly the Callback's manual-IP
+ * primary tab route — the offline shell is exactly the handset's manual-IP
  * first-run state, so no mock device is needed.
  *
  * The offline shell has to be asked for now that Demo Mode is on by default: without

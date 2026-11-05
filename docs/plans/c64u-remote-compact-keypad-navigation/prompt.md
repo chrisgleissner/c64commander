@@ -19,7 +19,7 @@ DOM, compatibility-layer, operating-system, or handset-specific event identities
 and do not leave a task blocked waiting for that unreleased handset. Build the specified semantic
 behavior by construction, retain every tested-key fallback from the specification,
 validate phone-side behavior on the attached Pixel 4, and report the remaining
-Callback-only event-identity uncertainty accurately.
+Handset-only event-identity uncertainty accurately.
 
 ## Read before changing anything
 

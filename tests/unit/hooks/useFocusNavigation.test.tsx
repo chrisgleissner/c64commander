@@ -1267,7 +1267,7 @@ describe("FocusNavigationProvider global shortcuts", () => {
  * So a keypad user whose focus landed in a dialog's text field could reach nothing else
  * in that dialog, including its own primary action. Found on a 427x320 handset, where
  * the discovery dialog's Connect button became unreachable:
- * docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md
+ * docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-HANDSET-LANDSCAPE-CONNECT-UNREACHABLE.md
  */
 describe("vertical keys escape a single-line field inside an overlay", () => {
   const Dialog = () => (

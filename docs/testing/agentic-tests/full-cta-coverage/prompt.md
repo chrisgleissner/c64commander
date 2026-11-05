@@ -957,8 +957,8 @@ fuzz spine) and which modules are new; DroidMind MCP connection + capability dis
 integration; C64Bridge exception policy; installation; configuration; commands; discovery
 algorithm; control fingerprint; state graph; risk model (with the R0–R4↔action-class mapping);
 scenario format; oracle model; checkpoint/resume; replay; artifact format; adding a scenario;
-handling a new control type; troubleshooting; safety rules; known limitations; Pixel 4 vs Callback
-8020 limitations; example discover-only run; example full run; example failure replay. It must be
+handling a new control type; troubleshooting; safety rules; known limitations; Pixel 4 vs keypad
+handset limitations; example discover-only run; example full run; example failure replay. It must be
 sufficient for a future engineer or LLM to run the test without reconstructing the architecture
 from source.
 

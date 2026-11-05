@@ -482,7 +482,7 @@ again. The pin is per session, not persisted: an orientation pinned for one game
 not silently apply to the next launch weeks later.
 
 The override exists because three situations are not solvable by a sensor: a handset lying
-flat, a handset whose AppSupport does not deliver sensor callbacks, and a player lying
+flat, a handset whose Android compatibility layer does not deliver sensor callbacks, and a player lying
 down. It is also what makes the whole feature testable without turning a phone.
 
 ### 4.5 Rotating the picture only
@@ -644,7 +644,7 @@ exits.
 
 A binding is a map from **joystick slot** to **semantic action** — never to a raw key code.
 Physical keys already normalise to `SemanticAction` through the `keypad` profile
-(`docs/plans/callback8020/keymap.md`), so bindings stay device-independent and a handset
+(`docs/plans/keypadHandset/keymap.md`), so bindings stay device-independent and a handset
 that reports different key codes is handled in the profile, as today.
 
 ```ts
@@ -953,7 +953,7 @@ touch on joystick ─┘   (keyDriven and requested live in the sheet, per game 
 
 ### 10.4 Hardware (Pixel 4 + c64u)
 
-Per `AGENTS.md`, no item here is gated on the 8020.
+Per `AGENTS.md`, no item here is gated on the keypad handset.
 
 - Attach with the `hil-attach` skill after every `./build --install-apk`.
 - Drive keys through CDP `Input.dispatchKeyEvent` with a **hold** between `rawKeyDown` and
@@ -973,10 +973,10 @@ Per `AGENTS.md`, no item here is gated on the 8020.
 
 State these plainly in the as-built section rather than carrying them as open work:
 
-- The `KeyboardEvent` codes the 8020's keypad emits through Sailfish AppSupport. Mitigated
+- The `KeyboardEvent` codes the keypad handset's keypad emits through the Android compatibility layer. Mitigated
   by construction: the `keypad` profile binds several plausible aliases per key, and
   press-to-bind (§6.5) lets a user fix any key the profile misses.
-- Whether AppSupport delivers `OrientationEventListener` callbacks. Mitigated by the
+- Whether the Android compatibility layer delivers `OrientationEventListener` callbacks. Mitigated by the
   manual override, which makes the feature usable with no sensor at all.
 - Whether the keypad supports two keys held at once (diagonals). Mitigated by defaulting
   to cardinals only.
@@ -1134,10 +1134,10 @@ Two defects were found by this run and fixed:
 
 Stated plainly rather than carried as open work:
 
-- The `KeyboardEvent` codes the Callback 8020's keypad emits through Sailfish AppSupport.
+- The `KeyboardEvent` codes the keypad handset's keypad emits through the Android compatibility layer.
   Mitigated by construction: the `keypad` profile binds several plausible aliases per key, and
   press-to-bind (§6.5) lets a user fix any key the profile misses.
-- Whether AppSupport delivers `OrientationEventListener` callbacks. Mitigated by the manual
+- Whether the Android compatibility layer delivers `OrientationEventListener` callbacks. Mitigated by the manual
   override, which makes the feature usable with no sensor at all — and which is what the
   hardware run used to assert the orientation table.
 - Whether that keypad reports two keys held at once. The Pixel 4 does (the diagonal was read

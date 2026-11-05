@@ -24,7 +24,7 @@ smoke gate passes. Four defects were found in the app and five in the walk.
   `c64u-remote` APK hid both on any device. `resolveDefaultHideStatusBar` /
   `resolveDefaultHideNavigationBar` now take the resolved display profile.
 - **PR #415** — the variant pinned `default_display_profile: compact`, forcing the small-panel
-  presentation onto every device running the APK. Now `auto`. The 8020 is 320 CSS px so it still
+  presentation onto every device running the APK. Now `auto`. The keypad handset is 320 CSS px so it still
   resolves to compact, and the recording geometry is unchanged; a 392 px phone now gets medium.
 - **PR #416** — six controls carried only `data-testid`. **A WebView exposes the DOM `id` to
   Android as the accessibility resource-id and does not expose `data-testid` at all**, so a

@@ -6,7 +6,7 @@ hierarchy, together with the keypad / D-pad / T9 mapping used to reach and
 operate each one without a touchscreen.
 
 It is the reference checklist for keypad-first devices (D-pad + numeric T9
-keypad remotes such as the Commodore _Callback 8020_, and Bluetooth keyboards).
+keypad remotes such as the Commodore _keypad handset_, and Bluetooth keyboards).
 It complements:
 
 - `docs/keyboard-input.md` — the keypad/keyboard/T9 feature design and semantics.

@@ -11,7 +11,7 @@
  * What it costs someone who has just come home to reach one control: how many key presses, and how
  * many seconds before the press provably lands on the C64.
  *
- * The user this answers for holds the Callback 8020 — a keypad, no touchscreen, 320 x 426.7 CSS px
+ * The user this answers for holds the keypad handset — a keypad, no touchscreen, 320 x 426.7 CSS px
  * — and uses the app the way someone uses a light switch. They are not exploring it.
  *
  * "Provably" is the point. The health badge is not evidence: it has read healthy while the app
@@ -51,7 +51,7 @@ const REACH_TIMEOUT_MS = Number(arg("reach-timeout-ms", "20000"));
 const CONTROL = arg("control", "reset");
 const JSON_OUT = arg("json", "");
 
-/** Android key codes. The Callback's keypad produces exactly these. */
+/** Android key codes. The handset's keypad produces exactly these. */
 const KEY = { DOWN: 20, CENTER: 23, BACK: 4, DIGIT: (d) => 7 + d };
 
 const SENTINEL = 0xaa;

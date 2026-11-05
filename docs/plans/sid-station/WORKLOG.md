@@ -551,9 +551,9 @@ _(append entries below as tasks/gates complete — newest last)_
   - dist ships the GPL v2 _license text_ file, but the code is v2-or-later per the README clause.
 - Decision: licence gate **clears** — the WASM engine can be vendored under GPL-3.0-or-later with
   attribution in THIRD_PARTY_NOTICES (add with the vendor step). iOS App-Store × GPL friction is a
-  separate pre-iOS-release legal check (§12.2), not an Android/SailfishOS blocker.
+  separate pre-iOS-release legal check (§12.2), not an Android/the handset OS blocker.
 - Gate: **L1 legal component satisfied** (no GPL-2.0-only). The L1 runtime proof (WASM instantiates +
-  renders a PSID on the Callback 8020 / SailfishOS) and LE1–LE3 (local engine + chunked Web Audio sink
+  renders a PSID on the keypad handset / the handset OS) and LE1–LE3 (local engine + chunked Web Audio sink
   - engine toggle + on-device perf) remain — the independent Track B build (§0.5), which needs the
     vendored `dist/` + a full audio engine.
 
@@ -606,7 +606,7 @@ in expected order`) failed: in **developer mode** it enumerates every `h2`, and 
     (incl. bundle-budgets — WASM is a public asset, not a JS chunk), `vite build` (✓ 9.4s; public
     asset copied to `dist/wasm/`; lockfile intact).
 - **Scope truth:** LE1's **on-device L2 exit** (3-min PSID gapless, 0 underruns; `renderMsPerSec`)
-  needs a fresh APK on the Pixel/Callback 8020 — the spec's own manual/local gate (§9.5/§12.6),
+  needs a fresh APK on the Pixel/keypad handset — the spec's own manual/local gate (§9.5/§12.6),
   not CI-provable here. Next: **LE2** (engine toggle + `playItem` routing + one-time ROM notice +
   wake lock), then the hardware-gated L2–L4 soaks + GA flag-flip.
 
@@ -697,7 +697,7 @@ KERNAL rev 3 / BASIC V2 with fingerprints matching the canonical dumps.
 
 **SID emulation is now selectable** (Settings → SID Radio). Measured like-for-like: reSIDfp 4.3×
 realtime, SIDLite 23.8× (5.5× cheaper isolated; 3.1× on device, same tune). **Every variant defaults
-to reSIDfp**, including the keypad one: the Callback 8020 it targets is unreleased and cannot be
+to reSIDfp**, including the keypad one: the keypad handset it targets is unreleased and cannot be
 measured, and defaulting it to the lesser engine on a spec-sheet projection would ship an audible
 regression on the hardware that exists to protect hardware that does not. `variants.yaml` carries a
 per-variant override so that flips with one line once gate L1 can actually be run; a unit test pins
@@ -722,7 +722,7 @@ keypad hazard where the click-suppression flag outlived its click.
 **Gate L4 PASSED** — SID Radio played end to end on the Local engine for 60 s with the C64 pointed at
 an unroutable address, zero underruns.
 
-**Gate L1 cannot be run and is deferred, not blocked.** It is defined against the Callback 8020,
+**Gate L1 cannot be run and is deferred, not blocked.** It is defined against the keypad handset,
 which has not been released. The available rig is a Pixel 4 and a C64 Ultimate; the engine is proven
 on the Pixel 4 (zero underruns, 715 ms/sec p99, ~1.4× realtime margin). L1 becomes runnable when the
 device ships.
@@ -779,7 +779,7 @@ previous direction and both look identical.
 
 **L1's substance passed, its venue is deferred** — the WASM engine instantiates
 and renders on the Pixel 4 across the 31-tune corpus and the licence audit is
-clean. The gate names the Callback 8020 / SailfishOS as the primary device; that
+clean. The gate names the keypad handset / the handset OS as the primary device; that
 hardware does not exist yet, so that re-run is deferred, not failed.
 
 **Hold-to-seek verified with real touch**, after the user reported it did not

@@ -1,6 +1,6 @@
-# S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE — First-run setup is impossible on a keypad handset in landscape
+# S2-GAMEMODE-HANDSET-LANDSCAPE-CONNECT-UNREACHABLE — First-run setup is impossible on a keypad handset in landscape
 
-- ID: S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE
+- ID: S2-GAMEMODE-HANDSET-LANDSCAPE-CONNECT-UNREACHABLE
 - Title: "No C64 found" dialog renders its Connect button off-screen in landscape, and the keypad cannot reach it
 - Severity: S2
 - Priority: P1 — blocks first-run setup on the target device for the C64U Remote edition
@@ -11,14 +11,14 @@
 - Input method: injected physical key events (`adb shell input keyevent`), no touch
 - Build identity: `0.9.9-rc2-1db2e` (c64u-remote edition, debug)
 - Git SHA: `1db2e0e6`
-- Pixel 4 identity: `9B081FFAZ001WX`, emulating the Callback 8020 via `wm size 640x480` + `wm density 240`
+- Pixel 4 identity: `9B081FFAZ001WX`, emulating the keypad handset via `wm size 640x480` + `wm density 240`
 - Reproduction rate: 1/1, deterministic
 - Preconditions: C64U Remote edition; no saved device; app orientation set to Landscape
   (Settings → Appearance → Landscape); network unreachable so discovery finds nothing.
 
 ## What happens
 
-At 427x320 CSS (the 8020 in landscape) the discovery dialog's content is 363 px tall in a 320 px
+At 427x320 CSS (the keypad handset in landscape) the discovery dialog's content is 363 px tall in a 320 px
 viewport. Measured from the live DOM:
 
 ```
@@ -32,7 +32,7 @@ button "Connect"           y=285  bottom=329   visible=FALSE
 
 The only visible action is the dismissive one. The primary action is below the fold.
 
-That alone would be survivable on a touchscreen, because the dialog scrolls. The Callback 8020 has
+That alone would be survivable on a touchscreen, because the dialog scrolls. The keypad handset has
 no touchscreen, and the keypad cannot reach the button:
 
 - 8 × `DPAD_DOWN`: focus never leaves `Not now`.
@@ -97,7 +97,7 @@ discovered set in correct DOM order (close, host input, connect, dismiss). Measu
 - from `Not now`, `DPAD_UP` goes to `Close`, again skipping `Connect`
 - only `TAB` reaches it
 
-A Callback 8020 is d-pad and keypad; it has no Tab key. So for the target device this is **still
+A keypad handset is d-pad and keypad; it has no Tab key. So for the target device this is **still
 blocking**, and the remaining work is in the focus ring, not the layout.
 
 ## Suggested direction
