@@ -866,8 +866,8 @@ const renderKeyboardReference = ({ features, variant }) => {
     ),
     "",
     isC64uRemoteVariant(variant)
-      ? "Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one."
-      : "Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one.",
+      ? "Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. Your phone's own keypad settings come first: when they give F1 or F3 a tap, double tap or long press action, the phone keeps that key and the app does not receive it. The Commodore key opens the phone's launcher, so the app never receives it either. To see what your own keys send, open **Diagnostics → Key explorer** and press one."
+      : "Press either from any page and the app takes you to Play and does it there. A phone whose own settings give F1 or F3 an action keeps that key, and the app does not receive it. To see what your own keys send, open **Diagnostics → Key explorer** and press one.",
     "",
     "#### Star and Pound",
     "",

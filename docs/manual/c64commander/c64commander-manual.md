@@ -1329,7 +1329,7 @@ Pressing the number of the page you are already on starts that page over from th
 | F1 | Play or pause, from any page |
 | F3 | Next tune, from any page |
 
-Press either from any page and the app takes you to Play and does it there. **The Commodore key is not bound yet.** To see what your own keys send, open **Diagnostics → Key explorer** and press one.
+Press either from any page and the app takes you to Play and does it there. A phone whose own settings give F1 or F3 an action keeps that key, and the app does not receive it. To see what your own keys send, open **Diagnostics → Key explorer** and press one.
 
 #### Star and Pound
 

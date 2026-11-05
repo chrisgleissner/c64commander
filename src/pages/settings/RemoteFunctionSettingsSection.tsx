@@ -50,7 +50,9 @@ export const RemoteFunctionSettingsSection = () => {
       <div>
         <Label className="text-sm">Remote function keys</Label>
         <HelperText>
-          F1 and F3 run these assignments in normal navigation. C64 input surfaces always send literal C64 F1/F3.
+          F1 and F3 run these assignments in normal navigation when the phone leaves the key to the app. A key given an
+          action in the phone's own keypad settings stays with the phone. C64 input surfaces always send literal C64
+          F1/F3.
         </HelperText>
       </div>
       {([1, 3] as const).map((key) => {
