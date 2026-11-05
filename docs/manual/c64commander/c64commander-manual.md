@@ -1331,11 +1331,11 @@ Pressing the number of the page you are already on starts that page over from th
 
 Press either from any page and the app takes you to Play and does it there. A phone whose own settings give F1 or F3 an action keeps that key, and the app does not receive it. To see what your own keys send, open **Diagnostics → Key explorer** and press one.
 
-#### Next song from anywhere on the phone
+#### Skip to the next item from anywhere on your phone or tablet
 
-The keys above work while C64 Commander is in front. To skip to the next song from anywhere on your phone or tablet, install the companion app **C64 Commander - Next Song**. It is attached to every release as `c64commander-<version>-android-next-song.apk`. Opening it skips to the next song and does nothing else.
+The keys above work while C64 Commander is in front. To move on to the next item in your playlist from anywhere on your phone or tablet, install the small companion app **Skip - C64 Commander**. Opening it does the same as **Next** on the Play page, for a song, a program or a disk, and nothing else. It is attached to every release as `c64commander-<version>-android-skip.apk`.
 
-If your phone or tablet lets a key open an app, choose **C64 Commander - Next Song** for that key in its own keypad settings. The key then skips to the next song wherever you are. If C64 Commander was in front, it comes back about a second later. From anywhere else, your phone or tablet may show its own list of apps afterwards. Without such a key, put the companion app on your home screen and open it with one tap.
+If your phone or tablet lets a key open an app, choose **Skip - C64 Commander** for that key in its own keypad settings. The key then skips to the next item wherever you are. If C64 Commander was in front, it comes back about a second later. From anywhere else, your phone or tablet may show its own list of apps afterwards. Without such a key, put the companion app on your home screen and open it with one tap.
 
 #### Star and Pound
 

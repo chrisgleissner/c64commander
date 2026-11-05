@@ -2033,6 +2033,14 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   log "Installing APK to device: $DEVICE_ID"
   adb -s "$DEVICE_ID" install -r "$APK_PATH"
 
+  SKIP_APK_PATH="$ROOT_DIR/android/skip-to-next/build/outputs/apk/$APK_VARIANT/skip-to-next-$APK_VARIANT.apk"
+  if [[ -f "$SKIP_APK_PATH" ]]; then
+    log "Installing the Skip companion APK to device: $DEVICE_ID"
+    adb -s "$DEVICE_ID" install -r "$SKIP_APK_PATH"
+  else
+    echo "WARNING: Skip companion APK not found at $SKIP_APK_PATH; the device has the app without it" >&2
+  fi
+
   log "Launching app"
   adb -s "$DEVICE_ID" shell monkey -p "$(resolve_android_application_id)" -c android.intent.category.LAUNCHER 1
 fi

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-package uk.gleissner.c64commander.nextsong;
+package uk.gleissner.c64commander.skipnext;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -34,7 +34,7 @@ import org.robolectric.android.controller.ActivityController;
 import org.robolectric.shadows.ShadowLooper;
 
 @RunWith(RobolectricTestRunner.class)
-public class NextSongActivityTest {
+public class SkipToNextActivityTest {
     private static final String MAIN = BuildConfig.MAIN_APPLICATION_ID;
 
     public static final class FakeTransport extends ContentProvider {
@@ -47,7 +47,7 @@ public class NextSongActivityTest {
         public Bundle call(String method, String arg, Bundle extras) {
             calls.add(method);
             Bundle reply = new Bundle();
-            reply.putBoolean(NextSongActivity.RESULT_WAS_IN_FRONT, wasInFront);
+            reply.putBoolean(SkipToNextActivity.RESULT_WAS_IN_FRONT, wasInFront);
             return reply;
         }
 
@@ -75,11 +75,11 @@ public class NextSongActivityTest {
     @Test
     public void sendsNextAndHandsTheScreenBackWhenTheMainAppWasInFront() {
         installMainApp(true);
-        ActivityController<NextSongActivity> controller = Robolectric.buildActivity(NextSongActivity.class).create();
-        NextSongActivity activity = controller.get();
+        ActivityController<SkipToNextActivity> controller = Robolectric.buildActivity(SkipToNextActivity.class).create();
+        SkipToNextActivity activity = controller.get();
 
-        assertEquals(List.of(NextSongActivity.METHOD_NEXT), FakeTransport.calls);
-        ShadowLooper.idleMainLooper(NextSongActivity.HAND_BACK_DELAY_MS - 1, TimeUnit.MILLISECONDS);
+        assertEquals(List.of(SkipToNextActivity.METHOD_NEXT), FakeTransport.calls);
+        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS - 1, TimeUnit.MILLISECONDS);
         assertFalse("waits for the system switcher to pass", activity.isFinishing());
         assertNull(shadowOf(activity).peekNextStartedActivity());
 
@@ -93,21 +93,21 @@ public class NextSongActivityTest {
     @Test
     public void sendsNextAndLeavesTheUserWhereTheyWereWhenTheMainAppWasNotInFront() {
         installMainApp(false);
-        NextSongActivity activity = Robolectric.buildActivity(NextSongActivity.class).create().get();
+        SkipToNextActivity activity = Robolectric.buildActivity(SkipToNextActivity.class).create().get();
 
-        assertEquals(List.of(NextSongActivity.METHOD_NEXT), FakeTransport.calls);
+        assertEquals(List.of(SkipToNextActivity.METHOD_NEXT), FakeTransport.calls);
         assertTrue(activity.isFinishing());
-        ShadowLooper.idleMainLooper(NextSongActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
+        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
         assertNull(shadowOf(activity).getNextStartedActivity());
     }
 
     @Test
     public void finishesWithoutHandingBackWhenTheMainAppIsNotInstalled() {
         FakeTransport.calls.clear();
-        NextSongActivity activity = Robolectric.buildActivity(NextSongActivity.class).create().get();
+        SkipToNextActivity activity = Robolectric.buildActivity(SkipToNextActivity.class).create().get();
 
         assertTrue(activity.isFinishing());
-        ShadowLooper.idleMainLooper(NextSongActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
+        ShadowLooper.idleMainLooper(SkipToNextActivity.HAND_BACK_DELAY_MS, TimeUnit.MILLISECONDS);
         assertNull(shadowOf(activity).getNextStartedActivity());
         assertEquals(List.of(), FakeTransport.calls);
     }

@@ -1359,11 +1359,11 @@ Pressing the number of the page you are already on starts that page over from th
 
 Change either one in **Settings → Play and disk → Remote function keys**. A function-key shortcut acts without changing page. While a C64 keyboard or joystick screen has the keypad, it sends the C64 key with the same label instead. Your phone's own keypad settings come first: when they give F1 or F3 a tap, double tap or long press action, the phone keeps that key and the app does not receive it. The Commodore key opens the phone's launcher, so the app never receives it either. To see what your own keys send, open **Diagnostics → Key explorer** and press one.
 
-#### Next song from anywhere on the phone
+#### Skip to the next item from anywhere on your phone
 
-The keys above work while C64U Remote is in front. To skip to the next song from anywhere on your phone, install the companion app **C64U Remote - Next Song**. It is attached to every release as `c64u-remote-<version>-android-next-song.apk`. Opening it skips to the next song and does nothing else.
+The keys above work while C64U Remote is in front. To move on to the next item in your playlist from anywhere on your phone, install the small companion app **Skip - C64U Remote**. Opening it does the same as **Next** on the Play page, for a song, a program or a disk, and nothing else. It is attached to every release as `c64u-remote-<version>-android-skip.apk`.
 
-If your phone lets a key open an app, choose **C64U Remote - Next Song** for that key in its own keypad settings. The key then skips to the next song wherever you are. If C64U Remote was in front, it comes back about a second later. From anywhere else, your phone may show its own list of apps afterwards. Without such a key, put the companion app on your home screen and open it with one tap.
+If your phone lets a key open an app, choose **Skip - C64U Remote** for that key in its own keypad settings. The key then skips to the next item wherever you are. If C64U Remote was in front, it comes back about a second later. From anywhere else, your phone may show its own list of apps afterwards. Without such a key, put the companion app on your home screen and open it with one tap.
 
 #### Star and Pound
 

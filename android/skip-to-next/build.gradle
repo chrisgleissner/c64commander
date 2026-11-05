@@ -17,17 +17,17 @@ def copyAppIcon = tasks.register("copyAppIcon", Sync) {
 }
 
 android {
-    namespace "uk.gleissner.c64commander.nextsong"
+    namespace "uk.gleissner.c64commander.skipnext"
     compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "${mainApplicationId}.nextsong"
+        applicationId "${mainApplicationId}.skipnext"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode mainApp.defaultConfig.versionCode
         versionName mainApp.defaultConfig.versionName
         manifestPlaceholders = [mainApplicationId: mainApplicationId]
-        resValue "string", "next_song_label", "${variant.displayName} - Next Song"
+        resValue "string", "skip_label", "Skip - ${variant.displayName}"
         buildConfigField "String", "MAIN_APPLICATION_ID", "\"${mainApplicationId}\""
     }
 

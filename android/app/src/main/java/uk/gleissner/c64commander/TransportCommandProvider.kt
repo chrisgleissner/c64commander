@@ -19,7 +19,7 @@ import android.os.Bundle
 import android.os.Process
 
 /**
- * Accepts transport commands from the companion "Next Song" app, which a phone's function keys can open from anywhere.
+ * Accepts transport commands from the companion "Skip" app, which a phone's function keys can open from anywhere.
  * The reply says whether this app was in front, so the companion can hand the screen back to it.
  */
 open class TransportCommandProvider : ContentProvider() {
