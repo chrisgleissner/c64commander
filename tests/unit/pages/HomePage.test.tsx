@@ -555,6 +555,12 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
 
+const deviceCategories = vi.hoisted(() => ({ keyboardLighting: true }));
+vi.mock("@/hooks/useDeviceHasConfigCategory", () => ({
+  useDeviceHasConfigCategory: (category: string) =>
+    category === "Keyboard Lighting" ? deviceCategories.keyboardLighting : true,
+}));
+
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: {
     intent: "user",
@@ -756,6 +762,7 @@ beforeEach(() => {
   ledStripPayloadRef.current = undefined;
   userInterfacePayloadRef.current = undefined;
   keyboardLightingPayloadRef.current = undefined;
+  deviceCategories.keyboardLighting = true;
   c64ApiMockRef.current = {
     getDeviceHost: () => "c64u",
     setConfigValue: vi.fn().mockResolvedValue({}),
@@ -1859,6 +1866,17 @@ describe("HomePage SID status", () => {
       "Turbo Control",
       expect.anything(),
     );
+  });
+
+  it("shows no Keyboard Light card and reads no Keyboard Lighting on a device without that category", async () => {
+    deviceCategories.keyboardLighting = false;
+    ledStripPayloadRef.current = { "LED Strip Settings": buildLightingPayload() };
+
+    renderHomePage();
+
+    expectLightingControls("home-led", "Case Light");
+    expect(screen.queryByTestId("home-keyboard-lighting-summary")).toBeNull();
+    expect([...enabledConfigReadsRef.current].some((read) => read.startsWith("Keyboard Lighting|"))).toBe(false);
   });
 
   it("renders the quick actions RAM folder row and LED lighting case + keyboard cards in order", async () => {

@@ -136,6 +136,7 @@ import { hasStreamTransport } from "@/lib/streams/streamReceiver";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useDeviceHasConfigCategory } from "@/hooks/useDeviceHasConfigCategory";
 
 // HARD18-012b: the Ultimate's entire network stack is down for the whole
 // boot duration after a real power cycle - long enough that, unsuppressed,
@@ -163,7 +164,7 @@ function HomePageContent() {
   const arrangementPinned = useArrangementPin();
   const offlineArrangement = useOfflineArrangement(arrangementPinned);
   const isActive = status.isConnected;
-  const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
+  const keyboardLightingRequested = useDeviceHasConfigCategory("Keyboard Lighting");
 
   const { data: u64SettingsCategory, isFetched: u64SettingsLoaded } = useC64ConfigItems(
     "U64 Specific Settings",
@@ -291,14 +292,8 @@ function HomePageContent() {
     markManualLightingChange,
     isActiveProfileModified,
   } = useLightingStudio();
-  const handleOpenStudio = () => {
-    setKeyboardLightingRequested(true);
-    openStudio();
-  };
-  const handleOpenContextLens = () => {
-    setKeyboardLightingRequested(true);
-    openContextLens();
-  };
+  const handleOpenStudio = openStudio;
+  const handleOpenContextLens = openContextLens;
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");

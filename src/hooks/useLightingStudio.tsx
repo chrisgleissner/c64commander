@@ -32,6 +32,7 @@ import {
 import { resolveLightingState } from "@/lib/lighting/resolver";
 import { calculateSolarTimes, resolveCircadianPhase } from "@/lib/lighting/solar";
 import { loadLightingStudioState, saveLightingStudioState } from "@/lib/lighting/store";
+import { useDeviceHasConfigCategory } from "@/hooks/useDeviceHasConfigCategory";
 import type {
   LightingCircadianResolvedLocation,
   LightingConnectionSentinelState,
@@ -306,10 +307,11 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
     (status.isConnected || status.isConnecting) && lightingSummaryEnabled,
     studioOpen || contextLensOpen ? VISIBLE_C64_QUERY_OPTIONS : summaryQueryOptions,
   );
+  const deviceHasKeyboardLighting = useDeviceHasConfigCategory("Keyboard Lighting");
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
     [...lightingQueryItems],
-    (status.isConnected || status.isConnecting) && (studioOpen || contextLensOpen),
+    (status.isConnected || status.isConnecting) && (studioOpen || contextLensOpen) && deviceHasKeyboardLighting,
     VISIBLE_C64_QUERY_OPTIONS,
   );
 
