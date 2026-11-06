@@ -51,3 +51,45 @@ export const buildOwnReleaseEvents = (
   if (keyboard.size) events.push({ kind: "keyboard", inputs: [...keyboard], transition: "release" });
   return events;
 };
+
+/** Press events for inputs this phone sent, or queued to send, that no confirmed release has covered yet. */
+export type UnreleasedInputs = readonly MachineInputEvent[];
+
+export const NO_UNRELEASED_INPUTS: UnreleasedInputs = [];
+
+type TransitionEvent = Exclude<MachineInputEvent, { kind: "release_all" }>;
+
+const isPress = (event: MachineInputEvent): event is TransitionEvent =>
+  event.kind !== "release_all" && holdsInput(event) && event.transition !== "release";
+
+const isRelease = (event: MachineInputEvent): event is TransitionEvent =>
+  event.kind !== "release_all" && event.transition === "release";
+
+const sameInputGroup = (a: TransitionEvent, b: TransitionEvent) =>
+  a.kind === b.kind && (a.kind !== "joystick" || a.port === (b as typeof a).port);
+
+export const withPressedInputs = (
+  unreleased: UnreleasedInputs,
+  batch: readonly MachineInputEvent[],
+): UnreleasedInputs => {
+  const presses = batch.filter(isPress);
+  return presses.length ? [...unreleased, ...presses] : unreleased;
+};
+
+/** Forgets the inputs that a batch about to be sent to the device releases. */
+export const withoutReleasedInputs = (
+  unreleased: UnreleasedInputs,
+  confirmedBatch: readonly MachineInputEvent[],
+): UnreleasedInputs => {
+  if (confirmedBatch.some((event) => event.kind === "release_all")) return NO_UNRELEASED_INPUTS;
+  let remaining = unreleased;
+  for (const release of confirmedBatch.filter(isRelease)) {
+    const released = new Set<string>(release.inputs);
+    remaining = remaining.flatMap((press) => {
+      if (!isPress(press) || !sameInputGroup(press, release)) return [press];
+      const inputs = press.inputs.filter((input) => !released.has(input));
+      return inputs.length ? [{ ...press, inputs } as TransitionEvent] : [];
+    });
+  }
+  return remaining;
+};

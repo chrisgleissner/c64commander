@@ -126,4 +126,66 @@ describe("useRemoteInputSession typed-key retry and the serialized machine:input
       { events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }] },
     ]);
   });
+
+  describe("releasing what this phone pressed while its batches were still queued", () => {
+    const holdNextSend = () => {
+      const control = { resolve: () => undefined as void, reject: () => undefined as void };
+      sendMachineInputBatchMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            control.resolve = () => resolve({ errors: [], keyboard: { inputs: [] }, joysticks: [] });
+            control.reject = () => reject(noAnswer());
+          }),
+      );
+      return control;
+    };
+    const hold = async (result: { current: ReturnType<typeof useRemoteInputSession> }, inputs: string[]) => {
+      act(() => result.current.setHeldJoystickInputs(new Set(inputs) as never));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(16);
+      });
+    };
+    const releasedJoystickInputs = (batch: unknown) =>
+      (batch as { events: Array<{ transition: string; inputs: string[] }> }).events
+        .filter((event) => event.transition === "release")
+        .flatMap((event) => [...event.inputs].sort());
+
+    it("recovery release after a failed press also frees an input pressed in an earlier confirmed batch", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      await hold(result, ["up"]);
+      await act(async () => settle());
+      const firePress = holdNextSend();
+      await hold(result, ["up", "fire"]);
+      await hold(result, []);
+      expect(sentBatches()).toHaveLength(2);
+
+      await act(async () => {
+        firePress.reject();
+        await settle();
+      });
+
+      expect(sentBatches()).toHaveLength(3);
+      expect(releasedJoystickInputs(sentBatches()[2])).toEqual(["fire", "up"]);
+    });
+
+    it("the own release on sheet close also frees inputs whose queued release it supersedes", async () => {
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      await hold(result, ["up"]);
+      await act(async () => settle());
+      const firePress = holdNextSend();
+      await hold(result, ["up", "fire"]);
+      await hold(result, []);
+      await hold(result, ["left"]);
+      expect(sentBatches()).toHaveLength(2);
+
+      act(() => result.current.releaseHeldInputs());
+
+      expect(sentBatches()).toHaveLength(3);
+      expect(releasedJoystickInputs(sentBatches()[2])).toEqual(["fire", "left", "up"]);
+      await act(async () => {
+        firePress.resolve();
+        await settle();
+      });
+    });
+  });
 });

@@ -47,7 +47,14 @@ import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remot
 import { hasWaitingMachineInput, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
-import { buildOwnReleaseEvents, holdsInput } from "@/lib/remoteInput/ownInputRelease";
+import {
+  buildOwnReleaseEvents,
+  holdsInput,
+  NO_UNRELEASED_INPUTS,
+  withoutReleasedInputs,
+  withPressedInputs,
+} from "@/lib/remoteInput/ownInputRelease";
+import type { UnreleasedInputs } from "@/lib/remoteInput/ownInputRelease";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -190,6 +197,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     port: portRef.current,
     keyboard: lastSentKeyboardHeldSetRef.current,
   });
+  /** Every input this phone pressed, in any batch sent or still queued, until a confirmed release covers it. */
+  const unreleasedInputsRef = useRef<UnreleasedInputs>(NO_UNRELEASED_INPUTS);
+  const ownReleaseEvents = (unconfirmed: readonly MachineInputEvent[] = []) =>
+    buildOwnReleaseEvents(ownHeldInputs(), [...unreleasedInputsRef.current, ...unconfirmed]);
   const pendingKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
   /**
    * Queued press/release events, computed against the PREVIOUS pending set at
@@ -246,6 +257,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       if (immediate) sendGenerationRef.current += 1;
       const generation = sendGenerationRef.current;
       const failureEpoch = sendFailureEpochRef.current;
+      unreleasedInputsRef.current = withPressedInputs(unreleasedInputsRef.current, events);
       setConnectionStatus("sending");
       const batches = chunkMachineInputEvents(events);
       batches.forEach((batch, batchIndex) => {
@@ -258,6 +270,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             recordInputLatencySample(performance.now() - batchGestureAtMs, performance.now());
           }
           const send = () => getC64API().sendMachineInputBatch({ events: batch });
+          // Forgotten once the release is sent, not once it is answered: a release that fails is released again by the
+          // recovery below, which covers its own inputs. A release that is dropped before it is sent stays recorded.
+          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, batch);
           // Not after an immediate send (a release-all, a port swap) or another failure has superseded this one, not after
           // Remote Input closed, and never while newer input waits behind it.
           const retryStillWanted = () =>
@@ -300,7 +315,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
                 lastSentKeyboardHeldSetRef.current.size > 0 ||
                 batch.some(holdsInput);
               const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
-              const ownReleaseEvents = buildOwnReleaseEvents(ownHeldInputs(), batch);
+              const recoveryReleaseEvents = ownReleaseEvents(batch);
               // HARD18-001: a queued coalesced batch computed against the
               // now-abandoned held-set model must never dispatch after this
               // reset, or it re-asserts a stale press once the device recovers.
@@ -313,11 +328,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
               pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
               pendingKeyboardEventsRef.current = [];
               setConnectionStatus("error");
-              if (owedRelease && !wasReleaseAll && ownReleaseEvents.length) {
+              if (owedRelease && !wasReleaseAll && recoveryReleaseEvents.length) {
                 // Direct API call, not routed through sendEventsNow: idempotent
                 // and single-shot, so it cannot recurse into this same catch.
                 void getC64API()
-                  .sendMachineInputBatch({ events: ownReleaseEvents })
+                  .sendMachineInputBatch({ events: recoveryReleaseEvents })
+                  .then(() => {
+                    unreleasedInputsRef.current = withoutReleasedInputs(
+                      unreleasedInputsRef.current,
+                      recoveryReleaseEvents,
+                    );
+                  })
                   .catch((releaseError) => {
                     addErrorLog(
                       "Remote input recovery release after send failure failed",
@@ -463,8 +484,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // held on the device. A non-empty last-sent set is only ever populated by
       // the full-tier relay path, so it is a reliable "we owe a release" signal
       // independent of the now-current tier.
-      const ownReleaseEvents = buildOwnReleaseEvents(ownHeldInputs());
-      const hadRelayedInputs = ownReleaseEvents.length > 0;
+      const releaseEvents = ownReleaseEvents();
+      const hadRelayedInputs = releaseEvents.length > 0;
       pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
       lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
       pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
@@ -491,7 +512,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       setAutofireEnabled(false);
       autofirePhaseOnRef.current = true;
       if (scope === "own") {
-        if (hadRelayedInputs) sendEventsNow(ownReleaseEvents, { immediate: true });
+        if (hadRelayedInputs) sendEventsNow(releaseEvents, { immediate: true });
       } else if (hadRelayedInputs || tierRef.current === "full") {
         sendEventsNow(buildReleaseAllEvent(), { immediate: true });
       }
@@ -746,11 +767,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // full-tier relay, so it alone signals "we owe the device a release" -
       // don't additionally gate on the current tier, which may already have
       // been downgraded (unmount triggered by a device switch / disconnect).
-      const ownReleaseEvents = buildOwnReleaseEvents(ownHeldInputs());
-      if (ownReleaseEvents.length) {
+      const releaseEvents = ownReleaseEvents();
+      if (releaseEvents.length) {
         sendGenerationRef.current += 1;
         void getC64API()
-          .sendMachineInputBatch({ events: ownReleaseEvents })
+          .sendMachineInputBatch({ events: releaseEvents })
           .catch((error) => {
             addErrorLog(
               "Remote input release on unmount failed",
@@ -769,8 +790,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // (empty deps) is safe - the callback always sees the latest values.
   useEffect(() => {
     const releaseNow = async (): Promise<void> => {
-      const ownReleaseEvents = buildOwnReleaseEvents(ownHeldInputs());
-      if (!ownReleaseEvents.length) return;
+      const releaseEvents = ownReleaseEvents();
+      if (!releaseEvents.length) return;
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
@@ -785,7 +806,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
       sendGenerationRef.current += 1;
       await getC64API()
-        .sendMachineInputBatch({ events: ownReleaseEvents })
+        .sendMachineInputBatch({ events: releaseEvents })
+        .then(() => {
+          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, releaseEvents);
+        })
         .catch((error) => {
           addErrorLog(
             "Remote input pre-switch release failed",
