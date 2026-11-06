@@ -578,3 +578,42 @@ describe("Stop after another app changed the C64's mixer", () => {
     expect(ultimate.volMaster).toBe("-6 dB");
   });
 });
+
+describe("the saved session after Stop", () => {
+  it("is saved as ended, so a remount cannot bring the muted session back", async () => {
+    const { result, rerender } = renderVolume();
+    await waitForLabel(result, "0 dB");
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+    rerender({ isPlaying: false, isPaused: false, resolvedDeviceId: DEVICE_ID });
+    await act(async () => {
+      await result.current.restoreVolumeOverrides("stop");
+    });
+
+    expect(storedEnvelope()).toMatchObject({ volumeActive: false, manualMuteSnapshot: null });
+  });
+
+  it("does not write the ended session's levels over another app's after a remount", async () => {
+    const first = renderVolume();
+    await waitForLabel(first.result, "0 dB");
+    await act(async () => {
+      await first.result.current.handleToggleMute();
+    });
+    first.rerender({ isPlaying: false, isPaused: false, resolvedDeviceId: DEVICE_ID });
+    await act(async () => {
+      await first.result.current.restoreVolumeOverrides("stop");
+    });
+    first.unmount();
+    changeOnTheDevice("-6 dB");
+    const writesBeforeRemount = ultimate.writes.length;
+
+    const remounted = renderVolume({ isPlaying: false });
+    await act(async () => {
+      await remounted.result.current.restoreVolumeOverrides("playback-ended");
+    });
+
+    expect(ultimate.writes.slice(writesBeforeRemount)).toEqual([]);
+    expect(ultimate.volMaster).toBe("-6 dB");
+  });
+});

@@ -285,8 +285,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     }
   }, [resolvedDeviceId]);
 
-  // HARD12-006: the snapshots live in refs, so they are saved on every playback edge and whenever a mute
-  // changes them, for a remount or a restart to re-own.
+  // HARD12-006: saved on each playback edge, mute change and session end, for a remount or restart to re-own.
   const persistVolumeSession = useCallback(() => {
     if (!resolvedDeviceId) return;
     persistPlaybackSnapshot({
@@ -791,6 +790,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         manualMuteSnapshotRef.current = null;
         manualMuteIntentRef.current = false;
         pauseMuteSnapshotRef.current = null;
+        persistVolumeSession();
         dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
         volumeUiTargetRef.current = null;
       };
@@ -839,6 +839,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       buildEnabledSidRestoreUpdates,
       defaultVolumeIndex,
       dispatchTrackedVolume,
+      persistVolumeSession,
       resolvePlaybackVolumeItems,
       resolvedDeviceId,
       sidEnablement,
