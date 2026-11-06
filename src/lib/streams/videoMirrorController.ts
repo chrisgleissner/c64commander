@@ -119,6 +119,8 @@ export interface VideoStreamLossInfo {
 
 export const VIDEO_RECONNECTING_MESSAGE = "Video lost, reconnecting…";
 export const VIDEO_STOPPED_ARRIVING_MESSAGE = "The video stream stopped arriving.";
+export const VIDEO_STREAMING_ELSEWHERE_MESSAGE =
+  "The C64 is sending its picture to another app. Select Watch to take it back.";
 
 export interface VideoMirrorDeps {
   /** Called when a live stream went silent. Returns true when the owner is restarting it. */
@@ -513,6 +515,12 @@ export class VideoMirrorController {
   abandonReconnect(): void {
     if (this.snapshot.state !== "error" || !this.snapshot.reconnecting) return;
     this.update({ reconnecting: false, error: VIDEO_STOPPED_ARRIVING_MESSAGE });
+  }
+
+  /** The device answers but streams to another client: say so instead of the plain loss. */
+  reportStreamingElsewhere(): void {
+    if (this.snapshot.state !== "error") return;
+    this.update({ reconnecting: false, error: VIDEO_STREAMING_ELSEWHERE_MESSAGE });
   }
 
   /**

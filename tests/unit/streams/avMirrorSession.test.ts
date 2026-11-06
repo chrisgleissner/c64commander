@@ -58,6 +58,7 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
     }));
     adoptSender = vi.fn(async () => {});
     abandonReconnect = vi.fn();
+    reportStreamingElsewhere = vi.fn();
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -85,6 +86,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
     setKeepFraction = vi.fn();
     adoptSender = vi.fn(async () => {});
     abandonReconnect = vi.fn();
+    reportStreamingElsewhere = vi.fn();
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       videoInstances.push(this as unknown as Captured);
@@ -840,18 +842,19 @@ describe("AvMirrorSession", () => {
       expect(audio.start).toHaveBeenCalledTimes(1);
     });
 
-    it("stops restarting after the bounded number of attempts when the stream keeps dying", async () => {
+    it("leaves the audio to the other client and says so when it is lost again soon after the restart", async () => {
       const { session, audio } = makeSession();
       await session.startAudio();
 
       expect(lose(audio, 1000)).toBe(true);
       await vi.advanceTimersByTimeAsync(2000);
-      expect(lose(audio, 1000)).toBe(true);
-      await vi.advanceTimersByTimeAsync(6000);
       expect(lose(audio, 1000)).toBe(false);
       await vi.advanceTimersByTimeAsync(60000);
 
-      expect(audio.start).toHaveBeenCalledTimes(3);
+      expect(audio.start).toHaveBeenCalledTimes(2);
+      expect(
+        (audio as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
+      ).toHaveBeenCalledTimes(1);
     });
     it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
       vi.spyOn(getC64API(), "getInfo").mockRejectedValue(new Error("timeout"));
@@ -907,15 +910,12 @@ describe("AvMirrorSession", () => {
       expect(audio.start).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps counting restart attempts when a playback event asks again for audio that is already wanted", async () => {
+    it("keeps the loss episode when a playback event asks again for audio that is already wanted", async () => {
       const { session, audio } = makeSession();
       await session.setAudioWanted(true);
 
       expect(lose(audio, 1000)).toBe(true);
       await vi.advanceTimersByTimeAsync(2000);
-      await session.setAudioWanted(true);
-      expect(lose(audio, 1000)).toBe(true);
-      await vi.advanceTimersByTimeAsync(6000);
       await session.setAudioWanted(true);
 
       expect(lose(audio, 1000)).toBe(false);
@@ -971,18 +971,19 @@ describe("AvMirrorSession", () => {
       expect(video.start).toHaveBeenCalledTimes(1);
     });
 
-    it("stops restarting after the bounded number of attempts when the stream keeps dying", async () => {
+    it("leaves the video to the other client and says so when it is lost again soon after the restart", async () => {
       const { session, video } = makeSession();
       await session.startVideo();
 
       expect(lose(video, 1000)).toBe(true);
       await vi.advanceTimersByTimeAsync(2000);
-      expect(lose(video, 1000)).toBe(true);
-      await vi.advanceTimersByTimeAsync(6000);
       expect(lose(video, 1000)).toBe(false);
       await vi.advanceTimersByTimeAsync(60000);
 
-      expect(video.start).toHaveBeenCalledTimes(3);
+      expect(video.start).toHaveBeenCalledTimes(2);
+      expect(
+        (video as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
+      ).toHaveBeenCalledTimes(1);
     });
 
     it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {

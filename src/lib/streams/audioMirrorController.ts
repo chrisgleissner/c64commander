@@ -54,6 +54,8 @@ export interface AudioMirrorSnapshot {
 }
 
 export const AUDIO_STOPPED_ARRIVING_MESSAGE = "The audio stream stopped arriving.";
+export const AUDIO_STREAMING_ELSEWHERE_MESSAGE =
+  "The C64 is sending its sound to another app. Select Listen to take it back.";
 export const AUDIO_RECONNECTING_MESSAGE = "Audio lost, reconnecting…";
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -395,6 +397,12 @@ export class AudioMirrorController {
   abandonReconnect(): void {
     if (this.snapshot.state !== "error" || !this.snapshot.reconnecting) return;
     this.update({ reconnecting: false, error: AUDIO_STOPPED_ARRIVING_MESSAGE });
+  }
+
+  /** The device answers but streams to another client: say so instead of the plain loss. */
+  reportStreamingElsewhere(): void {
+    if (this.snapshot.state !== "error") return;
+    this.update({ reconnecting: false, error: AUDIO_STREAMING_ELSEWHERE_MESSAGE });
   }
 
   /**

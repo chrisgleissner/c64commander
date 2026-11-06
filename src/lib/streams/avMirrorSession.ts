@@ -310,6 +310,7 @@ export class AvMirrorSession {
         await this.startAudioNow();
       }),
     giveUp: () => this.audio.abandonReconnect(),
+    yieldToOtherClient: () => this.audio.reportStreamingElsewhere(),
     // Mirrored audio keeps playing with the page hidden (see avMirrorBackgroundPolicy), so its restart must not wait for it.
     isPageHidden: () => false,
   });
@@ -325,6 +326,7 @@ export class AvMirrorSession {
         await this.video.start();
       }),
     giveUp: () => this.video.abandonReconnect(),
+    yieldToOtherClient: () => this.video.reportStreamingElsewhere(),
     isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
   });
 

@@ -136,6 +136,53 @@ describe("AudioMirrorController", () => {
     expect(controller.getSnapshot().error).toBeNull();
   });
 
+  it("leaves a live stream alone when told another app has the audio", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.reportStreamingElsewhere();
+
+    expect(controller.getSnapshot().state).toBe("live");
+    expect(controller.getSnapshot().error).toBeNull();
+  });
+
+  it("says another app has the audio when its owner leaves a lost stream to that app", async () => {
+    vi.useFakeTimers();
+    try {
+      const receiver = new FakeReceiver();
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createPlayer: () => fakePlayer(true),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        networkBufferMs: 0,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await tickSeconds(10);
+
+      controller.reportStreamingElsewhere();
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().error).toBe(
+        "The C64 is sending its sound to another app. Select Listen to take it back.",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("tells its owner how long the audio had been live when it went silent, and shows the reconnecting state", async () => {
     vi.useFakeTimers();
     try {

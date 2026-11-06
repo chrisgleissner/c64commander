@@ -181,6 +181,20 @@ describe("VideoMirrorController", () => {
     }
   });
 
+  it("says another app has the video when its owner leaves a lost stream to that app", async () => {
+    try {
+      const controller = await goSilent(() => false);
+      controller.reportStreamingElsewhere();
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().reconnecting).toBe(false);
+      expect(controller.getSnapshot().error).toBe(
+        "The C64 is sending its picture to another app. Select Watch to take it back.",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("clears the reconnecting state when the stream is started again", async () => {
     try {
       const controller = await goSilent(() => true);
