@@ -16,6 +16,10 @@ export type OwnHeldInputs = {
   keyboard: HeldKeyboardInputs;
 };
 
+/** Whether delivering this event can leave an input held on the C64. A keyboard tap cannot: the firmware releases it. */
+export const holdsInput = (event: MachineInputEvent) =>
+  event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap");
+
 /**
  * Releases exactly what this phone may be holding on the C64: its last-sent held inputs, plus every
  * input a batch whose outcome is unknown may have pressed.
@@ -36,10 +40,9 @@ export const buildOwnReleaseEvents = (
   };
   holdOnPort(held.port, held.joystick);
   const keyboard = new Set<KeyboardInputName>(held.keyboard);
-  for (const event of unconfirmed) {
+  for (const event of unconfirmed.filter(holdsInput)) {
     if (event.kind === "joystick") holdOnPort(event.port, event.inputs);
-    else if (event.kind === "keyboard" && event.transition !== "tap")
-      event.inputs.forEach((input) => keyboard.add(input));
+    else if (event.kind === "keyboard") event.inputs.forEach((input) => keyboard.add(input));
   }
   const events: MachineInputEvent[] = [];
   for (const [port, inputs] of joystick) {

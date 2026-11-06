@@ -73,6 +73,35 @@ describe("useRemoteInputSession typed-key retry and the serialized machine:input
     expect(sentBatches()).toEqual([typedOne, typedOne]);
   });
 
+  it("still sends the keys typed behind a key that got no answer", async () => {
+    const fail = failFirstSendLater();
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+    act(() => result.current.sendChar("1"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(40);
+    });
+    for (const char of ["2", "3"]) {
+      act(() => result.current.sendChar(char));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40);
+      });
+    }
+    expect(sentBatches()).toEqual([typedOne]);
+
+    await act(async () => {
+      fail();
+      await settle();
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    // "1" is not sent again, because input waits behind it; "2" and "3" must not be lost with it.
+    expect(sentBatches()).toEqual([
+      typedOne,
+      { events: [{ kind: "keyboard", inputs: ["2"], transition: "tap" }] },
+      { events: [{ kind: "keyboard", inputs: ["3"], transition: "tap" }] },
+    ]);
+  });
+
   it("does not hold joystick input queued behind it for a second attempt", async () => {
     const fail = failFirstSendLater();
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));

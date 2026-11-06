@@ -47,7 +47,7 @@ import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remot
 import { hasWaitingMachineInput, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
-import { buildOwnReleaseEvents } from "@/lib/remoteInput/ownInputRelease";
+import { buildOwnReleaseEvents, holdsInput } from "@/lib/remoteInput/ownInputRelease";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -227,6 +227,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // reflect it. Each coalesced dispatch captures the generation at schedule time
   // and drops itself if an immediate send has since superseded it.
   const sendGenerationRef = useRef(0);
+  /**
+   * Bumped by a failed batch. Queued batches that carry held state drop themselves when it changes (HARD18-001);
+   * queued key taps still go, since a tap cannot leave anything held and dropping it loses what the user typed.
+   */
+  const sendFailureEpochRef = useRef(0);
   /** Cleared on unmount, which releases only what was held, so a retry decided later sees that Remote Input closed. */
   const sessionOpenRef = useRef(true);
 
@@ -240,6 +245,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       const { immediate = false, gestureAtMs } = options;
       if (immediate) sendGenerationRef.current += 1;
       const generation = sendGenerationRef.current;
+      const failureEpoch = sendFailureEpochRef.current;
       setConnectionStatus("sending");
       const batches = chunkMachineInputEvents(events);
       batches.forEach((batch, batchIndex) => {
@@ -256,6 +262,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
           // Remote Input closed, and never while newer input waits behind it.
           const retryStillWanted = () =>
             generation === sendGenerationRef.current &&
+            failureEpoch === sendFailureEpochRef.current &&
             sessionOpenRef.current &&
             flushTimerRef.current === null &&
             !hasWaitingMachineInput();
@@ -291,19 +298,13 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
               const owedRelease =
                 lastSentHeldSetRef.current.size > 0 ||
                 lastSentKeyboardHeldSetRef.current.size > 0 ||
-                batch.some(
-                  (event) => event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap"),
-                );
+                batch.some(holdsInput);
               const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
               const ownReleaseEvents = buildOwnReleaseEvents(ownHeldInputs(), batch);
               // HARD18-001: a queued coalesced batch computed against the
               // now-abandoned held-set model must never dispatch after this
-              // reset - bump the generation (the same supersede mechanism an
-              // immediate send already uses) so every batch still waiting on
-              // runSerializedMachineInput drops itself at its generation
-              // check instead of re-asserting a stale press once the device
-              // recovers from this failure.
-              sendGenerationRef.current += 1;
+              // reset, or it re-asserts a stale press once the device recovers.
+              sendFailureEpochRef.current += 1;
               // Held state is not retried: forget what we thought was held so the
               // next real change re-syncs cleanly instead of compounding drift.
               lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
@@ -339,6 +340,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             // Superseded by a later immediate release/port-swap while we waited:
             // drop this stale press so it can't land after the release (HARD13-002).
             if (generation !== sendGenerationRef.current) return;
+            if (failureEpoch !== sendFailureEpochRef.current && batch.some(holdsInput)) return;
             return dispatch();
           });
         }
