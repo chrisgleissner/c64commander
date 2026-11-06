@@ -861,6 +861,18 @@ export const HomeDiskManager = () => {
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
+      const shown = {
+        shownDiskId: resolveMountedDiskId(drive),
+        shownInfo: mountSupport.findPolledDrive(drivesData, drive),
+      };
+      const fresh = await drivesQuery.refetch({ cancelRefetch: false });
+      const freshInfo = mountSupport.findPolledDrive(fresh.data, drive);
+      const freshDiskId = resolveMountedDiskId(drive, freshInfo, fresh.dataUpdatedAt, false);
+      if (mountSupport.driveChangedUnderCard({ ...shown, freshInfo, freshDiskId })) {
+        addLog("info", "Eject skipped: the drive now holds a disk this card did not show", { drive, freshInfo });
+        toast({ title: `${buildDriveLabel(drive)} changed`, description: mountSupport.DRIVE_CHANGED_EJECT_MESSAGE });
+        return;
+      }
       await runDriveMutationWithSettledPolling(() => api.unmountDrive(drive));
       // HARD18-025: read the materialized work-dir image back and re-persist
       // it to the source now that the drive has released it. Best-effort -
@@ -1010,9 +1022,13 @@ export const HomeDiskManager = () => {
     }
   });
 
-  const resolveMountedDiskId = (drive: DriveKey) => {
-    const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
-    const mountedOverride = mountedByDrive[drive];
+  const resolveMountedDiskId = (
+    drive: DriveKey,
+    driveInfo = mountSupport.findPolledDrive(drivesData, drive),
+    polledAt = drivesDataUpdatedAt,
+    useOverride = true,
+  ) => {
+    const mountedOverride = useOverride ? mountedByDrive[drive] : undefined;
     if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
@@ -1021,12 +1037,7 @@ export const HomeDiskManager = () => {
     if (workPath && getDiskName(driveInfo.image_file) === getDiskName(workPath)) {
       return getMaterializedDiskId(drive, api.getDeviceHost());
     }
-    const uploadedDiskId = mountSupport.resolveUploadMountedDiskId(
-      api.getDeviceHost(),
-      drive,
-      driveInfo,
-      drivesDataUpdatedAt,
-    );
+    const uploadedDiskId = mountSupport.resolveUploadMountedDiskId(api.getDeviceHost(), drive, driveInfo, polledAt);
     if (uploadedDiskId && disksById[uploadedDiskId]) return uploadedDiskId;
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;

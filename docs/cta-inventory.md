@@ -654,7 +654,7 @@ collection's tunes is installed — see size `sid-radio-collection-<id>-size`]`.
 Per drive (A / B / Soft-IEC):
 
 - Status toggle — switch — `drive-status-toggle-*` — R✅ I✅ _(on Drive A and B this is the only power control; Soft IEC keeps a separate Turn on/off button because the pill writes its configuration while the button powers the running drive)_
-- Mount disk / select directory — button — `drive-mount-toggle-*` — R✅ I✅
+- Mount disk / select directory — button — `drive-mount-toggle-*` — R✅ I✅ _(while a disk is mounted it is Eject; Eject reads the drive again first and ejects nothing, with a toast, when another app has since put a different disk in the drive)_
 - Bus ID — select — `drive-bus-select-*` — R✅ I✅
 - Drive Type — select — `drive-type-select-*` — R✅ I✅ _(A/B)_
 - Soft-IEC default path — button — `drive-default-path-select-soft-iec` — R✅ I✅

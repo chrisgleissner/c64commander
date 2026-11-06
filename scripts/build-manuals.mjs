@@ -1225,7 +1225,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Filter by name, path or group to find something. A filter never deletes or moves anything.",
     "",
-    "Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.",
+    "Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). If another app has put a different disk in that drive since the card last updated, the eject leaves that disk in place and the card shows it instead; press the icon again to remove it. Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.",
     "",
     "Come to Disks whenever more than one disk is involved: the collection, the groups and the drives are all on one page. The drives themselves are explained in [Drives and Disk Images](#drives-and-disk-images).",
     "",

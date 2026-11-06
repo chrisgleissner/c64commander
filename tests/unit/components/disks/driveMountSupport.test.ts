@@ -7,7 +7,11 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { buildMountTargetLabel, mountOntoPoweredDrive } from "@/components/disks/driveMountSupport";
+import {
+  buildMountTargetLabel,
+  driveChangedUnderCard,
+  mountOntoPoweredDrive,
+} from "@/components/disks/driveMountSupport";
 
 describe("mount target label", () => {
   it("marks a drive that is off", () => {
@@ -50,5 +54,61 @@ describe("mountOntoPoweredDrive", () => {
       "Could not turn Drive B on to mount the disk: HTTP 500",
     );
     expect(mount).not.toHaveBeenCalled();
+  });
+});
+
+describe("driveChangedUnderCard", () => {
+  const drive = (image_path: string, image_file: string) => ({ enabled: true, image_path, image_file }) as any;
+
+  it("reports a change when a disk the card did not show is now mounted", () => {
+    expect(
+      driveChangedUnderCard({
+        shownDiskId: null,
+        shownInfo: drive("/USB2", "mine.d64"),
+        freshInfo: drive("/USB2", "theirs.d64"),
+        freshDiskId: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("reports a change when the drive now resolves to another library disk than the card shows", () => {
+    expect(
+      driveChangedUnderCard({
+        shownDiskId: "disk-mine",
+        shownInfo: drive("/USB2", "c64commander-disk-work-0123abcd-a.d64"),
+        freshInfo: drive("/USB2", "c64commander-disk-work-fedc9876-a.d64"),
+        freshDiskId: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("reports no change when the drive still holds the card's disk, even if the cached poll predates its mount", () => {
+    expect(
+      driveChangedUnderCard({
+        shownDiskId: "disk-mine",
+        shownInfo: undefined,
+        freshInfo: drive("/USB2", "c64commander-disk-work-0123abcd-a.d64"),
+        freshDiskId: "disk-mine",
+      }),
+    ).toBe(false);
+    expect(
+      driveChangedUnderCard({
+        shownDiskId: null,
+        shownInfo: drive("/USB2", "mine.d64"),
+        freshInfo: drive("/USB2", "mine.d64"),
+        freshDiskId: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("reports no change when the drive is now empty", () => {
+    expect(
+      driveChangedUnderCard({
+        shownDiskId: "disk-mine",
+        shownInfo: drive("/USB2", "mine.d64"),
+        freshInfo: drive("", ""),
+        freshDiskId: null,
+      }),
+    ).toBe(false);
   });
 });

@@ -318,6 +318,7 @@ const useC64ConnectionMock = {
 };
 const useC64DrivesMock = {
   data: mockDrivesData,
+  refetch: vi.fn(async () => ({ data: useC64DrivesMock.data, dataUpdatedAt: Date.now() })),
 };
 
 vi.mock("@/hooks/useC64Connection", () => ({

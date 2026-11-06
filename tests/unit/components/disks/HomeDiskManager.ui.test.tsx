@@ -15,6 +15,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
+import { DRIVE_CHANGED_EJECT_MESSAGE } from "@/components/disks/driveMountSupport";
 import { mountDiskToDrive, getMaterializedWorkPath, hasShownArchiveDiskWriteBackAdvisory } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
@@ -55,6 +56,12 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Drives: vi.fn(),
 }));
 vi.mock("@/hooks/useDiskLibrary");
+
+const drivesQueryOf = (data: unknown) => ({
+  data,
+  dataUpdatedAt: 1,
+  refetch: vi.fn(async () => ({ data, dataUpdatedAt: 2 })),
+});
 vi.mock("@/lib/c64api");
 vi.mock("@/hooks/use-toast");
 vi.mock("@/lib/uiErrors");
@@ -180,9 +187,7 @@ describe("HomeDiskManager UI & Interactions", () => {
   it("renders drive power toggle and handles error", async () => {
     const driveA = createMockDrive();
     driveA.enabled = true;
-    (useC64Drives as any).mockReturnValue({
-      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
-    });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     render(<HomeDiskManager />);
 
@@ -803,9 +808,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     driveA.image_file = "disk1.d64";
     driveA.image_path = "/";
 
-    (useC64Drives as any).mockReturnValue({
-      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
-    });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     // Need to mock resolveMountedDiskId logic by having the disk in library match the drive path
     // library disk1 path is /disk1.d64. Drive path is / + disk1.d64. Matches.
@@ -970,6 +973,44 @@ describe("HomeDiskManager UI & Interactions", () => {
     );
   });
 
+  it("does not eject when the drive, read again on Eject, holds a disk another app mounted", async () => {
+    const shownDrive = { ...createMockDrive(), image_file: "mine.d64", image_path: "/USB2" };
+    const otherDrive = { ...createMockDrive(), image_file: "theirs.d64", image_path: "/USB2" };
+    const query = drivesQueryOf({ drives: [{ a: shownDrive }, { b: createMockDrive() }] });
+    query.refetch.mockResolvedValue({
+      data: { drives: [{ a: otherDrive }, { b: createMockDrive() }] },
+      dataUpdatedAt: 2,
+    });
+    (useC64Drives as any).mockReturnValue(query);
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Drive A Eject disk" }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Drive A changed", description: DRIVE_CHANGED_EJECT_MESSAGE }),
+      );
+    });
+    expect(mockApi.unmountDrive).not.toHaveBeenCalled();
+  });
+
+  it("still ejects when the drive, read again on Eject, is empty, so this phone's write-back runs", async () => {
+    const { finalizeDiskWriteBack } = await import("@/lib/disks/diskMount");
+    const shownDrive = { ...createMockDrive(), image_file: "mine.d64", image_path: "/USB2" };
+    const query = drivesQueryOf({ drives: [{ a: shownDrive }, { b: createMockDrive() }] });
+    query.refetch.mockResolvedValue({
+      data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
+      dataUpdatedAt: 2,
+    });
+    (useC64Drives as any).mockReturnValue(query);
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByRole("button", { name: "Drive A Eject disk" }));
+
+    await waitFor(() => expect(mockApi.unmountDrive).toHaveBeenCalledWith("a"));
+    expect(finalizeDiskWriteBack).toHaveBeenCalled();
+  });
+
   it("HARD18-025: surfaces a destructive toast when the eject write-back fails", async () => {
     const { finalizeDiskWriteBack } = await import("@/lib/disks/diskMount");
     (finalizeDiskWriteBack as any).mockResolvedValueOnce({
@@ -980,9 +1021,7 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const driveA = createMockDrive();
     driveA.image_file = "test.d64";
-    (useC64Drives as any).mockReturnValue({
-      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
-    });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     render(<HomeDiskManager />);
 
@@ -1007,7 +1046,7 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const driveA = createMockDrive();
     driveA.image_file = "game.d64";
-    (useC64Drives as any).mockReturnValue({ data: { drives: [{ a: driveA }, { b: createMockDrive() }] } });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     render(<HomeDiskManager />);
     fireEvent.click(screen.getByRole("button", { name: "Drive A Eject disk" }));
@@ -1049,9 +1088,7 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     const driveA = createMockDrive();
     driveA.image_file = "test.d64";
-    (useC64Drives as any).mockReturnValue({
-      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
-    });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     render(<HomeDiskManager />);
 
@@ -1205,9 +1242,7 @@ describe("HomeDiskManager UI & Interactions", () => {
     const driveA = createMockDrive();
     driveA.image_file = "test.d64";
 
-    (useC64Drives as any).mockReturnValue({
-      data: { drives: [{ a: driveA }, { b: createMockDrive() }] },
-    });
+    (useC64Drives as any).mockReturnValue(drivesQueryOf({ drives: [{ a: driveA }, { b: createMockDrive() }] }));
 
     render(<HomeDiskManager />);
 
