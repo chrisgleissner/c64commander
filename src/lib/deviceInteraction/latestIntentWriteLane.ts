@@ -92,14 +92,13 @@ export const createLatestIntentWriteLane = <T>(params: {
           settledVersion = Math.max(settledVersion, job.version);
           resolveUpTo(settledVersion);
         } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
           if (latestJob) {
             addLog(
               "warn",
               merge
                 ? "Device write failed; retrying its value merged into the newer pending write"
                 : "Device write failed; superseded by a newer pending write",
-              buildErrorLogDetails(err, {
+              buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {
                 failedVersion: job.version,
                 supersedingVersion: latestJob.version,
                 merged: Boolean(merge),
@@ -118,10 +117,10 @@ export const createLatestIntentWriteLane = <T>(params: {
           // of the failed batch). Replace-semantics lanes keep the historical
           // behaviour — superseded waiters never had their write attempted.
           if (merge) {
-            rejectUpTo(job.version, err);
+            rejectUpTo(job.version, error as Error);
           } else {
             resolveUpTo(job.version - 1);
-            rejectUpTo(job.version, err);
+            rejectUpTo(job.version, error as Error);
           }
         }
       }
