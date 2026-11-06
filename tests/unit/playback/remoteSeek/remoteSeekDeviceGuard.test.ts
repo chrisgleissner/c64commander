@@ -24,11 +24,13 @@ import {
 } from "@/lib/playback/remoteSeek/remoteSeekDeviceGuard";
 import { createFakeRemoteSeekDevice, DEVICE_KEY } from "./fakeRemoteSeekDevice";
 import { findFastForwardPatch } from "@/lib/playback/remoteSeek/sidPlayerFastForwardPatch";
+import { noteTransientConfigWriteSettled } from "@/lib/config/configFlashPersistence";
 
 /** The SID player is on screen: what the controller confirms before every key. */
 const ON_SCREEN = async () => true;
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
+vi.mock("@/lib/config/configFlashPersistence", () => ({ noteTransientConfigWriteSettled: vi.fn() }));
 
 const NO_RETRY_WAIT = [0, 0, 0, 0];
 
@@ -74,7 +76,6 @@ describe("remote seek device guard", () => {
     expect(device.log).toEqual([
       "Turbo Control=Manual (transient)",
       "CPU Speed=64 (transient)",
-      "key release arrow_left+minus+plus",
       "CPU Speed=1 (transient)",
       "Turbo Control=Off (restore)",
     ]);
@@ -364,7 +365,7 @@ describe("remote seek device guard", () => {
     const device = createFakeRemoteSeekDevice();
     const earlier = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
     await earlier.setCpuSpeed("64");
-    device.failures.keyEvents = 100;
+    device.failures.configWrites = 100;
     vi.useFakeTimers();
     const opening = RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN }).catch(
       (error: Error) => error,
@@ -372,7 +373,7 @@ describe("remote seek device guard", () => {
     await vi.runAllTimersAsync();
     vi.useRealTimers();
     expect(await opening).toBeInstanceOf(Error);
-    device.failures.keyEvents = 0;
+    device.failures.configWrites = 0;
     vi.useFakeTimers();
     const again = RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
     await vi.runAllTimersAsync();
@@ -438,7 +439,7 @@ describe("remote seek device guard", () => {
     expect(await restore).toBe(false);
     expect(addErrorLog).toHaveBeenCalledWith(
       "Remote seek could not restore the device; it will retry",
-      expect.objectContaining({ error: "Read-back after restore shows CPU Speed 64; expected  1" }),
+      expect.objectContaining({ error: "Read-back after restore shows CPU Speed 64, expected  1" }),
     );
     device.api.setConfigValue = write;
     expect(await recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
@@ -476,6 +477,87 @@ describe("remote seek device guard", () => {
     await expect(session.tapKey("minus", 60)).rejects.toBeInstanceOf(RemoteSeekPlayerGoneError);
     expect(device.log.filter((entry) => entry.startsWith("key press"))).toEqual([]);
     expect(readRemoteSeekJournal(DEVICE_KEY)?.keyHeld).toBe(false);
+  });
+
+  describe("with another client sharing the device", () => {
+    const killApp = async () => {
+      vi.resetModules();
+      return import("@/lib/playback/remoteSeek/remoteSeekDeviceGuard");
+    };
+
+    it("recovery keeps a CPU Speed, Turbo Control and Vol Master another client chose after the seek", async () => {
+      const device = createFakeRemoteSeekDevice({ settings: { "Turbo Control": "Off" } });
+      const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await session.pressKey();
+      await session.setCpuSpeed("64");
+      const fresh = await killApp();
+      Object.assign(device.settings, { "CPU Speed": " 8", "Turbo Control": "TurboEnable Bit", "Vol Master": "-6 dB" });
+      device.log.length = 0;
+      expect(await fresh.recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+      expect(device.settings).toMatchObject({
+        "CPU Speed": " 8",
+        "Turbo Control": "TurboEnable Bit",
+        "Vol Master": "-6 dB",
+      });
+      expect(device.log.filter((entry) => entry.includes("="))).toEqual([]);
+      expect(fresh.readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    });
+
+    it("restores only the items that still hold the seek's values", async () => {
+      const device = createFakeRemoteSeekDevice({ settings: { "Turbo Control": "Off" } });
+      const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await session.pressKey();
+      await session.setCpuSpeed("64");
+      device.settings["CPU Speed"] = " 8";
+      device.log.length = 0;
+      expect(await session.restore("test")).toBe(true);
+      expect(device.settings).toMatchObject({ "CPU Speed": " 8", "Turbo Control": "Off", "Vol Master": " 0 dB" });
+      expect(device.log).toEqual([
+        "key release arrow_left+minus+plus",
+        "Vol Master=0 dB (transient)",
+        "Turbo Control=Off (transient)",
+      ]);
+    });
+
+    it("restores a CPU Speed the seek wrote earlier when a later speed change never landed", async () => {
+      const device = createFakeRemoteSeekDevice();
+      const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await session.setCpuSpeed("64");
+      device.failures.configWrites = 1;
+      await expect(session.setCpuSpeed(" 4")).rejects.toThrow("HTTP 503");
+      expect(await session.restore("test")).toBe(true);
+      expect(device.settings["CPU Speed"]).toBe(" 1");
+    });
+
+    it("recovery releases no keys once this phone's own press was released", async () => {
+      const device = createFakeRemoteSeekDevice();
+      const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await session.pressKey();
+      await session.releaseKey();
+      await session.setCpuSpeed("64");
+      const fresh = await killApp();
+      device.player.pressKey("arrow_left");
+      expect(await fresh.recoverRemoteSeekJournal(device.api, NO_RETRY_WAIT)).toBe(true);
+      expect(device.player.heldKeys).toEqual(["arrow_left"]);
+      expect(device.log.filter((entry) => entry.startsWith("key release"))).toEqual(["key release arrow_left"]);
+      expect(device.settings["CPU Speed"]).toBe(" 1");
+    });
+
+    it("lets a held flash save go when nothing needed restoring, and holds it while another client's value stays", async () => {
+      const device = createFakeRemoteSeekDevice();
+      const first = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await first.setCpuSpeed("64");
+      await first.setCpuSpeed(" 1");
+      vi.mocked(noteTransientConfigWriteSettled).mockClear();
+      expect(await first.restore("test")).toBe(true);
+      expect(noteTransientConfigWriteSettled).toHaveBeenCalledTimes(1);
+
+      const second = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+      await second.setCpuSpeed("64");
+      device.settings["CPU Speed"] = " 8";
+      expect(await second.restore("test")).toBe(true);
+      expect(noteTransientConfigWriteSettled).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("on a machine that takes no key input", () => {

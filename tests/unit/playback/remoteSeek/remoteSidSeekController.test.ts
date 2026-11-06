@@ -136,7 +136,7 @@ describe("remote SID seek controller", () => {
     expect(device.player.restarts).toBe(0);
     expect(device.player.heldKeys).toEqual([]);
     expect(device.settings["CPU Speed"]).toBe(" 1");
-    expect(cpuSpeedWrites(device.log)).toEqual(["64 (transient)", "4 (transient)", "1 (transient)", "1 (restore)"]);
+    expect(cpuSpeedWrites(device.log)).toEqual(["64 (transient)", "4 (transient)", "1 (transient)"]);
   });
 
   it("lands a tune with a light play routine, which fast forwards six times faster, without overshooting", async () => {
@@ -480,7 +480,12 @@ describe("remote SID seek controller", () => {
   it("gives the device back once when a jump fails, not again on the way out", async () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
-    device.failures.configWrites = 1000;
+    const write = device.api.setConfigValue;
+    device.api.setConfigValue = async (...args) => {
+      const written = await write(...args);
+      if (args[1] === "CPU Speed") device.failures.configWrites = 1000;
+      return written;
+    };
     const landing = await settle(controller.jumpTo(() => 0, 300));
     expect(landing?.completed).toBe(false);
     const restoreAttempts = device.log.filter((entry) => entry === "FAILED CPU Speed=1").length;
@@ -808,7 +813,7 @@ describe("remote SID seek controller", () => {
     const device = createFakeRemoteSeekDevice();
     const controller = new RemoteSidSeekController(device.api, profile());
     const restoredWhenTold: boolean[] = [];
-    controller.landingListener = () => restoredWhenTold.push(device.log.some((entry) => entry.includes("restore")));
+    controller.landingListener = () => restoredWhenTold.push(readRemoteSeekJournal(DEVICE_KEY) === null);
     const at = () => device.player.tunePositionSeconds;
     if (kind === "jump") {
       await settle(controller.jumpTo(at, 300));
@@ -818,7 +823,7 @@ describe("remote SID seek controller", () => {
       await settle(controller.endFastForward());
     }
     expect(restoredWhenTold).toEqual([false]);
-    expect(device.log.some((entry) => entry.includes("restore"))).toBe(true);
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
   });
 
   describe("when the page has fallen behind the C64, as after a hold cancelled by hiding the app", () => {
