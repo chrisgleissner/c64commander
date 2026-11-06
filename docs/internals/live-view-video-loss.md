@@ -42,6 +42,12 @@ at the sender (restart, or a second sender taking over the group). `rejectedPack
   exactly that on the bench (2026-11-06, u64): each restart took the stream from the other phone about ten seconds
   after the previous one. The app keeps the lost state and shows "The C64 is sending its picture to another app.
   Select Watch to take it back." (or the sound and Listen for audio).
+- A Wi-Fi drop while REST answers looks the same as a takeover, so a yielded controller keeps watching for its own
+  packets (the native audio sink through a 1 s poll of its arrival counter). If they arrive again, the Ultimate still
+  sends to this phone: the controller marks the stream as its own again, records it for the launch sweep, and returns
+  to live. Without that, Stop would skip the stream stop and the Ultimate would keep sending to the phone.
+- With the multicast transport another client's start takes nothing, so the recovery never yields there. It restarts
+  a lost stream up to two times per episode and then reports the plain loss.
 - Sharing the multicast groups instead was tried and rejected. Both phones converged on multicast, then lost 32 to 55%
   of the audio packets on the bench Wi-Fi, and each phone's audio protection stopped the video on the device, which
   stopped it for the other phone too.
