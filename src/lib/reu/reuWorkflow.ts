@@ -8,7 +8,7 @@
 
 import { getBuildInfo } from "@/lib/buildInfo";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
-import { buildInstallStagedFileName } from "@/lib/remoteFiles/installStagedFile";
+import { buildInstallStagedFileName, isAppStagedFileName } from "@/lib/remoteFiles/installStagedFile";
 import { formatDisplayTimestamp, formatFileTimestamp } from "@/lib/snapshot/snapshotFilename";
 import { persistReuSnapshotFile, readReuSnapshotBytes } from "./reuSnapshotStorage";
 import { saveReuSnapshotToStore } from "./reuSnapshotStore";
@@ -180,6 +180,7 @@ export const detectUpdatedTempReuFile = (before: ReuRemoteFile[], after: ReuRemo
   const beforeMap = new Map(before.map((entry) => [entry.name, `${entry.size ?? -1}:${entry.modifiedAt ?? ""}`]));
   const changed = after
     .filter((entry) => entry.name.toLowerCase().endsWith(".reu"))
+    .filter((entry) => !isAppStagedFileName(entry.name))
     .filter((entry) => beforeMap.get(entry.name) !== `${entry.size ?? -1}:${entry.modifiedAt ?? ""}`)
     .sort((left, right) => {
       const leftTime = left.modifiedAt ? Date.parse(left.modifiedAt) : 0;

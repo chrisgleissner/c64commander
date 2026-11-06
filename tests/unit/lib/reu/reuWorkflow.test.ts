@@ -50,6 +50,29 @@ describe("reuWorkflow", () => {
     expect(file?.name).toBe("newer.reu");
   });
 
+  it("does not take an REU image another install staged in /Temp for this install's save", () => {
+    const file = detectUpdatedTempReuFile(
+      [],
+      [
+        { name: "memory.reu", path: "/Temp/memory.reu", modifiedAt: "2026-03-29T10:01:00Z", size: 131072 },
+        {
+          name: "c64commander-reu-9f8e7d6c.reu",
+          path: "/Temp/c64commander-reu-9f8e7d6c.reu",
+          modifiedAt: "2026-03-29T10:02:00Z",
+          size: 131072,
+        },
+        {
+          name: "c64commander-reu-preload.reu",
+          path: "/Temp/c64commander-reu-preload.reu",
+          modifiedAt: "2026-03-29T10:03:00Z",
+          size: 131072,
+        },
+      ],
+    );
+
+    expect(file?.name).toBe("memory.reu");
+  });
+
   it("ignores unchanged files and non-reu updates when detecting new temp files", () => {
     const file = detectUpdatedTempReuFile(
       [{ name: "old.reu", path: "/Temp/old.reu", modifiedAt: "2026-03-29T10:00:00Z", size: 10 }],

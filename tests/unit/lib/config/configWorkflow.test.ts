@@ -140,6 +140,23 @@ describe("configWorkflow", () => {
     );
   });
 
+  it("does not take a config file another install staged in /Temp for this install's save", () => {
+    const file = detectUpdatedTempConfigFile(
+      [],
+      [
+        { name: "saved.cfg", path: "/Temp/saved.cfg", modifiedAt: "2026-03-29T10:01:00Z", size: 64 },
+        {
+          name: "c64commander-cfg-9f8e7d6c.cfg",
+          path: "/Temp/c64commander-cfg-9f8e7d6c.cfg",
+          modifiedAt: "2026-03-29T10:02:00Z",
+          size: 64,
+        },
+      ],
+    );
+
+    expect(file?.name).toBe("saved.cfg");
+  });
+
   it("uploads a local config snapshot to /Temp before applying it", async () => {
     const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
     const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
