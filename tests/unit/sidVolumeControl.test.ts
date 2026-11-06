@@ -14,6 +14,7 @@ import {
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
+  buildPauseMuteRestoreUpdates,
   buildSidEnablement,
   buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
@@ -331,5 +332,44 @@ describe("what a volume step asks on-device playback for", () => {
 
   it("does not boost past unity, which would clip a rendered signal", () => {
     expect(sidVolumeStepGain(steps.find((step) => step.numeric === 6))).toBe(1);
+  });
+});
+
+describe("buildPauseMuteRestoreUpdates", () => {
+  const snapshot = { "Vol UltiSid 1": " 0 dB", "Vol UltiSid 2": "-6 dB", "Vol Master": " 0 dB" };
+  const enablement: SidEnablement = { ultiSid1: true, ultiSid2: true };
+
+  it("restores an output the device still reports at the -42 dB pause mute, ignoring spacing", () => {
+    expect(buildPauseMuteRestoreUpdates(snapshot, enablement, [{ name: "Vol UltiSid 1", value: " -42 dB" }])).toEqual({
+      "Vol UltiSid 1": " 0 dB",
+    });
+  });
+
+  it("keeps a level another client set during the pause", () => {
+    expect(buildPauseMuteRestoreUpdates(snapshot, enablement, [{ name: "Vol UltiSid 1", value: "-6 dB" }])).toEqual({});
+  });
+
+  it("restores Vol Master from OFF even when the read carries no options", () => {
+    expect(buildPauseMuteRestoreUpdates(snapshot, enablement, [{ name: "Vol Master", value: "OFF" }])).toEqual({
+      "Vol Master": " 0 dB",
+    });
+  });
+
+  it("does not treat a per-SID OFF as the pause mute, since the pause never writes OFF there", () => {
+    expect(
+      buildPauseMuteRestoreUpdates(snapshot, enablement, [{ name: "Vol UltiSid 2", value: "OFF", options: ["OFF"] }]),
+    ).toEqual({});
+  });
+
+  it("skips outputs the device did not report and outputs that are disabled", () => {
+    expect(
+      buildPauseMuteRestoreUpdates(snapshot, { ultiSid1: false, ultiSid2: true }, [
+        { name: "Vol UltiSid 1", value: "-42 dB" },
+      ]),
+    ).toEqual({});
+  });
+
+  it("returns nothing for a missing snapshot", () => {
+    expect(buildPauseMuteRestoreUpdates(null, enablement, [{ name: "Vol UltiSid 1", value: "-42 dB" }])).toEqual({});
   });
 });

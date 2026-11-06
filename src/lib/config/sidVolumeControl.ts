@@ -221,6 +221,30 @@ export const buildEnabledSidUnmuteUpdates = (
   return updates;
 };
 
+/**
+ * The pre-pause levels to write back on resume, limited to the items still at the level the pause
+ * muted them to. The Ultimate is shared: another app, or its own menu, may set a level while it is
+ * paused, and that later level is the one to keep.
+ */
+export const buildPauseMuteRestoreUpdates = (
+  snapshot: Record<string, string | number> | null | undefined,
+  enablement: SidEnablement,
+  liveItems: SidVolumeItem[],
+) => {
+  const liveByName = new Map(liveItems.map((item) => [item.name, item]));
+  const updates: Record<string, string | number> = {};
+  Object.entries(buildEnabledSidUnmuteUpdates(snapshot, enablement)).forEach(([name, value]) => {
+    const live = liveByName.get(name);
+    if (live && isStillPauseMuted(live)) updates[name] = value;
+  });
+  return updates;
+};
+
+// A category read carries no options, so Vol Master's "OFF" mute cannot be derived from them.
+const isStillPauseMuted = (item: SidVolumeItem) =>
+  valuesEqual(item.value, resolveSidMutedVolumeOption(item.options, item.name)) ||
+  (item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM && isSidVolumeOffValue(item.value));
+
 export const buildEnabledSidRestoreUpdates = (
   items: SidVolumeItem[],
   enablement: SidEnablement,

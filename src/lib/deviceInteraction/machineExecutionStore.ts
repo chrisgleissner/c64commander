@@ -7,7 +7,8 @@
  */
 
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
-import { buildEnabledSidUnmuteUpdates } from "@/lib/config/sidVolumeControl";
+import { extractAudioMixerItems } from "@/lib/config/audioMixerItems";
+import { buildEnabledSidUnmuteUpdates, buildPauseMuteRestoreUpdates } from "@/lib/config/sidVolumeControl";
 import { clearPersistedPauseMute, hydratePlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
 
 // HARD12-020: the C64's machine pause/resume state has no device-side read
@@ -43,6 +44,7 @@ export type MachineExecutionSnapshot = Readonly<{
 }>;
 
 type ResumeUnmuteApi = {
+  getCategory: (category: string, options?: { __c64uIntent?: "user" }) => Promise<Record<string, unknown>>;
   updateConfigBatch: (
     payload: Record<string, Record<string, string | number>>,
     options?: { __c64uTransientConfigWrite?: boolean; __c64uTransientConfigRestore?: boolean },
@@ -130,9 +132,29 @@ export const restorePauseMuteFromPersistedSnapshot = async (
   if (!persisted || !persisted.pauseMuteSnapshot || !persisted.pauseMuteEnablement) {
     return false;
   }
-  const updates = buildEnabledSidUnmuteUpdates(persisted.pauseMuteSnapshot, persisted.pauseMuteEnablement);
+  if (!Object.keys(buildEnabledSidUnmuteUpdates(persisted.pauseMuteSnapshot, persisted.pauseMuteEnablement)).length) {
+    clearPersistedPauseMute(deviceId);
+    return false;
+  }
+  let updates: Record<string, string | number>;
+  try {
+    const liveItems = extractAudioMixerItems(await api.getCategory("Audio Mixer", { __c64uIntent: "user" }));
+    updates = buildPauseMuteRestoreUpdates(persisted.pauseMuteSnapshot, persisted.pauseMuteEnablement, liveItems);
+  } catch (error) {
+    // Restoring blind is still better than leaving the C64 silent after a resume.
+    addLog(
+      "warn",
+      "Home resume could not read the SID mixer; restoring the levels from before the pause",
+      buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), { deviceId }),
+    );
+    updates = buildEnabledSidUnmuteUpdates(persisted.pauseMuteSnapshot, persisted.pauseMuteEnablement);
+  }
   if (!Object.keys(updates).length) {
     clearPersistedPauseMute(deviceId);
+    addLog("info", "Home resume left the SID mixer as it is: its levels were changed after the pause", {
+      deviceId,
+      snapshotItems: Object.keys(persisted.pauseMuteSnapshot),
+    });
     return false;
   }
   try {
