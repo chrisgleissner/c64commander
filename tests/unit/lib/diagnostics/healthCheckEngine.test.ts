@@ -47,6 +47,15 @@ vi.mock("@/lib/logging", async (importOriginal) => ({
   addLog: vi.fn(),
 }));
 
+vi.mock("@/lib/diagnostics/configPulseRevert", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/diagnostics/configPulseRevert")>();
+  return {
+    ...actual,
+    watchForReturnedPulseValue: (...args: Parameters<typeof actual.watchForReturnedPulseValue>) =>
+      actual.watchForReturnedPulseValue(args[0], args[1], args[2], { durationMs: 40, intervalMs: 10 }),
+  };
+});
+
 vi.mock("@/lib/diagnostics/latencyTracker", () => ({
   computeLatencyPercentiles: vi.fn(() => ({ p50: 10, p90: 20, p99: 30 })),
   recordLatencySample: vi.fn(),
@@ -953,8 +962,7 @@ describe("runHealthCheck — CONFIG probe", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp) // initial: 5
       .mockResolvedValueOnce(ledResp) // readback: still 5, expected 21
-      .mockResolvedValueOnce(ledResp) // pre-revert: still 5, so the pulse never took and nothing is reverted
-      .mockResolvedValueOnce(ledResp); // verify
+      .mockResolvedValue(ledResp); // pre-revert, overlap watch and verify: still 5, so nothing is reverted
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
 
@@ -1170,6 +1178,62 @@ describe("runHealthCheck — CONFIG probe", () => {
       21,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
+  });
+
+  describe("another app's probe overlapping this one", () => {
+    // A stateful LED Strip intensity. `otherApp` runs another app's probe steps against the same value, keyed to
+    // this probe's LED reads, the way two phones pressing Run health check at once interleave on one Ultimate.
+    const shareLedWithOtherApp = (initial: number, otherApp: Record<number, (value: number) => number>) => {
+      const device = { value: initial };
+      let ledReads = 0;
+      mockGetConfigItem.mockImplementation((category: string) => {
+        if (category !== "LED Strip Settings") return Promise.resolve({});
+        ledReads += 1;
+        device.value = otherApp[ledReads]?.(device.value) ?? device.value;
+        return Promise.resolve({ "LED Strip Settings": { "Strip Intensity": { selected: device.value } } });
+      });
+      mockSetConfigValue.mockImplementation((_category: string, _item: string, value: number) => {
+        device.value = value;
+        return Promise.resolve(undefined);
+      });
+      mockGetInfo.mockResolvedValue(successfulInfo);
+      mockReadMemory.mockImplementation((addr: string) =>
+        Promise.resolve(addr === "00A2" ? jiffyBytes : new Uint8Array([0x42])),
+      );
+      return device;
+    };
+
+    it("restores the original after the other app took the pulse value as its own original and wrote it back", async () => {
+      // This probe reads 8 and pulses to 24. The other app reads 24, pulses to 8, and later reverts to 24.
+      const device = shareLedWithOtherApp(8, { 2: () => 8, 5: () => 24 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(8);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24, 8]);
+      expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+      expect(result!.probes.CONFIG.reason).toContain("overlapped");
+    });
+
+    it("restores the original when the other app's pulse lands after this probe's readback", async () => {
+      const device = shareLedWithOtherApp(8, { 3: () => 8, 6: () => 24 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(8);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24, 8]);
+      expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+    });
+
+    it("leaves a different value from another writer in place for the whole watch", async () => {
+      const device = shareLedWithOtherApp(8, { 3: () => 13 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(13);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24]);
+      expect(result!.probes.CONFIG.reason).toContain("concurrent write");
+    });
   });
 
   it("HARD18-021: skips Audio Mixer targets entirely while a playback write burst is active", async () => {

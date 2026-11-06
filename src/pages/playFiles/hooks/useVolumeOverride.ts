@@ -807,11 +807,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         }
         const items = await resolvePlaybackVolumeItems(true);
         const restores = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
-        const updates = keepRestoresOfOwnWrites(
-          restores,
-          items,
-          volumeSessionWrites.readVolumeSessionWrites(resolvedDeviceId),
-        );
+        const ownWrites = volumeSessionWrites.readVolumeSessionWrites(resolvedDeviceId);
+        const updates = keepRestoresOfOwnWrites(restores, items, ownWrites);
         if (Object.keys(updates).length) {
           await withPollingPause(async () => {
             await waitForMachineTransitionsToSettle();

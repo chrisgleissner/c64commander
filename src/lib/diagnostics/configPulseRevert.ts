@@ -21,3 +21,23 @@ export const decideConfigPulseRevert = (values: {
   if (preRevertValue === originalValue && readBackValue !== tempValue) return "not-applied";
   return "external-write";
 };
+
+export const CONFIG_PULSE_OVERLAP_WATCH = { durationMs: 2000, intervalMs: 250 };
+
+/**
+ * A second app whose probe starts inside this one's pulse reads the pulse value as its original and writes it back
+ * when it reverts, after this probe's own revert decision. Watching briefly for the pulse value to return lets this
+ * probe undo that; otherwise the device keeps the pulse value.
+ */
+export const watchForReturnedPulseValue = async (
+  tempValue: number,
+  readValue: () => Promise<number | null>,
+  wait: (ms: number) => Promise<void>,
+  watch = CONFIG_PULSE_OVERLAP_WATCH,
+): Promise<boolean> => {
+  for (let elapsedMs = 0; elapsedMs < watch.durationMs; elapsedMs += watch.intervalMs) {
+    await wait(watch.intervalMs);
+    if ((await readValue()) === tempValue) return true;
+  }
+  return false;
+};
