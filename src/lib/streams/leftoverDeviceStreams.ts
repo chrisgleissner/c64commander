@@ -101,6 +101,9 @@ export const forgetDeviceStream = (name: LeftoverStreamName): void => {
   writeRecord(record);
 };
 
+/** A sweep is already waiting for the network; launch and every reconnect while offline share it. */
+let waitingForNetwork = false;
+
 export const getLeftoverDeviceStreamsForTests = (): LeftoverRecord => readRecord();
 
 /**
@@ -123,9 +126,12 @@ export const stopLeftoverDeviceStreams = async (): Promise<void> => {
   // With no network there is no route to the device yet, so the sweep waits for one instead of failing now.
   const network = await readNativeNetworkStatus();
   if (network.supported && !network.online) {
+    if (waitingForNetwork) return;
+    waitingForNetwork = true;
     const unsubscribe = subscribeNetworkEdges((edge) => {
       if (edge !== "online") return;
       unsubscribe();
+      waitingForNetwork = false;
       void stopLeftoverDeviceStreams();
     });
     return;

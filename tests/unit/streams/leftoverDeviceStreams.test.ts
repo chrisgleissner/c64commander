@@ -93,6 +93,23 @@ describe("leftover device streams (HARD27-021)", () => {
     );
   });
 
+  it("stops a leftover stream once when several sweeps were asked for while offline", async () => {
+    recordDeviceStreamStarted("video", "192.0.2.146");
+    networkStatus.current = { online: false, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await stopLeftoverDeviceStreams();
+    await stopLeftoverDeviceStreams();
+    await stopLeftoverDeviceStreams();
+
+    networkStatus.current = { online: true, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stopAt).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps waiting through another offline report, and warns about a stop the device refused", async () => {
     recordDeviceStreamStarted("audio", "192.0.2.146");
     // The platform answered "no network" just before the watch last heard the network was up.
