@@ -49,7 +49,7 @@ const CONFIG_ROUNDTRIP_TARGETS = [
 
 const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   REST: 3000,
-  FTP: 1000,
+  FTP: 3000,
   TELNET: 3000,
   CONFIG: 4000,
   RASTER: 1500,

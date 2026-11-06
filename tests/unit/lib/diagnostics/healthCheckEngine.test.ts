@@ -1507,13 +1507,25 @@ describe("runHealthCheck — FTP probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockPingFtp.mockRejectedValue(new Error("FTP timed out after 1000ms"));
+    mockPingFtp.mockRejectedValue(new Error("FTP timed out after 3000ms"));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.FTP.outcome).toBe("Fail");
-    expect(result!.probes.FTP.durationMs).toBe(1000);
+    expect(result!.probes.FTP.durationMs).toBe(3000);
     expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
+  });
+
+  it("lets an FTP login that takes 1.5 s on a slow link succeed, as REST and Telnet would", async () => {
+    setupAllProbesSuccess();
+    mockPingFtp.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1500)) as Promise<{ ok: boolean }>,
+    );
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Success");
+    expect(mockPingFtp).toHaveBeenCalledWith(expect.objectContaining({ connectTimeoutMs: 3000 }));
   });
 
   it("normalizes an HTTP device host with a port before probing FTP", async () => {
