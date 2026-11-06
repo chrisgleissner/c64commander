@@ -131,6 +131,12 @@ export class AudioMirrorController {
   /** Last socket-level packet count seen from the native sink, for the arrival watchdog's poll. */
   private lastSeenArrivalPackets = -1;
   private liveSinceMs = 0;
+  /**
+   * The device's audio stream is this phone's to stop: a start was sent and no other client has since
+   * been found holding it. The Ultimate keeps one target per stream, so a stop sent after another phone
+   * took it would end that phone's audio.
+   */
+  private deviceStreamOwned = false;
   /** Notices that the multicast audio stopped arriving; a bound socket reports nothing when it does. */
   private readonly arrivalWatchdog = new StreamArrivalWatchdog({
     now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
@@ -305,6 +311,8 @@ export class AudioMirrorController {
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       socketOpen = true;
+      // Owned before the reply: a start that timed out may still have reached the device.
+      this.deviceStreamOwned = true;
       await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
       addLog("warn", socketOpen ? "Audio Mirror: device stream start failed" : "Audio Mirror: receive socket failed", {
@@ -402,6 +410,7 @@ export class AudioMirrorController {
   /** The device answers but streams to another client: say so instead of the plain loss. */
   reportStreamingElsewhere(): void {
     if (this.snapshot.state !== "error") return;
+    this.deviceStreamOwned = false;
     this.update({ reconnecting: false, error: AUDIO_STREAMING_ELSEWHERE_MESSAGE });
   }
 
@@ -459,6 +468,19 @@ export class AudioMirrorController {
     this.arrivalWatchdog.start();
   }
 
+  private async stopDeviceStream(): Promise<void> {
+    try {
+      await this.deps.stopStream("audio");
+      this.deviceStreamOwned = false;
+    } catch (error) {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Audio Mirror: device stream stop failed; the device may still be streaming", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
+  }
+
   /** A session that ended in "error" still holds its receiver and sink, whose stats poll never stops on its own. */
   private async releaseFailedSessionTransport(): Promise<void> {
     const failedReceiver = this.receiver;
@@ -482,15 +504,8 @@ export class AudioMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
-    try {
-      await this.deps.stopStream("audio");
-    } catch (error) {
-      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
-      addLog("warn", "Audio Mirror: device stream stop failed; the device may still be streaming", {
-        error: (error as Error)?.message ?? String(error),
-        stack: (error as Error)?.stack,
-      });
-    }
+    if (this.deviceStreamOwned) await this.stopDeviceStream();
+    else addLog("info", "Audio Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();
     this.receiver = null;
     // Flush any buffered tail so no packets are stranded, then release the player/sink.

@@ -264,6 +264,8 @@ export class VideoMirrorController {
 
   private lastEmitMs = -Infinity;
   private liveSinceMs = 0;
+  /** A start was sent and no other client has since been found holding the stream; see the audio controller. */
+  private deviceStreamOwned = false;
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
@@ -468,6 +470,8 @@ export class VideoMirrorController {
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       socketOpen = true;
+      // Owned before the reply: a start that timed out may still have reached the device.
+      this.deviceStreamOwned = true;
       await this.deps.startStream("video", receiver.destination);
     } catch (error) {
       addLog("warn", socketOpen ? "Video Mirror: device stream start failed" : "Video Mirror: receive socket failed", {
@@ -520,6 +524,7 @@ export class VideoMirrorController {
   /** The device answers but streams to another client: say so instead of the plain loss. */
   reportStreamingElsewhere(): void {
     if (this.snapshot.state !== "error") return;
+    this.deviceStreamOwned = false;
     this.update({ reconnecting: false, error: VIDEO_STREAMING_ELSEWHERE_MESSAGE });
   }
 
@@ -583,6 +588,19 @@ export class VideoMirrorController {
     this.arrivalWatchdog.start();
   }
 
+  private async stopDeviceStream(): Promise<void> {
+    try {
+      await this.deps.stopStream("video");
+      this.deviceStreamOwned = false;
+    } catch (error) {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Video Mirror: device stream stop failed; the device may still be streaming", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
+  }
+
   private resetPresentation(): void {
     this.presentPhase = 0;
     this.frameStartByNum.clear();
@@ -602,15 +620,8 @@ export class VideoMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
-    try {
-      await this.deps.stopStream("video");
-    } catch (error) {
-      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
-      addLog("warn", "Video Mirror: device stream stop failed; the device may still be streaming", {
-        error: (error as Error)?.message ?? String(error),
-        stack: (error as Error)?.stack,
-      });
-    }
+    if (this.deviceStreamOwned) await this.stopDeviceStream();
+    else addLog("info", "Video Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();
     this.receiver = null;
     this.assembler.reset();

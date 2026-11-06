@@ -183,6 +183,96 @@ describe("AudioMirrorController", () => {
     }
   });
 
+  const loseAudio = async (stopStream: () => Promise<unknown>) => {
+    const receiver = new FakeReceiver();
+    const sink = fakeNativeSink(true);
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sink.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
+      onChange: vi.fn(),
+      onStreamLost: () => false,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    await tickSeconds(10);
+    expect(controller.getSnapshot().state).toBe("error");
+    return { controller, receiver, sink };
+  };
+
+  it("does not stop the device audio stream after leaving it to another app, but releases its own socket and sink", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller, receiver, sink } = await loseAudio(stopStream);
+      controller.reportStreamingElsewhere();
+
+      await controller.stop();
+
+      expect(stopStream).not.toHaveBeenCalled();
+      expect(receiver.closed).toBe(true);
+      expect(sink.closed).toBe(true);
+      expect(controller.getSnapshot().state).toBe("off");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still stops the device audio stream after a loss it has not left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseAudio(stopStream);
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops the device audio stream again once Listen takes it back from another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseAudio(stopStream);
+      controller.reportStreamingElsewhere();
+      await controller.start();
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sends no device stop when the receive socket failed before any start was sent", async () => {
+    const stopStream = vi.fn(async () => ({ errors: [] }));
+    const startStream = vi.fn(async () => ({ errors: [] }));
+    const receiver = new FakeReceiver();
+    Object.assign(receiver, {
+      ready: async () => {
+        throw new Error("bind failed");
+      },
+    });
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream,
+      stopStream,
+      onChange: vi.fn(),
+    });
+
+    await controller.start();
+
+    expect(startStream).not.toHaveBeenCalled();
+    expect(stopStream).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().state).toBe("error");
+  });
+
   it("tells its owner how long the audio had been live when it went silent, and shows the reconnecting state", async () => {
     vi.useFakeTimers();
     try {

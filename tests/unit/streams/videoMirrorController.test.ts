@@ -195,6 +195,73 @@ describe("VideoMirrorController", () => {
     }
   });
 
+  const loseVideo = async (stopStream: () => Promise<unknown>) => {
+    vi.useFakeTimers();
+    let clock = 0;
+    const receiver = new FakeReceiver();
+    const controller = new VideoMirrorController({
+      createReceiver: () => receiver,
+      renderFrame: vi.fn(),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
+      onChange: vi.fn(),
+      onStreamLost: () => false,
+      now: () => clock,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    for (let i = 0; i < 12; i += 1) {
+      clock += 1000;
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    expect(controller.getSnapshot().state).toBe("error");
+    return { controller, receiver };
+  };
+
+  it("does not stop the device video stream after leaving it to another app, but closes its own receiver", async () => {
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller, receiver } = await loseVideo(stopStream);
+      controller.reportStreamingElsewhere();
+
+      await controller.stop();
+
+      expect(stopStream).not.toHaveBeenCalled();
+      expect(receiver.closed).toBe(true);
+      expect(controller.getSnapshot().state).toBe("off");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still stops the device video stream after a loss it has not left to another app", async () => {
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseVideo(stopStream);
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledWith("video");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops the device video stream again once Watch takes it back from another app", async () => {
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseVideo(stopStream);
+      controller.reportStreamingElsewhere();
+      await controller.start();
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("clears the reconnecting state when the stream is started again", async () => {
     try {
       const controller = await goSilent(() => true);
