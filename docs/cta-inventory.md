@@ -655,6 +655,7 @@ Per drive (A / B / Soft-IEC):
 
 - Status toggle — switch — `drive-status-toggle-*` — R✅ I✅ _(on Drive A and B this is the only power control; Soft IEC keeps a separate Turn on/off button because the pill writes its configuration while the button powers the running drive)_
 - Mount disk / select directory — button — `drive-mount-toggle-*` — R✅ I✅ _(while a disk is mounted it is Eject; Eject reads the drive again first and ejects nothing, with a toast, when another app has since put a different disk in the drive)_
+- Previous disk / Next disk — buttons — R✅ I✅ _(shown only while the mounted disk belongs to a group of two or more; each reads the drive again first and inserts nothing, with a toast, when another app has since put a different disk in the drive)_
 - Bus ID — select — `drive-bus-select-*` — R✅ I✅
 - Drive Type — select — `drive-type-select-*` — R✅ I✅ _(A/B)_
 - Soft-IEC default path — button — `drive-default-path-select-soft-iec` — R✅ I✅
@@ -663,7 +664,7 @@ Per drive (A / B / Soft-IEC):
 
 Disk library: New disk — button — `new-disk-open` — R✅ I✅ _(flag `new_disk_enabled`; opens the **New disk dialog**, §5)_ ; Add disks — button — R✅ I✅ ; Filter disks — text — `list-filter-input` — R✅ I✅ ; Select all — button — `disk-list-toggle-select-all` — R✅ I✅ `[disabled: empty]`.
 
-Per-disk overflow menu (Set group / Rename / Remove; on the compact profile the **Item actions sheet** with Mount first, as for a playlist row, §4.2; elsewhere a menu whose detail rows are reachable by the arrow keys and inert on OK) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
+Per-disk overflow menu (Set group / Rename / Remove — Remove reads each drive showing the disk again and ejects only a drive that still holds it; on the compact profile the **Item actions sheet** with Mount first, as for a playlist row, §4.2; elsewhere a menu whose detail rows are reachable by the arrow keys and inert on OK) additionally gains, behind `disk_explorer_enabled`: Open (Disk Explorer)… — action — R✅ I✅ `[only for .d64/.d71/.d81/.dnp rows]` — opens the **Disk contents dialog** (§5).
 
 Mount disk sheet: Available disks list — filter text — `list-filter-input` — R✅ I✅ ; Mount disk row action — button — R✅ I✅ ; Add disks — button — `mount-sheet-add-disks` — R✅ I✅ `[visible when library empty]`; Add disks source picker Local / connected Ultimate (named after its product: C64U, U64, U64E, U64E2 or U2) / CommoServe — buttons — `import-option-*` — R✅ I✅.
 

@@ -15,7 +15,7 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
-import { DRIVE_CHANGED_EJECT_MESSAGE } from "@/components/disks/driveMountSupport";
+import { DRIVE_CHANGED_EJECT_MESSAGE, DRIVE_CHANGED_ROTATE_MESSAGE } from "@/components/disks/driveMountSupport";
 import { mountDiskToDrive, getMaterializedWorkPath, hasShownArchiveDiskWriteBackAdvisory } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
 import { noteDiskMountOutcome, resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
@@ -991,6 +991,65 @@ describe("HomeDiskManager UI & Interactions", () => {
       );
     });
     expect(mockApi.unmountDrive).not.toHaveBeenCalled();
+  });
+
+  describe("when another app changed the drive after the card was drawn", () => {
+    const shownDrive = { ...createMockDrive(), image_file: "one.d64", image_path: "/USB2/" };
+    const otherDrive = { ...createMockDrive(), image_file: "theirs.d64", image_path: "/USB2/" };
+    const groupDisks = [
+      createMockDisk({ id: "one", name: "one.d64", path: "/USB2/one.d64", group: "Game" }),
+      createMockDisk({ id: "two", name: "two.d64", path: "/USB2/two.d64", group: "Game" }),
+    ];
+    const useDrivesReadingAgain = (fresh: unknown) => {
+      const query = drivesQueryOf({ drives: [{ a: shownDrive }, { b: createMockDrive() }] });
+      query.refetch.mockResolvedValue({ data: { drives: [{ a: fresh }, { b: createMockDrive() }] }, dataUpdatedAt: 2 });
+      (useC64Drives as any).mockReturnValue(query);
+      (useDiskLibrary as any).mockReturnValue({ disks: groupDisks, runtimeFiles: {}, removeDisk: mockRemoveDisk });
+    };
+
+    it("does not insert the group's next disk over the other app's disk", async () => {
+      useDrivesReadingAgain(otherDrive);
+      render(<HomeDiskManager />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Drive A next disk" }));
+
+      await waitFor(() =>
+        expect(toast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Drive A changed", description: DRIVE_CHANGED_ROTATE_MESSAGE }),
+        ),
+      );
+      expect(mountDiskToDrive).not.toHaveBeenCalled();
+    });
+
+    it("inserts the group's next disk while the drive still holds the disk shown", async () => {
+      useDrivesReadingAgain(shownDrive);
+      (mountDiskToDrive as any).mockResolvedValue({ persistence: "device-native" });
+      render(<HomeDiskManager />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Drive A next disk" }));
+
+      await waitFor(() =>
+        expect(mountDiskToDrive).toHaveBeenCalledWith(
+          expect.anything(),
+          "a",
+          expect.objectContaining({ id: "two" }),
+          undefined,
+          expect.anything(),
+        ),
+      );
+    });
+
+    it("removes the disk from the collection without ejecting the other app's disk", async () => {
+      useDrivesReadingAgain(otherDrive);
+      render(<HomeDiskManager />);
+
+      fireEvent.click(screen.getByText("Select all"));
+      fireEvent.click(screen.getByText("Remove selected items"));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+
+      await waitFor(() => expect(mockRemoveDisk).toHaveBeenCalledWith("one"));
+      expect(mockApi.unmountDrive).not.toHaveBeenCalled();
+    });
   });
 
   it("still ejects when the drive, read again on Eject, is empty, so this phone's write-back runs", async () => {

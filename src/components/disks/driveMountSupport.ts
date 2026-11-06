@@ -50,6 +50,8 @@ export const keepsLocalMountOverride = (
 
 export const DRIVE_CHANGED_EJECT_MESSAGE =
   "The disk in this drive changed on the C64, so nothing was ejected. Press Eject again to remove the disk shown now.";
+export const DRIVE_CHANGED_ROTATE_MESSAGE =
+  "The disk in this drive changed on the C64, so no other disk was inserted. Check the disk shown now first.";
 
 /**
  * Whether the drive, read again just before an eject, holds a different image than the one its card shows. Another

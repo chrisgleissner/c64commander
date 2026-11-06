@@ -857,21 +857,25 @@ export const HomeDiskManager = () => {
     }
   };
 
+  /** Reads the drive again; another app may have changed it since the card was drawn. */
+  const driveChangedSinceShown = async (drive: DriveKey, action: string, message: string | null) => {
+    const shown = {
+      shownDiskId: resolveMountedDiskId(drive),
+      shownInfo: mountSupport.findPolledDrive(drivesData, drive),
+    };
+    const fresh = await drivesQuery.refetch({ cancelRefetch: false });
+    const freshInfo = mountSupport.findPolledDrive(fresh.data, drive);
+    const freshDiskId = resolveMountedDiskId(drive, freshInfo, fresh.dataUpdatedAt, false);
+    if (!mountSupport.driveChangedUnderCard({ ...shown, freshInfo, freshDiskId })) return false;
+    addLog("info", `${action} skipped: the drive now holds a disk this card did not show`, { drive, freshInfo });
+    if (message) toast({ title: `${buildDriveLabel(drive)} changed`, description: message });
+    return true;
+  };
+
   const handleEject = trace(async (drive: DriveKey) => {
     setDriveMutationPending((prev) => ({ ...prev, [drive]: true }));
     try {
-      const shown = {
-        shownDiskId: resolveMountedDiskId(drive),
-        shownInfo: mountSupport.findPolledDrive(drivesData, drive),
-      };
-      const fresh = await drivesQuery.refetch({ cancelRefetch: false });
-      const freshInfo = mountSupport.findPolledDrive(fresh.data, drive);
-      const freshDiskId = resolveMountedDiskId(drive, freshInfo, fresh.dataUpdatedAt, false);
-      if (mountSupport.driveChangedUnderCard({ ...shown, freshInfo, freshDiskId })) {
-        addLog("info", "Eject skipped: the drive now holds a disk this card did not show", { drive, freshInfo });
-        toast({ title: `${buildDriveLabel(drive)} changed`, description: mountSupport.DRIVE_CHANGED_EJECT_MESSAGE });
-        return;
-      }
+      if (await driveChangedSinceShown(drive, "Eject", mountSupport.DRIVE_CHANGED_EJECT_MESSAGE)) return;
       await runDriveMutationWithSettledPolling(() => api.unmountDrive(drive));
       // HARD18-025: read the materialized work-dir image back and re-persist
       // it to the source now that the drive has released it. Best-effort -
@@ -1204,25 +1208,28 @@ export const HomeDiskManager = () => {
     const nextIndex = (index + direction + groupDisks.length) % groupDisks.length;
     const nextDisk = groupDisks[nextIndex];
     if (!nextDisk) return;
+    if (await driveChangedSinceShown(drive, "Rotate", mountSupport.DRIVE_CHANGED_ROTATE_MESSAGE)) return;
     await handleMountDisk(drive, nextDisk);
   });
 
   const handleDeleteDisk = trace(async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
-    const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
-    if (mountedDrives.length > 0) {
+    const shownDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
+    if (shownDrives.length > 0) {
+      const mountedDrives: DriveKey[] = [];
       try {
+        for (const drive of shownDrives) {
+          if (!(await driveChangedSinceShown(drive, "Eject before delete", null))) mountedDrives.push(drive);
+        }
         // HARD18-017: reuse handleEject's body per mounted drive, so the card reads "unmounted" at once
         // instead of ghost-mounting from the not-yet-settled polled drive state.
         await Promise.all(
           mountedDrives.map((drive) => runDriveMutationWithSettledPolling(() => api.unmountDrive(drive))),
         );
-        // HARD18-025: the disk is being removed from the library outright -
-        // there is no source left to write back to, so drop any pending
-        // materialized-mount entry instead of spending an FTP round trip.
-        mountedDrives.forEach((drive) => discardDiskWriteBack(drive, api.getDeviceHost()));
+        // HARD18-025: the disk leaves the library, so no source is left to write back to.
+        shownDrives.forEach((drive) => discardDiskWriteBack(drive, api.getDeviceHost()));
         setMountedByDrive((prev) => {
           const next = { ...prev };
-          mountedDrives.forEach((drive) => {
+          shownDrives.forEach((drive) => {
             mountedByDriveSetAtRef.current[drive] = Date.now();
             next[drive] = "";
           });
