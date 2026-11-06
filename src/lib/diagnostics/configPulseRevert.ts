@@ -22,7 +22,7 @@ export const decideConfigPulseRevert = (values: {
   return "external-write";
 };
 
-export const CONFIG_PULSE_OVERLAP_WATCH = { durationMs: 2000, intervalMs: 250 };
+export const CONFIG_PULSE_OVERLAP_WATCH = { durationMs: 1500, intervalMs: 250 };
 
 /**
  * A second app whose probe starts inside this one's pulse reads the pulse value as its original and writes it back
@@ -35,7 +35,8 @@ export const watchForReturnedPulseValue = async (
   wait: (ms: number) => Promise<void>,
   watch = CONFIG_PULSE_OVERLAP_WATCH,
 ): Promise<boolean> => {
-  for (let elapsedMs = 0; elapsedMs < watch.durationMs; elapsedMs += watch.intervalMs) {
+  const deadline = Date.now() + watch.durationMs;
+  while (Date.now() < deadline) {
     await wait(watch.intervalMs);
     if ((await readValue()) === tempValue) return true;
   }

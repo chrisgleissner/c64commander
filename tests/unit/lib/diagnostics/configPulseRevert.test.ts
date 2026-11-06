@@ -45,12 +45,21 @@ describe("watchForReturnedPulseValue", () => {
     expect(readValue).toHaveBeenCalledTimes(3);
   });
 
-  it("gives up after the watch duration when the pulse value never returns", async () => {
-    const readValue = vi.fn(() => Promise.resolve(9));
-    const wait = vi.fn(noWait);
+  it("gives up at the wall-clock deadline when the pulse value never returns, however slow the reads", async () => {
+    vi.useFakeTimers();
+    try {
+      const readValue = vi.fn(async () => {
+        vi.advanceTimersByTime(60);
+        return 9;
+      });
+      const wait = vi.fn(async (ms: number) => {
+        vi.advanceTimersByTime(ms);
+      });
 
-    await expect(watchForReturnedPulseValue(21, readValue, wait, watch)).resolves.toBe(false);
-    expect(readValue).toHaveBeenCalledTimes(4);
-    expect(wait).toHaveBeenCalledWith(25);
+      await expect(watchForReturnedPulseValue(21, readValue, wait, watch)).resolves.toBe(false);
+      expect(readValue).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1420,7 +1420,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     expect(result!.probes.CONFIG.reason).toContain("Failed to restore original value");
   });
 
-  it("leaves the pulse value unreverted and fails CONFIG when the pre-revert re-read throws", async () => {
+  it("reverts to the original when the pre-revert re-read throws, rather than leave the pulse value", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
@@ -1430,20 +1430,19 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
       .mockResolvedValueOnce(ledResp)
       .mockResolvedValueOnce(ledReadbackResp)
       .mockRejectedValueOnce(new Error("re-read failed"))
-      .mockResolvedValueOnce(ledReadbackResp);
+      .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
-    expect(result!.probes.CONFIG.outcome).toBe("Fail");
-    expect(result!.probes.CONFIG.reason).toContain("could not be read before the revert");
+    expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([21, 5]);
+    expect(result!.probes.CONFIG.outcome).toBe("Success");
     expect(addLog).toHaveBeenCalledWith(
       "warn",
-      "Health check CONFIG probe: pre-revert re-read failed, leaving the value unreverted",
+      "Health check CONFIG probe: pre-revert re-read failed, reverting to the original value anyway",
       expect.objectContaining({ category: "LED Strip Settings", item: "Strip Intensity", tempValue: 21 }),
     );
-    expect(mockSetConfigValue).toHaveBeenCalledTimes(1);
   });
 
   it("does not revert when another client's value replaced the pulse before the readback", async () => {

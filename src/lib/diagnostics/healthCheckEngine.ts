@@ -816,7 +816,9 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
               return null;
             }
           };
-          const preRevertValue = await readPulseItem("pre-revert re-read failed, leaving the value unreverted");
+          const preRevertValue = await readPulseItem(
+            "pre-revert re-read failed, reverting to the original value anyway",
+          );
           let decision = decideConfigPulseRevert({
             originalValue: currentValue,
             tempValue,
@@ -839,9 +841,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
               readBackValue,
               preRevertValue,
             });
-          } else if (decision === "unknown") {
-            revertErrorMessage = "value could not be read before the revert";
-          } else if (decision === "revert") {
+          } else if (decision === "revert" || decision === "unknown") {
             try {
               // HARD18-003: the revert uses its own signal-less request, because the run's signal may already be
               // aborted and an aborted signal would cancel the revert before it reaches the device.
