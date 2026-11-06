@@ -24,6 +24,7 @@ import { clearPassword as clearStoredPassword, setPassword as storePassword } fr
 import { completeSavedDeviceVerification, getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
+import { loadConfigWriteLedger } from "@/lib/config/configWriteLedger";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -1235,6 +1236,34 @@ describe("c64api", () => {
     expect(calls).toContain("http://c64u/v1/configs/Audio%20Mixer/Vol%20UltiSid%201?value=%2B6%20dB");
     expect(calls).toContain("http://c64u/v1/configs:save_to_flash");
     expect(calls).toContain("http://c64u/v1/machine:resume");
+  });
+
+  it("records each accepted config write as this phone's, and a rejected one not at all", async () => {
+    localStorage.removeItem("c64u_config_writes:http://c64u");
+    const fetchMock = getFetchMock();
+    const mixer = categoryConfigResponse("Audio Mixer", {
+      "Vol UltiSid 1": { selected: "0 dB", options: ["0 dB", "+6 dB"] },
+      "Vol UltiSid 2": { selected: "0 dB", options: ["0 dB", "+6 dB"] },
+    });
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("Vol%20UltiSid%202?value="))
+        return Promise.resolve(okJsonResponse({ errors: ["Value rejected"] }));
+      if (url.endsWith("/v1/configs/Clock")) {
+        return Promise.resolve(categoryConfigResponse("Clock", { Hour: { selected: "1", options: ["1", "12"] } }));
+      }
+      return Promise.resolve(url.endsWith("/v1/configs/Audio%20Mixer") ? mixer.clone() : okJsonResponse());
+    });
+
+    const api = new C64API("http://c64u");
+    await api.setConfigValue("Audio Mixer", "Vol UltiSid 1", "+6 dB");
+    await expect(api.setConfigValue("Audio Mixer", "Vol UltiSid 2", "+6 dB")).rejects.toThrow();
+    await api.updateConfigBatch({ Clock: { Hour: "12" } });
+
+    expect(loadConfigWriteLedger("http://c64u")).toEqual({
+      "Audio Mixer": { "Vol UltiSid 1": "+6 dB" },
+      Clock: { Hour: "12" },
+    });
   });
 
   it("does not inspect successful machine-control response bodies", async () => {

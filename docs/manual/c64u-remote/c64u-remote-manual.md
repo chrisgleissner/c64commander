@@ -1118,7 +1118,7 @@ The machine's own **Auto save config** does not cover this. It decides whether t
 
 Set it on the Commodore 64 Ultimate at **C= + RESTORE → User interface → Auto save config**; the same setting appears in Config as **User interface → Auto save config**.
 
-Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the phone, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
+Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which undoes the setting changes you made in the app since it first connected to the device. A setting that someone else has changed since then, for example from another phone, is left as it is. The app also keeps its own named **configuration snapshots** on the phone, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
 
 ### Switching Between Devices
 

@@ -25,6 +25,7 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { usePageActivity } from "@/hooks/usePageActivity";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
+import { buildOwnRevertPayload, clearConfigWriteLedger, loadConfigWriteLedger } from "@/lib/config/configWriteLedger";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
@@ -291,6 +292,7 @@ export function useAppConfigState() {
         ...(failedCategories.length ? { failedCategories } : {}),
       };
       saveInitialSnapshot(resolvedBaseUrl, snapshot);
+      clearConfigWriteLedger(resolvedBaseUrl);
       setInitialSnapshot(snapshot);
       setFetchError(null);
       updateHasChanges(resolvedBaseUrl, false);
@@ -336,6 +338,7 @@ export function useAppConfigState() {
           ...(failedCategories.length ? { failedCategories } : {}),
         };
         saveInitialSnapshot(resolvedBaseUrl, snapshot);
+        clearConfigWriteLedger(resolvedBaseUrl);
         setInitialSnapshot(snapshot);
         setFetchError(null);
         updateHasChanges(resolvedBaseUrl, false);
@@ -454,12 +457,9 @@ export function useAppConfigState() {
     };
   }, [captureIdleInitialSnapshot, hasChanges, initialSnapshot, pageActive, resolvedBaseUrl, status.isConnected]);
 
-  const applyConfigData = useCallback(
-    async (data: Record<string, ConfigResponse>) => {
-      const api = getC64API();
-      const payload = buildWritableConfigPayload(data);
-
-      await api.updateConfigBatch(payload);
+  const applyConfigPayload = useCallback(
+    async (payload: WritableConfigPayload) => {
+      await getC64API().updateConfigBatch(payload);
 
       void queryClient.invalidateQueries({ queryKey: ["c64-category"] });
       void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
@@ -473,6 +473,10 @@ export function useAppConfigState() {
     },
     [queryClient],
   );
+  const applyConfigData = useCallback(
+    (data: Record<string, ConfigResponse>) => applyConfigPayload(buildWritableConfigPayload(data)),
+    [applyConfigPayload],
+  );
 
   const revertToInitial = useCallback(async (): Promise<ConfigRevertResult> => {
     if (!initialSnapshot) {
@@ -481,12 +485,17 @@ export function useAppConfigState() {
 
     setIsApplying(true);
     try {
-      await applyConfigData(initialSnapshot.data);
-      const expectedPayload = buildWritableConfigPayload(initialSnapshot.data);
+      const before = await fetchAllConfig({ mode: "user" });
+      const expectedPayload = buildOwnRevertPayload(
+        buildWritableConfigPayload(initialSnapshot.data),
+        buildWritableConfigPayload(before.configs),
+        loadConfigWriteLedger(resolvedBaseUrl),
+      );
+      if (Object.keys(expectedPayload).length > 0) await applyConfigPayload(expectedPayload);
       const { configs: currentConfig, failedCategories } = await fetchAllConfig({ mode: "user" });
       // HARD19-024: exclude categories that couldn't be re-read from the mismatch
       // scan so an unreadable category is not reported as N failed settings.
-      const unreadCategories = new Set(failedCategories);
+      const unreadCategories = new Set([...before.failedCategories, ...failedCategories]);
       const mismatches = collectConfigRevertMismatches(
         expectedPayload,
         buildWritableConfigPayload(currentConfig),
@@ -512,6 +521,7 @@ export function useAppConfigState() {
       }
 
       updateHasChanges(resolvedBaseUrl, false);
+      clearConfigWriteLedger(resolvedBaseUrl);
       // HARD19-023/024: report the revert as succeeded, but flag categories that
       // could not be re-read (unverified) or that were never in the baseline
       // (baselineIncomplete — those items were not written back).
@@ -523,7 +533,7 @@ export function useAppConfigState() {
     } finally {
       setIsApplying(false);
     }
-  }, [applyConfigData, initialSnapshot, resolvedBaseUrl]);
+  }, [applyConfigPayload, initialSnapshot, resolvedBaseUrl]);
 
   const saveCurrentConfig = useCallback(
     async (name: string) => {

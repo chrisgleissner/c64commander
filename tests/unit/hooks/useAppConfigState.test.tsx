@@ -65,6 +65,8 @@ vi.mock("@/lib/config/appConfigStore", () => ({
   createAppConfigEntry,
 }));
 
+import { loadConfigWriteLedger, recordConfigWrite } from "@/lib/config/configWriteLedger";
+
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
   addErrorLog: vi.fn(),
@@ -105,6 +107,7 @@ describe("useAppConfigState", () => {
       savedAt: "now",
     }));
     sessionStorage.clear();
+    localStorage.clear();
     ({ useAppConfigState } = await import("@/hooks/useAppConfigState"));
     queryClient = new QueryClient();
     wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -202,8 +205,11 @@ describe("useAppConfigState", () => {
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
     });
+    recordConfigWrite("http://c64u", "Audio", "Vol", "5");
     getCategories.mockResolvedValue({ categories: ["Audio"] });
-    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
+    getCategory
+      .mockResolvedValueOnce({ items: { Vol: { selected: "5" } } })
+      .mockResolvedValue({ items: { Vol: { selected: "7" } } });
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     let revertResult;
@@ -213,7 +219,9 @@ describe("useAppConfigState", () => {
 
     expect(revertResult).toEqual({ status: "reverted" });
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+    expect(updateConfigBatch).toHaveBeenCalledWith({ Audio: { Vol: "7" } });
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
+    expect(loadConfigWriteLedger("http://c64u")).toEqual({});
   });
 
   it("classifies an unreadable category as unverified (not a mismatch) on revert (HARD19-024)", async () => {
@@ -224,10 +232,13 @@ describe("useAppConfigState", () => {
         Video: { items: { Mode: { value: "PAL" } } },
       },
     });
+    recordConfigWrite("http://c64u", "Audio", "Vol", "5");
     getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
+    let audioReads = 0;
     getCategory.mockImplementation(async (category: string) => {
       if (category === "Video") throw new Error("read timeout");
-      return { items: { Vol: { selected: "7" } } };
+      audioReads += 1;
+      return { items: { Vol: { selected: audioReads <= 1 ? "5" : "7" } } };
     });
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
@@ -341,8 +352,11 @@ describe("useAppConfigState", () => {
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
     });
+    recordConfigWrite("http://c64u", "Audio", "Vol", "5");
     getCategories.mockResolvedValue({ categories: ["Audio"] });
-    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
+    getCategory
+      .mockResolvedValueOnce({ items: { Vol: { selected: "5" } } })
+      .mockResolvedValue({ items: { Vol: { selected: "7" } } });
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
@@ -359,6 +373,7 @@ describe("useAppConfigState", () => {
       savedAt: "t",
       data: { Audio: { items: { Vol: { value: "7" } } } },
     });
+    recordConfigWrite("http://c64u", "Audio", "Vol", "5");
     getCategories.mockResolvedValue({ categories: ["Audio"] });
     getCategory.mockResolvedValue({ items: { Vol: { selected: "5" } } });
 
@@ -383,6 +398,47 @@ describe("useAppConfigState", () => {
       ],
     });
     expect(updateHasChanges).not.toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it("revertToInitial writes back only settings this phone changed that still hold the value it wrote", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: {
+        Audio: { items: { Mine: { value: "1" }, Theirs: { value: "1" }, Untouched: { value: "1" } } },
+      },
+    });
+    recordConfigWrite("http://c64u", "Audio", "Mine", "2");
+    recordConfigWrite("http://c64u", "Audio", "Theirs", "2");
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory
+      .mockResolvedValueOnce({
+        items: { Mine: { selected: "2" }, Theirs: { selected: "3" }, Untouched: { selected: "4" } },
+      })
+      .mockResolvedValue({
+        items: { Mine: { selected: "1" }, Theirs: { selected: "3" }, Untouched: { selected: "4" } },
+      });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let revertResult;
+    await act(async () => {
+      revertResult = await result.current.revertToInitial();
+    });
+
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+    expect(updateConfigBatch).toHaveBeenCalledWith({ Audio: { Mine: "1" } });
+    expect(revertResult).toEqual({ status: "reverted" });
+  });
+
+  it("a captured baseline starts a new record of this phone's writes", async () => {
+    recordConfigWrite("http://c64u", "Audio", "Volume", "4");
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
+    });
+
+    expect(saveInitialSnapshot).toHaveBeenCalled();
+    expect(loadConfigWriteLedger("http://c64u")).toEqual({});
   });
 
   it("sets fetchError state when manual initial snapshot capture fails", async () => {
@@ -700,108 +756,87 @@ describe("useAppConfigState", () => {
     );
   });
 
-  it("extractValue normalizes null config to empty string via revertToInitial", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { NullItem: null } } },
-    });
+  it("extractValue normalizes null config to empty string via loadAppConfig", async () => {
+    const data = { Cat: { items: { NullItem: null } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     // null is not a valid config scalar; extractConfigValue normalizes it to ""
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { NullItem: "" } }));
   });
 
-  it("extractValue normalizes array config to empty string via revertToInitial", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { ArrItem: [1, 2, 3] } } },
-    });
+  it("extractValue normalizes array config to empty string via loadAppConfig", async () => {
+    const data = { Cat: { items: { ArrItem: [1, 2, 3] } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     // arrays are not valid config scalars; extractConfigValue normalizes them to ""
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { ArrItem: "" } }));
   });
 
-  it("extractValue handles primitive string config via revertToInitial", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { StrItem: "raw" } } },
-    });
+  it("extractValue handles primitive string config via loadAppConfig", async () => {
+    const data = { Cat: { items: { StrItem: "raw" } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { StrItem: "raw" } }));
   });
 
   it("extractValue uses value field when selected is absent", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { VolItem: { value: "8" } } } },
-    });
+    const data = { Cat: { items: { VolItem: { value: "8" } } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { VolItem: "8" } }));
   });
 
   it("extractValue uses current field when selected and value absent", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { Item: { current: "3" } } } },
-    });
+    const data = { Cat: { items: { Item: { current: "3" } } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { Item: "3" } }));
   });
 
   it("extractValue falls back to empty string when no known field", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: { Cat: { items: { Item: { unknown: "x" } } } },
-    });
+    const data = { Cat: { items: { Item: { unknown: "x" } } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { Item: "" } }));
   });
 
   it("applyConfigData skips read-only SID Detected Socket items", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: {
-        Audio: {
-          items: {
-            Volume: { selected: "5" },
-            "SID Detected Socket 1": { selected: "yes" },
-          },
+    const data = {
+      Audio: {
+        items: {
+          Volume: { selected: "5" },
+          "SID Detected Socket 1": { selected: "yes" },
         },
       },
-    });
+    } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     const batchPayload = updateConfigBatch.mock.calls[0][0] as Record<string, Record<string, string | number>>;
@@ -810,18 +845,15 @@ describe("useAppConfigState", () => {
   });
 
   it("applyConfigData skips categories with no writable items", async () => {
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: {
-        Audio: {
-          items: { "SID Detected Socket 1": { selected: "yes" } },
-        },
+    const data = {
+      Audio: {
+        items: { "SID Detected Socket 1": { selected: "yes" } },
       },
-    });
+    } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     const batchPayload = updateConfigBatch.mock.calls[0][0] as Record<string, unknown>;
@@ -848,34 +880,24 @@ describe("useAppConfigState", () => {
 
   it("extractItems uses categoryBlock when items field absent (line 49 fallback)", async () => {
     // data.Audio has no .items property — categoryBlock itself is iterated
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: {
-        Audio: { Volume: { selected: "5" } },
-      },
-    });
+    const data = { Audio: { Volume: { selected: "5" } } } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
-    expect(updateConfigBatch).toHaveBeenCalled();
+    expect(updateConfigBatch).toHaveBeenCalledWith({ Audio: { Volume: "5" } });
   });
 
   it("extractItems returns empty for string category value (lines 51, 173)", async () => {
     // string category → itemsBlock is a string → typeof !== 'object' → return []
     // Then in applyConfigData: items.length === 0 → continue (line 173)
-    loadInitialSnapshot.mockReturnValue({
-      savedAt: "t",
-      data: {
-        BadCat: "not-an-object" as unknown as Record<string, unknown>,
-      },
-    });
+    const data = { BadCat: "not-an-object" } as never;
     const { result } = renderHook(() => useAppConfigState(), { wrapper });
 
     await act(async () => {
-      await result.current.revertToInitial();
+      await result.current.loadAppConfig({ id: "c", name: "c", savedAt: "t", baseUrl: "http://c64u", data });
     });
 
     const batchPayload = updateConfigBatch.mock.calls[0][0] as Record<string, unknown>;

@@ -35,6 +35,7 @@ import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
+import { recordConfigWrite } from "@/lib/config/configWriteLedger";
 import {
   getConfigCategoryItems,
   validateConfigBatchWrite,
@@ -2383,6 +2384,7 @@ export class C64API {
     );
     this.assertConfigWriteAccepted(response, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);
+    recordConfigWrite(buildBaseUrlFromDeviceHost(this.deviceHost), category, item, resolvedValue);
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
     // rejected write left nothing to persist.
@@ -2513,6 +2515,7 @@ export class C64API {
       Object.entries(requestPayload).forEach(([category, updates]) => {
         Object.entries(updates).forEach(([item, value]) => {
           this.setCachedConfigValue(category, item, value);
+          recordConfigWrite(buildBaseUrlFromDeviceHost(this.deviceHost), category, item, value);
         });
       });
       errors.push(...(response.errors ?? []));
