@@ -92,6 +92,9 @@ describe("useRemoteInputSession typed-key retry and the serialized machine:input
     });
 
     // The ordinary failure path runs at once: the queued press is superseded and released (HARD18-001, HARD15-007).
-    expect(sentBatches()).toEqual([typedOne, { events: [{ kind: "release_all" }] }]);
+    expect(sentBatches()).toEqual([
+      typedOne,
+      { events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }] },
+    ]);
   });
 });

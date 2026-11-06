@@ -1351,7 +1351,8 @@ the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
     compact profile
 - **Close**: the sheet's top-right X (`remote-input-close`) is the sole Close
   affordance (the duplicate footer Close was removed). Closing — via the X or
-  Android Back — releases all held inputs
+  Android Back — releases the inputs this phone holds and leaves another
+  client's held inputs alone; only Release All releases everything
 - **Joystick Game mode only**: Release All is intentionally hidden (no-look
   play); dismissal is via the sheet header X or the `remote-input-immersive-toggle`
   "Exit" control, both of which release all held inputs. Both live in the

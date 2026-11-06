@@ -940,9 +940,9 @@ Without `machine:input`, **Keys** types by placing characters in the C64's KERNA
 
 If the device has a password, enter it in Settings first. Joystick and Keys both need it.
 
-No key is ever left stuck down on the real C64. Everything is released when you close the sheet, change mode or port, switch device, or send the app to the background. If a message does not get through, the header shows **Reconnecting…** until the next one does.
+No key is ever left stuck down on the real C64. Everything you hold is released when you close the sheet, change mode or port, switch device, or send the app to the background. Another phone or app using your C64 at the same time keeps what it holds. If a message does not get through, the header shows **Reconnecting…** until the next one does.
 
-Tap **Release all** at any time to let go of every key and button at once.
+Tap **Release all** at any time to let go of every key and button at once, including any held by another phone or app.
 
 _Availability: on by default. Turn it off under **Remote Input** in Settings → Stable Features._
 
