@@ -30,6 +30,37 @@ describe("AudioLossGuard", () => {
     expect(second.result).toBeCloseTo(0.17, 2);
   });
 
+  it("does not trip while no audio arrives at all, because stopping the video cannot bring it back", () => {
+    const guard = new AudioLossGuard();
+    guard.update(0, 0, true);
+    let state = { lost: 0, ms: 0 };
+    for (let i = 0; i < 10; i++) {
+      const next = feedWindow(guard, state.ms, state.lost, 1);
+      expect(next.result).toBeNull();
+      state = next;
+    }
+  });
+
+  it("trips on a heavy loss that still lets some audio through", () => {
+    const guard = new AudioLossGuard();
+    guard.update(0, 0, true);
+
+    const first = feedWindow(guard, 0, 0, 0.55);
+    const second = feedWindow(guard, first.ms, first.lost, 0.55);
+    expect(second.result).toBeCloseTo(0.55, 2);
+  });
+
+  it("does not let a window with no audio complete a run of bad windows, and counts afresh after it", () => {
+    const guard = new AudioLossGuard();
+    guard.update(0, 0, true);
+
+    const bad = feedWindow(guard, 0, 0, 0.3);
+    const absent = feedWindow(guard, bad.ms, bad.lost, 1);
+    const bad2 = feedWindow(guard, absent.ms, absent.lost, 0.3);
+    expect(absent.result).toBeNull();
+    expect(bad2.result).toBeNull();
+  });
+
   it("does not trip on the 3% loss a healthy 5 GHz link shows while video streams", () => {
     const guard = new AudioLossGuard();
     guard.update(0, 0, true);
