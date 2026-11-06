@@ -66,16 +66,23 @@ export const subscribeActivePlayback = subscribePlaybackActivity;
 let remotePlaybackActive = false;
 // A cartridge stays mapped and a MOD player keeps playing through a reset; only a reboot ends them.
 let remoteStopNeedsReboot = false;
+let remoteTuneReplacedCheck: (() => Promise<boolean>) | null = null;
 
-export const markRemotePlaybackStarted = (stopNeedsReboot = false): void => {
+/** `isTuneReplaced` tells a switch whether the C64 still plays this tune: another app may have started its own. */
+export const markRemotePlaybackStarted = (
+  stopNeedsReboot = false,
+  isTuneReplaced: (() => Promise<boolean>) | null = null,
+): void => {
   remotePlaybackActive = true;
   remoteStopNeedsReboot = stopNeedsReboot;
+  remoteTuneReplacedCheck = isTuneReplaced;
   addLog("info", "Playback: tune launched on the C64", { service: "playback" });
   notifyPlaybackActivityChanged();
 };
 
 export const markRemotePlaybackStopped = (): void => {
   remotePlaybackActive = false;
+  remoteTuneReplacedCheck = null;
   notifyPlaybackActivityChanged();
 };
 
@@ -152,6 +159,11 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
   });
   if (!remotePlaybackActive) return;
   await giveBackRemoteSeekBeforeDeviceSwitch();
+  if (await remoteTuneReplacedCheck?.()) {
+    markRemotePlaybackStopped();
+    addLog("info", "Playback: device switch left the old C64 alone; it plays something else", { service: "playback" });
+    return;
+  }
   const { deviceHost, password } = getC64APIConfigSnapshot();
   const leftBehindDeviceId = getSavedDevicesSnapshot().selectedDeviceId;
   const reboot = remoteStopNeedsReboot;

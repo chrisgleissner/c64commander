@@ -18,6 +18,7 @@ import { createPlaybackTimeStore, usePlaybackTime } from "@/pages/playFiles/play
 import { useSoundingTune } from "@/pages/playFiles/hooks/useSoundingTune";
 import { toast } from "@/hooks/use-toast";
 import { isTuneReplacedOnC64, TUNE_REPLACED_ON_C64_MESSAGE } from "@/pages/playFiles/tuneReplacedOnC64";
+import { stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
 
 vi.mock("@/lib/archive/client", () => ({
   createArchiveClient: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@/lib/archive/execution", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
+  getC64APIConfigSnapshot: () => ({ deviceHost: "u64", password: undefined }),
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
@@ -259,6 +261,20 @@ describe("usePlaybackController auto advance", () => {
       expect(isTuneReplacedOnC64).toHaveBeenCalledWith(playlist[0], expect.any(Function));
       expect(machineReset).not.toHaveBeenCalled();
       expect(result.current.isPlaying).toBe(false);
+    });
+
+    it("is not reset when this phone switches to another saved device", async () => {
+      const { playlist } = await playFirstOfTwo();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      vi.mocked(isTuneReplacedOnC64).mockResolvedValueOnce(true);
+
+      await act(async () => {
+        await stopActivePlaybackBeforeDeviceSwitch();
+      });
+
+      expect(isTuneReplacedOnC64).toHaveBeenCalledWith(playlist[0], expect.any(Function));
+      expect(machineReset).not.toHaveBeenCalled();
     });
 
     it("is reset by Stop while the C64 still plays this phone's tune", async () => {

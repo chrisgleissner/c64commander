@@ -1021,7 +1021,9 @@ export function usePlaybackController({
           // The tune is now running on the Ultimate. Recorded here, at the real
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
-          markRemotePlaybackStarted(stopRequiresReboot(item.category));
+          markRemotePlaybackStarted(stopRequiresReboot(item.category), () =>
+            isTuneReplacedOnC64(item, resolveHvscRuntimeRequest),
+          );
           // Bring the tune to this device's speakers too, unless the listener chose otherwise: the preference
           // check is what makes "Listen on: <device>" mean anything. Best-effort, as a device that will not
           // stream must not stop the tune from playing.
