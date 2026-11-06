@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  keepRestoresOfOwnWrites,
   buildEnabledSidMuteUpdates,
   buildEnabledSidMutedToTargetUpdates,
   buildEnabledSidRestoreUpdates,
@@ -371,5 +372,32 @@ describe("buildPauseMuteRestoreUpdates", () => {
 
   it("returns nothing for a missing snapshot", () => {
     expect(buildPauseMuteRestoreUpdates(null, enablement, [{ name: "Vol UltiSid 1", value: "-42 dB" }])).toEqual({});
+  });
+});
+
+describe("keepRestoresOfOwnWrites", () => {
+  const live = [
+    { name: "Vol Master", value: "OFF" },
+    { name: "Vol Socket 1", value: "-6 dB" },
+    { name: "Vol Socket 2", value: " 0 dB" },
+  ];
+  const restores = { "Vol Master": " 0 dB", "Vol Socket 1": " 0 dB", "Vol Socket 2": "+6 dB" };
+
+  it("restores only the items that still hold the value this phone wrote", () => {
+    const written = { "Vol Master": "OFF", "Vol Socket 1": "OFF" };
+
+    expect(keepRestoresOfOwnWrites(restores, live, written)).toEqual({ "Vol Master": " 0 dB" });
+  });
+
+  it("restores nothing when this phone wrote nothing", () => {
+    expect(keepRestoresOfOwnWrites(restores, live, {})).toEqual({});
+  });
+
+  it("restores everything when no record exists, as for a session started before the record", () => {
+    expect(keepRestoresOfOwnWrites(restores, live, null)).toEqual(restores);
+  });
+
+  it("compares numbers and their text form as the same level", () => {
+    expect(keepRestoresOfOwnWrites({ Level: 3 }, [{ name: "Level", value: "3" }], { Level: 3 })).toEqual({ Level: 3 });
   });
 });

@@ -39,9 +39,11 @@ import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidVolumeUpdates,
   isSidVolumeOffValue,
+  keepRestoresOfOwnWrites,
   resolveSidMutedVolumeOption,
   type SidEnablement,
 } from "@/lib/config/sidVolumeControl";
+import * as volumeSessionWrites from "@/lib/playback/volumeSessionWrites";
 import { reduceVolumeState, type VolumeAction } from "../volumeState";
 import { parseVolumeOption } from "../playFilesUtils";
 import { resolvePlaybackSyncDecision, type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
@@ -304,9 +306,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const restoreInFlightRef = useRef<Promise<void> | null>(null);
-  // Holds the in-flight Audio Mixer write so concurrent writers can sequence/dedupe on it.
-  // Typed as Promise<unknown> because mutateAsync resolves a result object; the resolved
-  // value is never consumed (only awaited for ordering and compared by identity).
+  // The in-flight Audio Mixer write, awaited for ordering and compared by identity only.
   const audioMixerWriteInFlightRef = useRef<Promise<unknown> | null>(null);
   const playbackWriteInFlightRef = useRef<Promise<void> | null>(null);
   const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
@@ -488,6 +488,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       run: async (write) => {
         const endWriteBurst = beginPlaybackWriteBurst();
         const startedAtMs = Date.now();
+        volumeSessionWrites.noteVolumeSessionWrites(write.updates);
         try {
           await withTimeout(
             updateConfigBatch.mutateAsync({
@@ -540,9 +541,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
       if (!Object.keys(updates).length) return;
-      // HARD27-011: every write from this hook is playback state, not user
-      // configuration. A restore returns the mixer to the user's own values and
-      // releases a flash save that the override was holding.
+      // HARD27-011: playback state, not user configuration; a restore releases a held flash save.
       const isRestore = context.startsWith("Restore");
       const startAudioMixerWrite = () =>
         withTimeout(
@@ -556,6 +555,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
           AUDIO_MIXER_WRITE_TIMEOUT_MS,
           `${context} audio mixer update`,
         );
+      if (!isRestore) volumeSessionWrites.noteVolumeSessionWrites(updates);
       let pendingWrite = startAudioMixerWrite();
       try {
         audioMixerWriteInFlightRef.current = pendingWrite;
@@ -763,6 +763,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     const snapshot = buildEnabledSidVolumeSnapshot(items, sidEnablement);
     volumeSessionSnapshotRef.current = snapshot;
     volumeSessionActiveRef.current = true;
+    volumeSessionWrites.startVolumeSessionWrites(resolvedDeviceId);
     return snapshot;
   }, [
     buildEnabledSidVolumeSnapshot,
@@ -770,6 +771,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     isPaused,
     isPlaying,
     resolvePlaybackVolumeItems,
+    resolvedDeviceId,
     sidEnablement,
   ]);
 
@@ -785,6 +787,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       const endVolumeSession = () => {
         volumeSessionSnapshotRef.current = null;
         volumeSessionActiveRef.current = false;
+        volumeSessionWrites.endVolumeSessionWrites();
         manualMuteSnapshotRef.current = null;
         manualMuteIntentRef.current = false;
         pauseMuteSnapshotRef.current = null;
@@ -803,7 +806,12 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
           await audioMixerWriteInFlightRef.current.catch(() => undefined);
         }
         const items = await resolvePlaybackVolumeItems(true);
-        const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
+        const restores = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
+        const updates = keepRestoresOfOwnWrites(
+          restores,
+          items,
+          volumeSessionWrites.readVolumeSessionWrites(resolvedDeviceId),
+        );
         if (Object.keys(updates).length) {
           await withPollingPause(async () => {
             await waitForMachineTransitionsToSettle();
@@ -832,6 +840,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       defaultVolumeIndex,
       dispatchTrackedVolume,
       resolvePlaybackVolumeItems,
+      resolvedDeviceId,
       sidEnablement,
       status.isConnected,
       status.isConnecting,
@@ -840,12 +849,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
     ],
   );
 
-  // Drops the in-flight volume-override session without writing anything to a
-  // device. A saved-device switch during active playback re-targets the C64
-  // API singleton to the new device (HARD11-002); a subsequent restore/mute
-  // write would otherwise apply the OLD device's captured snapshot to the NEW
-  // device's mixer. Local bookkeeping only — never call this when the current
-  // API target still owns the snapshot being cleared.
+  // Drops the session without a device write: after a saved-device switch (HARD11-002) a restore would apply
+  // the old device's snapshot to the new device's mixer.
   const discardVolumeSession = useCallback(
     (reason: string) => {
       if (
@@ -858,13 +863,12 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
       }
       volumeSessionSnapshotRef.current = null;
       volumeSessionActiveRef.current = false;
+      volumeSessionWrites.endVolumeSessionWrites();
       manualMuteSnapshotRef.current = null;
       pauseMuteSnapshotRef.current = null;
       pausingFromPauseRef.current = false;
       resumingFromPauseRef.current = false;
-      // HARD12-006: drop the persisted envelope too so a saved-device switch
-      // never rehydrates another device's captured snapshot back into the
-      // next device's refs.
+      // HARD12-006: a saved-device switch must not rehydrate another device's snapshot.
       discardPlaybackSnapshot(resolvedDeviceId ?? undefined);
       dispatchTrackedVolume({ type: "reset", index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;

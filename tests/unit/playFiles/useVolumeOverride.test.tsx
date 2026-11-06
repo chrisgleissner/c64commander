@@ -157,7 +157,9 @@ const buildSidVolumeStepsMock = vi.fn(() => [
   { option: "5", label: "5", numeric: 5 },
 ]);
 
-vi.mock("@/lib/config/sidVolumeControl", () => ({
+vi.mock("@/lib/config/sidVolumeControl", async (importOriginal) => ({
+  keepRestoresOfOwnWrites: (await importOriginal<typeof import("@/lib/config/sidVolumeControl")>())
+    .keepRestoresOfOwnWrites,
   buildEnabledSidMutedToTargetUpdates: (...args: unknown[]) => buildEnabledSidMutedToTargetUpdatesMock(...args),
   buildEnabledSidUnmuteUpdates: (...args: unknown[]) => buildEnabledSidUnmuteUpdatesMock(...args),
   buildEnabledSidRestoreUpdates: (...args: unknown[]) => buildEnabledSidRestoreUpdatesMock(...args),

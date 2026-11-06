@@ -171,7 +171,6 @@ export function usePlaybackController({
   applySonglengthsToItems,
   archiveConfigs,
   restoreVolumeOverrides,
-  discardVolumeSession,
   applyAudioMixerUpdates,
   enabledSidVolumeItems,
   buildEnabledSidMuteUpdates,
@@ -391,31 +390,6 @@ export function usePlaybackController({
     [withTimeout],
   );
 
-  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
-  const stopTuneOnC64 = useCallback(
-    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
-      // A pause still under way would otherwise freeze the machine after the reset, muted.
-      await machineTransitionCoordinatorRef.current.idle();
-      const wasPaused = isPausedRef.current;
-      const report = (title: string, error: unknown) =>
-        addErrorLog(title, {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          itemId,
-        });
-      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
-      await stopMachineWithGracePeriod(api, shouldReboot);
-      if (endMounts) await endPlayLaunchMounts(api);
-      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
-      if (wasPaused && pauseMuteSnapshotRef.current) {
-        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
-      }
-    },
-    [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
-  );
-
-  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
-
   const resolveSidMetadata = useCallback(
     (file?: LocalPlayFile, songNr?: number | null) =>
       resolveLocalSidMetadata(file, songNr, durationFallbackMs, resolveSonglengthDurationMsForPath),
@@ -486,7 +460,12 @@ export function usePlaybackController({
 
   /** Stops this phone's playlist without a word to the C64, which now plays what somebody else started. */
   const leaveTuneReplacedOnC64 = useCallback(() => {
-    discardVolumeSession?.("tune-replaced-on-c64");
+    void restoreVolumeOverrides("tune-replaced-on-c64").catch((error) =>
+      addErrorLog("Volume restore after the C64 changed tune failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+    );
     markRemotePlaybackStopped();
     autoAdvanceGuardRef.current = null;
     setAutoAdvanceDueAtMs(null);
@@ -494,7 +473,42 @@ export function usePlaybackController({
     setIsPaused(false);
     addLog("info", "Playback stopped: the C64 is playing something else", { currentIndex: currentIndexRef.current });
     toast({ title: "Playback stopped", description: TUNE_REPLACED_ON_C64_MESSAGE });
-  }, [autoAdvanceGuardRef, discardVolumeSession, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying]);
+  }, [addErrorLog, autoAdvanceGuardRef, restoreVolumeOverrides, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying]);
+
+  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
+  const stopTuneOnC64 = useCallback(
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
+      // A pause still under way would otherwise freeze the machine after the reset, muted.
+      await machineTransitionCoordinatorRef.current.idle();
+      if (await isTuneReplacedOnC64(playlistRef.current[currentIndexRef.current], resolveHvscRuntimeRequest)) {
+        addLog("info", "Stop left the C64 alone: it is playing something else", { itemId });
+        return;
+      }
+      const wasPaused = isPausedRef.current;
+      const report = (title: string, error: unknown) =>
+        addErrorLog(title, {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          itemId,
+        });
+      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
+      await stopMachineWithGracePeriod(api, shouldReboot);
+      if (endMounts) await endPlayLaunchMounts(api);
+      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
+      if (wasPaused && pauseMuteSnapshotRef.current) {
+        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
+      }
+    },
+    [
+      addErrorLog,
+      resolveHvscRuntimeRequest,
+      resumeMachineWithRetry,
+      stopMachineWithGracePeriod,
+      unmuteAfterMachineResume,
+    ],
+  );
+
+  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
 
   const finishPlaylistPlayback = useCallback(
     (reason: "auto-end" | "user-next-end") => {

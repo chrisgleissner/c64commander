@@ -245,6 +245,25 @@ const isStillPauseMuted = (item: SidVolumeItem) =>
   valuesEqual(item.value, resolveSidMutedVolumeOption(item.options, item.name)) ||
   (item.name === AUDIO_MIXER_MASTER_VOLUME_ITEM && isSidVolumeOffValue(item.value));
 
+/**
+ * The restores to send when a playback volume session ends: only items that still hold the level this phone wrote.
+ * The Ultimate is shared, so a level another app set since then is the one to keep. Without a record of this
+ * phone's writes (a session an older build started) every restore is kept.
+ */
+export const keepRestoresOfOwnWrites = (
+  updates: Record<string, string | number>,
+  liveItems: SidVolumeItem[],
+  written: Record<string, string | number> | null,
+) => {
+  if (!written) return updates;
+  const liveByName = new Map(liveItems.map((item) => [item.name, item]));
+  return Object.fromEntries(
+    Object.entries(updates).filter(
+      ([name]) => name in written && valuesEqual(liveByName.get(name)?.value, written[name]),
+    ),
+  );
+};
+
 export const buildEnabledSidRestoreUpdates = (
   items: SidVolumeItem[],
   enablement: SidEnablement,

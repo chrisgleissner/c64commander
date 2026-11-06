@@ -71,7 +71,7 @@ vi.mock("@/pages/playFiles/tuneReplacedOnC64", async (importOriginal) => ({
   isTuneReplacedOnC64: vi.fn(async () => false),
 }));
 
-const discardVolumeSession = vi.fn();
+const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
 
 const createUltimateSid = (id: string): PlaylistItem => ({
   id,
@@ -168,8 +168,7 @@ const renderPlaybackHarness = (
       ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
-      restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
-      discardVolumeSession,
+      restoreVolumeOverrides,
       applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
       captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
@@ -227,7 +226,7 @@ describe("usePlaybackController auto advance", () => {
       });
       vi.mocked(executePlayPlan).mockClear();
       vi.mocked(isTuneReplacedOnC64).mockClear();
-      discardVolumeSession.mockClear();
+      restoreVolumeOverrides.mockClear();
       return { ...harness, playlist };
     };
 
@@ -244,8 +243,35 @@ describe("usePlaybackController auto advance", () => {
       expect(result.current.isPlaying).toBe(false);
       expect(result.current.autoAdvanceGuardRef.current).toBeNull();
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: TUNE_REPLACED_ON_C64_MESSAGE }));
-      // The mixer now belongs to whoever plays: the levels this phone would restore are dropped, not written.
-      expect(discardVolumeSession).toHaveBeenCalledWith("tune-replaced-on-c64");
+      expect(restoreVolumeOverrides).toHaveBeenCalledWith("tune-replaced-on-c64");
+    });
+
+    it("is not reset by Stop, so a sleep timer or an engine switch leaves the other app's program running", async () => {
+      const { result, playlist } = await playFirstOfTwo();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      vi.mocked(isTuneReplacedOnC64).mockResolvedValueOnce(true);
+
+      await act(async () => {
+        await result.current.handleStop();
+      });
+
+      expect(isTuneReplacedOnC64).toHaveBeenCalledWith(playlist[0], expect.any(Function));
+      expect(machineReset).not.toHaveBeenCalled();
+      expect(result.current.isPlaying).toBe(false);
+    });
+
+    it("is reset by Stop while the C64 still plays this phone's tune", async () => {
+      const { result } = await playFirstOfTwo();
+      const machineReset = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+      vi.mocked(isTuneReplacedOnC64).mockResolvedValueOnce(false);
+
+      await act(async () => {
+        await result.current.handleStop();
+      });
+
+      expect(machineReset).toHaveBeenCalledTimes(1);
     });
 
     it("is not assumed: while the C64 still plays this phone's tune the playlist moves on as before", async () => {
@@ -256,7 +282,7 @@ describe("usePlaybackController auto advance", () => {
       });
 
       expect(isTuneReplacedOnC64).toHaveBeenCalledTimes(1);
-      expect(discardVolumeSession).not.toHaveBeenCalled();
+      expect(restoreVolumeOverrides).not.toHaveBeenCalledWith("tune-replaced-on-c64");
       expect(executePlayPlan).toHaveBeenLastCalledWith(
         expect.anything(),
         expect.objectContaining({ path: "/USB2/MUSICIANS/two.sid" }),

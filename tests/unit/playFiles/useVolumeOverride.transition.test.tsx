@@ -111,7 +111,9 @@ const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement
   "SID 1": target,
 }));
 
-vi.mock("@/lib/config/sidVolumeControl", () => ({
+vi.mock("@/lib/config/sidVolumeControl", async (importOriginal) => ({
+  keepRestoresOfOwnWrites: (await importOriginal<typeof import("@/lib/config/sidVolumeControl")>())
+    .keepRestoresOfOwnWrites,
   buildEnabledSidMutedToTargetUpdates: (...args: unknown[]) => buildEnabledSidMutedToTargetUpdatesMock(...args),
   buildEnabledSidUnmuteUpdates: vi.fn((volumes: Record<string, string | number>) => volumes),
   buildEnabledSidRestoreUpdates: (...args: unknown[]) => buildEnabledSidRestoreUpdatesMock(...args),
