@@ -97,6 +97,8 @@ export interface UsePlaybackControllerProps {
 
   // Volume Control
   restoreVolumeOverrides: (reason: string) => Promise<void>;
+  /** Forgets the levels this phone would restore, without writing them, once the C64 belongs to someone else. */
+  discardVolumeSession?: (reason: string) => void;
   applyAudioMixerUpdates: (updates: Record<string, string | number>, reason: string) => Promise<void>;
   enabledSidVolumeItems: AudioMixerItem[];
   buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: SidEnablement) => Record<string, string | number>;

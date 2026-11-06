@@ -610,6 +610,7 @@ export default function PlayFilesPage() {
     applySonglengthsToItems,
     archiveConfigs,
     restoreVolumeOverrides,
+    discardVolumeSession,
     applyAudioMixerUpdates,
     enabledSidVolumeItems,
     buildEnabledSidMuteUpdates,

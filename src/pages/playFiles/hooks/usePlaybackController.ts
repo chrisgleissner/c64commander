@@ -171,6 +171,7 @@ export function usePlaybackController({
   applySonglengthsToItems,
   archiveConfigs,
   restoreVolumeOverrides,
+  discardVolumeSession,
   applyAudioMixerUpdates,
   enabledSidVolumeItems,
   buildEnabledSidMuteUpdates,
@@ -485,6 +486,7 @@ export function usePlaybackController({
 
   /** Stops this phone's playlist without a word to the C64, which now plays what somebody else started. */
   const leaveTuneReplacedOnC64 = useCallback(() => {
+    discardVolumeSession?.("tune-replaced-on-c64");
     markRemotePlaybackStopped();
     autoAdvanceGuardRef.current = null;
     setAutoAdvanceDueAtMs(null);
@@ -492,7 +494,7 @@ export function usePlaybackController({
     setIsPaused(false);
     addLog("info", "Playback stopped: the C64 is playing something else", { currentIndex: currentIndexRef.current });
     toast({ title: "Playback stopped", description: TUNE_REPLACED_ON_C64_MESSAGE });
-  }, [autoAdvanceGuardRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying]);
+  }, [autoAdvanceGuardRef, discardVolumeSession, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying]);
 
   const finishPlaylistPlayback = useCallback(
     (reason: "auto-end" | "user-next-end") => {

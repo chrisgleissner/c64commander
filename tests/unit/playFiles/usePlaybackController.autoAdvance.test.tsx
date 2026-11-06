@@ -71,6 +71,8 @@ vi.mock("@/pages/playFiles/tuneReplacedOnC64", async (importOriginal) => ({
   isTuneReplacedOnC64: vi.fn(async () => false),
 }));
 
+const discardVolumeSession = vi.fn();
+
 const createUltimateSid = (id: string): PlaylistItem => ({
   id,
   request: { source: "ultimate", path: `/USB2/MUSICIANS/${id}.sid` },
@@ -167,6 +169,7 @@ const renderPlaybackHarness = (
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
       restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
+      discardVolumeSession,
       applyAudioMixerUpdates: vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: vi.fn().mockReturnValue({}),
       captureSidMuteSnapshot: vi.fn().mockReturnValue({ volumes: {}, enablement: {} }),
@@ -224,6 +227,7 @@ describe("usePlaybackController auto advance", () => {
       });
       vi.mocked(executePlayPlan).mockClear();
       vi.mocked(isTuneReplacedOnC64).mockClear();
+      discardVolumeSession.mockClear();
       return { ...harness, playlist };
     };
 
@@ -240,6 +244,8 @@ describe("usePlaybackController auto advance", () => {
       expect(result.current.isPlaying).toBe(false);
       expect(result.current.autoAdvanceGuardRef.current).toBeNull();
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ description: TUNE_REPLACED_ON_C64_MESSAGE }));
+      // The mixer now belongs to whoever plays: the levels this phone would restore are dropped, not written.
+      expect(discardVolumeSession).toHaveBeenCalledWith("tune-replaced-on-c64");
     });
 
     it("is not assumed: while the C64 still plays this phone's tune the playlist moves on as before", async () => {
@@ -250,6 +256,7 @@ describe("usePlaybackController auto advance", () => {
       });
 
       expect(isTuneReplacedOnC64).toHaveBeenCalledTimes(1);
+      expect(discardVolumeSession).not.toHaveBeenCalled();
       expect(executePlayPlan).toHaveBeenLastCalledWith(
         expect.anything(),
         expect.objectContaining({ path: "/USB2/MUSICIANS/two.sid" }),
