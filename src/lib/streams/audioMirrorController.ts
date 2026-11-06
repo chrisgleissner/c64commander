@@ -16,7 +16,7 @@
 
 import { addLog } from "@/lib/logging";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
-import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
+import { describeForeignSenders, foreignSenders } from "./foreignSenderGuard";
 import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
@@ -37,8 +37,8 @@ export interface AudioMirrorSnapshot {
   chunks: number;
   error: string | null;
   /**
-   * A second Ultimate is streaming into our group and would not stop when asked. Non-fatal — the
-   * native filter keeps the picture right — so it is a hint beside the controls, not an error.
+   * A second Ultimate is streaming into our group. Non-fatal — the native filter keeps only the selected
+   * device's packets — so it is a hint beside the controls, not an error.
    */
   foreignSenderNotice: string | null;
   /**
@@ -98,8 +98,6 @@ export interface AudioMirrorDeps {
   stopStream: (name: "audio") => Promise<unknown>;
   /** The device the user selected — any other sender on the group is uninvited. */
   expectedSenderHost?: () => string | null;
-  /** Ask ONE specific machine (by host/IP) to stop streaming. */
-  stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
   /** Whether a sender is proven to be another machine; the selected device on another address is not. */
   isForeignSender?: (host: string) => Promise<boolean>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
@@ -123,8 +121,10 @@ export class AudioMirrorController {
   private player: AudioMirrorPlayer | null = null;
   /** Native low-latency sink; when set the plugin's receive thread feeds the AudioTrack directly. */
   private nativeSink: NativeAudioSink | null = null;
-  /** Uninvited senders already acted on, so the guard asks each machine once per session. */
+  /** Senders already judged, so each machine is checked once per session. */
   private readonly foreignHandled = new Set<string>();
+  /** Senders proven to be another machine this session, named in the notice. */
+  private readonly foreignNamed = new Set<string>();
   /** Seq-gap loss counter for the native path (which has no JS playback buffer to count drops). */
   private nativeLostPackets = 0;
   private nativeLastSeq: number | null = null;
@@ -172,7 +172,7 @@ export class AudioMirrorController {
     // Another machine streaming into our multicast group is not a subtle fault — it doubles the
     // arrival rate and interleaves two sequence spaces — but nothing in the receive path looks
     // wrong, because every packet arrives in order from each sender. Catch it by origin IP.
-    void this.evictForeignSenders();
+    void this.noteForeignSenders();
     const nativeStats = this.nativeSink?.getStats();
     return {
       audioBufferMs: nativeStats?.bufferedMs ?? this.player?.bufferedMs ?? 0,
@@ -219,6 +219,7 @@ export class AudioMirrorController {
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
     this.foreignHandled.clear();
+    this.foreignNamed.clear();
     this.update({
       state: "connecting",
       error: null,
@@ -327,12 +328,12 @@ export class AudioMirrorController {
   }
 
   /**
-   * Ask any machine that is streaming into our audio group uninvited to stop.
+   * Name any other machine streaming into our audio group, without asking it to stop.
    *
-   * Each offender is asked once per session: the stop is a request to a device that may be busy or
-   * unreachable, and retrying it every 250 ms tick would be a flood, not a fix.
+   * That machine was not selected here: another phone may be listening to it, and a stop would end
+   * that phone's audio. The native sender filter already keeps its packets out of this stream.
    */
-  private async evictForeignSenders(): Promise<void> {
+  private async noteForeignSenders(): Promise<void> {
     const senders = this.nativeSink?.senders ?? [];
     if (senders.length < 2) return;
     const pending = foreignSenders(senders, this.deps.expectedSenderHost?.() ?? null).filter(
@@ -344,12 +345,13 @@ export class AudioMirrorController {
     const proven = await Promise.all(pending.map(isForeignSender));
     const foreign = pending.filter((_, index) => proven[index]);
     if (foreign.length === 0) return;
-    const { failed } = await stopForeignSenders({
-      senders: foreign,
-      expectedHost: null, // already filtered
-      stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
+    foreign.forEach((host) => this.foreignNamed.add(host));
+    addLog("warn", "Live View: another machine is streaming into our audio group", {
+      service: "streams",
+      foreign,
+      expected: this.deps.expectedSenderHost?.() ?? null,
     });
-    if (failed.length > 0) this.update({ foreignSenderNotice: describeUnstoppedForeignSenders(failed) });
+    this.update({ foreignSenderNotice: describeForeignSenders([...this.foreignNamed]) });
   }
 
   /**

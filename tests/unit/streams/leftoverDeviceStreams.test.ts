@@ -10,7 +10,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/streams/foreignSenderStop", () => ({
   stopStreamAtHost: vi.fn(async () => ({ errors: [] })),
-  stopStreamAtForeignHost: vi.fn(async () => ({ errors: [] })),
   resolveForeignSenderPassword: vi.fn(async () => null),
 }));
 

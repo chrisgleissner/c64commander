@@ -21,7 +21,7 @@ vi.mock("@/lib/secureStorage", async () => {
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import { getSavedDevicesStorageKey, resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
-import { resolveForeignSenderPassword, stopStreamAtForeignHost } from "@/lib/streams/foreignSenderStop";
+import { resolveForeignSenderPassword, stopStreamAtHost } from "@/lib/streams/foreignSenderStop";
 
 /**
  * HARD27-019. The eviction addresses the OTHER Ultimate on the LAN. Sent unauthenticated it is
@@ -78,7 +78,7 @@ describe("foreign-sender eviction credentials (HARD27-019)", () => {
       new Response(JSON.stringify({ errors: ["forbidden"] }), { status: 403, statusText: "Forbidden" }),
     );
 
-    await expect(stopStreamAtForeignHost(FOREIGN_IP, "audio")).rejects.toBeDefined();
+    await expect(stopStreamAtHost(FOREIGN_IP, "audio")).rejects.toBeDefined();
 
     expect(fetchMock).toHaveBeenCalled();
     expect(notifyAuthRequired).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe("foreign-sender eviction credentials (HARD27-019)", () => {
     saveDevices([device({ hasPassword: true })]);
     vi.mocked(getPasswordForDevice).mockResolvedValue("redacted-password");
 
-    await stopStreamAtForeignHost(`${FOREIGN_IP}:80`, "audio");
+    await stopStreamAtHost(`${FOREIGN_IP}:80`, "audio");
 
     expect(getPasswordForDevice).toHaveBeenCalledWith("other");
     const headers = (fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> })?.headers ?? {};

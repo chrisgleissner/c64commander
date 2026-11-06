@@ -35,7 +35,7 @@ import {
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
-import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
+import { stopStreamAtHost } from "./foreignSenderStop";
 import { forgetDeviceStream, recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
@@ -400,11 +400,9 @@ export class AvMirrorSession {
           ? new NativeAudioSink(sampleRate, undefined, loadStreamNetworkBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
-      // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
-      // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
-      // earlier session sends straight into ours.
+      // Who we EXPECT to hear from. The mirror's groups are multicast and every Ultimate defaults to
+      // the same ones, so another machine streaming sends straight into ours.
       expectedSenderHost: () => this.expectedSender(),
-      stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
       isForeignSender: async (host) =>
         (await this.judgeStreamSender(host, getC64API().getDeviceHost())) === "different",
     });
