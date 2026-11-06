@@ -41,24 +41,45 @@ type PauseMuteOptions = {
   resumingFromPauseRef: MutableRefObject<boolean>;
 };
 
+/** The SID mixer as the device reports it now; the page's copy goes stale when another app changes it. */
+const readLiveAudioMixerItems = async () =>
+  extractAudioMixerItems(await getC64API().getCategory("Audio Mixer", { __c64uIntent: "user" }));
+
+const describeMixerReadError = (error: unknown) => ({
+  error: error instanceof Error ? error.message : String(error),
+  stack: error instanceof Error ? error.stack : undefined,
+});
+
+const withLiveValues = async (items: AudioMixerItem[]) => {
+  try {
+    const liveValues = new Map((await readLiveAudioMixerItems()).map((item) => [item.name, item.value]));
+    return items.map((item) => {
+      const liveValue = liveValues.get(item.name);
+      return liveValue === undefined ? item : { ...item, value: liveValue };
+    });
+  } catch (error) {
+    addLog(
+      "warn",
+      "Playback pause could not read the SID mixer; muting from the last known levels",
+      describeMixerReadError(error),
+    );
+    return items;
+  }
+};
+
 /**
- * The levels to put back on resume, read against the device rather than the cache, since another app
- * may have changed them during the pause. When the mixer cannot be read, the stored levels go back
- * as before, so a resume never leaves the C64 silent.
+ * The levels to put back on resume. When the mixer cannot be read, the stored levels go back as
+ * before, so a resume never leaves the C64 silent.
  */
 const buildResumeUpdates = async (snapshot: SidMuteSnapshot) => {
-  const names = Object.keys(snapshot.volumes);
   try {
-    const data = await getC64API().getConfigItems("Audio Mixer", names, {
-      __c64uIntent: "user",
-      __c64uBypassCache: true,
-    });
-    return buildPauseMuteRestoreUpdates(snapshot.volumes, snapshot.enablement, extractAudioMixerItems(data));
+    return buildPauseMuteRestoreUpdates(snapshot.volumes, snapshot.enablement, await readLiveAudioMixerItems());
   } catch (error) {
-    addLog("warn", "Playback resume could not read the SID mixer; restoring the levels from before the pause", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    addLog(
+      "warn",
+      "Playback resume could not read the SID mixer; restoring the levels from before the pause",
+      describeMixerReadError(error),
+    );
     return buildEnabledSidUnmuteUpdates(snapshot.volumes, snapshot.enablement);
   }
 };
@@ -86,7 +107,7 @@ export const usePauseMute = ({
       addLog("warn", "Playback pause mute skipped because no cached SID mixer items are available");
       return;
     }
-    const items = enabledSidVolumeItems;
+    const items = await withLiveValues(enabledSidVolumeItems);
     const snapshot = captureSidMuteSnapshot(items, sidEnablement);
     const updates = buildEnabledSidMuteUpdates(items, sidEnablement);
     pauseMuteSnapshotRef.current = snapshot;
