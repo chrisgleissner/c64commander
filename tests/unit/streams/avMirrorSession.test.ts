@@ -106,6 +106,7 @@ import { AvMirrorSession, avMirrorSession } from "@/lib/streams/avMirrorSession"
 import { __resetPhoneAudioOwnership, claimPhoneAudio, interruptPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
+import { getLeftoverDeviceStreamsForTests, recordDeviceStreamStarted } from "@/lib/streams/leftoverDeviceStreams";
 
 vi.mock("@/lib/logging", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/logging")>();
@@ -842,6 +843,21 @@ describe("AvMirrorSession", () => {
       expect(audio.start).toHaveBeenCalledTimes(1);
     });
 
+    it("forgets the audio stream in the leftover record once it leaves the stream to the other client", async () => {
+      localStorage.clear();
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      recordDeviceStreamStarted("audio", "192.0.2.5");
+
+      expect(lose(audio, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.5" });
+      expect(lose(audio, 1000)).toBe(false);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+    });
+
     it("leaves the audio to the other client and says so when it is lost again soon after the restart", async () => {
       const { session, audio } = makeSession();
       await session.startAudio();
@@ -969,6 +985,21 @@ describe("AvMirrorSession", () => {
       await vi.advanceTimersByTimeAsync(60000);
 
       expect(video.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("forgets the video stream in the leftover record once it leaves the stream to the other client", async () => {
+      localStorage.clear();
+      const { session, video } = makeSession();
+      await session.startVideo();
+      recordDeviceStreamStarted("video", "192.0.2.5");
+
+      expect(lose(video, 1000)).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.0.2.5" });
+      expect(lose(video, 1000)).toBe(false);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(getLeftoverDeviceStreamsForTests()).toEqual({});
     });
 
     it("leaves the video to the other client and says so when it is lost again soon after the restart", async () => {

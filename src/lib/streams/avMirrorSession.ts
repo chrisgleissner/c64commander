@@ -36,7 +36,7 @@ import {
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
-import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
+import { forgetDeviceStream, recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
 import { judgeStreamSender, type SenderVerdict } from "./sameDeviceSender";
@@ -310,7 +310,10 @@ export class AvMirrorSession {
         await this.startAudioNow();
       }),
     giveUp: () => this.audio.abandonReconnect(),
-    yieldToOtherClient: () => this.audio.reportStreamingElsewhere(),
+    yieldToOtherClient: () => {
+      forgetDeviceStream("audio");
+      this.audio.reportStreamingElsewhere();
+    },
     // Mirrored audio keeps playing with the page hidden (see avMirrorBackgroundPolicy), so its restart must not wait for it.
     isPageHidden: () => false,
   });
@@ -326,7 +329,10 @@ export class AvMirrorSession {
         await this.video.start();
       }),
     giveUp: () => this.video.abandonReconnect(),
-    yieldToOtherClient: () => this.video.reportStreamingElsewhere(),
+    yieldToOtherClient: () => {
+      forgetDeviceStream("video");
+      this.video.reportStreamingElsewhere();
+    },
     isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
   });
 
