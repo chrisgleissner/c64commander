@@ -31,6 +31,9 @@ export type AudioMirrorState = "off" | "connecting" | "live" | "error";
 /** Coalesce audio health broadcasts to ~10 Hz (state/error transitions bypass this). */
 export const AUDIO_SNAPSHOT_EMIT_INTERVAL_MS = 100;
 
+/** How often a native sink is asked whether packets arrive again after the stream was left to another client. */
+const RETURNED_PACKETS_POLL_MS = 1000;
+
 export interface AudioMirrorSnapshot {
   state: AudioMirrorState;
   droppedPackets: number;
@@ -103,6 +106,8 @@ export interface AudioMirrorDeps {
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** The stream went silent after being live for `liveForMs`. True when a restart is scheduled. */
   onStreamLost?: (liveForMs: number) => boolean;
+  /** This phone's packets arrived again after the stream was left to another client, so the device still sends here. */
+  onStreamReclaimed?: () => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
   /**
@@ -137,6 +142,9 @@ export class AudioMirrorController {
    * took it would end that phone's audio.
    */
   private deviceStreamOwned = false;
+  /** The stream was left to another client; packets arriving again prove the device still sends it here. */
+  private leftToOtherClient = false;
+  private returnedPacketsPoll: ReturnType<typeof setInterval> | null = null;
   /** Notices that the multicast audio stopped arriving; a bound socket reports nothing when it does. */
   private readonly arrivalWatchdog = new StreamArrivalWatchdog({
     now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
@@ -216,6 +224,7 @@ export class AudioMirrorController {
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
+    this.stopWatchingForReturnedPackets();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
     this.foreignHandled.clear();
@@ -289,6 +298,7 @@ export class AudioMirrorController {
       const parsed = parseAudioPacket(bytes);
       if (!parsed) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       // Analyzer feed: RAW per-packet stream (fine-grained, wire-stamped) — measurement integrity.
       // Runs on BOTH paths; the native path plays in the plugin, so JS does only this + loss counting.
       const samples = bytesToInt16LE(parsed.body);
@@ -413,7 +423,35 @@ export class AudioMirrorController {
   reportStreamingElsewhere(): void {
     if (this.snapshot.state !== "error") return;
     this.deviceStreamOwned = false;
+    this.stopWatchingForReturnedPackets();
+    this.leftToOtherClient = true;
     this.update({ reconnecting: false, error: AUDIO_STREAMING_ELSEWHERE_MESSAGE });
+    if (this.nativeSink) {
+      this.returnedPacketsPoll = setInterval(() => {
+        if (this.nativeArrivalAdvanced()) this.reclaimStreamIfLeftToOtherClient();
+      }, RETURNED_PACKETS_POLL_MS);
+    }
+  }
+
+  /**
+   * Packets arrived after the stream was left to another client: the device still sends to this phone,
+   * so the loss was the network. Take the stream back as this phone's, so Stop ends it.
+   */
+  private reclaimStreamIfLeftToOtherClient(): void {
+    if (!this.leftToOtherClient || this.snapshot.state !== "error") return;
+    this.stopWatchingForReturnedPackets();
+    addLog("info", "Audio Mirror: packets arrived again after the stream was left to another client");
+    this.deviceStreamOwned = true;
+    this.liveSinceMs = performance.now();
+    this.update({ state: "live", error: null, reconnecting: false });
+    this.arrivalWatchdog.start();
+    this.deps.onStreamReclaimed?.();
+  }
+
+  private stopWatchingForReturnedPackets(): void {
+    this.leftToOtherClient = false;
+    if (this.returnedPacketsPoll !== null) clearInterval(this.returnedPacketsPoll);
+    this.returnedPacketsPoll = null;
   }
 
   /**
@@ -506,6 +544,7 @@ export class AudioMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
+    this.stopWatchingForReturnedPackets();
     if (this.deviceStreamOwned) await this.stopDeviceStream();
     else addLog("info", "Audio Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();

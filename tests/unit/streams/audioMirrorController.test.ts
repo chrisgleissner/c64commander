@@ -253,6 +253,111 @@ describe("AudioMirrorController", () => {
     }
   });
 
+  const loseAudioViaPlayer = async (stopStream: () => Promise<unknown>, onStreamReclaimed = vi.fn()) => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
+      onChange: vi.fn(),
+      onStreamLost: () => false,
+      onStreamReclaimed,
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    await tickSeconds(10);
+    expect(controller.getSnapshot().state).toBe("error");
+    return { controller, receiver, onStreamReclaimed };
+  };
+
+  it("takes the device audio stream back when packets arrive after it was left to another app, so Stop ends it", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller, receiver, onStreamReclaimed } = await loseAudioViaPlayer(stopStream);
+      controller.reportStreamingElsewhere();
+      expect(controller.getSnapshot().error).not.toBeNull();
+
+      receiver.emit(audioPacket(1));
+
+      expect(controller.getSnapshot().state).toBe("live");
+      expect(controller.getSnapshot().error).toBeNull();
+      expect(onStreamReclaimed).toHaveBeenCalledTimes(1);
+      await controller.stop();
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a lost audio stream lost when packets arrive although it was not left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const { controller, receiver, onStreamReclaimed } = await loseAudioViaPlayer(vi.fn(async () => ({ errors: [] })));
+
+      receiver.emit(audioPacket(1));
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(onStreamReclaimed).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("takes the device audio stream back when the native sink counts packets again after it was left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const arrival = { packets: 100, lostPackets: 0 };
+      const receiver = new FakeReceiver();
+      const sink = fakeNativeSink(true, arrival);
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const onStreamReclaimed = vi.fn();
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createNativeSink: () => sink.sink,
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream,
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        onStreamReclaimed,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await tickSeconds(10);
+      expect(controller.getSnapshot().state).toBe("error");
+      controller.reportStreamingElsewhere();
+
+      await tickSeconds(3);
+      expect(controller.getSnapshot().state).toBe("error");
+      arrival.packets += 50;
+      await tickSeconds(1);
+
+      expect(controller.getSnapshot().state).toBe("live");
+      expect(onStreamReclaimed).toHaveBeenCalledTimes(1);
+      await controller.stop();
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops polling the native sink for returned packets when the audio is stopped", async () => {
+    vi.useFakeTimers();
+    try {
+      const { controller } = await loseAudio(vi.fn(async () => ({ errors: [] })));
+      controller.reportStreamingElsewhere();
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      await controller.stop();
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("sends no device stop when the receive socket failed before any start was sent", async () => {
     const stopStream = vi.fn(async () => ({ errors: [] }));
     const startStream = vi.fn(async () => ({ errors: [] }));

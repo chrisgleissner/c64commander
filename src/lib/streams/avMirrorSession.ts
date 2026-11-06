@@ -314,6 +314,7 @@ export class AvMirrorSession {
       forgetDeviceStream("audio");
       this.audio.reportStreamingElsewhere();
     },
+    otherClientCanTakeStream: () => loadStreamTransport() !== "multicast",
     // Mirrored audio keeps playing with the page hidden (see avMirrorBackgroundPolicy), so its restart must not wait for it.
     isPageHidden: () => false,
   });
@@ -333,6 +334,7 @@ export class AvMirrorSession {
       forgetDeviceStream("video");
       this.video.reportStreamingElsewhere();
     },
+    otherClientCanTakeStream: () => loadStreamTransport() !== "multicast",
     isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
   });
 
@@ -341,6 +343,7 @@ export class AvMirrorSession {
     // process death with Live View on can be cleaned up at the next launch — see
     // [stopLeftoverDeviceStreams]. Injected transports (tests, the web bridge) keep their own
     // behaviour and record nothing.
+    const recordStarted = (name: "audio" | "video") => recordDeviceStreamStarted(name, getC64API().getDeviceHost());
     const startStream =
       deps.startStream ??
       (async (name, destination) => {
@@ -349,9 +352,12 @@ export class AvMirrorSession {
           destination,
           () => makeUnicastPathReady(this.expectedSender()),
         );
-        recordDeviceStreamStarted(name, getC64API().getDeviceHost());
+        recordStarted(name);
         return result;
       });
+    const recordReclaimed = (name: "audio" | "video") => {
+      if (!deps.startStream) recordStarted(name);
+    };
     const stopStream =
       deps.stopStream ??
       (async (name) => {
@@ -382,6 +388,7 @@ export class AvMirrorSession {
           },
         }),
       onStreamLost: (liveForMs) => this.audioLossRestarter.onLost(liveForMs),
+      onStreamReclaimed: () => recordReclaimed("audio"),
       createReceiver:
         deps.createAudioReceiver ??
         ((opts) =>
@@ -424,6 +431,7 @@ export class AvMirrorSession {
           },
         }),
       onStreamLost: (info) => this.videoLossRestarter.onLost(info.liveForMs),
+      onStreamReclaimed: () => recordReclaimed("video"),
       expectedSenderHost: () => this.expectedSender(),
       createReceiver:
         deps.createVideoReceiver ??

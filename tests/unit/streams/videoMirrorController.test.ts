@@ -262,6 +262,76 @@ describe("VideoMirrorController", () => {
     }
   });
 
+  it("takes the device video stream back when frames arrive after it was left to another app, so Stop ends it", async () => {
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const onStreamReclaimed = vi.fn();
+      let clock = 0;
+      const receiver = new FakeReceiver();
+      const controller = new VideoMirrorController({
+        createReceiver: () => receiver,
+        renderFrame: vi.fn(),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream,
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        onStreamReclaimed,
+        now: () => clock,
+      });
+      vi.useFakeTimers();
+      await controller.start();
+      receiver.emitState("open");
+      for (let i = 0; i < 12; i += 1) {
+        clock += 1000;
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      expect(controller.getSnapshot().state).toBe("error");
+      controller.reportStreamingElsewhere();
+
+      completeFrame(receiver, 1);
+
+      expect(controller.getSnapshot().state).toBe("live");
+      expect(controller.getSnapshot().error).toBeNull();
+      expect(onStreamReclaimed).toHaveBeenCalledTimes(1);
+      await controller.stop();
+      expect(stopStream).toHaveBeenCalledWith("video");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a lost video stream lost when frames arrive although it was not left to another app", async () => {
+    try {
+      const onStreamReclaimed = vi.fn();
+      let clock = 0;
+      const receiver = new FakeReceiver();
+      const controller = new VideoMirrorController({
+        createReceiver: () => receiver,
+        renderFrame: vi.fn(),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        onStreamReclaimed,
+        now: () => clock,
+      });
+      vi.useFakeTimers();
+      await controller.start();
+      receiver.emitState("open");
+      for (let i = 0; i < 12; i += 1) {
+        clock += 1000;
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      completeFrame(receiver, 1);
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(onStreamReclaimed).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("clears the reconnecting state when the stream is started again", async () => {
     try {
       const controller = await goSilent(() => true);

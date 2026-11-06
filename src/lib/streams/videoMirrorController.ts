@@ -125,6 +125,8 @@ export const VIDEO_STREAMING_ELSEWHERE_MESSAGE =
 export interface VideoMirrorDeps {
   /** Called when a live stream went silent. Returns true when the owner is restarting it. */
   onStreamLost?: (info: VideoStreamLossInfo) => boolean;
+  /** This phone's frames arrived again after the stream was left to another client, so the device still sends here. */
+  onStreamReclaimed?: () => void;
   createReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   startStream: (name: "video", destination: string) => Promise<unknown>;
   stopStream: (name: "video") => Promise<unknown>;
@@ -266,6 +268,8 @@ export class VideoMirrorController {
   private liveSinceMs = 0;
   /** A start was sent and no other client has since been found holding the stream; see the audio controller. */
   private deviceStreamOwned = false;
+  /** The stream was left to another client; frames arriving again prove the device still sends it here. */
+  private leftToOtherClient = false;
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
@@ -378,6 +382,7 @@ export class VideoMirrorController {
 
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
+    this.leftToOtherClient = false;
     this.assembler.reset();
     this.resetPresentation();
     this.update({
@@ -430,6 +435,7 @@ export class VideoMirrorController {
       // non-zero fps/framesLost into an off-state snapshot (and the shared session other surfaces read).
       if (this.receiver !== receiver) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost, present);
     });
     // Push the current governor cadence to the native transport now that the receiver exists (so a
@@ -441,6 +447,7 @@ export class VideoMirrorController {
       // (nor feed the assembler for the new session), same as the onFrame guard above.
       if (this.receiver !== receiver) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
       // frame number), so cross-frame reordering cannot skew the frame-start time the analyzer uses.
       const header = parseVicHeader(bytes);
@@ -525,7 +532,23 @@ export class VideoMirrorController {
   reportStreamingElsewhere(): void {
     if (this.snapshot.state !== "error") return;
     this.deviceStreamOwned = false;
+    this.leftToOtherClient = true;
     this.update({ reconnecting: false, error: VIDEO_STREAMING_ELSEWHERE_MESSAGE });
+  }
+
+  /**
+   * Frames arrived after the stream was left to another client: the device still sends to this phone,
+   * so the loss was the network. Take the stream back as this phone's, so Stop ends it.
+   */
+  private reclaimStreamIfLeftToOtherClient(): void {
+    if (!this.leftToOtherClient || this.snapshot.state !== "error") return;
+    this.leftToOtherClient = false;
+    addLog("info", "Video Mirror: packets arrived again after the stream was left to another client");
+    this.deviceStreamOwned = true;
+    this.liveSinceMs = this.now();
+    this.update({ state: "live", error: null, reconnecting: false });
+    this.arrivalWatchdog.start();
+    this.deps.onStreamReclaimed?.();
   }
 
   /**
@@ -620,6 +643,7 @@ export class VideoMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
+    this.leftToOtherClient = false;
     if (this.deviceStreamOwned) await this.stopDeviceStream();
     else addLog("info", "Video Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();

@@ -13,26 +13,41 @@ import {
 describe("StreamLossRecovery", () => {
   it("restarts the first loss and yields every later loss in the same episode", () => {
     const recovery = new StreamLossRecovery();
-    expect([recovery.noteLost(0), recovery.noteLost(0), recovery.noteLost(0)]).toEqual(["restart", "yield", "yield"]);
+    expect([recovery.noteLost(0, true), recovery.noteLost(0, true), recovery.noteLost(0, true)]).toEqual([
+      "restart",
+      "yield",
+      "yield",
+    ]);
+  });
+
+  it("never yields in a shared group, restarts twice per episode and then stops", () => {
+    const recovery = new StreamLossRecovery();
+    expect([0, 1, 2, 3].map(() => recovery.noteLost(0, false))).toEqual(["restart", "restart", "stop", "stop"]);
+  });
+
+  it("grants a shared-group stream new restarts once it stayed live for the stable period", () => {
+    const recovery = new StreamLossRecovery();
+    [0, 1, 2].forEach(() => recovery.noteLost(0, false));
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS, false)).toBe("restart");
   });
 
   it("keeps yielding when the restarted stream was live for less than the stable period", () => {
     const recovery = new StreamLossRecovery();
-    recovery.noteLost(0);
-    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS - 1)).toBe("yield");
+    recovery.noteLost(0, true);
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS - 1, true)).toBe("yield");
   });
 
   it("restarts again when the stream was live for the stable period", () => {
     const recovery = new StreamLossRecovery();
-    recovery.noteLost(0);
-    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS)).toBe("restart");
+    recovery.noteLost(0, true);
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS, true)).toBe("restart");
   });
 
   it("starts a fresh episode after reset", () => {
     const recovery = new StreamLossRecovery();
-    recovery.noteLost(0);
+    recovery.noteLost(0, true);
     recovery.reset();
-    expect(recovery.noteLost(0)).toBe("restart");
+    expect(recovery.noteLost(0, true)).toBe("restart");
   });
 });
 
@@ -55,6 +70,7 @@ describe("StreamLossRestarter", () => {
       restart: vi.fn(async () => undefined),
       giveUp: vi.fn(),
       yieldToOtherClient: vi.fn(),
+      otherClientCanTakeStream: () => true,
       isPageHidden: () => hidden,
     };
   });
@@ -88,6 +104,19 @@ describe("StreamLossRestarter", () => {
     expect(hooks.restart).toHaveBeenCalledTimes(1);
     expect(hooks.yieldToOtherClient).toHaveBeenCalledTimes(1);
     expect(hooks.giveUp).not.toHaveBeenCalled();
+  });
+
+  it("restarts a stream lost twice in a shared group instead of yielding it, then reports a plain loss", async () => {
+    const restarter = new StreamLossRestarter({ ...hooks, otherClientCanTakeStream: () => false });
+    expect(restarter.onLost(1000)).toBe(true);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    expect(restarter.onLost(1000)).toBe(true);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    expect(restarter.onLost(1000)).toBe(false);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(hooks.restart).toHaveBeenCalledTimes(2);
+    expect(hooks.yieldToOtherClient).not.toHaveBeenCalled();
   });
 
   it("reports a plain loss, not another client, when the device stops answering after the restart", async () => {

@@ -872,6 +872,31 @@ describe("AvMirrorSession", () => {
         (audio as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
       ).toHaveBeenCalledTimes(1);
     });
+    it("does not leave a stream lost twice to another client in the multicast groups, where nobody can take it", async () => {
+      localStorage.clear();
+      localStorage.setItem("c64u_stream_transport", "multicast");
+      try {
+        const { session, audio } = makeSession();
+        await session.startAudio();
+        recordDeviceStreamStarted("audio", "192.0.2.5");
+
+        expect(lose(audio, 1000)).toBe(true);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(lose(audio, 1000)).toBe(true);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(lose(audio, 1000)).toBe(false);
+        await vi.advanceTimersByTimeAsync(60000);
+
+        expect(audio.start).toHaveBeenCalledTimes(3);
+        expect(
+          (audio as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
+        ).not.toHaveBeenCalled();
+        expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.5" });
+      } finally {
+        localStorage.removeItem("c64u_stream_transport");
+      }
+    });
+
     it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
       vi.spyOn(getC64API(), "getInfo").mockRejectedValue(new Error("timeout"));
       const { session, audio } = makeSession();
@@ -1015,6 +1040,31 @@ describe("AvMirrorSession", () => {
       expect(
         (video as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
       ).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not leave a stream lost twice to another client in the multicast groups, where nobody can take it", async () => {
+      localStorage.clear();
+      localStorage.setItem("c64u_stream_transport", "multicast");
+      try {
+        const { session, video } = makeSession();
+        await session.startVideo();
+        recordDeviceStreamStarted("video", "192.0.2.5");
+
+        expect(lose(video, 1000)).toBe(true);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(lose(video, 1000)).toBe(true);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(lose(video, 1000)).toBe(false);
+        await vi.advanceTimersByTimeAsync(60000);
+
+        expect(video.start).toHaveBeenCalledTimes(3);
+        expect(
+          (video as unknown as { reportStreamingElsewhere: ReturnType<typeof vi.fn> }).reportStreamingElsewhere,
+        ).not.toHaveBeenCalled();
+        expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.0.2.5" });
+      } finally {
+        localStorage.removeItem("c64u_stream_transport");
+      }
     });
 
     it("shows the plain lost message instead of restarting when the device does not answer REST", async () => {
