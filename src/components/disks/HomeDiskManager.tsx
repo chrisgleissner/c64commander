@@ -367,9 +367,8 @@ export const HomeDiskManager = () => {
     });
   }, [api, queryClient]);
   // HARD18-025 / HARD19-008: the FTP write-back deps are built by the shared
-  // buildDiskWriteBackDependencies (host/port/password resolved fresh per call
-  // against the currently selected device), so the Play page's executePlayPlan
-  // disk case can pass the SAME deps.
+  // buildDiskWriteBackDependencies (host/port/password bound when they are built),
+  // so the Play page's executePlayPlan disk case can pass the SAME deps.
   const runDriveMutationWithSettledPolling = useCallback(
     async <T,>(operation: () => Promise<T>) => {
       const pollingPause = pollingPauseRegistry.acquirePause();

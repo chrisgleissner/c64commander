@@ -51,7 +51,7 @@ vi.mock("@/lib/disks/diskMount", () => ({
   saveArchiveDiskCopyToLocalFolder: vi.fn(),
 }));
 vi.mock("@/lib/ftp/ftpClient", () => ({ listFtpDirectory: vi.fn(), readFtpFile: vi.fn(), writeFtpFile: vi.fn() }));
-vi.mock("@/lib/ftp/ftpConfig", () => ({ resolveFtpConnectionOptions: vi.fn() }));
+vi.mock("@/lib/ftp/ftpConfig", () => ({ getStoredFtpPort: () => 21 }));
 vi.mock("@/hooks/useActionTrace", () => ({ useActionTrace: () => (fn: unknown) => fn }));
 vi.mock("@/pages/playFiles/hooks/useArchiveClientSettings", () => ({
   useArchiveClientSettings: () => ({

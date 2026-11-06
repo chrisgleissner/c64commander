@@ -18,7 +18,6 @@ import { reportUserError } from "@/lib/uiErrors";
 import { DRIVE_CHANGED_EJECT_MESSAGE } from "@/components/disks/driveMountSupport";
 import { mountDiskToDrive, getMaterializedWorkPath, hasShownArchiveDiskWriteBackAdvisory } from "@/lib/disks/diskMount";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
-import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 import { noteDiskMountOutcome, resetUploadMountsForTests } from "@/lib/disks/uploadMountRegistry";
 
 // Helpers
@@ -90,7 +89,7 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
   writeFtpFile: vi.fn(),
 }));
 vi.mock("@/lib/ftp/ftpConfig", () => ({
-  resolveFtpConnectionOptions: vi.fn(),
+  getStoredFtpPort: () => 21,
 }));
 vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
@@ -1067,12 +1066,6 @@ describe("HomeDiskManager UI & Interactions", () => {
 
   it("HARD18-025: buildDiskWriteBackDependencies wires the real FTP read/write callbacks used during eject write-back", async () => {
     const { finalizeDiskWriteBack } = await import("@/lib/disks/diskMount");
-    (resolveFtpConnectionOptions as any).mockResolvedValue({
-      host: "c64u",
-      port: 21,
-      username: "user",
-      password: "secret",
-    });
     (listFtpDirectory as any).mockResolvedValue({
       path: "/",
       entries: [{ type: "dir", name: "Temp", path: "/Temp" }],

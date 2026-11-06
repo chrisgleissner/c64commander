@@ -11,15 +11,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const listFtpDirectory = vi.fn();
 const readFtpFile = vi.fn();
 const writeFtpFile = vi.fn();
-const resolvedHost = vi.hoisted(() => ({ current: "c64u" }));
+const selectedDevice = vi.hoisted(() => ({ current: { ftpPort: 21, password: "c64u-secret" } }));
 
 vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: (options: { host: string; path: string }) => listFtpDirectory(options),
   readFtpFile: (options: { host: string; path: string }) => readFtpFile(options),
   writeFtpFile: (options: { host: string; path: string }) => writeFtpFile(options),
 }));
-vi.mock("@/lib/ftp/ftpConfig", () => ({
-  resolveFtpConnectionOptions: async () => ({ host: resolvedHost.current, port: 21, password: "" }),
+vi.mock("@/lib/ftp/ftpConfig", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ftp/ftpConfig")>()),
+  getStoredFtpPort: () => selectedDevice.current.ftpPort,
+}));
+vi.mock("@/lib/secureStorage", () => ({
+  getPassword: async () => selectedDevice.current.password,
 }));
 
 import { buildDiskWriteBackDependencies } from "@/lib/disks/diskWriteBackDependencies";
@@ -27,7 +31,7 @@ import { resolvePersistentReuStorageRoot } from "@/lib/reu/reuWorkflow";
 
 describe("buildDiskWriteBackDependencies", () => {
   beforeEach(() => {
-    resolvedHost.current = "c64u";
+    selectedDevice.current = { ftpPort: 21, password: "c64u-secret" };
     listFtpDirectory.mockReset();
     readFtpFile.mockReset();
     writeFtpFile.mockReset();
@@ -54,12 +58,13 @@ describe("buildDiskWriteBackDependencies", () => {
   it("keeps reading and writing work files on the device it was built for after the selection changes", async () => {
     readFtpFile.mockResolvedValue({ data: "" });
     const deps = buildDiskWriteBackDependencies("c64u:80");
-    resolvedHost.current = "u64";
+    selectedDevice.current = { ftpPort: 2121, password: "u64-secret" };
 
     await deps.readRemoteFile("/USB2/work/drive-a.d64");
     await deps.writeRemoteFile("/USB2/work/drive-a.d64", new Uint8Array([1]));
 
-    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
-    expect(writeFtpFile).toHaveBeenCalledWith(expect.objectContaining({ host: "c64u" }));
+    const boundOptions = { host: "c64u", port: 21, password: "c64u-secret" };
+    expect(readFtpFile).toHaveBeenCalledWith(expect.objectContaining(boundOptions));
+    expect(writeFtpFile).toHaveBeenCalledWith(expect.objectContaining(boundOptions));
   });
 });
