@@ -8,13 +8,17 @@ import {
   waitForTempReuFile,
 } from "@/lib/reu/reuWorkflow";
 import type { ReuSnapshotStorageEntry } from "@/lib/reu/reuSnapshotTypes";
+import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
 
 const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
 const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
 
+const setInstallId = (clientId: string) => localStorage.setItem(DISK_WORK_CLIENT_ID_STORAGE_KEY, clientId);
+
 describe("reuWorkflow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setInstallId("0a1b2c3d");
   });
 
   describe("resolvePersistentReuStorageRoot (HARD18-014)", () => {
@@ -206,8 +210,8 @@ describe("reuWorkflow", () => {
 
     await workflow.restoreSnapshot(snapshot, "preload-on-startup", onProgress);
 
-    expect(writeRemoteFile).toHaveBeenCalledWith("/USB2/c64commander-reu-preload.reu", new Uint8Array([1, 2, 3]));
-    expect(runRestoreRemoteReu).toHaveBeenCalledWith("c64commander-reu-preload.reu", "preload-on-startup", "USB2");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/USB2/c64commander-preload-0a1b2c3d.reu", new Uint8Array([1, 2, 3]));
+    expect(runRestoreRemoteReu).toHaveBeenCalledWith("c64commander-preload-0a1b2c3d.reu", "preload-on-startup", "USB2");
     expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual([
       "reading-local",
       "uploading",
@@ -221,7 +225,7 @@ describe("reuWorkflow", () => {
         operation: "restore",
         status: "success",
         localPath: "reu-snapshots/local.reu",
-        remotePath: "/USB2/c64commander-reu-preload.reu",
+        remotePath: "/USB2/c64commander-preload-0a1b2c3d.reu",
       }),
     );
   });
@@ -260,7 +264,7 @@ describe("reuWorkflow", () => {
     expect(runRestoreRemoteReu).not.toHaveBeenCalled();
   });
 
-  it("falls back to the local file name when the remote file name is blank", async () => {
+  it("names the restore after the local file when the remote file name is blank", async () => {
     const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
     const runRestoreRemoteReu = vi.fn().mockResolvedValue(undefined);
     const onProgress = vi.fn();
@@ -286,14 +290,55 @@ describe("reuWorkflow", () => {
 
     await workflow.restoreSnapshot(snapshot, "load-into-reu", onProgress);
 
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/fallback.reu", new Uint8Array([4, 5, 6]));
-    expect(runRestoreRemoteReu).toHaveBeenCalledWith("fallback.reu", "load-into-reu", "Temp");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/c64commander-reu-0a1b2c3d.reu", new Uint8Array([4, 5, 6]));
+    expect(runRestoreRemoteReu).toHaveBeenCalledWith("c64commander-reu-0a1b2c3d.reu", "load-into-reu", "Temp");
     expect(onProgress).toHaveBeenLastCalledWith(
       expect.objectContaining({
         step: "complete",
         title: "REU image loaded",
+        description: "fallback.reu",
       }),
     );
+  });
+
+  it("stages the same REU snapshot under a different device file name on each install", async () => {
+    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
+    const runRestoreRemoteReu = vi.fn().mockResolvedValue(undefined);
+    const snapshot: ReuSnapshotStorageEntry = {
+      id: "reu-shared",
+      filename: "local.reu",
+      createdAt: "2026-03-29T10:02:00Z",
+      snapshotType: "reu",
+      sizeBytes: 3,
+      remoteFileName: "memory.reu",
+      storage: { kind: "native-data", path: "reu-snapshots/local.reu" },
+      metadata: { snapshot_type: "reu", display_ranges: ["REU image"], created_at: "2026-03-29 10:02:00" },
+    };
+    const workflow = createReuWorkflow({
+      readLocalSnapshot: vi.fn().mockResolvedValue(new Uint8Array([1])),
+      writeRemoteFile,
+      runRestoreRemoteReu,
+      listRemoteStorageRoots: vi.fn().mockResolvedValue(["SD"]),
+    });
+
+    for (const clientId of ["11111111", "22222222"]) {
+      setInstallId(clientId);
+      await workflow.restoreSnapshot(snapshot, "load-into-reu");
+      await workflow.restoreSnapshot(snapshot, "preload-on-startup");
+    }
+
+    expect(writeRemoteFile.mock.calls.map(([path]) => path)).toEqual([
+      "/Temp/c64commander-reu-11111111.reu",
+      "/SD/c64commander-preload-11111111.reu",
+      "/Temp/c64commander-reu-22222222.reu",
+      "/SD/c64commander-preload-22222222.reu",
+    ]);
+    expect(runRestoreRemoteReu.mock.calls.map(([fileName]) => fileName)).toEqual([
+      "c64commander-reu-11111111.reu",
+      "c64commander-preload-11111111.reu",
+      "c64commander-reu-22222222.reu",
+      "c64commander-preload-22222222.reu",
+    ]);
   });
 
   it("reports waiting progress at the capped upper bound before timing out", async () => {
@@ -370,7 +415,7 @@ describe("reuWorkflow", () => {
         phase: "uploading",
         transport: "ftp",
         localPath: "reu-snapshots/upload-failure.reu",
-        remotePath: "/Temp/upload-failure.reu",
+        remotePath: "/Temp/c64commander-reu-0a1b2c3d.reu",
         status: "error",
       }),
     );
@@ -429,7 +474,7 @@ describe("reuWorkflow", () => {
         phase: "restoring",
         transport: "telnet",
         localPath: "reu-snapshots/restore-failure.reu",
-        remotePath: "/Temp/restore-failure.reu",
+        remotePath: "/Temp/c64commander-reu-0a1b2c3d.reu",
         status: "error",
       }),
     );

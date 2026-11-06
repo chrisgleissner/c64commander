@@ -7,6 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
+import { buildInstallStagedFileName } from "@/lib/remoteFiles/installStagedFile";
 import { formatFileTimestamp } from "@/lib/snapshot/snapshotFilename";
 import type { ConfigProgressState, ConfigSnapshotFileLocation, SavedConfigSnapshot } from "./configSnapshotTypes";
 
@@ -316,7 +317,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
     onProgress?: (state: ConfigProgressState) => void,
   ) => {
     const reporter = createProgressReporter("apply-local", onProgress);
-    const remoteFileName = normalizeConfigFileName(fileName);
+    const remoteFileName = buildInstallStagedFileName("cfg");
     const remotePath = `/Temp/${remoteFileName}`;
     let logContext: ConfigWorkflowLogContext = {
       localFileName: fileName,
@@ -340,7 +341,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
       emit({
         step: "uploading",
         title: "Uploading config snapshot",
-        description: `Uploading ${remoteFileName} to /Temp.`,
+        description: `Uploading ${fileName} to /Temp.`,
         progress: 60,
       });
       await deps.writeRemoteFile(remotePath, bytes);
@@ -348,7 +349,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
       emit({
         step: "restoring",
         title: "Applying config snapshot",
-        description: `Applying ${remoteFileName} on the Ultimate.`,
+        description: `Applying ${fileName} on the Ultimate.`,
         progress: 90,
       });
       await deps.runApplyRemoteConfig(remoteFileName);
@@ -356,7 +357,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
       emit({
         step: "complete",
         title: "Config snapshot applied",
-        description: remoteFileName,
+        description: fileName,
         progress: 100,
       });
       reporter.succeed("complete", logContext);
@@ -383,17 +384,18 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
    */
   const applyRemoteSnapshot = async (remotePath: string, onProgress?: (state: ConfigProgressState) => void) => {
     const reporter = createProgressReporter("apply-remote", onProgress);
-    const remoteFileName = normalizeConfigFileName(remotePath.split("/").pop() ?? "config.cfg");
-    const logContext: ConfigWorkflowLogContext = { remoteFileName, remotePath };
+    const sourceFileName = normalizeConfigFileName(remotePath.split("/").pop() ?? "config.cfg");
+    const alreadyStaged = remotePath.toLowerCase() === `/Temp/${sourceFileName}`.toLowerCase();
+    const remoteFileName = alreadyStaged ? sourceFileName : buildInstallStagedFileName("cfg");
     const stagedPath = `/Temp/${remoteFileName}`;
-    const alreadyStaged = remotePath.toLowerCase() === stagedPath.toLowerCase();
+    const logContext: ConfigWorkflowLogContext = { remoteFileName, remotePath };
     try {
       if (!alreadyStaged) {
         reporter.emit(
           {
             step: "uploading",
             title: "Staging config snapshot",
-            description: `Copying ${remoteFileName} to /Temp.`,
+            description: `Copying ${sourceFileName} to /Temp.`,
             progress: 60,
           },
           logContext,
@@ -404,7 +406,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         {
           step: "restoring",
           title: "Applying config snapshot",
-          description: `Applying ${remoteFileName} on the Ultimate.`,
+          description: `Applying ${sourceFileName} on the Ultimate.`,
           progress: 90,
         },
         logContext,
@@ -414,7 +416,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         {
           step: "complete",
           title: "Config snapshot applied",
-          description: remoteFileName,
+          description: sourceFileName,
           progress: 100,
         },
         logContext,

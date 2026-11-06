@@ -8,6 +8,7 @@
 
 import { getBuildInfo } from "@/lib/buildInfo";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { buildInstallStagedFileName } from "@/lib/remoteFiles/installStagedFile";
 import { formatDisplayTimestamp, formatFileTimestamp } from "@/lib/snapshot/snapshotFilename";
 import { persistReuSnapshotFile, readReuSnapshotBytes } from "./reuSnapshotStorage";
 import { saveReuSnapshotToStore } from "./reuSnapshotStore";
@@ -38,8 +39,6 @@ type ReuWorkflowDependencies = {
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
 };
-
-const REU_PRELOAD_FILE_NAME = "c64commander-reu-preload.reu";
 
 export { resolvePersistentReuStorageRoot };
 
@@ -374,8 +373,8 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
       if (!folderName) {
         throw new ReuPersistentStorageUnavailableError();
       }
-      const remoteFileName =
-        mode === "preload-on-startup" ? REU_PRELOAD_FILE_NAME : snapshot.remoteFileName || snapshot.filename;
+      const displayName = snapshot.remoteFileName || snapshot.filename;
+      const remoteFileName = buildInstallStagedFileName(mode === "preload-on-startup" ? "preload" : "reu");
       const remotePath = `/${folderName}/${remoteFileName}`;
       logContext = { ...logContext, remoteFileName, remotePath };
 
@@ -393,7 +392,7 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
         {
           step: "uploading",
           title: "Uploading REU snapshot",
-          description: `Uploading ${remoteFileName} to /${folderName}.`,
+          description: `Uploading ${displayName} to /${folderName}.`,
           progress: 50,
         },
         { remoteFileName, remotePath },
@@ -414,7 +413,7 @@ export const createReuWorkflow = (overrides: Partial<ReuWorkflowDependencies> = 
         {
           step: "complete",
           title: mode === "load-into-reu" ? "REU image loaded" : "REU preload configured",
-          description: remoteFileName,
+          description: displayName,
           progress: 100,
         },
         { remoteFileName, remotePath },
