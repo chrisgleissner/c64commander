@@ -223,7 +223,19 @@ vi.mock("@/lib/config/appConfigStore", () => ({
   updateHasChanges: (...args: [string, boolean]) => mockUpdateHasChanges(...args),
 }));
 
+/** The Audio Mixer as the device reports it now, which ending Solo reads before it restores anything. */
+const mockDeviceAudioMixer = (levels: Record<string, string>) => {
+  const getCategory = vi.fn(async () => ({
+    "Audio Mixer": {
+      items: Object.fromEntries(Object.entries(levels).map(([name, selected]) => [name, { selected }])),
+    },
+  }));
+  vi.mocked(getC64API).mockReturnValue({ getCategory } as unknown as ReturnType<typeof getC64API>);
+  return getCategory;
+};
+
 const setupDefaultMocks = () => {
+  mockDeviceAudioMixer({ "Vol Ultisid 1": "OFF", "Vol Ultisid 2": "OFF" });
   mockUseC64Connection.mockReturnValue({
     status: { isConnected: true },
     runtimeBaseUrl: "http://c64u",
@@ -762,6 +774,78 @@ describe("ConfigBrowserPage", () => {
     await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toBeNull());
   });
 
+  describe("with another client sharing the device", () => {
+    const renderSharedMixer = () => {
+      sessionStorage.clear();
+      localStorage.removeItem("c64u_audio_mixer_solo:v1");
+      setupDefaultMocks();
+      mockUseC64Categories.mockReturnValue({ data: { categories: ["Audio Mixer"] }, isLoading: false });
+      const options = ["OFF", "-6 dB", "0 dB"];
+      const audioMixerItems = {
+        "Vol Ultisid 1": { selected: "0 dB", options },
+        "Vol Ultisid 2": { selected: "0 dB", options },
+        "Vol Socket 1": { selected: "0 dB", options },
+      };
+      const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+      mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync: updateConfigBatch, isPending: false });
+      mockUseC64Category.mockImplementation((categoryName: string) => ({
+        data: { [categoryName]: { items: audioMixerItems } },
+        isLoading: false,
+        refetch: vi.fn().mockResolvedValue({ data: { "Audio Mixer": { items: audioMixerItems } }, isSuccess: true }),
+      }));
+      renderConfigBrowserPage();
+      ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
+      return updateConfigBatch;
+    };
+
+    it("marks the Solo mute as transient so a flash save does not keep it", async () => {
+      const updateConfigBatch = renderSharedMixer();
+      fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+      await waitFor(() =>
+        expect(updateConfigBatch).toHaveBeenCalledWith({
+          category: "Audio Mixer",
+          updates: { "Vol Ultisid 1": "0 dB", "Vol Ultisid 2": "OFF", "Vol Socket 1": "OFF" },
+          transient: true,
+        }),
+      );
+    });
+
+    it("ending Solo leaves a SID level another client set while Solo was on", async () => {
+      const updateConfigBatch = renderSharedMixer();
+      const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
+      fireEvent.click(soloSwitch);
+      await waitFor(() => expect(updateConfigBatch).toHaveBeenCalledTimes(1));
+      mockDeviceAudioMixer({ "Vol Ultisid 1": "0 dB", "Vol Ultisid 2": "OFF", "Vol Socket 1": "-6 dB" });
+
+      fireEvent.click(soloSwitch);
+
+      await waitFor(() =>
+        expect(updateConfigBatch).toHaveBeenLastCalledWith({
+          category: "Audio Mixer",
+          updates: { "Vol Ultisid 2": "0 dB" },
+          transientRestore: true,
+        }),
+      );
+      await waitFor(() => expect(localStorage.getItem("c64u_audio_mixer_solo:v1")).toBeNull());
+    });
+
+    it("a volume edit that ends Solo leaves a SID level another client set while Solo was on", async () => {
+      const updateConfigBatch = renderSharedMixer();
+      fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
+      await waitFor(() => expect(updateConfigBatch).toHaveBeenCalledTimes(1));
+      mockDeviceAudioMixer({ "Vol Ultisid 1": "0 dB", "Vol Ultisid 2": "OFF", "Vol Socket 1": "-6 dB" });
+
+      fireEvent.click(screen.getByRole("button", { name: "Update Vol Ultisid 2" }));
+
+      await waitFor(() =>
+        expect(updateConfigBatch).toHaveBeenLastCalledWith({
+          category: "Audio Mixer",
+          updates: { "Vol Ultisid 2": "updated" },
+        }),
+      );
+    });
+  });
+
   it("restores the other SID volumes once and turns Solo off when the Audio Mixer card is closed while Solo is on", async () => {
     sessionStorage.clear();
     setupDefaultMocks();
@@ -848,7 +932,8 @@ describe("ConfigBrowserPage", () => {
     await waitFor(() =>
       expect(updateConfigBatch).toHaveBeenCalledWith({
         category: "Audio Mixer",
-        updates: { "Vol Ultisid 1": "0 dB", "Vol Ultisid 2": "0 dB" },
+        updates: { "Vol Ultisid 2": "0 dB" },
+        transientRestore: true,
       }),
     );
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
@@ -907,15 +992,17 @@ describe("ConfigBrowserPage", () => {
 
   it("auto-restores a fresh audio mixer solo snapshot on mount (HARD9-054)", async () => {
     sessionStorage.clear();
+    localStorage.removeItem("c64u_audio_mixer_solo:v1");
     const freshSavedAtMs = Date.now() - 30 * 1000; // well within the freshness window
     sessionStorage.setItem(
       "c64u_audio_mixer_solo_snapshot",
       JSON.stringify({
         savedAtMs: freshSavedAtMs,
-        items: [{ name: "Vol Ultisid 1", value: "-6 dB", options: ["-6 dB", "0 dB"] }],
+        items: [{ name: "Vol Ultisid 1", value: "0 dB", options: ["-6 dB", "0 dB"] }],
       }),
     );
     setupDefaultMocks();
+    mockDeviceAudioMixer({ "Vol Ultisid 1": "-6 dB" });
     mockUseC64Categories.mockReturnValue({
       data: { categories: ["Audio Mixer"] },
       isLoading: false,
@@ -939,7 +1026,9 @@ describe("ConfigBrowserPage", () => {
     ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
 
-    await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ updates: { "Vol Ultisid 1": "0 dB" } })),
+    );
   });
 
   it("reports config update failures", async () => {
