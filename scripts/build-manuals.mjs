@@ -1197,6 +1197,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.",
     "",
+    "If another app, or somebody at the machine, starts something else on your C64 while a tune from your playlist plays there, the playlist stops when that tune would end instead of playing over it. Press **Play** to start it again.",
+    "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
     "Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
