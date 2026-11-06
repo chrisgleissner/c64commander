@@ -42,7 +42,12 @@ import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
 import { loadFirstDiskPrgViaDma } from "./diskFirstPrg";
 import { withCartridgeParked } from "./launchSafety";
-import { peekPlayLaunchMount, recordPlayLaunchMount, resolvePriorImageForLaunch } from "./playLaunchMounts";
+import {
+  peekPlayLaunchMount,
+  readLaunchUploadImage,
+  recordPlayLaunchMount,
+  resolvePriorImageForLaunch,
+} from "./playLaunchMounts";
 
 export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
 
@@ -739,11 +744,13 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           });
           mountOutcome = await mountDiskToDrive(api, drive, diskEntry, undefined, { writeBack: diskWriteBack });
         }
+        const mountedByUpload = mountOutcome.persistence === "transient";
         recordPlayLaunchMount(deviceHost, {
           drive,
           launchPath: plan.path,
           priorImagePath,
-          mountedByUpload: mountOutcome.persistence === "transient",
+          mountedByUpload,
+          uploadImagePath: mountedByUpload ? await readLaunchUploadImage(api, drive) : undefined,
         });
 
         if (beforeLaunch) {

@@ -53,11 +53,39 @@ const mountTypeOf = (path: string) => {
 
 const imageName = (path: string) => path.split("/").pop() ?? "";
 
+const nameStem = (name: string) => {
+  const dot = name.lastIndexOf(".");
+  return (dot > 0 ? name.slice(0, dot) : name).toLowerCase();
+};
+
+/** The device names an upload after the file, adding `_<n>` when another upload already holds that name. */
+export const isUploadOfLaunchFile = (heldPath: string, launchPath: string) => {
+  const held = nameStem(imageName(heldPath));
+  const launched = nameStem(imageName(normalizeDiskPath(launchPath)));
+  return held === launched || (held.startsWith(`${launched}_`) && /^\d+$/.test(held.slice(launched.length + 1)));
+};
+
 const driveStillHoldsLaunchImage = (drives: DrivesResponse, mount: PlayLaunchMount) => {
   const held = describeDriveImage(drives.drives?.find((entry) => entry[mount.drive])?.[mount.drive]);
   if (held === null) return false;
-  if (mount.mountedByUpload && isUploadCachePath(held)) return true;
+  if (mount.uploadImagePath) return held === normalizeDiskPath(mount.uploadImagePath);
+  if (mount.mountedByUpload && isUploadCachePath(held)) return isUploadOfLaunchFile(held, mount.launchPath);
   return imageName(held) === imageName(normalizeDiskPath(mount.launchPath));
+};
+
+/** Which upload file the drive holds now, so Stop can tell it from another app's upload of a same-named disk. */
+export const readLaunchUploadImage = async (api: Pick<C64API, "getDrives">, drive: string) => {
+  try {
+    const drives = await api.getDrives();
+    return describeDriveImage(drives.drives?.find((entry) => entry[drive])?.[drive]);
+  } catch (error) {
+    addLog("warn", "Play could not read which upload file the drive holds; Stop will match it by name", {
+      drive,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    return null;
+  }
 };
 
 // Play's mount over a Home disk's work file already wrote its saves back and closed its write-back record. A plain

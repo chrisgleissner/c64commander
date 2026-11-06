@@ -11,7 +11,9 @@ import {
   describeDriveImage,
   endPlayLaunchMounts,
   forgetPlayLaunchMount,
+  isUploadOfLaunchFile,
   peekPlayLaunchMount,
+  readLaunchUploadImage,
   recordPlayLaunchMount,
   resolvePriorImageForLaunch,
 } from "@/lib/playback/playLaunchMounts";
@@ -183,6 +185,78 @@ describe("Stop returns the drives to how Play found them", () => {
     await endPlayLaunchMounts(api);
 
     expect(api.unmountDrive).toHaveBeenCalledWith("a");
+  });
+
+  it("leaves another app's upload alone even when its disk has the same name as Play's", async () => {
+    recordPlayLaunchMount("c64u", {
+      drive: "a",
+      launchPath: "/Local/Games/game.d64",
+      priorImagePath: null,
+      mountedByUpload: true,
+      uploadImagePath: "/Temp/cache/upload/game.d64",
+    });
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(
+      drivesHolding({ a: { image_path: "/Temp/cache/upload/", image_file: "game_1.d64" } }),
+    );
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).not.toHaveBeenCalled();
+    expect(peekPlayLaunchMount("c64u", "a")).toBeNull();
+  });
+
+  it("ejects the upload file Play's mount left in the drive", async () => {
+    recordPlayLaunchMount("c64u", {
+      drive: "a",
+      launchPath: "/Local/Games/game.d64",
+      priorImagePath: null,
+      mountedByUpload: true,
+      uploadImagePath: "/Temp/cache/upload/game_1.d64",
+    });
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(
+      drivesHolding({ a: { image_path: "/Temp/cache/upload/", image_file: "game_1.d64" } }),
+    );
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).toHaveBeenCalledWith("a");
+  });
+
+  it("leaves another app's upload of a different disk alone when Play could not read its own upload file", async () => {
+    recordPlayLaunchMount("c64u", {
+      drive: "a",
+      launchPath: "/Local/Games/game.d64",
+      priorImagePath: null,
+      mountedByUpload: true,
+    });
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(
+      drivesHolding({ a: { image_path: "/Temp/cache/upload/", image_file: "other.d64" } }),
+    );
+
+    await endPlayLaunchMounts(api);
+
+    expect(api.unmountDrive).not.toHaveBeenCalled();
+  });
+
+  it("matches an upload file by the name the device gives it", () => {
+    expect(isUploadOfLaunchFile("/Temp/cache/upload/Game.d64", "/Local/game.d64")).toBe(true);
+    expect(isUploadOfLaunchFile("/Temp/cache/upload/game_12.d64", "/Local/game.d64")).toBe(true);
+    expect(isUploadOfLaunchFile("/Temp/cache/upload/game_x.d64", "/Local/game.d64")).toBe(false);
+    expect(isUploadOfLaunchFile("/Temp/cache/upload/gamer.d64", "/Local/game.d64")).toBe(false);
+  });
+
+  it("reads which upload file a drive holds, and nothing when the drives cannot be read", async () => {
+    const api = createDriveApi();
+    api.getDrives.mockResolvedValueOnce(
+      drivesHolding({ a: { image_path: "/Temp/cache/upload/", image_file: "game_1.d64" } }),
+    );
+    expect(await readLaunchUploadImage(api, "a")).toBe("/Temp/cache/upload/game_1.d64");
+
+    api.getDrives.mockRejectedValueOnce(new Error("Network error"));
+    expect(await readLaunchUploadImage(api, "a")).toBeNull();
   });
 
   it("ejects nothing and keeps the record when the drives cannot be read", async () => {
