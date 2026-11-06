@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
 import type { C64API } from "@/lib/c64api";
 import {
   mountDiskToDrive,
@@ -75,6 +76,7 @@ const readBlobText = (blob: Blob) =>
 describe("mountDiskToDrive", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem(DISK_WORK_CLIENT_ID_STORAGE_KEY, "0123abcd");
     resetSavedDevicesCacheForTests();
     if (typeof sessionStorage !== "undefined") sessionStorage.clear();
     resetMaterializedMountsForTests();
@@ -280,7 +282,12 @@ describe("mountDiskToDrive", () => {
 
       expect(outcome.persistence).toBe("materialized");
       expect(api.mountDriveUpload).not.toHaveBeenCalled();
-      expect(api.mountDrive).toHaveBeenCalledWith("a", "/Usb0/c64commander-disk-work-a.d64", "d64", "readwrite");
+      expect(api.mountDrive).toHaveBeenCalledWith(
+        "a",
+        "/Usb0/c64commander-disk-work-0123abcd-a.d64",
+        "d64",
+        "readwrite",
+      );
 
       const { FolderPicker } = await import("@/lib/native/folderPicker");
       const result = await finalizeDiskWriteBack("a", writeBack);
@@ -351,7 +358,7 @@ describe("mountDiskToDrive", () => {
     it("HARD21-002: a same-drive remount on a DIFFERENT device leaves the original device's write-back entry intact, so ejecting after switching back still saves", async () => {
       // Device A: materialize drive a — in-game saves accumulate in its work file.
       const { writeBack } = await materializeOnDevice("device-a", "a");
-      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-0123abcd-a.d64");
       (writeBack.readRemoteFile as ReturnType<typeof vi.fn>).mockClear();
 
       // Switch to device B and mount ANY (here device-native) disk to the SAME
@@ -367,7 +374,7 @@ describe("mountDiskToDrive", () => {
 
       // Pre-fix: dropOrFinalizeStaleMaterializedMount deleted the entry BEFORE the
       // device-mismatch check, so this read null and the saves were unrecoverable.
-      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-0123abcd-a.d64");
       // The other device's work file was never read/overwritten during the remount.
       expect(writeBack.readRemoteFile).not.toHaveBeenCalled();
 
@@ -424,7 +431,7 @@ describe("mountDiskToDrive", () => {
 
     it("exposes the materialized work path so the drive card can keep the disk identity (HARD19-007)", async () => {
       await materializeOnDevice("device-a", "a");
-      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      expect(getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-0123abcd-a.d64");
       expect(getMaterializedWorkPath("b")).toBeNull();
     });
 
@@ -437,7 +444,7 @@ describe("mountDiskToDrive", () => {
       // rehydrates from sessionStorage (the in-memory singleton was lost).
       vi.resetModules();
       const fresh = await import("@/lib/disks/diskMount");
-      expect(fresh.getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-a.d64");
+      expect(fresh.getMaterializedWorkPath("a")).toBe("/Usb0/c64commander-disk-work-0123abcd-a.d64");
       fresh.resetMaterializedMountsForTests();
     });
 

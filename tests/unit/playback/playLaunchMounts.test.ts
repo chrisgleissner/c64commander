@@ -200,7 +200,7 @@ describe("Stop returns the drives to how Play found them", () => {
     recordPlayLaunchMount("c64u", {
       drive: "a",
       launchPath: "/USB0/Games/game.d64",
-      priorImagePath: buildDiskWorkPath("Usb0", "a", "d64"),
+      priorImagePath: buildDiskWorkPath("Usb0", "0123abcd", "a", "d64"),
     });
     const api = createDriveApi();
     const { addLog } = await import("@/lib/logging");
@@ -213,7 +213,7 @@ describe("Stop returns the drives to how Play found them", () => {
     expect(addLog).toHaveBeenCalledWith(
       "warn",
       expect.stringContaining("not put back"),
-      expect.objectContaining({ drive: "a", priorImagePath: buildDiskWorkPath("Usb0", "a", "d64") }),
+      expect.objectContaining({ drive: "a", priorImagePath: buildDiskWorkPath("Usb0", "0123abcd", "a", "d64") }),
     );
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Disk not put back in drive A" }));
   });

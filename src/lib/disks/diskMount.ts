@@ -43,6 +43,7 @@ import {
 import type { DiskEntry } from "./diskTypes";
 import { getDiskName } from "./diskTypes";
 import { buildDiskWorkPath } from "./diskPath";
+import { getDiskWorkClientId } from "./diskWorkClientId";
 
 const MAX_LOCAL_DISK_IMAGE_BYTES = 64 * 1024 * 1024;
 const LOCAL_DISK_READ_TIMEOUT_BASE_MS = 8000;
@@ -357,10 +358,9 @@ export const markArchiveDiskWriteBackAdvisoryShown = (): void => {
   localStorage.setItem(DISK_ARCHIVE_ADVISORY_STORAGE_KEY, "1");
 };
 
-// Deterministic, reused per-drive work filename (overwritten on every
-// materialized mount) rather than one file per mount - the FTP plugin has no
-// delete primitive, so "cleanup" means never accumulating new files, not
-// removing old ones.
+// Deterministic, reused work filename per install and drive (overwritten on
+// every materialized mount) rather than one file per mount - the FTP plugin
+// has no delete primitive, so "cleanup" means never accumulating new files.
 const tryMaterializeDiskMount = async (
   api: C64API,
   drive: "a" | "b",
@@ -389,7 +389,7 @@ const tryMaterializeDiskMount = async (
     });
     return null;
   }
-  const workPath = buildDiskWorkPath(root, drive, mountType);
+  const workPath = buildDiskWorkPath(root, getDiskWorkClientId(), drive, mountType);
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const device = resolveDiskDeviceIdentity(api.getDeviceHost());

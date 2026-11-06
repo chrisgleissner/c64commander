@@ -9,6 +9,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
@@ -44,7 +45,7 @@ const WIFI_HOST = "203.0.113.10";
 const OTHER_DEVICE_HOST = "192.0.2.30";
 // A third, separate Ultimate whose user gave it the dual-homed one's custom unique id, but not its hostname.
 const IMPOSTOR_HOST = "192.0.2.40";
-const WORK_PATH = "/Usb0/c64commander-disk-work-a.d64";
+const WORK_PATH = "/Usb0/c64commander-disk-work-0123abcd-a.d64";
 
 // A machine's hostname defaults to one derived from its unique id; a test overrides it to model two
 // machines that share a custom unique id.
@@ -129,6 +130,7 @@ describe("disk write-back on an Ultimate saved under two addresses", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    localStorage.setItem(DISK_WORK_CLIENT_ID_STORAGE_KEY, "0123abcd");
     sessionStorage.clear();
     resetSavedDevicesCacheForTests();
     resetMaterializedMountsForTests();

@@ -7,6 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
+import { buildDiskWorkPath } from "@/lib/disks/diskPath";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
@@ -122,6 +124,7 @@ const buildArchiveDisk = () =>
 describe("diskMount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.setItem(DISK_WORK_CLIENT_ID_STORAGE_KEY, "0123abcd");
     mockIsOriginOnSelectedDevice.mockReturnValue(true);
     clearArchiveDiskCacheForTests();
     // materializedMounts is a module singleton (by design - drive occupancy
@@ -909,14 +912,19 @@ describe("diskMount", () => {
 
         expect(writeBack.listRemoteStorageRoots).toHaveBeenCalled();
         expect(writeBack.writeRemoteFile).toHaveBeenCalledWith(
-          "/Usb0/c64commander-disk-work-a.d64",
+          "/Usb0/c64commander-disk-work-0123abcd-a.d64",
           expect.any(Uint8Array),
         );
-        expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/Usb0/c64commander-disk-work-a.d64", "d64", "readwrite");
+        expect(mockApi.mountDrive).toHaveBeenCalledWith(
+          "a",
+          "/Usb0/c64commander-disk-work-0123abcd-a.d64",
+          "d64",
+          "readwrite",
+        );
         expect(mockApi.mountDriveUpload).not.toHaveBeenCalled();
         expect(outcome).toMatchObject({
           persistence: "materialized",
-          workPath: "/Usb0/c64commander-disk-work-a.d64",
+          workPath: "/Usb0/c64commander-disk-work-0123abcd-a.d64",
         });
       });
 
@@ -1020,6 +1028,28 @@ describe("diskMount", () => {
     });
 
     describe("finalizeDiskWriteBack (eject)", () => {
+      it("reads back this install's own work file when another install materialized a disk on the same drive", async () => {
+        const deviceFiles = new Map<string, Uint8Array>();
+        const writeBack = buildWriteBack({
+          writeRemoteFile: vi.fn(async (path: string, bytes: Uint8Array) => void deviceFiles.set(path, bytes)),
+          readRemoteFile: vi.fn(async (path: string) => deviceFiles.get(path) ?? new Uint8Array()),
+        });
+        await mountDiskToDrive(
+          mockApi as any,
+          "a",
+          { path: "/mine.d64", location: "local", localTreeUri: "tree://mine" } as any,
+          new File([new Uint8Array([1, 2, 3])], "mine.d64"),
+          { writeBack },
+        );
+        deviceFiles.set(buildDiskWorkPath("Usb0", "fedc9876", "a", "d64"), new Uint8Array([7, 7, 7]));
+
+        await finalizeDiskWriteBack("a", writeBack);
+
+        expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
+          expect.objectContaining({ treeUri: "tree://mine", path: "/mine.d64", data: "AQID" }),
+        );
+      });
+
       it("reports attempted:false when the drive has no materialized mount", async () => {
         const result = await finalizeDiskWriteBack("a", buildWriteBack());
         expect(result).toMatchObject({ attempted: false });
@@ -1038,7 +1068,7 @@ describe("diskMount", () => {
 
         const result = await finalizeDiskWriteBack("a", writeBack);
 
-        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-0123abcd-a.d64");
         expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith({
           treeUri: "tree://direct",
           path: "/game.d64",
@@ -1177,11 +1207,14 @@ describe("diskMount", () => {
         await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
         await mountDiskToDrive(mockApi as any, "a", disk, new File([originalBytes], "first.d64"), { writeBack });
 
-        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-0123abcd-a.d64");
         expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
           expect.objectContaining({ treeUri: "tree://first", path: "/first.d64", data: "BwgJ" }),
         );
-        expect(writeBack.writeRemoteFile).toHaveBeenLastCalledWith("/Usb0/c64commander-disk-work-a.d64", changedBytes);
+        expect(writeBack.writeRemoteFile).toHaveBeenLastCalledWith(
+          "/Usb0/c64commander-disk-work-0123abcd-a.d64",
+          changedBytes,
+        );
       });
 
       it("finalizes the stale entry's write-back before the new mount proceeds", async () => {
@@ -1204,7 +1237,7 @@ describe("diskMount", () => {
           { writeBack },
         );
 
-        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-a.d64");
+        expect(writeBack.readRemoteFile).toHaveBeenCalledWith("/Usb0/c64commander-disk-work-0123abcd-a.d64");
         expect(FolderPicker.writeFileToTree).toHaveBeenCalledWith(
           expect.objectContaining({ treeUri: "tree://first", path: "/first.d64" }),
         );
