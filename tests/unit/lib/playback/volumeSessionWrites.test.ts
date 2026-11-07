@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   endVolumeSessionWrites,
+  noteRestoredVolumeSessionWrites,
   noteVolumeSessionWrites,
   readVolumeSessionWrites,
   startVolumeSessionWrites,
@@ -29,6 +30,50 @@ describe("the record of mixer levels a playback volume session wrote", () => {
     noteVolumeSessionWrites({ "Vol Master": "-6 dB", "Vol Socket 1": "OFF" });
 
     expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB", "Vol Socket 1": "OFF" });
+  });
+
+  it("records a restored level only when the record held it before the mute", () => {
+    startVolumeSessionWrites("device-1");
+    noteVolumeSessionWrites({ "Vol Master": "-6 dB", "Vol Socket 1": "-6 dB" });
+    noteVolumeSessionWrites({ "Vol Master": "OFF", "Vol Socket 1": "OFF", "Vol Socket 2": "OFF" });
+
+    noteRestoredVolumeSessionWrites(
+      { "Vol Master": "-6 dB", "Vol Socket 1": "-10 dB", "Vol Socket 2": "0 dB" },
+      "device-1",
+    );
+
+    expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB" });
+  });
+
+  it("keeps the level from before the first of two identical mute writes", () => {
+    startVolumeSessionWrites("device-1");
+    noteVolumeSessionWrites({ "Vol Master": "-6 dB" });
+    noteVolumeSessionWrites({ "Vol Master": "OFF" });
+    noteVolumeSessionWrites({ "Vol Master": "OFF" });
+
+    noteRestoredVolumeSessionWrites({ "Vol Master": "-6 dB" }, "device-1");
+
+    expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB" });
+  });
+
+  it("does not restore into the record of another device, or of no session", () => {
+    noteRestoredVolumeSessionWrites({ "Vol Master": "-6 dB" }, "device-1");
+    expect(readVolumeSessionWrites("device-1")).toBeNull();
+
+    startVolumeSessionWrites("device-2");
+    noteRestoredVolumeSessionWrites({ "Vol Master": "-6 dB" }, "device-1");
+    expect(readVolumeSessionWrites("device-2")).toEqual({});
+  });
+
+  it("reads a record an earlier build saved without the levels from before", () => {
+    localStorage.setItem(
+      "c64u_volume_session_writes:v1",
+      JSON.stringify({ deviceId: "device-1", writes: { "Vol Master": "OFF" } }),
+    );
+
+    noteVolumeSessionWrites({ "Vol Master": "-6 dB" });
+
+    expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB" });
   });
 
   it("starts empty for each new session", () => {

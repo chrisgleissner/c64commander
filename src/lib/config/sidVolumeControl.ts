@@ -46,7 +46,7 @@ const parseNumericOption = (option: string) => {
   return match ? Number(match[0]) : null;
 };
 
-const valuesEqual = (left: string | number | undefined, right: string | number | undefined) => {
+export const valuesEqual = (left: string | number | undefined, right: string | number | undefined) => {
   if (left === undefined || right === undefined) return false;
   if (typeof left === "number" || typeof right === "number") {
     return String(left).trim() === String(right).trim();

@@ -10,7 +10,7 @@ import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { extractAudioMixerItems } from "@/lib/config/audioMixerItems";
 import { buildEnabledSidUnmuteUpdates, buildPauseMuteRestoreUpdates } from "@/lib/config/sidVolumeControl";
 import { clearPersistedPauseMute, hydratePlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
-import { noteVolumeSessionWrites } from "@/lib/playback/volumeSessionWrites";
+import { noteRestoredVolumeSessionWrites } from "@/lib/playback/volumeSessionWrites";
 
 // HARD12-020: the C64's machine pause/resume state has no device-side read
 // endpoint, so Home and Play cannot converge by polling. Home previously
@@ -158,7 +158,7 @@ export const restorePauseMuteFromPersistedSnapshot = async (
     });
     return false;
   }
-  noteVolumeSessionWrites(updates, deviceId);
+  noteRestoredVolumeSessionWrites(updates, deviceId);
   try {
     // HARD27-011: this undoes the pause mute, so it releases the flash save the
     // mute was holding rather than persisting the mute itself.

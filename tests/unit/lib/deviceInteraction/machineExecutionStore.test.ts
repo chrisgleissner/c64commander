@@ -153,6 +153,7 @@ describe("machineExecutionStore", () => {
     it("notes the levels a Home resume writes, so Stop still restores the user's level", async () => {
       persistSocketPauseMute();
       startVolumeSessionWrites("device-1");
+      noteVolumeSessionWrites({ "Vol Socket 1": "-6 dB" });
       noteVolumeSessionWrites({ "Vol Socket 1": "-42 dB" });
       const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
 
