@@ -168,6 +168,36 @@ describe("useRemoteInputSession typed-key retry and the serialized machine:input
       expect(releasedJoystickInputs(sentBatches()[2])).toEqual(["fire", "up"]);
     });
 
+    it("recovery release still frees an input pressed again after a queued release of it was dispatched", async () => {
+      const okReply = { errors: [], keyboard: { inputs: [] }, joysticks: [] };
+      const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+      await hold(result, ["fire"]);
+      await act(async () => settle());
+      const upPress = holdNextSend();
+      sendMachineInputBatchMock.mockResolvedValueOnce(okReply).mockResolvedValueOnce(okReply);
+      await hold(result, ["fire", "up"]);
+      await hold(result, ["up"]);
+      await hold(result, ["up", "fire"]);
+      const leftPress = holdNextSend();
+      await hold(result, ["up", "fire", "left"]);
+      await hold(result, ["up", "left"]);
+      expect(sentBatches()).toHaveLength(2);
+
+      await act(async () => {
+        upPress.resolve();
+        await settle();
+      });
+      expect(sentBatches()).toHaveLength(5);
+
+      await act(async () => {
+        leftPress.reject();
+        await settle();
+      });
+
+      expect(sentBatches()).toHaveLength(6);
+      expect(releasedJoystickInputs(sentBatches()[5])).toEqual(["fire", "left", "up"]);
+    });
+
     it("the own release on sheet close also frees inputs whose queued release it supersedes", async () => {
       const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
       await hold(result, ["up"]);

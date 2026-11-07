@@ -52,8 +52,14 @@ export const buildOwnReleaseEvents = (
   return events;
 };
 
-/** Press events for inputs this phone sent, or queued to send, that no confirmed release has covered yet. */
-export type UnreleasedInputs = readonly MachineInputEvent[];
+/**
+ * A press sent or queued by this phone. `sequence` is taken when the batch is queued, so a release can tell the presses
+ * queued before it (which it frees) from those queued after it (which it does not).
+ */
+export type SequencedPress = { sequence: number; press: MachineInputEvent };
+
+/** Presses of inputs that no release dispatched after them has covered yet. */
+export type UnreleasedInputs = readonly SequencedPress[];
 
 export const NO_UNRELEASED_INPUTS: UnreleasedInputs = [];
 
@@ -70,25 +76,35 @@ const sameInputGroup = (a: TransitionEvent, b: TransitionEvent) =>
 
 export const withPressedInputs = (
   unreleased: UnreleasedInputs,
-  batch: readonly MachineInputEvent[],
+  events: readonly MachineInputEvent[],
+  sequence: number,
 ): UnreleasedInputs => {
-  const presses = batch.filter(isPress);
+  const presses = events.filter(isPress).map((press) => ({ sequence, press }));
   return presses.length ? [...unreleased, ...presses] : unreleased;
 };
 
-/** Forgets the inputs that a batch about to be sent to the device releases. */
+export const unreleasedPressEvents = (unreleased: UnreleasedInputs): MachineInputEvent[] =>
+  unreleased.map(({ press }) => press);
+
+/**
+ * Forgets what a batch about to be dispatched releases, but only presses queued before it (a lower sequence). A press
+ * queued after the release goes out after it and leaves its input held.
+ */
 export const withoutReleasedInputs = (
   unreleased: UnreleasedInputs,
-  confirmedBatch: readonly MachineInputEvent[],
+  batch: readonly MachineInputEvent[],
+  sequence: number,
 ): UnreleasedInputs => {
-  if (confirmedBatch.some((event) => event.kind === "release_all")) return NO_UNRELEASED_INPUTS;
+  const queuedAfter = ({ sequence: pressSequence }: SequencedPress) => pressSequence >= sequence;
+  if (batch.some((event) => event.kind === "release_all")) return unreleased.filter(queuedAfter);
   let remaining = unreleased;
-  for (const release of confirmedBatch.filter(isRelease)) {
+  for (const release of batch.filter(isRelease)) {
     const released = new Set<string>(release.inputs);
-    remaining = remaining.flatMap((press) => {
-      if (!isPress(press) || !sameInputGroup(press, release)) return [press];
+    remaining = remaining.flatMap((entry) => {
+      const { press } = entry;
+      if (queuedAfter(entry) || !isPress(press) || !sameInputGroup(press, release)) return [entry];
       const inputs = press.inputs.filter((input) => !released.has(input));
-      return inputs.length ? [{ ...press, inputs } as TransitionEvent] : [];
+      return inputs.length ? [{ ...entry, press: { ...press, inputs } as TransitionEvent }] : [];
     });
   }
   return remaining;

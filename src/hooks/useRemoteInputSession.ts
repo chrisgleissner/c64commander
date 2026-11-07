@@ -51,6 +51,7 @@ import {
   buildOwnReleaseEvents,
   holdsInput,
   NO_UNRELEASED_INPUTS,
+  unreleasedPressEvents,
   withoutReleasedInputs,
   withPressedInputs,
 } from "@/lib/remoteInput/ownInputRelease";
@@ -199,8 +200,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   });
   /** Every input this phone pressed, in any batch sent or still queued, until a confirmed release covers it. */
   const unreleasedInputsRef = useRef<UnreleasedInputs>(NO_UNRELEASED_INPUTS);
+  const inputSequenceRef = useRef(0);
   const ownReleaseEvents = (unconfirmed: readonly MachineInputEvent[] = []) =>
-    buildOwnReleaseEvents(ownHeldInputs(), [...unreleasedInputsRef.current, ...unconfirmed]);
+    buildOwnReleaseEvents(ownHeldInputs(), [...unreleasedPressEvents(unreleasedInputsRef.current), ...unconfirmed]);
   const pendingKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
   /**
    * Queued press/release events, computed against the PREVIOUS pending set at
@@ -257,7 +259,8 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       if (immediate) sendGenerationRef.current += 1;
       const generation = sendGenerationRef.current;
       const failureEpoch = sendFailureEpochRef.current;
-      unreleasedInputsRef.current = withPressedInputs(unreleasedInputsRef.current, events);
+      const sequence = ++inputSequenceRef.current;
+      unreleasedInputsRef.current = withPressedInputs(unreleasedInputsRef.current, events, sequence);
       setConnectionStatus("sending");
       const batches = chunkMachineInputEvents(events);
       batches.forEach((batch, batchIndex) => {
@@ -272,7 +275,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
           const send = () => getC64API().sendMachineInputBatch({ events: batch });
           // Forgotten once the release is sent, not once it is answered: a release that fails is released again by the
           // recovery below, which covers its own inputs. A release that is dropped before it is sent stays recorded.
-          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, batch);
+          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, batch, sequence);
           // Not after an immediate send (a release-all, a port swap) or another failure has superseded this one, not after
           // Remote Input closed, and never while newer input waits behind it.
           const retryStillWanted = () =>
@@ -316,6 +319,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
                 batch.some(holdsInput);
               const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
               const recoveryReleaseEvents = ownReleaseEvents(batch);
+              const recoverySequence = ++inputSequenceRef.current;
               // HARD18-001: a queued coalesced batch computed against the
               // now-abandoned held-set model must never dispatch after this
               // reset, or it re-asserts a stale press once the device recovers.
@@ -337,6 +341,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
                     unreleasedInputsRef.current = withoutReleasedInputs(
                       unreleasedInputsRef.current,
                       recoveryReleaseEvents,
+                      recoverySequence,
                     );
                   })
                   .catch((releaseError) => {
@@ -792,6 +797,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     const releaseNow = async (): Promise<void> => {
       const releaseEvents = ownReleaseEvents();
       if (!releaseEvents.length) return;
+      const releaseSequence = ++inputSequenceRef.current;
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
@@ -808,7 +814,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       await getC64API()
         .sendMachineInputBatch({ events: releaseEvents })
         .then(() => {
-          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, releaseEvents);
+          unreleasedInputsRef.current = withoutReleasedInputs(
+            unreleasedInputsRef.current,
+            releaseEvents,
+            releaseSequence,
+          );
         })
         .catch((error) => {
           addErrorLog(

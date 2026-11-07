@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOwnReleaseEvents,
   NO_UNRELEASED_INPUTS,
+  unreleasedPressEvents,
   withoutReleasedInputs,
   withPressedInputs,
 } from "@/lib/remoteInput/ownInputRelease";
@@ -68,30 +69,53 @@ describe("unreleased input record", () => {
     inputs,
     transition: "release",
   });
+  const keyPress: MachineInputEvent = { kind: "keyboard", inputs: ["b"], transition: "press" };
 
   it("records joystick and held keyboard presses but not releases, taps or release_all", () => {
-    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [
-      press(2, "up"),
-      release(2, "fire"),
-      { kind: "keyboard", inputs: ["a"], transition: "tap" },
-      { kind: "keyboard", inputs: ["b"], transition: "press" },
-      { kind: "release_all" },
+    const record = withPressedInputs(
+      NO_UNRELEASED_INPUTS,
+      [
+        press(2, "up"),
+        release(2, "fire"),
+        { kind: "keyboard", inputs: ["a"], transition: "tap" },
+        keyPress,
+        { kind: "release_all" },
+      ],
+      1,
+    );
+    expect(record).toEqual([
+      { sequence: 1, press: press(2, "up") },
+      { sequence: 1, press: keyPress },
     ]);
-    expect(record).toEqual([press(2, "up"), { kind: "keyboard", inputs: ["b"], transition: "press" }]);
   });
 
   it("removes only the inputs a release names, on the port it named", () => {
-    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up", "fire"), press(1, "up")]);
-    expect(withoutReleasedInputs(record, [release(2, "up")])).toEqual([press(2, "fire"), press(1, "up")]);
+    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up", "fire"), press(1, "up")], 1);
+    expect(unreleasedPressEvents(withoutReleasedInputs(record, [release(2, "up")], 2))).toEqual([
+      press(2, "fire"),
+      press(1, "up"),
+    ]);
   });
 
-  it("clears everything once a release_all is sent", () => {
-    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up")]);
-    expect(withoutReleasedInputs(record, [{ kind: "release_all" }])).toEqual([]);
+  it("keeps a press queued after the release, which dispatches after it and leaves the input held", () => {
+    const queuedBefore = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "fire")], 1);
+    const record = withPressedInputs(queuedBefore, [press(2, "fire")], 3);
+    expect(withoutReleasedInputs(record, [release(2, "fire")], 2)).toEqual([{ sequence: 3, press: press(2, "fire") }]);
   });
 
-  it("feeds buildOwnReleaseEvents so a release covers an input only a record remembers", () => {
-    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up")]);
-    expect(buildOwnReleaseEvents(nothingHeld, record)).toEqual([release(2, "up")]);
+  it("clears the presses queued before a release_all but not those queued after it", () => {
+    const record = withPressedInputs(
+      withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up")], 1),
+      [press(2, "fire")],
+      3,
+    );
+    expect(withoutReleasedInputs(record, [{ kind: "release_all" }], 2)).toEqual([
+      { sequence: 3, press: press(2, "fire") },
+    ]);
+  });
+
+  it("feeds buildOwnReleaseEvents so a release covers an input only the record remembers", () => {
+    const record = withPressedInputs(NO_UNRELEASED_INPUTS, [press(2, "up")], 1);
+    expect(buildOwnReleaseEvents(nothingHeld, unreleasedPressEvents(record))).toEqual([release(2, "up")]);
   });
 });
