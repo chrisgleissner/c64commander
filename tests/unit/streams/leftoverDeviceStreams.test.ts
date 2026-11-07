@@ -10,7 +10,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/streams/foreignSenderStop", () => ({
   stopStreamAtHost: vi.fn(async () => ({ errors: [] })),
-  stopStreamAtForeignHost: vi.fn(async () => ({ errors: [] })),
   resolveForeignSenderPassword: vi.fn(async () => null),
 }));
 
@@ -91,6 +90,23 @@ describe("leftover device streams (HARD27-021)", () => {
         expect.objectContaining({ host: "192.0.2.146" }),
       ),
     );
+  });
+
+  it("stops a leftover stream once when several sweeps were asked for while offline", async () => {
+    recordDeviceStreamStarted("video", "192.0.2.146");
+    networkStatus.current = { online: false, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await stopLeftoverDeviceStreams();
+    await stopLeftoverDeviceStreams();
+    await stopLeftoverDeviceStreams();
+
+    networkStatus.current = { online: true, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(stopAt).toHaveBeenCalledTimes(1);
   });
 
   it("keeps waiting through another offline report, and warns about a stop the device refused", async () => {

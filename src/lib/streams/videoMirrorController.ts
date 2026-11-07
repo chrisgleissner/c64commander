@@ -119,10 +119,14 @@ export interface VideoStreamLossInfo {
 
 export const VIDEO_RECONNECTING_MESSAGE = "Video lost, reconnecting…";
 export const VIDEO_STOPPED_ARRIVING_MESSAGE = "The video stream stopped arriving.";
+export const VIDEO_STREAMING_ELSEWHERE_MESSAGE =
+  "The C64 is sending its picture to another app. Select Watch to take it back.";
 
 export interface VideoMirrorDeps {
   /** Called when a live stream went silent. Returns true when the owner is restarting it. */
   onStreamLost?: (info: VideoStreamLossInfo) => boolean;
+  /** This phone's frames arrived again after the stream was left to another client, so the device still sends here. */
+  onStreamReclaimed?: () => void;
   createReceiver?: (options: StreamReceiverOptions) => StreamReceiver;
   startStream: (name: "video", destination: string) => Promise<unknown>;
   stopStream: (name: "video") => Promise<unknown>;
@@ -262,6 +266,10 @@ export class VideoMirrorController {
 
   private lastEmitMs = -Infinity;
   private liveSinceMs = 0;
+  /** A start was sent and no other client has since been found holding the stream; see the audio controller. */
+  private deviceStreamOwned = false;
+  /** The stream was left to another client; frames arriving again prove the device still sends it here. */
+  private leftToOtherClient = false;
 
   private update(patch: Partial<VideoMirrorSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
@@ -374,6 +382,7 @@ export class VideoMirrorController {
 
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
+    this.leftToOtherClient = false;
     this.assembler.reset();
     this.resetPresentation();
     this.update({
@@ -426,6 +435,7 @@ export class VideoMirrorController {
       // non-zero fps/framesLost into an off-state snapshot (and the shared session other surfaces read).
       if (this.receiver !== receiver) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost, present);
     });
     // Push the current governor cadence to the native transport now that the receiver exists (so a
@@ -437,6 +447,7 @@ export class VideoMirrorController {
       // (nor feed the assembler for the new session), same as the onFrame guard above.
       if (this.receiver !== receiver) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
       // frame number), so cross-frame reordering cannot skew the frame-start time the analyzer uses.
       const header = parseVicHeader(bytes);
@@ -466,6 +477,8 @@ export class VideoMirrorController {
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       socketOpen = true;
+      // Owned before the reply: a start that timed out may still have reached the device.
+      this.deviceStreamOwned = true;
       await this.deps.startStream("video", receiver.destination);
     } catch (error) {
       addLog("warn", socketOpen ? "Video Mirror: device stream start failed" : "Video Mirror: receive socket failed", {
@@ -513,6 +526,29 @@ export class VideoMirrorController {
   abandonReconnect(): void {
     if (this.snapshot.state !== "error" || !this.snapshot.reconnecting) return;
     this.update({ reconnecting: false, error: VIDEO_STOPPED_ARRIVING_MESSAGE });
+  }
+
+  /** The device answers but streams to another client: say so instead of the plain loss. */
+  reportStreamingElsewhere(): void {
+    if (this.snapshot.state !== "error") return;
+    this.deviceStreamOwned = false;
+    this.leftToOtherClient = true;
+    this.update({ reconnecting: false, error: VIDEO_STREAMING_ELSEWHERE_MESSAGE });
+  }
+
+  /**
+   * Frames arrived after the stream was left to another client: the device still sends to this phone,
+   * so the loss was the network. Take the stream back as this phone's, so Stop ends it.
+   */
+  private reclaimStreamIfLeftToOtherClient(): void {
+    if (!this.leftToOtherClient || this.snapshot.state !== "error") return;
+    this.leftToOtherClient = false;
+    addLog("info", "Video Mirror: packets arrived again after the stream was left to another client");
+    this.deviceStreamOwned = true;
+    this.liveSinceMs = this.now();
+    this.update({ state: "live", error: null, reconnecting: false });
+    this.arrivalWatchdog.start();
+    this.deps.onStreamReclaimed?.();
   }
 
   /**
@@ -575,6 +611,19 @@ export class VideoMirrorController {
     this.arrivalWatchdog.start();
   }
 
+  private async stopDeviceStream(): Promise<void> {
+    try {
+      await this.deps.stopStream("video");
+      this.deviceStreamOwned = false;
+    } catch (error) {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Video Mirror: device stream stop failed; the device may still be streaming", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
+  }
+
   private resetPresentation(): void {
     this.presentPhase = 0;
     this.frameStartByNum.clear();
@@ -594,15 +643,9 @@ export class VideoMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
-    try {
-      await this.deps.stopStream("video");
-    } catch (error) {
-      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
-      addLog("warn", "Video Mirror: device stream stop failed; the device may still be streaming", {
-        error: (error as Error)?.message ?? String(error),
-        stack: (error as Error)?.stack,
-      });
-    }
+    this.leftToOtherClient = false;
+    if (this.deviceStreamOwned) await this.stopDeviceStream();
+    else addLog("info", "Video Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();
     this.receiver = null;
     this.assembler.reset();

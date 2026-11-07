@@ -27,6 +27,7 @@ const sendKeyboardInputsMock = vi.fn();
 const sendCursorMock = vi.fn();
 const sendSpecialKeyMock = vi.fn();
 const releaseAllMock = vi.fn();
+const releaseHeldInputsMock = vi.fn();
 
 let initialSessionOutputMode: "joystick" | "type" = "joystick";
 let initialSessionHeldJoystickInputs: ReadonlySet<string> = new Set();
@@ -98,6 +99,14 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
         setHeldKeyboardInputsState(new Set());
         setReleaseAllEpoch((epoch) => epoch + 1);
         releaseAllMock();
+      },
+      // Mirrors the real hook's releaseHeldInputs: the same local clearing, but the
+      // device only hears releases for what this phone held (sheet close).
+      releaseHeldInputs: () => {
+        setHeldJoystickInputsState(new Set());
+        setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
+        releaseHeldInputsMock();
       },
       releaseAllEpoch,
     };
@@ -195,13 +204,14 @@ describe("RemoteInputSheet", () => {
     expect(releaseAllMock).toHaveBeenCalledTimes(1);
   });
 
-  it("releases all inputs and closes via the sheet's top-right X (the sole Close affordance)", () => {
+  it("releases only this phone's inputs and closes via the sheet's top-right X (the sole Close affordance)", () => {
     const onOpenChange = vi.fn();
     render(<RemoteInputSheet open onOpenChange={onOpenChange} />);
-    // The duplicate footer "Close" button was removed; the header X is the only
-    // Close, and closing must still release everything held on the device.
+    // The header X is the only Close. Closing releases what this phone holds on
+    // the device and leaves another client's held inputs alone.
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(releaseAllMock).toHaveBeenCalledTimes(1);
+    expect(releaseHeldInputsMock).toHaveBeenCalledTimes(1);
+    expect(releaseAllMock).not.toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

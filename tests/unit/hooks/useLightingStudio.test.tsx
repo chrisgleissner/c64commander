@@ -26,6 +26,12 @@ vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: mocks.useConnectionState,
 }));
 
+const deviceCategories = vi.hoisted(() => ({ keyboardLighting: true }));
+vi.mock("@/hooks/useDeviceHasConfigCategory", () => ({
+  useDeviceHasConfigCategory: (category: string) =>
+    category === "Keyboard Lighting" ? deviceCategories.keyboardLighting : true,
+}));
+
 const featureFlagOverrides = vi.hoisted(() => new Map<string, boolean>());
 
 vi.mock("@/hooks/useFeatureFlags", async () => {
@@ -354,6 +360,27 @@ describe("LightingStudioProvider", () => {
     expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("Keyboard Lighting", [...LIGHTING_CATEGORY_ITEMS], true, {
       intent: "user",
     });
+  });
+
+  it("never reads Keyboard Lighting from a device that has no such category, even with the studio open", async () => {
+    deviceCategories.keyboardLighting = false;
+    mocks.useC64ConfigItems.mockClear();
+    renderProvider("/");
+
+    fireEvent.click(screen.getByRole("button", { name: "open-studio" }));
+
+    await waitFor(() =>
+      expect(mocks.useC64ConfigItems).toHaveBeenCalledWith("LED Strip Settings", [...LIGHTING_CATEGORY_ITEMS], true, {
+        intent: "user",
+      }),
+    );
+    expect(mocks.useC64ConfigItems).not.toHaveBeenCalledWith(
+      "Keyboard Lighting",
+      expect.anything(),
+      true,
+      expect.anything(),
+    );
+    deviceCategories.keyboardLighting = true;
   });
 
   it("does not fetch lighting summaries from Settings while the studio is closed", async () => {

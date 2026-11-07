@@ -8,7 +8,13 @@
 
 import { useCallback, type MutableRefObject } from "react";
 import { addErrorLog, addLog } from "@/lib/logging";
-import type { SidEnablement } from "@/lib/config/sidVolumeControl";
+import { getC64API } from "@/lib/c64api";
+import { extractAudioMixerItems } from "@/lib/config/audioMixerItems";
+import {
+  buildEnabledSidUnmuteUpdates,
+  buildPauseMuteRestoreUpdates,
+  type SidEnablement,
+} from "@/lib/config/sidVolumeControl";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 
@@ -35,6 +41,49 @@ type PauseMuteOptions = {
   resumingFromPauseRef: MutableRefObject<boolean>;
 };
 
+/** The SID mixer as the device reports it now; the page's copy goes stale when another app changes it. */
+const readLiveAudioMixerItems = async () =>
+  extractAudioMixerItems(await getC64API().getCategory("Audio Mixer", { __c64uIntent: "user" }));
+
+const describeMixerReadError = (error: unknown) => ({
+  error: error instanceof Error ? error.message : String(error),
+  stack: error instanceof Error ? error.stack : undefined,
+});
+
+const withLiveValues = async (items: AudioMixerItem[]) => {
+  try {
+    const liveValues = new Map((await readLiveAudioMixerItems()).map((item) => [item.name, item.value]));
+    return items.map((item) => {
+      const liveValue = liveValues.get(item.name);
+      return liveValue === undefined ? item : { ...item, value: liveValue };
+    });
+  } catch (error) {
+    addLog(
+      "warn",
+      "Playback pause could not read the SID mixer; muting from the last known levels",
+      describeMixerReadError(error),
+    );
+    return items;
+  }
+};
+
+/**
+ * The levels to put back on resume. When the mixer cannot be read, the stored levels go back as
+ * before, so a resume never leaves the C64 silent.
+ */
+const buildResumeUpdates = async (snapshot: SidMuteSnapshot) => {
+  try {
+    return buildPauseMuteRestoreUpdates(snapshot.volumes, snapshot.enablement, await readLiveAudioMixerItems());
+  } catch (error) {
+    addLog(
+      "warn",
+      "Playback resume could not read the SID mixer; restoring the levels from before the pause",
+      describeMixerReadError(error),
+    );
+    return buildEnabledSidUnmuteUpdates(snapshot.volumes, snapshot.enablement);
+  }
+};
+
 /** Mutes the C64's SID outputs while a tune is paused on it, and hands back the volume, or the listener's own Mute, on resume. */
 export const usePauseMute = ({
   enabledSidVolumeItems,
@@ -58,7 +107,7 @@ export const usePauseMute = ({
       addLog("warn", "Playback pause mute skipped because no cached SID mixer items are available");
       return;
     }
-    const items = enabledSidVolumeItems;
+    const items = await withLiveValues(enabledSidVolumeItems);
     const snapshot = captureSidMuteSnapshot(items, sidEnablement);
     const updates = buildEnabledSidMuteUpdates(items, sidEnablement);
     pauseMuteSnapshotRef.current = snapshot;
@@ -98,13 +147,13 @@ export const usePauseMute = ({
       return;
     }
     const snapshot = pauseMuteSnapshotRef.current;
-    const currentItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : undefined;
-    let updates = snapshotToUpdates(snapshot, currentItems);
-    if (!Object.keys(updates).length && snapshot) {
-      updates = snapshotToUpdates(snapshot);
-    }
+    const updates = snapshot ? await buildResumeUpdates(snapshot) : {};
     if (Object.keys(updates).length) {
       await applyAudioMixerUpdates(updates, "Resume unmute");
+    } else if (snapshot) {
+      addLog("info", "Playback resume left the SID mixer as it is: its levels were changed after the pause", {
+        snapshotItems: Object.keys(snapshot.volumes),
+      });
     } else {
       await ensureUnmuted({ force: true, refreshItems: true });
     }
@@ -118,14 +167,12 @@ export const usePauseMute = ({
   }, [
     applyAudioMixerUpdates,
     dispatchVolume,
-    enabledSidVolumeItems,
     ensureUnmuted,
     isManualMuteHeld,
     keepManualMuteAfterPause,
     pauseMuteSnapshotRef,
     pausingFromPauseRef,
     resumingFromPauseRef,
-    snapshotToUpdates,
   ]);
 
   const rollbackMuteAfterFailedPause = useCallback(

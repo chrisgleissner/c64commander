@@ -187,6 +187,27 @@ describe("captureCpuState — error recovery", () => {
     expect(fw.mem.get(0x033c)).toBe(0xa0);
   });
 
+  it("does not write back a vector or safe region another client changed while the capture timed out", async () => {
+    const fw = new CaptureMock();
+    fw.fireOnResume = false;
+    fw.api.machineResume = async () => {
+      // Another client's program takes over the KERNAL IRQ vector and the cassette buffer.
+      fw.mem.set(0x0314, 0x00);
+      fw.mem.set(0x0315, 0xc1);
+      fw.mem.set(0x033c, 0x4c);
+      return { errors: [] };
+    };
+
+    await expect(captureCpuState(fw.api, { ...clock(), captureTimeoutMs: 300 })).rejects.toMatchObject({
+      failure: "no-interrupt",
+    });
+
+    expect(fw.mem.get(0x0314)).toBe(0x00);
+    expect(fw.mem.get(0x0315)).toBe(0xc1);
+    expect(fw.writeLog.some((w) => w.addr === IRQ_VECTOR_0314 && w.bytes[1] === ORIG_IRQ[1])).toBe(false);
+    expect(fw.writeLog.some((w) => w.addr === L.base && w.bytes[0] === 0xa0)).toBe(false);
+  });
+
   it("restores the live patch and rethrows when a transport error fires mid-capture", async () => {
     const fw = new CaptureMock();
     let polls = 0;
@@ -203,6 +224,25 @@ describe("captureCpuState — error recovery", () => {
     // The catch ran restorePatch: original vector + region restored.
     expect(fw.mem.get(0x0314)).toBe(ORIG_IRQ[0]);
     expect(fw.mem.get(0x033c)).toBe(0xa0);
+  });
+
+  it("does not write back the saved vector during error recovery once another client repointed it", async () => {
+    const fw = new CaptureMock();
+    const realRead = fw.api.readMemory;
+    fw.api.readMemory = async (address: string, length = 1) => {
+      if (parse(address) === L.captured) {
+        fw.mem.set(0x0314, 0x00);
+        fw.mem.set(0x0315, 0xc1);
+        throw new Error("socket closed mid-poll");
+      }
+      return realRead(address, length);
+    };
+
+    await expect(captureCpuState(fw.api, clock())).rejects.toThrow(/socket closed mid-poll/);
+
+    expect(fw.mem.get(0x0314)).toBe(0x00);
+    expect(fw.mem.get(0x0315)).toBe(0xc1);
+    expect(fw.mem.get(0x033c)).toBe(0xad);
   });
 
   it("logs (and swallows) a failure during the post-capture rollback while surfacing the original error", async () => {
@@ -249,6 +289,22 @@ describe("resumeAfterCapture", () => {
     const regionIdx = fw.writeLog.findIndex((w) => w.addr === L.base && w.bytes.length === 82);
     expect(releaseIdx).toBeGreaterThanOrEqual(0);
     expect(regionIdx).toBeGreaterThan(releaseIdx);
+  });
+});
+
+describe("resumeAfterCapture when another client changed the vector", () => {
+  it("releases the spin loop but leaves the other client's vector and the safe region alone", async () => {
+    const fw = new CaptureMock();
+    const result = await captureCpuState(fw.api, clock());
+    fw.mem.set(0x0314, 0x00);
+    fw.mem.set(0x0315, 0xc1);
+
+    fw.writeLog.length = 0;
+    await resumeAfterCapture(fw.api, result);
+
+    expect(fw.mem.get(0x0314)).toBe(0x00);
+    expect(fw.mem.get(0x0315)).toBe(0xc1);
+    expect(fw.writeLog).toEqual([{ addr: L.release, bytes: [0x01] }]);
   });
 });
 

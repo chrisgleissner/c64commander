@@ -50,6 +50,8 @@ const {
   reuWorkflowSaveSnapshotSpy,
   reuWorkflowRestoreSnapshotSpy,
   capturedReuWorkflowDepsRef,
+  capturedConfigWorkflowDepsRef,
+  selectedDeviceHostRef,
   configWorkflowSaveSnapshotSpy,
   configWorkflowApplyLocalSnapshotSpy,
   pickConfigSnapshotFileSpy,
@@ -76,6 +78,8 @@ const {
   reuWorkflowSaveSnapshotSpy: vi.fn(),
   reuWorkflowRestoreSnapshotSpy: vi.fn(),
   capturedReuWorkflowDepsRef: { current: null as any },
+  capturedConfigWorkflowDepsRef: { current: null as any },
+  selectedDeviceHostRef: { current: "c64u" },
   configWorkflowSaveSnapshotSpy: vi.fn(),
   configWorkflowApplyLocalSnapshotSpy: vi.fn(),
   pickConfigSnapshotFileSpy: vi.fn(),
@@ -280,7 +284,7 @@ vi.mock("@/lib/logging", async () => {
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({ getDeviceHost: () => "c64u" }),
-  resolveDeviceHostFromStorage: () => "c64u",
+  resolveDeviceHostFromStorage: () => selectedDeviceHostRef.current,
 }));
 
 vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
@@ -382,11 +386,14 @@ vi.mock("@/lib/reu/reuTelnetWorkflow", () => ({
 }));
 
 vi.mock("@/lib/config/configWorkflow", () => ({
-  createConfigWorkflow: () => ({
-    saveSnapshot: configWorkflowSaveSnapshotSpy,
-    applyLocalSnapshot: configWorkflowApplyLocalSnapshotSpy,
-    applyRemoteSnapshot: vi.fn(),
-  }),
+  createConfigWorkflow: (deps: unknown) => {
+    capturedConfigWorkflowDepsRef.current = deps;
+    return {
+      saveSnapshot: configWorkflowSaveSnapshotSpy,
+      applyLocalSnapshot: configWorkflowApplyLocalSnapshotSpy,
+      applyRemoteSnapshot: vi.fn(),
+    };
+  },
 }));
 
 vi.mock("@/lib/config/configTelnetWorkflow", () => ({
@@ -411,7 +418,7 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
 }));
 
 vi.mock("@/lib/secureStorage", () => ({
-  getPassword: vi.fn().mockResolvedValue("secret"),
+  getPassword: async () => (selectedDeviceHostRef.current === "c64u" ? "secret" : "other-secret"),
 }));
 
 vi.mock("@/lib/c64api/hostConfig", () => ({
@@ -483,6 +490,7 @@ describe("HomePage RAM actions", () => {
   vi.setConfig({ testTimeout: 15000 });
 
   beforeEach(() => {
+    selectedDeviceHostRef.current = "c64u";
     vi.clearAllMocks();
     featureFlagsRef.current = {
       lighting_studio_enabled: true,
@@ -854,6 +862,62 @@ describe("HomePage RAM actions", () => {
     );
     expect(fakeSession.connect).toHaveBeenCalled();
     expect(fakeSession.disconnect).toHaveBeenCalled();
+  });
+
+  it("keeps every REU workflow step on the device selected when the workflow started", async () => {
+    const { listFtpDirectory, readFtpFile } = await import("@/lib/ftp/ftpClient");
+    (listFtpDirectory as ReturnType<typeof vi.fn>).mockResolvedValue({ entries: [] });
+    (readFtpFile as ReturnType<typeof vi.fn>).mockResolvedValue({ data: "" });
+    const { createTelnetSession } = await import("@/lib/telnet/telnetSession");
+    const fakeSession = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+    (createTelnetSession as ReturnType<typeof vi.fn>).mockReturnValue(fakeSession);
+
+    renderHomePage();
+    fireEvent.click(screen.getByTestId("home-machine-inline-saveReuMemory"));
+    await waitFor(() => expect(reuWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    selectedDeviceHostRef.current = "other-ultimate";
+
+    const deps = capturedReuWorkflowDepsRef.current;
+    await deps.listRemoteTempFiles();
+    await deps.readRemoteFile("/Temp/capture.reu");
+    await deps.runRestoreRemoteReu("capture.reu", "load-into-reu", "SD2");
+
+    expect(listFtpDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "c64u", password: "secret", path: "/Temp" }),
+    );
+    expect(readFtpFile).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "c64u", password: "secret", path: "/Temp/capture.reu" }),
+    );
+    expect(fakeSession.connect).toHaveBeenCalledWith("c64u", 23, "secret");
+  });
+
+  it("keeps every config file workflow step on the device selected when the workflow started", async () => {
+    featureFlagsRef.current.home_telnet_config_actions_enabled = true;
+    const { writeFtpFile } = await import("@/lib/ftp/ftpClient");
+    (writeFtpFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    const { createTelnetSession } = await import("@/lib/telnet/telnetSession");
+    const fakeSession = {
+      connect: vi.fn().mockResolvedValue(undefined),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+    (createTelnetSession as ReturnType<typeof vi.fn>).mockReturnValue(fakeSession);
+
+    renderHomePage();
+    fireEvent.click(screen.getByTestId("home-config-save-file"));
+    await waitFor(() => expect(configWorkflowSaveSnapshotSpy).toHaveBeenCalled(), { timeout: 5000 });
+    selectedDeviceHostRef.current = "other-ultimate";
+
+    const deps = capturedConfigWorkflowDepsRef.current;
+    await deps.writeRemoteFile("/Temp/picked.cfg", new Uint8Array([1]));
+    await deps.runApplyRemoteConfig("picked.cfg");
+
+    expect(writeFtpFile).toHaveBeenCalledWith(
+      expect.objectContaining({ host: "c64u", password: "secret", path: "/Temp/picked.cfg" }),
+    );
+    expect(fakeSession.connect).toHaveBeenCalledWith("c64u", 23, "secret");
   });
 
   it("shows the REU progress dialog while save is running and closes it after success", async () => {

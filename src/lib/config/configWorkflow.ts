@@ -6,7 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/c64api/hostConfig";
+import { markConfigStoreReplaced } from "@/lib/config/configWriteLedger";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { buildInstallStagedFileName, isAppStagedFileName } from "@/lib/remoteFiles/installStagedFile";
 import { formatFileTimestamp } from "@/lib/snapshot/snapshotFilename";
 import type { ConfigProgressState, ConfigSnapshotFileLocation, SavedConfigSnapshot } from "./configSnapshotTypes";
 
@@ -27,6 +30,7 @@ type ConfigWorkflowDependencies = {
   runApplyRemoteConfig: (fileName: string) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
+  configStoreBaseUrl: string;
 };
 
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -41,7 +45,7 @@ type ConfigWorkflowLogContext = {
   remotePath?: string;
 };
 
-const defaultDependencies: ConfigWorkflowDependencies = {
+const defaultDependencies: Omit<ConfigWorkflowDependencies, "configStoreBaseUrl"> = {
   ensureLocalSnapshotStorage: async () => undefined,
   listRemoteTempFiles: async () => [],
   readRemoteFile: async () => new Uint8Array(),
@@ -158,6 +162,7 @@ export const detectUpdatedTempConfigFile = (
   const beforeMap = new Map(before.map((entry) => [entry.name, `${entry.size ?? -1}:${entry.modifiedAt ?? ""}`]));
   const changed = after
     .filter((entry) => entry.name.toLowerCase().endsWith(".cfg"))
+    .filter((entry) => !isAppStagedFileName(entry.name))
     .filter((entry) => beforeMap.get(entry.name) !== `${entry.size ?? -1}:${entry.modifiedAt ?? ""}`)
     .sort((left, right) => {
       const leftTime = left.modifiedAt ? Date.parse(left.modifiedAt) : 0;
@@ -204,7 +209,11 @@ export const waitForTempConfigFile = async (
 };
 
 export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependencies> = {}) => {
-  const deps = { ...defaultDependencies, ...overrides };
+  const deps = {
+    ...defaultDependencies,
+    configStoreBaseUrl: buildBaseUrlFromDeviceHost(resolveDeviceHostFromStorage()),
+    ...overrides,
+  };
 
   const saveSnapshot = async (onProgress?: (state: ConfigProgressState) => void): Promise<SavedConfigSnapshot> => {
     const reporter = createProgressReporter("save", onProgress);
@@ -316,7 +325,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
     onProgress?: (state: ConfigProgressState) => void,
   ) => {
     const reporter = createProgressReporter("apply-local", onProgress);
-    const remoteFileName = normalizeConfigFileName(fileName);
+    const remoteFileName = buildInstallStagedFileName("cfg");
     const remotePath = `/Temp/${remoteFileName}`;
     let logContext: ConfigWorkflowLogContext = {
       localFileName: fileName,
@@ -340,7 +349,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
       emit({
         step: "uploading",
         title: "Uploading config snapshot",
-        description: `Uploading ${remoteFileName} to /Temp.`,
+        description: `Uploading ${fileName} to /Temp.`,
         progress: 60,
       });
       await deps.writeRemoteFile(remotePath, bytes);
@@ -348,15 +357,16 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
       emit({
         step: "restoring",
         title: "Applying config snapshot",
-        description: `Applying ${remoteFileName} on the Ultimate.`,
+        description: `Applying ${fileName} on the Ultimate.`,
         progress: 90,
       });
       await deps.runApplyRemoteConfig(remoteFileName);
+      markConfigStoreReplaced(deps.configStoreBaseUrl);
 
       emit({
         step: "complete",
         title: "Config snapshot applied",
-        description: remoteFileName,
+        description: fileName,
         progress: 100,
       });
       reporter.succeed("complete", logContext);
@@ -383,17 +393,18 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
    */
   const applyRemoteSnapshot = async (remotePath: string, onProgress?: (state: ConfigProgressState) => void) => {
     const reporter = createProgressReporter("apply-remote", onProgress);
-    const remoteFileName = normalizeConfigFileName(remotePath.split("/").pop() ?? "config.cfg");
-    const logContext: ConfigWorkflowLogContext = { remoteFileName, remotePath };
+    const sourceFileName = normalizeConfigFileName(remotePath.split("/").pop() ?? "config.cfg");
+    const alreadyStaged = remotePath.toLowerCase() === `/Temp/${sourceFileName}`.toLowerCase();
+    const remoteFileName = alreadyStaged ? sourceFileName : buildInstallStagedFileName("cfg");
     const stagedPath = `/Temp/${remoteFileName}`;
-    const alreadyStaged = remotePath.toLowerCase() === stagedPath.toLowerCase();
+    const logContext: ConfigWorkflowLogContext = { remoteFileName, remotePath };
     try {
       if (!alreadyStaged) {
         reporter.emit(
           {
             step: "uploading",
             title: "Staging config snapshot",
-            description: `Copying ${remoteFileName} to /Temp.`,
+            description: `Copying ${sourceFileName} to /Temp.`,
             progress: 60,
           },
           logContext,
@@ -404,17 +415,18 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         {
           step: "restoring",
           title: "Applying config snapshot",
-          description: `Applying ${remoteFileName} on the Ultimate.`,
+          description: `Applying ${sourceFileName} on the Ultimate.`,
           progress: 90,
         },
         logContext,
       );
       await deps.runApplyRemoteConfig(remoteFileName);
+      markConfigStoreReplaced(deps.configStoreBaseUrl);
       reporter.emit(
         {
           step: "complete",
           title: "Config snapshot applied",
-          description: remoteFileName,
+          description: sourceFileName,
           progress: 100,
         },
         logContext,

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TelnetError } from "@/lib/telnet/telnetTypes";
 
 const { addLogMock, getConnectionSnapshotMock, mockConnect, mockDisconnect, mockSend, mockRead } = vi.hoisted(() => ({
@@ -45,9 +45,27 @@ vi.mock("@/lib/native/telnetSocket", () => ({
   },
 }));
 
-import { createTelnetClient, shouldUseMockTelnetTransport } from "@/lib/telnet/telnetClient";
+import {
+  createTelnetClient as createProductionTelnetClient,
+  shouldUseMockTelnetTransport,
+  TELNET_SOCKET_LEASE_TIMEOUT_MS,
+} from "@/lib/telnet/telnetClient";
+import type { TelnetTransport } from "@/lib/telnet/telnetTypes";
+
+const createdClients: TelnetTransport[] = [];
+const createTelnetClient = (...args: Parameters<typeof createProductionTelnetClient>) => {
+  const client = createProductionTelnetClient(...args);
+  createdClients.push(client);
+  return client;
+};
 
 describe("createTelnetClient", () => {
+  afterEach(async () => {
+    vi.useRealTimers();
+    mockDisconnect.mockResolvedValue(undefined);
+    await Promise.all(createdClients.splice(0).map((client) => client.disconnect()));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     getConnectionSnapshotMock.mockReturnValue({ state: "REAL_CONNECTED" });
@@ -155,6 +173,60 @@ describe("createTelnetClient", () => {
 
       await expect(client.read(500)).rejects.toMatchObject({ code: "CONNECTION_CLOSED" });
       expect(client.isConnected()).toBe(false);
+    });
+
+    it("opens a second session's socket only after the first session disconnects", async () => {
+      const first = createTelnetClient();
+      const second = createTelnetClient();
+      await first.connect("192.0.2.10", 23);
+
+      const secondConnect = second.connect("192.0.2.20", 23);
+      await first.send(new Uint8Array([0x0d]));
+      await Promise.resolve();
+
+      expect(mockConnect).toHaveBeenCalledTimes(1);
+      expect(mockSend).toHaveBeenCalledTimes(1);
+
+      await first.disconnect();
+      await secondConnect;
+
+      expect(mockConnect).toHaveBeenCalledTimes(2);
+      expect(mockConnect).toHaveBeenLastCalledWith(expect.objectContaining({ host: "192.0.2.20" }));
+      expect(second.isConnected()).toBe(true);
+    });
+
+    it("releases the socket when the native connect fails", async () => {
+      mockConnect.mockRejectedValueOnce(new Error("Network unreachable"));
+      const failing = createTelnetClient();
+      const next = createTelnetClient();
+
+      await expect(failing.connect("192.0.2.10", 23)).rejects.toThrow(TelnetError);
+      await next.connect("192.0.2.20", 23);
+
+      expect(next.isConnected()).toBe(true);
+    });
+
+    it("takes over a socket held past the lease timeout and fails the old session instead of sending to the other device", async () => {
+      vi.useFakeTimers();
+      const stale = createTelnetClient();
+      const next = createTelnetClient();
+      await stale.connect("192.0.2.10", 23);
+
+      const nextConnect = next.connect("192.0.2.20", 23);
+      await vi.advanceTimersByTimeAsync(TELNET_SOCKET_LEASE_TIMEOUT_MS);
+      await nextConnect;
+
+      await expect(stale.send(new Uint8Array([0x41]))).rejects.toMatchObject({ code: "DISCONNECTED" });
+      await expect(stale.read(100)).rejects.toThrow(TelnetError);
+      await stale.disconnect();
+
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockDisconnect).not.toHaveBeenCalled();
+      expect(addLogMock).toHaveBeenCalledWith(
+        "warn",
+        "Telnet socket still held by another session; taking it over",
+        expect.objectContaining({ host: "192.0.2.20" }),
+      );
     });
   });
 

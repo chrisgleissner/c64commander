@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
+
 type PendingJob<T> = {
   version: number;
   value: T;
@@ -91,12 +93,22 @@ export const createLatestIntentWriteLane = <T>(params: {
           resolveUpTo(settledVersion);
         } catch (error) {
           if (latestJob) {
+            addLog(
+              "warn",
+              merge
+                ? "Device write failed; retrying its value merged into the newer pending write"
+                : "Device write failed; superseded by a newer pending write",
+              buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {
+                failedVersion: job.version,
+                supersedingVersion: latestJob.version,
+                merged: Boolean(merge),
+              }),
+            );
             if (merge) {
               latestJob = { version: latestJob.version, value: merge(job.value, latestJob.value) };
             }
             continue;
           }
-          const err = error as Error;
           settledVersion = Math.max(settledVersion, job.version);
           // HARD12-010: in merge-semantics lanes every waiter ≤ job.version had
           // its value folded into this failed run, so all of them must reject
@@ -105,10 +117,10 @@ export const createLatestIntentWriteLane = <T>(params: {
           // of the failed batch). Replace-semantics lanes keep the historical
           // behaviour — superseded waiters never had their write attempted.
           if (merge) {
-            rejectUpTo(job.version, err);
+            rejectUpTo(job.version, error as Error);
           } else {
             resolveUpTo(job.version - 1);
-            rejectUpTo(job.version, err);
+            rejectUpTo(job.version, error as Error);
           }
         }
       }

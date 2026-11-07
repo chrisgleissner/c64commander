@@ -116,7 +116,8 @@ describe("AvMirrorControls", () => {
     mirror.state.audio = {
       state: "live",
       error: null,
-      foreignSenderNotice: "Another Ultimate at 192.0.2.15 is also streaming into this group; stop it on that machine.",
+      foreignSenderNotice:
+        "Another Ultimate at 192.0.2.15 is also streaming into this group. Live View ignores it, but it shares your Wi-Fi.",
       senderMismatch: null,
     };
     render(<AvMirrorControls />);

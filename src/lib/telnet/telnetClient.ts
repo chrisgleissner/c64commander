@@ -87,6 +87,52 @@ const createDeferredMockTransport = (): TelnetTransport => {
   };
 };
 
+/**
+ * The native plugin holds one socket for the whole app, and its connect closes whichever socket is open. Telnet is
+ * serialized only per device, so a session to another device would take the socket over mid-workflow and receive the
+ * first session's keystrokes. Every native session therefore holds this app-wide lease from connect to disconnect.
+ */
+export const TELNET_SOCKET_LEASE_TIMEOUT_MS = 30_000;
+
+let nativeSocketHolder: object | null = null;
+let nativeSocketReleaseWaiters: Array<() => void> = [];
+
+const waitForNativeSocketRelease = (timeoutMs: number) =>
+  new Promise<void>((resolve) => {
+    const wake = () => {
+      clearTimeout(timer);
+      nativeSocketReleaseWaiters = nativeSocketReleaseWaiters.filter((waiter) => waiter !== wake);
+      resolve();
+    };
+    const timer = setTimeout(wake, timeoutMs);
+    nativeSocketReleaseWaiters.push(wake);
+  });
+
+const acquireNativeSocket = async (holder: object, host: string, port: number) => {
+  const deadline = Date.now() + TELNET_SOCKET_LEASE_TIMEOUT_MS;
+  while (nativeSocketHolder !== null && nativeSocketHolder !== holder) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      addLog("warn", "Telnet socket still held by another session; taking it over", {
+        host,
+        port,
+        waitedMs: TELNET_SOCKET_LEASE_TIMEOUT_MS,
+      });
+      break;
+    }
+    await waitForNativeSocketRelease(remainingMs);
+  }
+  nativeSocketHolder = holder;
+};
+
+const releaseNativeSocket = (holder: object) => {
+  if (nativeSocketHolder !== holder) return;
+  nativeSocketHolder = null;
+  const waiters = nativeSocketReleaseWaiters;
+  nativeSocketReleaseWaiters = [];
+  waiters.forEach((wake) => wake());
+};
+
 export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetTransport {
   if (shouldUseMockTelnetTransport()) {
     return createDeferredMockTransport();
@@ -94,15 +140,23 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
 
   let connected = false;
   const connectTimeoutMs = options?.connectTimeoutMs ?? 5000;
+  const socketHolder = {};
+  const assertHoldsNativeSocket = () => {
+    if (nativeSocketHolder === socketHolder) return;
+    connected = false;
+    throw new TelnetError("Telnet socket was taken over by another session", "DISCONNECTED");
+  };
 
   return {
     async connect(host: string, port: number): Promise<void> {
       assertDeviceTrafficAllowed("telnet", { host, port });
+      await acquireNativeSocket(socketHolder, host, port);
       try {
         await TelnetSocket.connect({ host, port, timeoutMs: connectTimeoutMs });
         connected = true;
       } catch (error) {
         connected = false;
+        releaseNativeSocket(socketHolder);
         throw new TelnetError(
           `Failed to connect to ${host}:${port}: ${(error as Error).message}`,
           "CONNECTION_FAILED",
@@ -113,10 +167,13 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
 
     async disconnect(): Promise<void> {
       connected = false;
+      if (nativeSocketHolder !== socketHolder) return;
       try {
         await TelnetSocket.disconnect();
       } catch (error) {
         addLog("warn", "TelnetSocket.disconnect() failed", buildErrorLogDetails(error as Error));
+      } finally {
+        releaseNativeSocket(socketHolder);
       }
     },
 
@@ -124,6 +181,7 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
       if (!connected) {
         throw new TelnetError("Not connected", "DISCONNECTED");
       }
+      assertHoldsNativeSocket();
       const base64 = uint8ArrayToBase64(data);
       try {
         await TelnetSocket.send({ data: base64 });
@@ -137,6 +195,7 @@ export function createTelnetClient(options?: CreateTelnetClientOptions): TelnetT
       if (!connected) {
         throw new TelnetError("Not connected", "DISCONNECTED");
       }
+      assertHoldsNativeSocket();
       try {
         const result = await TelnetSocket.read({ timeoutMs });
         return base64ToUint8Array(result.data);

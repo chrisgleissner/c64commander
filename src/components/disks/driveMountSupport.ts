@@ -48,6 +48,35 @@ export const keepsLocalMountOverride = (
   return polledName === getDiskName(disk.path) || (workPath !== null && polledName === getDiskName(workPath));
 };
 
+export const DRIVE_CHANGED_EJECT_MESSAGE =
+  "The disk in this drive changed on the C64, so nothing was ejected. Press Eject again to remove the disk shown now.";
+export const DRIVE_CHANGED_ROTATE_MESSAGE =
+  "The disk in this drive changed on the C64, so no other disk was inserted. Check the disk shown now first.";
+
+/**
+ * Whether the drive, read again just before an eject, holds a different image than the one its card shows. Another
+ * app on the same Ultimate may have mounted a disk since the last poll, and the eject would remove that disk. An
+ * empty drive is not a change: the eject then only finishes this phone's own write-back.
+ */
+export const driveChangedUnderCard = ({
+  shownDiskId,
+  shownInfo,
+  freshInfo,
+  freshDiskId,
+}: {
+  shownDiskId: string | null;
+  shownInfo: DriveInfo | undefined;
+  freshInfo: DriveInfo | undefined;
+  freshDiskId: string | null;
+}) => {
+  if (!freshInfo?.image_file) return false;
+  if (shownDiskId) return freshDiskId !== shownDiskId;
+  return (
+    buildDrivePath(freshInfo.image_path, freshInfo.image_file) !==
+    buildDrivePath(shownInfo?.image_path, shownInfo?.image_file)
+  );
+};
+
 export const buildMountTargetLabel = ({
   key,
   busId,

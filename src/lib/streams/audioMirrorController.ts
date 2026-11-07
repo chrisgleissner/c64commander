@@ -16,7 +16,7 @@
 
 import { addLog } from "@/lib/logging";
 import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
-import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
+import { describeForeignSenders, foreignSenders } from "./foreignSenderGuard";
 import { describeReceiverOpenFailure, describeStreamStartFailure } from "./streamStartFailure";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
@@ -31,14 +31,17 @@ export type AudioMirrorState = "off" | "connecting" | "live" | "error";
 /** Coalesce audio health broadcasts to ~10 Hz (state/error transitions bypass this). */
 export const AUDIO_SNAPSHOT_EMIT_INTERVAL_MS = 100;
 
+/** How often a native sink is asked whether packets arrive again after the stream was left to another client. */
+const RETURNED_PACKETS_POLL_MS = 1000;
+
 export interface AudioMirrorSnapshot {
   state: AudioMirrorState;
   droppedPackets: number;
   chunks: number;
   error: string | null;
   /**
-   * A second Ultimate is streaming into our group and would not stop when asked. Non-fatal — the
-   * native filter keeps the picture right — so it is a hint beside the controls, not an error.
+   * A second Ultimate is streaming into our group. Non-fatal — the native filter keeps only the selected
+   * device's packets — so it is a hint beside the controls, not an error.
    */
   foreignSenderNotice: string | null;
   /**
@@ -54,6 +57,8 @@ export interface AudioMirrorSnapshot {
 }
 
 export const AUDIO_STOPPED_ARRIVING_MESSAGE = "The audio stream stopped arriving.";
+export const AUDIO_STREAMING_ELSEWHERE_MESSAGE =
+  "The C64 is sending its sound to another app. Select Listen to take it back.";
 export const AUDIO_RECONNECTING_MESSAGE = "Audio lost, reconnecting…";
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -96,13 +101,13 @@ export interface AudioMirrorDeps {
   stopStream: (name: "audio") => Promise<unknown>;
   /** The device the user selected — any other sender on the group is uninvited. */
   expectedSenderHost?: () => string | null;
-  /** Ask ONE specific machine (by host/IP) to stop streaming. */
-  stopStreamAt?: (host: string, name: "audio" | "video") => Promise<unknown>;
   /** Whether a sender is proven to be another machine; the selected device on another address is not. */
   isForeignSender?: (host: string) => Promise<boolean>;
   onChange: (snapshot: AudioMirrorSnapshot) => void;
   /** The stream went silent after being live for `liveForMs`. True when a restart is scheduled. */
   onStreamLost?: (liveForMs: number) => boolean;
+  /** This phone's packets arrived again after the stream was left to another client, so the device still sends here. */
+  onStreamReclaimed?: () => void;
   /** Broadcast each decoded audio batch (interleaved Int16) — the ~32 ms player cadence. */
   renderAudio?: (samples: Int16Array) => void;
   /**
@@ -121,14 +126,25 @@ export class AudioMirrorController {
   private player: AudioMirrorPlayer | null = null;
   /** Native low-latency sink; when set the plugin's receive thread feeds the AudioTrack directly. */
   private nativeSink: NativeAudioSink | null = null;
-  /** Uninvited senders already acted on, so the guard asks each machine once per session. */
+  /** Senders already judged, so each machine is checked once per session. */
   private readonly foreignHandled = new Set<string>();
+  /** Senders proven to be another machine this session, named in the notice. */
+  private readonly foreignNamed = new Set<string>();
   /** Seq-gap loss counter for the native path (which has no JS playback buffer to count drops). */
   private nativeLostPackets = 0;
   private nativeLastSeq: number | null = null;
   /** Last socket-level packet count seen from the native sink, for the arrival watchdog's poll. */
   private lastSeenArrivalPackets = -1;
   private liveSinceMs = 0;
+  /**
+   * The device's audio stream is this phone's to stop: a start was sent and no other client has since
+   * been found holding it. The Ultimate keeps one target per stream, so a stop sent after another phone
+   * took it would end that phone's audio.
+   */
+  private deviceStreamOwned = false;
+  /** The stream was left to another client; packets arriving again prove the device still sends it here. */
+  private leftToOtherClient = false;
+  private returnedPacketsPoll: ReturnType<typeof setInterval> | null = null;
   /** Notices that the multicast audio stopped arriving; a bound socket reports nothing when it does. */
   private readonly arrivalWatchdog = new StreamArrivalWatchdog({
     now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
@@ -164,7 +180,7 @@ export class AudioMirrorController {
     // Another machine streaming into our multicast group is not a subtle fault — it doubles the
     // arrival rate and interleaves two sequence spaces — but nothing in the receive path looks
     // wrong, because every packet arrives in order from each sender. Catch it by origin IP.
-    void this.evictForeignSenders();
+    void this.noteForeignSenders();
     const nativeStats = this.nativeSink?.getStats();
     return {
       audioBufferMs: nativeStats?.bufferedMs ?? this.player?.bufferedMs ?? 0,
@@ -208,9 +224,11 @@ export class AudioMirrorController {
   async start(): Promise<void> {
     if (this.snapshot.state === "connecting" || this.snapshot.state === "live") return;
     this.batcher.reset();
+    this.stopWatchingForReturnedPackets();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
     this.foreignHandled.clear();
+    this.foreignNamed.clear();
     this.update({
       state: "connecting",
       error: null,
@@ -280,6 +298,7 @@ export class AudioMirrorController {
       const parsed = parseAudioPacket(bytes);
       if (!parsed) return;
       this.arrivalWatchdog.noteArrival();
+      this.reclaimStreamIfLeftToOtherClient();
       // Analyzer feed: RAW per-packet stream (fine-grained, wire-stamped) — measurement integrity.
       // Runs on BOTH paths; the native path plays in the plugin, so JS does only this + loss counting.
       const samples = bytesToInt16LE(parsed.body);
@@ -303,6 +322,8 @@ export class AudioMirrorController {
     try {
       await receiver.ready?.(); // native binds a UDP socket first, learning its destination
       socketOpen = true;
+      // Owned before the reply: a start that timed out may still have reached the device.
+      this.deviceStreamOwned = true;
       await this.deps.startStream("audio", receiver.destination);
     } catch (error) {
       addLog("warn", socketOpen ? "Audio Mirror: device stream start failed" : "Audio Mirror: receive socket failed", {
@@ -317,12 +338,12 @@ export class AudioMirrorController {
   }
 
   /**
-   * Ask any machine that is streaming into our audio group uninvited to stop.
+   * Name any other machine streaming into our audio group, without asking it to stop.
    *
-   * Each offender is asked once per session: the stop is a request to a device that may be busy or
-   * unreachable, and retrying it every 250 ms tick would be a flood, not a fix.
+   * That machine was not selected here: another phone may be listening to it, and a stop would end
+   * that phone's audio. The native sender filter already keeps its packets out of this stream.
    */
-  private async evictForeignSenders(): Promise<void> {
+  private async noteForeignSenders(): Promise<void> {
     const senders = this.nativeSink?.senders ?? [];
     if (senders.length < 2) return;
     const pending = foreignSenders(senders, this.deps.expectedSenderHost?.() ?? null).filter(
@@ -334,12 +355,13 @@ export class AudioMirrorController {
     const proven = await Promise.all(pending.map(isForeignSender));
     const foreign = pending.filter((_, index) => proven[index]);
     if (foreign.length === 0) return;
-    const { failed } = await stopForeignSenders({
-      senders: foreign,
-      expectedHost: null, // already filtered
-      stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
+    foreign.forEach((host) => this.foreignNamed.add(host));
+    addLog("warn", "Live View: another machine is streaming into our audio group", {
+      service: "streams",
+      foreign,
+      expected: this.deps.expectedSenderHost?.() ?? null,
     });
-    if (failed.length > 0) this.update({ foreignSenderNotice: describeUnstoppedForeignSenders(failed) });
+    this.update({ foreignSenderNotice: describeForeignSenders([...this.foreignNamed]) });
   }
 
   /**
@@ -397,6 +419,41 @@ export class AudioMirrorController {
     this.update({ reconnecting: false, error: AUDIO_STOPPED_ARRIVING_MESSAGE });
   }
 
+  /** The device answers but streams to another client: say so instead of the plain loss. */
+  reportStreamingElsewhere(): void {
+    if (this.snapshot.state !== "error") return;
+    this.deviceStreamOwned = false;
+    this.stopWatchingForReturnedPackets();
+    this.leftToOtherClient = true;
+    this.update({ reconnecting: false, error: AUDIO_STREAMING_ELSEWHERE_MESSAGE });
+    if (this.nativeSink) {
+      this.returnedPacketsPoll = setInterval(() => {
+        if (this.nativeArrivalAdvanced()) this.reclaimStreamIfLeftToOtherClient();
+      }, RETURNED_PACKETS_POLL_MS);
+    }
+  }
+
+  /**
+   * Packets arrived after the stream was left to another client: the device still sends to this phone,
+   * so the loss was the network. Take the stream back as this phone's, so Stop ends it.
+   */
+  private reclaimStreamIfLeftToOtherClient(): void {
+    if (!this.leftToOtherClient || this.snapshot.state !== "error") return;
+    this.stopWatchingForReturnedPackets();
+    addLog("info", "Audio Mirror: packets arrived again after the stream was left to another client");
+    this.deviceStreamOwned = true;
+    this.liveSinceMs = performance.now();
+    this.update({ state: "live", error: null, reconnecting: false });
+    this.arrivalWatchdog.start();
+    this.deps.onStreamReclaimed?.();
+  }
+
+  private stopWatchingForReturnedPackets(): void {
+    this.leftToOtherClient = false;
+    if (this.returnedPacketsPoll !== null) clearInterval(this.returnedPacketsPoll);
+    this.returnedPacketsPoll = null;
+  }
+
   /**
    * Ask the receiver whether the silence was the sender filter refusing everything that arrived.
    *
@@ -451,6 +508,19 @@ export class AudioMirrorController {
     this.arrivalWatchdog.start();
   }
 
+  private async stopDeviceStream(): Promise<void> {
+    try {
+      await this.deps.stopStream("audio");
+      this.deviceStreamOwned = false;
+    } catch (error) {
+      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
+      addLog("warn", "Audio Mirror: device stream stop failed; the device may still be streaming", {
+        error: (error as Error)?.message ?? String(error),
+        stack: (error as Error)?.stack,
+      });
+    }
+  }
+
   /** A session that ended in "error" still holds its receiver and sink, whose stats poll never stops on its own. */
   private async releaseFailedSessionTransport(): Promise<void> {
     const failedReceiver = this.receiver;
@@ -474,15 +544,9 @@ export class AudioMirrorController {
 
   async stop(): Promise<void> {
     this.arrivalWatchdog.stop();
-    try {
-      await this.deps.stopStream("audio");
-    } catch (error) {
-      // The Ultimate may still be sending to the shared multicast group, so this is not ignorable.
-      addLog("warn", "Audio Mirror: device stream stop failed; the device may still be streaming", {
-        error: (error as Error)?.message ?? String(error),
-        stack: (error as Error)?.stack,
-      });
-    }
+    this.stopWatchingForReturnedPackets();
+    if (this.deviceStreamOwned) await this.stopDeviceStream();
+    else addLog("info", "Audio Mirror: releasing only the phone's side; this phone does not hold the device stream");
     this.receiver?.close();
     this.receiver = null;
     // Flush any buffered tail so no packets are stranded, then release the player/sink.

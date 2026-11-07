@@ -288,14 +288,14 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     (nextOpen: boolean) => {
       if (!nextOpen) {
         clearHeldKeys();
-        session.releaseAll();
+        session.releaseHeldInputs();
         releaseLaunchedStreams();
         chrome.hide();
         quickKeysOverlay.hide();
       }
       onOpenChange(nextOpen);
     },
-    [onOpenChange, session.releaseAll, clearHeldKeys, releaseLaunchedStreams, chrome, quickKeysOverlay],
+    [onOpenChange, session.releaseHeldInputs, clearHeldKeys, releaseLaunchedStreams, chrome, quickKeysOverlay],
   );
 
   const handleOutputModeChange = (mode: RemoteInputOutputMode) => {

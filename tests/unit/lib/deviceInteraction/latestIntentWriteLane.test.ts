@@ -6,8 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
+
+const { addLogMock } = vi.hoisted(() => ({ addLogMock: vi.fn() }));
+
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: addLogMock,
+}));
+
+beforeEach(() => {
+  addLogMock.mockReset();
+});
 
 describe("createLatestIntentWriteLane", () => {
   it("drops superseded queued values before they start running", async () => {
@@ -313,5 +324,67 @@ describe("createLatestIntentWriteLane", () => {
 
     await expect(superseded).resolves.toBeUndefined();
     await expect(final).rejects.toThrow("final write failed");
+  });
+
+  it("logs a WARN with the stack when a failed write is merged into a newer pending write", async () => {
+    let releaseFirstRun!: () => void;
+    const firstRunReleased = new Promise<void>((resolve) => {
+      releaseFirstRun = resolve;
+    });
+    let attempt = 0;
+    const lane = createLatestIntentWriteLane<Record<string, number>>({
+      run: async () => {
+        attempt += 1;
+        if (attempt === 1) {
+          await firstRunReleased;
+          throw new Error("device rejected write");
+        }
+      },
+      merge: (previous, next) => ({ ...previous, ...next }),
+    });
+
+    const first = lane.schedule({ sid1_volume: 15 });
+    const second = lane.schedule({ sid1_pan: 8 });
+    releaseFirstRun();
+    await Promise.all([first, second]);
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Device write failed; retrying its value merged into the newer pending write",
+      expect.objectContaining({
+        failedVersion: 1,
+        supersedingVersion: 2,
+        merged: true,
+        errorStack: expect.stringContaining("device rejected write"),
+      }),
+    );
+  });
+
+  it("logs a WARN with the stack when a failed write is replaced by a newer pending write", async () => {
+    let releaseFirstRun!: () => void;
+    const firstRunReleased = new Promise<void>((resolve) => {
+      releaseFirstRun = resolve;
+    });
+    let attempt = 0;
+    const lane = createLatestIntentWriteLane<number>({
+      run: async () => {
+        attempt += 1;
+        if (attempt === 1) {
+          await firstRunReleased;
+          throw new Error("device rejected write");
+        }
+      },
+    });
+
+    const first = lane.schedule(1);
+    const second = lane.schedule(2);
+    releaseFirstRun();
+    await Promise.all([first, second]);
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Device write failed; superseded by a newer pending write",
+      expect.objectContaining({ failedVersion: 1, supersedingVersion: 2, merged: false }),
+    );
   });
 });

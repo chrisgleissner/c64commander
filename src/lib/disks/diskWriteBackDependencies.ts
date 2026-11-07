@@ -7,12 +7,14 @@
  */
 
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
-import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { listPopulatedStorageRoots } from "@/lib/ftp/storageRoots";
 import { base64ToUint8, uint8ToBase64 } from "@/lib/sid/sidUtils";
 import type { DiskMountWriteBackDependencies } from "@/lib/disks/diskMount";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { getPassword } from "@/lib/secureStorage";
 
 /**
  * FTP-backed disk write-back dependencies (list roots / read / write remote
@@ -21,16 +23,20 @@ import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
  * disk from Play dropped a Home-mounted disk's pending write-back (silently losing
  * in-game saves) instead of finalizing it.
  *
- * The FTP host is the device the dependencies were built for (by default the selected device at that
- * moment), so a device switch during a write-back cannot move a work-file read or write to the other device.
+ * The FTP host, port and password are those of the device the dependencies were built for (by default the selected
+ * device at that moment), so a device switch during a write-back cannot move a work-file read or write to the other
+ * device or send it the other device's password.
  */
 export const buildDiskWriteBackDependencies = (
   deviceHost: string = getC64APIConfigSnapshot().deviceHost,
 ): DiskMountWriteBackDependencies => {
-  const ftpOptionsForDevice = async () => ({
-    ...(await resolveFtpConnectionOptions()),
-    host: stripPortFromDeviceHost(deviceHost),
+  const host = stripPortFromDeviceHost(deviceHost);
+  const port = getStoredFtpPort();
+  const password = getPassword();
+  password.catch((error) => {
+    addLog("warn", "Failed to read the FTP password for disk write-back", buildErrorLogDetails(error, { host }));
   });
+  const ftpOptionsForDevice = async () => ({ host, port, username: "user", password: (await password) ?? "" });
   return {
     listRemoteStorageRoots: async () => {
       const ftpOptions = await ftpOptionsForDevice();

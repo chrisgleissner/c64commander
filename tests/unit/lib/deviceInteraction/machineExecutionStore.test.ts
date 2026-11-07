@@ -16,7 +16,13 @@ import {
   setMachineExecutionRunning,
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
+import { keepRestoresOfOwnWrites } from "@/lib/config/sidVolumeControl";
 import { hydratePlaybackSnapshot, persistPlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
+import {
+  noteVolumeSessionWrites,
+  readVolumeSessionWrites,
+  startVolumeSessionWrites,
+} from "@/lib/playback/volumeSessionWrites";
 
 describe("machineExecutionStore", () => {
   beforeEach(() => {
@@ -87,6 +93,13 @@ describe("machineExecutionStore", () => {
     });
   });
 
+  const mixerReports = (items: Record<string, string>) =>
+    vi.fn().mockResolvedValue({
+      "Audio Mixer": {
+        items: Object.fromEntries(Object.entries(items).map(([name, value]) => [name, { selected: value }])),
+      },
+    });
+
   it("restores the persisted pause-mute snapshot through Audio Mixer updates and clears it on success", async () => {
     persistPlaybackSnapshot({
       deviceId: "device-1",
@@ -104,16 +117,13 @@ describe("machineExecutionStore", () => {
       },
     });
     const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    const getCategory = mixerReports({ "Vol Socket 1": "-42 dB", "Vol Socket 2": "-42 dB" });
 
-    await expect(
-      restorePauseMuteFromPersistedSnapshot(
-        {
-          updateConfigBatch,
-        },
-        "device-1",
-      ),
-    ).resolves.toBe(true);
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      true,
+    );
 
+    expect(getCategory).toHaveBeenCalledWith("Audio Mixer", { __c64uIntent: "user" });
     // HARD27-011: the unmute undoes the pause mute, so it is marked as the
     // restore of a transient write and must not be persisted to flash on its own.
     expect(updateConfigBatch).toHaveBeenCalledWith(
@@ -126,6 +136,66 @@ describe("machineExecutionStore", () => {
     );
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteEnablement).toBeNull();
+  });
+
+  describe("the record of this phone's mixer writes during a Play volume session", () => {
+    const persistSocketPauseMute = () =>
+      persistPlaybackSnapshot({
+        deviceId: "device-1",
+        volumeSnapshot: {},
+        volumeActive: true,
+        manualMuteSnapshot: null,
+        manualMuteEnablement: null,
+        pauseMuteSnapshot: { "Vol Socket 1": "-6 dB" },
+        pauseMuteEnablement: { socket1: true },
+      });
+
+    it("notes the levels a Home resume writes, so Stop still restores the user's level", async () => {
+      persistSocketPauseMute();
+      startVolumeSessionWrites("device-1");
+      noteVolumeSessionWrites({ "Vol Socket 1": "-6 dB" });
+      noteVolumeSessionWrites({ "Vol Socket 1": "-42 dB" });
+      const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+
+      await restorePauseMuteFromPersistedSnapshot(
+        { getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }), updateConfigBatch },
+        "device-1",
+      );
+
+      const liveAfterResume = [{ name: "Vol Socket 1", value: "-6 dB", options: [] }];
+      expect(
+        keepRestoresOfOwnWrites({ "Vol Socket 1": "0 dB" }, liveAfterResume, readVolumeSessionWrites("device-1")),
+      ).toEqual({ "Vol Socket 1": "0 dB" });
+    });
+
+    it("does not create a record when no volume session is active", async () => {
+      persistSocketPauseMute();
+
+      await restorePauseMuteFromPersistedSnapshot(
+        {
+          getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }),
+          updateConfigBatch: vi.fn().mockResolvedValue({ errors: [] }),
+        },
+        "device-1",
+      );
+
+      expect(readVolumeSessionWrites("device-1")).toBeNull();
+    });
+
+    it("does not add the levels of one device to the session record of another", async () => {
+      persistSocketPauseMute();
+      startVolumeSessionWrites("device-2");
+
+      await restorePauseMuteFromPersistedSnapshot(
+        {
+          getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }),
+          updateConfigBatch: vi.fn().mockResolvedValue({ errors: [] }),
+        },
+        "device-1",
+      );
+
+      expect(readVolumeSessionWrites("device-2")).toEqual({});
+    });
   });
 
   it("keeps the persisted pause-mute snapshot when the restore write fails", async () => {
@@ -143,15 +213,11 @@ describe("machineExecutionStore", () => {
       },
     });
     const updateConfigBatch = vi.fn().mockRejectedValue(new Error("write failed"));
+    const getCategory = mixerReports({ "Vol Socket 1": "-42 dB" });
 
-    await expect(
-      restorePauseMuteFromPersistedSnapshot(
-        {
-          updateConfigBatch,
-        },
-        "device-1",
-      ),
-    ).resolves.toBe(false);
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      false,
+    );
 
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toEqual({
@@ -162,12 +228,7 @@ describe("machineExecutionStore", () => {
     });
   });
 
-  it("HARD18-018: restores a master-shaped pause-mute snapshot (Vol Master) with no migration needed", async () => {
-    // pauseMuteSnapshot/pauseMuteEnablement are a plain Record<string, ...>
-    // with no fixed per-SID schema - a master-collapsed snapshot restores
-    // through the exact same generic buildEnabledSidUnmuteUpdates path an
-    // old per-SID snapshot does (see the two tests above), so no dedicated
-    // master-shape handling or migration is required here.
+  it("HARD18-018: restores a master-shaped pause-mute snapshot when a category read reports Vol Master OFF without options", async () => {
     persistPlaybackSnapshot({
       deviceId: "device-1",
       volumeSnapshot: {},
@@ -180,15 +241,11 @@ describe("machineExecutionStore", () => {
       pauseMuteEnablement: {},
     });
     const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    const getCategory = mixerReports({ "Vol Master": "OFF" });
 
-    await expect(
-      restorePauseMuteFromPersistedSnapshot(
-        {
-          updateConfigBatch,
-        },
-        "device-1",
-      ),
-    ).resolves.toBe(true);
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      true,
+    );
 
     expect(updateConfigBatch).toHaveBeenCalledWith(
       {
@@ -198,6 +255,82 @@ describe("machineExecutionStore", () => {
       },
       { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
     );
+    expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
+  });
+  const persistTwoUltiSidPauseMute = () =>
+    persistPlaybackSnapshot({
+      deviceId: "device-1",
+      volumeSnapshot: {},
+      volumeActive: true,
+      manualMuteSnapshot: null,
+      manualMuteEnablement: null,
+      pauseMuteSnapshot: { "Vol UltiSid 1": " 0 dB", "Vol UltiSid 2": " 0 dB" },
+      pauseMuteEnablement: { ultiSid1: true, ultiSid2: true },
+    });
+
+  it("restores only the outputs still at the pause mute and keeps a level another client set while paused", async () => {
+    persistTwoUltiSidPauseMute();
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    const getCategory = mixerReports({ "Vol UltiSid 1": "-6 dB", "Vol UltiSid 2": "-42 dB" });
+
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      true,
+    );
+
+    expect(updateConfigBatch).toHaveBeenCalledWith(
+      { "Audio Mixer": { "Vol UltiSid 2": " 0 dB" } },
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
+    expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
+  });
+
+  it("writes nothing and clears the pause-mute snapshot when every output was changed after the pause", async () => {
+    persistTwoUltiSidPauseMute();
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    const getCategory = mixerReports({ "Vol UltiSid 1": "-6 dB", "Vol UltiSid 2": "+2 dB" });
+
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      false,
+    );
+
+    expect(updateConfigBatch).not.toHaveBeenCalled();
+    expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
+  });
+
+  it("restores every pre-pause level when the mixer cannot be read on resume", async () => {
+    persistTwoUltiSidPauseMute();
+    const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+    const getCategory = vi.fn().mockRejectedValue(new Error("read timed out"));
+
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      true,
+    );
+
+    expect(updateConfigBatch).toHaveBeenCalledWith(
+      { "Audio Mixer": { "Vol UltiSid 1": " 0 dB", "Vol UltiSid 2": " 0 dB" } },
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
+  });
+
+  it("skips the mixer read when the snapshot holds no enabled output", async () => {
+    persistPlaybackSnapshot({
+      deviceId: "device-1",
+      volumeSnapshot: {},
+      volumeActive: true,
+      manualMuteSnapshot: null,
+      manualMuteEnablement: null,
+      pauseMuteSnapshot: { "Vol Socket 2": "-12 dB" },
+      pauseMuteEnablement: { socket2: false },
+    });
+    const updateConfigBatch = vi.fn();
+    const getCategory = vi.fn();
+
+    await expect(restorePauseMuteFromPersistedSnapshot({ getCategory, updateConfigBatch }, "device-1")).resolves.toBe(
+      false,
+    );
+
+    expect(getCategory).not.toHaveBeenCalled();
+    expect(updateConfigBatch).not.toHaveBeenCalled();
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
   });
 });

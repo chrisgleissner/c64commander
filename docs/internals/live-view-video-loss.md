@@ -34,10 +34,25 @@ at the sender (restart, or a second sender taking over the group). `rejectedPack
 
 - Applies only while Watch is wanted: set by `startVideo()`, cleared by `stopVideo()` and `stopAll()`, which also cancel
   a pending restart.
-- At most two restarts per loss episode, after 2 s and then 6 s. A stream that stayed live for 30 s before it was lost
-  again earns a fresh set.
-- Before restarting, `GET /v1/info` must answer within 3 s. If it does not, the restart is abandoned and the plain
-  "The video stream stopped arriving." message stays.
+- The first loss in an episode is restarted after 2 s. A stream that stayed live for 30 s before it was lost again
+  starts a new episode.
+- A later loss in the same episode is not restarted. The Ultimate sends each stream to one address, and the app asks
+  for unicast to the phone, so a stream lost again soon after a restart while the device answers has been asked for by
+  another client. Restarting it would take it from that client, whose own recovery would take it back. Two phones did
+  exactly that on the bench (2026-11-06, u64): each restart took the stream from the other phone about ten seconds
+  after the previous one. The app keeps the lost state and shows "The C64 is sending its picture to another app.
+  Select Watch to take it back." (or the sound and Listen for audio).
+- A Wi-Fi drop while REST answers looks the same as a takeover, so a yielded controller keeps watching for its own
+  packets (the native audio sink through a 1 s poll of its arrival counter). If they arrive again, the Ultimate still
+  sends to this phone: the controller marks the stream as its own again, records it for the launch sweep, and returns
+  to live. Without that, Stop would skip the stream stop and the Ultimate would keep sending to the phone.
+- With the multicast transport another client's start takes nothing, so the recovery never yields there. It restarts
+  a lost stream up to two times per episode and then reports the plain loss.
+- Sharing the multicast groups instead was tried and rejected. Both phones converged on multicast, then lost 32 to 55%
+  of the audio packets on the bench Wi-Fi, and each phone's audio protection stopped the video on the device, which
+  stopped it for the other phone too.
+- Before restarting, or before saying another client has the stream, `GET /v1/info` must answer within 3 s. If it
+  does not, the plain "The video stream stopped arriving." message stays.
 - A hidden page waits for `visibilitychange`; nothing restarts while the WebView is frozen.
 
 ## What the user sees

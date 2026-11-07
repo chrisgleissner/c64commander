@@ -89,6 +89,7 @@ export const isTuneStillPlayingOnC64 = async (
   api: MemoryReader,
   sidBytes: ArrayBuffer,
   settleMs = SETTLE_MS,
+  matchingShare = MATCHING_SHARE,
 ): Promise<boolean | null> => {
   const tune = parseSid(sidBytes);
   if (!tune) return null;
@@ -102,7 +103,7 @@ export const isTuneStillPlayingOnC64 = async (
       if (byte === tune.data[address - tune.load + index]) matching += 1;
     });
   }
-  if (matching / compared < MATCHING_SHARE) return false;
+  if (matching / compared < matchingShare) return false;
   if (tune.basic) return true;
   const vector = await api.readMemory("0314", 2);
   if ((vector[0] | (vector[1] << 8)) !== KERNAL_IRQ_HANDLER) return true;

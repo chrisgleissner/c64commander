@@ -11,6 +11,7 @@ import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractio
 import { AUDIO_MIXER_MASTER_VOLUME_ITEM } from "@/lib/config/configItems";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { isSidVolumeOffValue } from "@/lib/config/sidVolumeControl";
+import { noteTransientConfigWriteSettled } from "@/lib/config/configFlashPersistence";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { remoteSeekErrorDetails as errorDetails, RemoteSeekSessionClosedError } from "./remoteSeekErrors";
 import { grantSeekKeyPress } from "./seekKeyPermit";
@@ -86,6 +87,9 @@ export type RemoteSeekJournal = {
   cpuSpeedChanged: boolean;
   /** Recorded only when the seek switched Turbo Control, so a restore never writes it needlessly. */
   originalTurboControl: string | null;
+  /** Every CPU Speed the seek wrote; absent in older journals. */
+  seekCpuSpeeds?: string[];
+  /** A press of this session's that no confirmed release has followed yet. */
   keyHeld: boolean;
   /** `Vol Master` before a rewind turned it off; absent when nothing was muted, and in older journals. */
   originalMasterVolume?: string | null;
@@ -138,6 +142,11 @@ const writeJournal = (deviceKey: string, journal: RemoteSeekJournal | null) => {
 
 const clearJournalIfOwn = (journal: RemoteSeekJournal) => {
   if (readRemoteSeekJournal(journal.deviceKey)?.sessionId === journal.sessionId) writeJournal(journal.deviceKey, null);
+};
+
+const writeJournalIfOwn = (journal: RemoteSeekJournal) => {
+  if (readRemoteSeekJournal(journal.deviceKey)?.sessionId === journal.sessionId)
+    writeJournal(journal.deviceKey, journal);
 };
 
 /** Sessions open in this process, by device. Their journals are theirs to restore, not recovery's. */
@@ -221,6 +230,55 @@ const releaseSeekKeys = async (api: RemoteSeekDeviceApi) => {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+type SeekOwnedItem = { category: string; item: string; original: string; isSeekValue: (value: string) => boolean };
+
+/**
+ * The items the seek changed that still hold a value the seek wrote, Vol Master first so sound returns before the
+ * slower CPU writes. Another client sharing the device may have chosen a value since; that value is left in place.
+ */
+const itemsStillHoldingSeekValues = async (api: RemoteSeekDeviceApi, journal: RemoteSeekJournal, reason: string) => {
+  const owned: SeekOwnedItem[] = [];
+  const masterVolume = journal.originalMasterVolume ?? null;
+  if (masterVolume !== null) {
+    owned.push({
+      category: AUDIO_MIXER_CATEGORY,
+      item: AUDIO_MIXER_MASTER_VOLUME_ITEM,
+      original: masterVolume,
+      isSeekValue: isSidVolumeOffValue,
+    });
+  }
+  if (journal.cpuSpeedChanged) {
+    const { seekCpuSpeeds } = journal;
+    owned.push({
+      category: U64_SETTINGS_CATEGORY,
+      item: CPU_SPEED_ITEM,
+      original: journal.originalCpuSpeed,
+      isSeekValue: (value) => seekCpuSpeeds?.some((speed) => sameOption(speed, value)) ?? true,
+    });
+  }
+  if (journal.originalTurboControl !== null) {
+    owned.push({
+      category: U64_SETTINGS_CATEGORY,
+      item: TURBO_CONTROL_ITEM,
+      original: journal.originalTurboControl,
+      isSeekValue: (value) => sameOption(value, MANUAL_TURBO_CONTROL),
+    });
+  }
+  const pending: SeekOwnedItem[] = [];
+  let keptOtherClientValue = false;
+  for (const entry of owned) {
+    const { value } = await readConfigItem(api, entry.category, entry.item);
+    if (sameOption(value, entry.original)) continue;
+    if (entry.isSeekValue(value)) {
+      pending.push(entry);
+      continue;
+    }
+    keptOtherClientValue = true;
+    addLog("info", "Remote seek keeps a value another client set", { reason, item: entry.item, value, journal });
+  }
+  return { pending, keptOtherClientValue };
+};
+
 /**
  * Put the key and the settings back to what the journal recorded, and confirm it by reading them.
  * The key goes first: with it up a raised CPU Speed only speeds the tune's own code, with it down
@@ -249,41 +307,32 @@ export const restoreFromJournal = async (
     try {
       const patch = journal.fastForwardPatch ?? null;
       if (patch) await releaseFastForwardPatch(api, patch);
-      else await releaseSeekKeys(api);
-      // Sound comes back as soon as the tune plays at its own speed again, before the slower config writes.
-      const masterVolume = journal.originalMasterVolume ?? null;
-      const writes: Array<[category: string, item: string, value: string]> = [];
-      if (masterVolume !== null) writes.push([AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM, masterVolume]);
-      if (journal.cpuSpeedChanged) writes.push([U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, journal.originalCpuSpeed]);
-      if (journal.originalTurboControl !== null)
-        writes.push([U64_SETTINGS_CATEGORY, TURBO_CONTROL_ITEM, journal.originalTurboControl]);
+      else if (journal.keyHeld) await releaseSeekKeys(api);
+      const { pending, keptOtherClientValue } = await itemsStillHoldingSeekValues(api, journal, reason);
       // Only the last write lets a held flash save go: after an earlier one, the others still hold seek values.
-      for (const [index, [category, item, value]] of writes.entries()) {
-        const last = index === writes.length - 1;
-        await api.setConfigValue(category, item, value, {
+      // A value kept for another client is not this phone's to save, so then the save stays held.
+      if (pending.length === 0 && !keptOtherClientValue) noteTransientConfigWriteSettled();
+      for (const [index, { category, item, original }] of pending.entries()) {
+        const last = index === pending.length - 1 && !keptOtherClientValue;
+        await api.setConfigValue(category, item, original, {
           ...(last ? { __c64uTransientConfigRestore: true } : { __c64uTransientConfigWrite: true }),
           ...(item === CPU_SPEED_ITEM ? { __c64uSeekCpuSpeedWrite: true } : {}),
         });
       }
-      const cpuSpeed = journal.cpuSpeedChanged ? await readU64ConfigItem(api, CPU_SPEED_ITEM) : null;
-      const turbo = journal.originalTurboControl === null ? null : await readU64ConfigItem(api, TURBO_CONTROL_ITEM);
-      const master =
-        masterVolume === null ? null : await readConfigItem(api, AUDIO_MIXER_CATEGORY, AUDIO_MIXER_MASTER_VOLUME_ITEM);
-      const restored =
-        (cpuSpeed === null || sameOption(cpuSpeed.value, journal.originalCpuSpeed)) &&
-        (turbo === null || sameOption(turbo.value, journal.originalTurboControl as string)) &&
-        (master === null || sameOption(master.value, masterVolume as string));
-      if (restored) {
+      const readBack = await Promise.all(
+        pending.map(async (entry) => ({
+          ...entry,
+          now: (await readConfigItem(api, entry.category, entry.item)).value,
+        })),
+      );
+      const wrong = readBack.filter(({ now, original }) => !sameOption(now, original));
+      if (wrong.length === 0) {
         clearJournalIfOwn(journal);
         addLog("info", "Remote seek restored the device", { reason, attempt, journal });
         return true;
       }
       lastError = new Error(
-        `Read-back after restore shows CPU Speed ${cpuSpeed?.value}` +
-          (turbo ? `, Turbo Control ${turbo.value}` : "") +
-          `; expected ${journal.originalCpuSpeed}` +
-          (journal.originalTurboControl ? `, ${journal.originalTurboControl}` : "") +
-          (master ? `; Vol Master ${master.value}, expected ${masterVolume}` : ""),
+        `Read-back after restore shows ${wrong.map(({ item, now, original }) => `${item} ${now}, expected ${original}`).join("; ")}`,
       );
     } catch (error) {
       lastError = error;
@@ -386,6 +435,7 @@ export class RemoteSeekDeviceSession {
       originalCpuSpeed: cpuSpeed.value,
       cpuSpeedChanged: false,
       originalTurboControl: null,
+      seekCpuSpeeds: [],
       keyHeld: false,
       fastForwardPatch:
         fastForward.kind === "patch"
@@ -424,8 +474,9 @@ export class RemoteSeekDeviceSession {
         }
       }
       this.assertOpen();
-      if (!this.journal.cpuSpeedChanged) {
-        this.journal = { ...this.journal, cpuSpeedChanged: true };
+      const seekCpuSpeeds = this.journal.seekCpuSpeeds ?? [];
+      if (!this.journal.cpuSpeedChanged || !seekCpuSpeeds.some((speed) => sameOption(speed, option))) {
+        this.journal = { ...this.journal, cpuSpeedChanged: true, seekCpuSpeeds: [...seekCpuSpeeds, option] };
         writeJournal(this.journal.deviceKey, this.journal);
       }
       await this.api.setConfigValue(U64_SETTINGS_CATEGORY, CPU_SPEED_ITEM, option, {
@@ -463,16 +514,34 @@ export class RemoteSeekDeviceSession {
       await sendKey(this.api, "press", key);
       await new Promise((resolve) => setTimeout(resolve, holdMs));
       // A device switch during the hold leaves the release to the restore, which releases every seek key.
-      if (this.api.currentDeviceKey() === this.journal.deviceKey) await sendKey(this.api, "release", key);
+      if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
+      await sendKey(this.api, "release", key);
+      this.noteKeyReleased();
     });
   }
 
   /** Release the key on this session's device; on another device there is nothing of ours to release. */
   async releaseKey(): Promise<void> {
     if (this.api.currentDeviceKey() !== this.journal.deviceKey) return;
-    if (this.fastForward.kind === "key") await sendKey(this.api, "release");
+    if (this.fastForward.kind === "key") {
+      await sendKey(this.api, "release");
+      this.noteKeyReleased();
+    }
     // Byte for byte when pressed; the release, which is timed, checks the `ldy`'s own region.
     else await writeFastForwardPatch(this.api, this.fastForward, FAST_FORWARD_RELEASED, { operandRegionOnly: true });
+  }
+
+  /** With no press of ours outstanding, a restore leaves the keys to whoever else holds them. */
+  private noteKeyReleased() {
+    this.journal = { ...this.journal, keyHeld: false };
+    try {
+      writeJournalIfOwn(this.journal);
+    } catch (error) {
+      addLog("warn", "Remote seek could not record a key release; the restore will release the keys", {
+        ...errorDetails(error),
+        deviceKey: this.journal.deviceKey,
+      });
+    }
   }
 
   /**

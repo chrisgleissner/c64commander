@@ -66,6 +66,7 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       sendCursor: vi.fn(),
       sendSpecialKey: vi.fn(),
       releaseAll: vi.fn(),
+      releaseHeldInputs: vi.fn(),
       releaseAllEpoch: 0,
     };
   },

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 import {
-  STREAM_RECOVERY_BACKOFF_MS,
+  STREAM_RECOVERY_DELAY_MS,
   STREAM_RECOVERY_STABLE_MS,
   StreamLossRecovery,
   StreamLossRestarter,
@@ -11,30 +11,43 @@ import {
 } from "@/lib/streams/streamLossRecovery";
 
 describe("StreamLossRecovery", () => {
-  it("allows exactly one restart per backoff entry, then gives up", () => {
+  it("restarts the first loss and yields every later loss in the same episode", () => {
     const recovery = new StreamLossRecovery();
-    const delays = STREAM_RECOVERY_BACKOFF_MS.map(() => recovery.noteLost(0));
-    expect(delays).toEqual([...STREAM_RECOVERY_BACKOFF_MS]);
-    expect(recovery.noteLost(0)).toBeNull();
+    expect([recovery.noteLost(0, true), recovery.noteLost(0, true), recovery.noteLost(0, true)]).toEqual([
+      "restart",
+      "yield",
+      "yield",
+    ]);
   });
 
-  it("does not refill the attempts when the restarted stream was live for less than the stable period", () => {
+  it("never yields in a shared group, restarts twice per episode and then stops", () => {
     const recovery = new StreamLossRecovery();
-    STREAM_RECOVERY_BACKOFF_MS.forEach(() => recovery.noteLost(0));
-    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS - 1)).toBeNull();
+    expect([0, 1, 2, 3].map(() => recovery.noteLost(0, false))).toEqual(["restart", "restart", "stop", "stop"]);
   });
 
-  it("refills the attempts when the stream was live for the stable period", () => {
+  it("grants a shared-group stream new restarts once it stayed live for the stable period", () => {
     const recovery = new StreamLossRecovery();
-    STREAM_RECOVERY_BACKOFF_MS.forEach(() => recovery.noteLost(0));
-    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS)).toBe(STREAM_RECOVERY_BACKOFF_MS[0]);
+    [0, 1, 2].forEach(() => recovery.noteLost(0, false));
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS, false)).toBe("restart");
+  });
+
+  it("keeps yielding when the restarted stream was live for less than the stable period", () => {
+    const recovery = new StreamLossRecovery();
+    recovery.noteLost(0, true);
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS - 1, true)).toBe("yield");
+  });
+
+  it("restarts again when the stream was live for the stable period", () => {
+    const recovery = new StreamLossRecovery();
+    recovery.noteLost(0, true);
+    expect(recovery.noteLost(STREAM_RECOVERY_STABLE_MS, true)).toBe("restart");
   });
 
   it("starts a fresh episode after reset", () => {
     const recovery = new StreamLossRecovery();
-    STREAM_RECOVERY_BACKOFF_MS.forEach(() => recovery.noteLost(0));
+    recovery.noteLost(0, true);
     recovery.reset();
-    expect(recovery.noteLost(0)).toBe(STREAM_RECOVERY_BACKOFF_MS[0]);
+    expect(recovery.noteLost(0, true)).toBe("restart");
   });
 });
 
@@ -42,6 +55,7 @@ describe("StreamLossRestarter", () => {
   let hooks: StreamLossRestarterHooks & {
     restart: ReturnType<typeof vi.fn>;
     giveUp: ReturnType<typeof vi.fn>;
+    yieldToOtherClient: ReturnType<typeof vi.fn>;
     deviceAnswers: ReturnType<typeof vi.fn>;
   };
   let hidden = false;
@@ -55,6 +69,8 @@ describe("StreamLossRestarter", () => {
       deviceAnswers: vi.fn(async () => true),
       restart: vi.fn(async () => undefined),
       giveUp: vi.fn(),
+      yieldToOtherClient: vi.fn(),
+      otherClientCanTakeStream: () => true,
       isPageHidden: () => hidden,
     };
   });
@@ -63,11 +79,11 @@ describe("StreamLossRestarter", () => {
     vi.useRealTimers();
   });
 
-  it("restarts after the first backoff delay when Watch is wanted and the device answers", async () => {
+  it("restarts after the delay when Watch is wanted and the device answers", async () => {
     const restarter = new StreamLossRestarter(hooks);
     expect(restarter.onLost(5000)).toBe(true);
     expect(hooks.restart).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
     expect(hooks.restart).toHaveBeenCalledTimes(1);
   });
 
@@ -78,17 +94,48 @@ describe("StreamLossRestarter", () => {
     expect(hooks.restart).not.toHaveBeenCalled();
   });
 
-  it("restarts at most as many times as the backoff has entries while the stream keeps dying", async () => {
+  it("does not take back a stream lost again soon after its restart, and says another client has it", async () => {
     const restarter = new StreamLossRestarter(hooks);
-    const scheduled = [restarter.onLost(1000), restarter.onLost(1000), restarter.onLost(1000)];
-    expect(scheduled).toEqual([true, true, false]);
+    expect(restarter.onLost(1000)).toBe(true);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    expect(restarter.onLost(1000)).toBe(false);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+
+    expect(hooks.restart).toHaveBeenCalledTimes(1);
+    expect(hooks.yieldToOtherClient).toHaveBeenCalledTimes(1);
+    expect(hooks.giveUp).not.toHaveBeenCalled();
+  });
+
+  it("restarts a stream lost twice in a shared group instead of yielding it, then reports a plain loss", async () => {
+    const restarter = new StreamLossRestarter({ ...hooks, otherClientCanTakeStream: () => false });
+    expect(restarter.onLost(1000)).toBe(true);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    expect(restarter.onLost(1000)).toBe(true);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    expect(restarter.onLost(1000)).toBe(false);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(hooks.restart).toHaveBeenCalledTimes(2);
+    expect(hooks.yieldToOtherClient).not.toHaveBeenCalled();
+  });
+
+  it("reports a plain loss, not another client, when the device stops answering after the restart", async () => {
+    const restarter = new StreamLossRestarter(hooks);
+    restarter.onLost(1000);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+    hooks.deviceAnswers.mockResolvedValue(false);
+    restarter.onLost(1000);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
+
+    expect(hooks.yieldToOtherClient).not.toHaveBeenCalled();
+    expect(hooks.giveUp).toHaveBeenCalledTimes(1);
   });
 
   it("gives up without restarting when the device does not answer REST", async () => {
     hooks.deviceAnswers.mockResolvedValue(false);
     const restarter = new StreamLossRestarter(hooks);
     restarter.onLost(5000);
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
     expect(hooks.restart).not.toHaveBeenCalled();
     expect(hooks.giveUp).toHaveBeenCalledTimes(1);
   });
@@ -97,7 +144,7 @@ describe("StreamLossRestarter", () => {
     hooks.restart.mockRejectedValue(new Error("boom"));
     const restarter = new StreamLossRestarter(hooks);
     restarter.onLost(5000);
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
     expect(hooks.giveUp).toHaveBeenCalledTimes(1);
   });
 
@@ -107,7 +154,7 @@ describe("StreamLossRestarter", () => {
     restarter.onLost(5000);
     lost = false;
 
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
 
     expect(hooks.deviceAnswers).not.toHaveBeenCalled();
     expect(hooks.restart).not.toHaveBeenCalled();
@@ -122,7 +169,7 @@ describe("StreamLossRestarter", () => {
     const restarter = new StreamLossRestarter({ ...hooks, isWanted: () => wanted });
     restarter.onLost(5000);
 
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
 
     expect(hooks.deviceAnswers).toHaveBeenCalledTimes(1);
     expect(hooks.restart).not.toHaveBeenCalled();
@@ -141,7 +188,7 @@ describe("StreamLossRestarter", () => {
     hidden = true;
     const restarter = new StreamLossRestarter(hooks);
     restarter.onLost(5000);
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[0]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
     expect(hooks.restart).not.toHaveBeenCalled();
 
     hidden = false;
@@ -151,7 +198,7 @@ describe("StreamLossRestarter", () => {
 
     hidden = true;
     restarter.onLost(1000);
-    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_BACKOFF_MS[1]);
+    await vi.advanceTimersByTimeAsync(STREAM_RECOVERY_DELAY_MS);
     restarter.cancel();
     hidden = false;
     document.dispatchEvent(new Event("visibilitychange"));

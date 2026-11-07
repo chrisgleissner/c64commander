@@ -224,6 +224,8 @@ The volume row holds speaker/mute, the slider, the dB value, **Shuffle** (crosse
 
 Press **Repeat** to cycle through **off**, **playlist** (start again after the last item) and **tune** (repeat the current tune indefinitely). Next and Previous still change tunes. **Shuffle** plays all playlist items in a random order without moving the rows; turn Shuffle off and on for a fresh upcoming order, preserving the current tune and playback position. Shuffle and Repeat work independently.
 
+If another app, or somebody at the machine, starts something else on your C64 while a tune from your playlist plays there, the playlist stops when that tune would end instead of playing over it. Press **Play** to start it again.
+
 **Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.
 
 Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.
@@ -248,7 +250,7 @@ Add a single image, a folder of them, or a result from the online archive. When 
 
 Filter by name, path or group to find something. A filter never deletes or moves anything.
 
-Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.
+Mounting is what the page is for. Choose the disk, choose the drive, mount it; the eject icon in the drive card's header empties the drive again (screen readers announce it as the drive's name followed by **Eject disk**). If another app has put a different disk in that drive since the card last updated, the eject leaves that disk in place and the card shows it instead; press the icon again to remove it. Each disk's menu also offers **Rename disk…**, which changes the name in your collection and leaves the file itself alone.
 
 Come to Disks whenever more than one disk is involved: the collection, the groups and the drives are all on one page. The drives themselves are explained in [Drives and Disk Images](#drives-and-disk-images).
 
@@ -794,13 +796,13 @@ While either is playing, the header badge carries a small mark, a screen for the
 
 If the stream stops reaching your phone, because the network drops out or the machine is switched off, Live View tells you so. You never sit in front of a frozen picture wondering.
 
-If only the picture stops while your C64 still answers, the header badge keeps its screen mark in a warning color and the card says **Video lost, reconnecting…**. The app then starts the picture again, up to twice, a few seconds apart. If it stops again and again, press **Watch** to try once more.
+If only the picture stops while your C64 still answers, the header badge keeps its screen mark in a warning color and the card says **Video lost, reconnecting…**. The app then starts the picture again once. If it stops again soon after, the app leaves it alone and the card says another app has it. Press **Watch** to take it back.
 
 Live View needs no setting up. Nothing crosses the network until you press **Watch** or **Listen**.
 
 The device sends to two network ports, 11000 for the picture and 11001 for the sound. If those are already taken on your network, change them in **Settings → Play and disk**.
 
-Your C64 sends the sound and the picture straight to your phone, so only one phone can have Live View on at a time. Start it on a second one and the first loses the stream.
+Your C64 sends the sound and the picture straight to your phone, so only one phone can have Live View on at a time. Start it on a second one and the first loses the stream. The first one tries once to get it back, then says that another app has it and leaves it with the second, so the two do not keep taking the stream from each other.
 
 The sound comes first. Sometimes the Wi-Fi cannot carry both together, and a 2.4 GHz connection is more likely to struggle than a 5 GHz one. When the sound starts to lose pieces, Live View stops the picture and the card says **Video paused to keep the sound clean**, with how much of the sound was lost. The sound carries on. Press **Watch** to try the picture again, or move your phone to a 5 GHz connection.
 
@@ -936,9 +938,9 @@ Without `machine:input`, **Keys** types by placing characters in the C64's KERNA
 
 If the device has a password, enter it in Settings first. Joystick and Keys both need it.
 
-No key is ever left stuck down on the real C64. Everything is released when you close the sheet, change mode or port, switch device, or send the app to the background. If a message does not get through, the header shows **Reconnecting…** until the next one does.
+No key is ever left stuck down on the real C64. Everything you hold is released when you close the sheet, change mode or port, switch device, or send the app to the background. Another phone or app using your C64 at the same time keeps what it holds. If a message does not get through, the header shows **Reconnecting…** until the next one does.
 
-Tap **Release all** at any time to let go of every key and button at once.
+Tap **Release all** at any time to let go of every key and button at once, including any held by another phone or app.
 
 _Availability: on by default. Turn it off under **Remote Input** in Settings → Stable Features._
 
@@ -1116,7 +1118,7 @@ The machine's own **Auto save config** does not cover this. It decides whether t
 
 Set it on the Commodore 64 Ultimate at **C= + RESTORE → User interface → Auto save config**; the same setting appears in Config as **User interface → Auto save config**.
 
-Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which puts back the settings the device had when the app first connected to it. The app also keeps its own named **configuration snapshots** on the phone, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
+Beside **Save** on the **Config** card are **Load** from flash, **Reset** (**To default**) to the device's default settings, and **Revert**, which undoes the setting changes you made in the app since it first connected to the device. A setting that someone else has changed since then, for example from another phone, is left as it is. The app also keeps its own named **configuration snapshots** on the phone, apart from the device's flash. Save a setup you like, and load the whole thing back whenever you want it.
 
 ### Switching Between Devices
 

@@ -239,7 +239,9 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
       unmount();
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up", "right"], transition: "release" }],
+    });
     const callsAfterUnmount = sendMachineInputBatchMock.mock.calls.length;
 
     await act(async () => {
@@ -376,7 +378,7 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
     expect(heldByPort.get(2)?.size ?? 0).toBe(0);
   }, 5000);
 
-  it("sends a release_all when a tier downgrade lands inside the release-coalesce window (HARD15-004)", async () => {
+  it("sends a release when a tier downgrade lands inside the release-coalesce window (HARD15-004)", async () => {
     const { result, rerender } = renderHook(
       ({ tier }: { tier: "full" | "kernal-fallback" }) => useRemoteInputSession({ tier }),
       { initialProps: { tier: "full" } },
@@ -400,7 +402,9 @@ describe("useRemoteInputSession chaos/stress (real device-safeguard throttle)", 
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["right"], transition: "release" }],
+    });
   }, 5000);
 
   it("recovers cleanly after a send fails mid-chaos, without ever throwing out of the hook", async () => {

@@ -35,8 +35,8 @@ import {
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
-import { stopStreamAtForeignHost, stopStreamAtHost } from "./foreignSenderStop";
-import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
+import { stopStreamAtHost } from "./foreignSenderStop";
+import { forgetDeviceStream, recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import type { SenderMismatch } from "./senderMismatch";
 import { judgeStreamSender, type SenderVerdict } from "./sameDeviceSender";
@@ -310,6 +310,11 @@ export class AvMirrorSession {
         await this.startAudioNow();
       }),
     giveUp: () => this.audio.abandonReconnect(),
+    yieldToOtherClient: () => {
+      forgetDeviceStream("audio");
+      this.audio.reportStreamingElsewhere();
+    },
+    otherClientCanTakeStream: () => loadStreamTransport() !== "multicast",
     // Mirrored audio keeps playing with the page hidden (see avMirrorBackgroundPolicy), so its restart must not wait for it.
     isPageHidden: () => false,
   });
@@ -325,6 +330,11 @@ export class AvMirrorSession {
         await this.video.start();
       }),
     giveUp: () => this.video.abandonReconnect(),
+    yieldToOtherClient: () => {
+      forgetDeviceStream("video");
+      this.video.reportStreamingElsewhere();
+    },
+    otherClientCanTakeStream: () => loadStreamTransport() !== "multicast",
     isPageHidden: () => typeof document !== "undefined" && document.visibilityState === "hidden",
   });
 
@@ -333,6 +343,7 @@ export class AvMirrorSession {
     // process death with Live View on can be cleaned up at the next launch — see
     // [stopLeftoverDeviceStreams]. Injected transports (tests, the web bridge) keep their own
     // behaviour and record nothing.
+    const recordStarted = (name: "audio" | "video") => recordDeviceStreamStarted(name, getC64API().getDeviceHost());
     const startStream =
       deps.startStream ??
       (async (name, destination) => {
@@ -341,9 +352,12 @@ export class AvMirrorSession {
           destination,
           () => makeUnicastPathReady(this.expectedSender()),
         );
-        recordDeviceStreamStarted(name, getC64API().getDeviceHost());
+        recordStarted(name);
         return result;
       });
+    const recordReclaimed = (name: "audio" | "video") => {
+      if (!deps.startStream) recordStarted(name);
+    };
     const stopStream =
       deps.stopStream ??
       (async (name) => {
@@ -374,6 +388,7 @@ export class AvMirrorSession {
           },
         }),
       onStreamLost: (liveForMs) => this.audioLossRestarter.onLost(liveForMs),
+      onStreamReclaimed: () => recordReclaimed("audio"),
       createReceiver:
         deps.createAudioReceiver ??
         ((opts) =>
@@ -392,11 +407,9 @@ export class AvMirrorSession {
           ? new NativeAudioSink(sampleRate, undefined, loadStreamNetworkBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
-      // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
-      // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
-      // earlier session sends straight into ours.
+      // Who we EXPECT to hear from. The mirror's groups are multicast and every Ultimate defaults to
+      // the same ones, so another machine streaming sends straight into ours.
       expectedSenderHost: () => this.expectedSender(),
-      stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
       isForeignSender: async (host) =>
         (await this.judgeStreamSender(host, getC64API().getDeviceHost())) === "different",
     });
@@ -418,6 +431,7 @@ export class AvMirrorSession {
           },
         }),
       onStreamLost: (info) => this.videoLossRestarter.onLost(info.liveForMs),
+      onStreamReclaimed: () => recordReclaimed("video"),
       expectedSenderHost: () => this.expectedSender(),
       createReceiver:
         deps.createVideoReceiver ??

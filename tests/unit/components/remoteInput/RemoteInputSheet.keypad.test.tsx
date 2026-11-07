@@ -26,6 +26,7 @@ const sendKeyboardInputsMock = vi.fn();
 const sendCursorMock = vi.fn();
 const sendSpecialKeyMock = vi.fn();
 const releaseAllMock = vi.fn();
+const releaseHeldInputsMock = vi.fn();
 
 let initialSessionOutputMode: "joystick" | "type" = "joystick";
 let initialSessionHeldJoystickInputs: ReadonlySet<string> = new Set();
@@ -116,6 +117,14 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
         setHeldKeyboardInputsState(new Set());
         setReleaseAllEpoch((epoch) => epoch + 1);
         releaseAllMock();
+      },
+      // Mirrors the real hook's releaseHeldInputs: the same local clearing, but the
+      // device only hears releases for what this phone held (sheet close).
+      releaseHeldInputs: () => {
+        setHeldJoystickInputsState(new Set());
+        setHeldKeyboardInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
+        releaseHeldInputsMock();
       },
       releaseAllEpoch,
     };
@@ -348,6 +357,8 @@ describe("RemoteInputSheet keypad", () => {
     choose("game");
     expect(sheet()).toHaveAttribute("data-game-mode", "true");
     choose("close");
+    expect(releaseHeldInputsMock).toHaveBeenCalledTimes(1);
+    expect(releaseAllMock).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

@@ -430,7 +430,23 @@ describe("useRemoteInputSession", () => {
     expect(result.current.heldJoystickInputs.size).toBe(0);
   });
 
-  it("releases held inputs when the Remote Input sheet loses window focus", async () => {
+  it("sends nothing to the device when releasing this phone's inputs while it holds none (another phone keeps its inputs)", () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.releaseHeldInputs());
+
+    expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
+  });
+
+  it("still sends release_all from the user's own Release all while this phone holds nothing", () => {
+    const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
+
+    act(() => result.current.releaseAll());
+
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+  });
+
+  it("releases only this phone's held keys when the Remote Input sheet loses window focus", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldKeyboardInputs(new Set(["f1"])));
     await act(async () => {
@@ -440,11 +456,13 @@ describe("useRemoteInputSession", () => {
 
     act(() => window.dispatchEvent(new Event("blur")));
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "keyboard", inputs: ["f1"], transition: "release" }],
+    });
     expect(result.current.heldKeyboardInputs.size).toBe(0);
   });
 
-  it("releases all held inputs when switching output mode", async () => {
+  it("releases only this phone's held joystick inputs when switching output mode", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
     await act(async () => {
@@ -454,11 +472,13 @@ describe("useRemoteInputSession", () => {
 
     act(() => result.current.setOutputMode("type"));
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+    });
     expect(result.current.outputMode).toBe("type");
   });
 
-  it("releases all held inputs when the tab/app is backgrounded", async () => {
+  it("releases only this phone's held joystick inputs when the tab/app is backgrounded", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
     await act(async () => {
@@ -469,11 +489,13 @@ describe("useRemoteInputSession", () => {
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     act(() => document.dispatchEvent(new Event("visibilitychange")));
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+    });
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
   });
 
-  it("sends a best-effort release_all on unmount when inputs were held", async () => {
+  it("sends a best-effort release of this phone's held inputs on unmount", async () => {
     const { result, unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     act(() => result.current.setHeldJoystickInputs(new Set(["fire"])));
     await act(async () => {
@@ -483,10 +505,12 @@ describe("useRemoteInputSession", () => {
 
     unmount();
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["fire"], transition: "release" }],
+    });
   });
 
-  it("does not send a release_all on unmount when nothing was held", async () => {
+  it("does not send a release on unmount when nothing was held", async () => {
     const { unmount } = renderHook(() => useRemoteInputSession({ tier: "full" }));
     unmount();
     expect(sendMachineInputBatchMock).not.toHaveBeenCalled();
@@ -513,7 +537,9 @@ describe("useRemoteInputSession", () => {
       await releaseActiveRemoteInput();
     });
 
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+    });
     expect(result.current.heldJoystickInputs.size).toBe(0);
   });
 
@@ -545,7 +571,9 @@ describe("useRemoteInputSession", () => {
       await releaseActiveRemoteInput();
     });
     expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+    });
     sendMachineInputBatchMock.mockClear();
 
     // The pending "down" flush must not ALSO fire afterwards and re-press it
@@ -569,7 +597,7 @@ describe("useRemoteInputSession", () => {
       await releaseActiveRemoteInput();
     });
 
-    expect(addErrorLogMock).toHaveBeenCalledWith("Remote input pre-switch release-all failed", expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith("Remote input pre-switch release failed", expect.any(Object));
   });
 
   it("logs (not throws) when the best-effort release_all on unmount fails", async () => {
@@ -586,7 +614,7 @@ describe("useRemoteInputSession", () => {
       await Promise.resolve();
     });
 
-    expect(addErrorLogMock).toHaveBeenCalledWith("Remote input release-all on unmount failed", expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith("Remote input release on unmount failed", expect.any(Object));
   });
 
   it("routes cursor moves through machine:input when full, and through the kernal fallback otherwise", async () => {
@@ -751,7 +779,7 @@ describe("useRemoteInputSession", () => {
     expect(addErrorLogMock).toHaveBeenCalledWith("Remote input batch send failed", expect.any(Object));
   });
 
-  it("recovers a possibly-applied failed batch with one release_all (HARD15-007)", async () => {
+  it("recovers a possibly-applied failed batch by releasing what it and the held set may have pressed (HARD15-007)", async () => {
     const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
 
     act(() => result.current.setHeldJoystickInputs(new Set(["up"])));
@@ -771,9 +799,12 @@ describe("useRemoteInputSession", () => {
     });
 
     // The failed batch may have actually landed on the device - a single
-    // recovery release_all must follow, exactly once.
+    // recovery release of everything it and the held set may have pressed
+    // must follow, exactly once.
     expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
-    expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up", "right"], transition: "release" }],
+    });
     sendMachineInputBatchMock.mockClear();
 
     // The user's own subsequent release must not need to reach the device
@@ -808,7 +839,7 @@ describe("useRemoteInputSession", () => {
 
     expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
     expect(addErrorLogMock).toHaveBeenCalledWith(
-      "Remote input recovery release-all after send failure failed",
+      "Remote input recovery release after send failure failed",
       expect.any(Object),
     );
   });
@@ -969,7 +1000,7 @@ describe("useRemoteInputSession", () => {
       expect(addErrorLogMock).toHaveBeenCalledWith("Remote input batch send failed", expect.any(Object));
     });
 
-    it("leaves a held joystick press to the release_all recovery rather than sending it again", async () => {
+    it("leaves a held joystick press to the release recovery rather than sending it again", async () => {
       sendMachineInputBatchMock.mockRejectedValueOnce(noAnswer());
       const { result } = renderHook(() => useRemoteInputSession({ tier: "full" }));
 
@@ -980,7 +1011,9 @@ describe("useRemoteInputSession", () => {
       });
 
       expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(2);
-      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({ events: [{ kind: "release_all" }] });
+      expect(sendMachineInputBatchMock).toHaveBeenLastCalledWith({
+        events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+      });
       expect(addLogMock).not.toHaveBeenCalled();
     });
   });
@@ -1024,9 +1057,11 @@ describe("useRemoteInputSession", () => {
     expect(result.current.heldJoystickInputs.size).toBe(0);
     // HARD13-001 regression: clearing local state is not enough - the inputs are
     // still physically held on the device, so the downgrade must also relay a
-    // release_all. Previously this was gated on the (already-downgraded) current
+    // release. Previously this was gated on the (already-downgraded) current
     // tier and silently skipped, stranding the held direction on the device.
-    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({ events: [{ kind: "release_all" }] });
+    expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+      events: [{ kind: "joystick", port: 2, inputs: ["up"], transition: "release" }],
+    });
   });
 
   describe("edge cases and stress (port swap, autofire races, bursts)", () => {
@@ -1245,13 +1280,12 @@ describe("useRemoteInputSession", () => {
       });
 
       expect(result.current.heldJoystickInputs.size).toBe(0);
-      // Every mode flip that actually changes mode calls releaseAll, which is
-      // immediate (not debounced) - each must have gone out.
-      expect(
-        sendMachineInputBatchMock.mock.calls.every((call) =>
-          call[0].events.every((e: { kind: string }) => e.kind === "release_all"),
-        ),
-      ).toBe(true);
+      // The first flip releases what this phone holds, immediately; the later
+      // flips have nothing left to release.
+      expect(sendMachineInputBatchMock).toHaveBeenCalledTimes(1);
+      expect(sendMachineInputBatchMock).toHaveBeenCalledWith({
+        events: [{ kind: "joystick", port: 2, inputs: ["up", "fire"], transition: "release" }],
+      });
     });
 
     // Lead F5 (accepted, won't-fix): documents rather than guards against a

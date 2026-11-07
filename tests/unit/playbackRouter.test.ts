@@ -632,8 +632,7 @@ describe("playbackRouter", () => {
         errors: [],
       }));
 
-    it("ejects on Stop a local disk Play mounted by upload, which the drive reports as an upload cache file", async () => {
-      const api = apiWithDriveA({ enabled: true, type: "1541" });
+    const launchLocalDiskByUpload = async (api: ReturnType<typeof apiWithDriveA>) => {
       vi.mocked(mountDiskToDrive).mockResolvedValueOnce({ persistence: "transient" });
       vi.useFakeTimers();
       const plan = buildPlayPlan({ source: "local", path: "/Games/game.d64", file: new File(["disk"], "game.d64") });
@@ -641,11 +640,34 @@ describe("playbackRouter", () => {
       await vi.runAllTimersAsync();
       await task;
       vi.useRealTimers();
+    };
+
+    it("ejects on Stop a local disk Play mounted by upload, which the drive reports as an upload cache file", async () => {
+      const api = apiWithDriveA(
+        { enabled: true, type: "1541" },
+        { enabled: true, image_path: "/Temp/cache/upload/", image_file: "temp0082" },
+      );
+      await launchLocalDiskByUpload(api);
       holdingUploadCopy(api);
 
       await endPlayLaunchMounts(api as any);
 
+      expect(peekPlayLaunchMount("c64u", "a")).toBeNull();
       expect(api.unmountDrive).toHaveBeenCalledWith("a");
+    });
+
+    it("leaves alone on Stop another app's upload that replaced Play's in the drive", async () => {
+      const api = apiWithDriveA(
+        { enabled: true, type: "1541" },
+        { enabled: true, image_path: "/Temp/cache/upload/", image_file: "temp0081" },
+      );
+      await launchLocalDiskByUpload(api);
+      expect(peekPlayLaunchMount("c64u", "a")?.uploadImagePath).toBe("/Temp/cache/upload/temp0081");
+      holdingUploadCopy(api);
+
+      await endPlayLaunchMounts(api as any);
+
+      expect(api.unmountDrive).not.toHaveBeenCalled();
     });
 
     it("leaves alone on Stop an upload cache file in a drive where Play mounted an Ultimate disk by path", async () => {

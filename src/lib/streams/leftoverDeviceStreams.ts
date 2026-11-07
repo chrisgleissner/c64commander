@@ -88,12 +88,21 @@ export const recordDeviceStreamStarted = (name: LeftoverStreamName, host: string
  * Only on success: a stop that threw may well have left the device streaming, which is exactly the
  * state the launch sweep exists to clean up.
  */
-export const recordDeviceStreamStopped = (name: LeftoverStreamName): void => {
+export const recordDeviceStreamStopped = (name: LeftoverStreamName): void => forgetDeviceStream(name);
+
+/**
+ * Called when another client is found holding the stream. The device keeps one target per stream, so
+ * a later sweep of this record would stop that client's stream, not one this app left running.
+ */
+export const forgetDeviceStream = (name: LeftoverStreamName): void => {
   const record = readRecord();
   if (!(name in record)) return;
   delete record[name];
   writeRecord(record);
 };
+
+/** A sweep is already waiting for the network; launch and every reconnect while offline share it. */
+let waitingForNetwork = false;
 
 export const getLeftoverDeviceStreamsForTests = (): LeftoverRecord => readRecord();
 
@@ -117,9 +126,12 @@ export const stopLeftoverDeviceStreams = async (): Promise<void> => {
   // With no network there is no route to the device yet, so the sweep waits for one instead of failing now.
   const network = await readNativeNetworkStatus();
   if (network.supported && !network.online) {
+    if (waitingForNetwork) return;
+    waitingForNetwork = true;
     const unsubscribe = subscribeNetworkEdges((edge) => {
       if (edge !== "online") return;
       unsubscribe();
+      waitingForNetwork = false;
       void stopLeftoverDeviceStreams();
     });
     return;

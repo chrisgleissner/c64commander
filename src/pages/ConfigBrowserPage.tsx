@@ -36,13 +36,14 @@ import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
 import {
   BACKGROUND_REQUEST_TIMEOUT_MS,
+  getC64API,
   getC64APIConfigSnapshot,
   type ConfigCategory,
   type ConfigResponse,
 } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
-import { clearSoloLevels, recordSoloLevels } from "@/lib/config/audioMixerSoloRecovery";
+import { clearSoloLevels, readUnsoloUpdates, recordSoloLevels } from "@/lib/config/audioMixerSoloRecovery";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -426,15 +427,14 @@ const CategorySection = memo(function CategorySection({
           });
         }
       }
-      const updates = buildSoloRoutingUpdates(configured, soloItem);
-      if (Object.keys(updates).length === 0) return;
       try {
-        // Routes through the shared mutation (not a direct api.updateConfigBatch
-        // call) so a solo/unsolo write invalidates c64-config-items/c64-category
-        // and marks hasChanges, same as every other config write - Home no
-        // longer kept showing pre-solo volumes after a solo toggle. See
-        // HARD9-054.
-        await updateAudioMixerBatch({ category: categoryName, updates });
+        const updates = soloItem
+          ? buildSoloRoutingUpdates(configured, soloItem)
+          : await readUnsoloUpdates(getC64API(), configured);
+        // HARD9-054: the shared mutation invalidates the queries Home reads. A flash save must not keep Solo's mute.
+        const transience = soloItem ? { transient: true } : { transientRestore: true };
+        if (Object.keys(updates).length > 0)
+          await updateAudioMixerBatch({ category: categoryName, updates, ...transience });
         if (!soloItem) {
           clearSoloLevels();
           try {
@@ -608,9 +608,9 @@ const CategorySection = memo(function CategorySection({
         : audioConfiguredRef.current.length
           ? audioConfiguredRef.current
           : items;
-      const updates = buildSoloRoutingUpdates(snapshot, null);
-      updates[itemName] = value;
       try {
+        const updates = await readUnsoloUpdates(getC64API(), snapshot);
+        updates[itemName] = value;
         await updateConfigBatch.mutateAsync({
           category: categoryName,
           updates,

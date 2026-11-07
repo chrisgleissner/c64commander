@@ -15,7 +15,7 @@ import {
   type CaptureHandler,
   type CaptureLayout,
 } from "./six502/capturePayload";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 /**
  * RLI (Ride the Live Interrupt) capture orchestration.
@@ -104,6 +104,25 @@ const readScratch = async (api: CaptureCpuApi, layout: CaptureLayout): Promise<C
 type PendingPatch = { vectorAddr: number; irqVector: Uint8Array; savedRegion: Uint8Array; base: number };
 
 /**
+ * Another client of the same Ultimate can load a program or repoint the vector while the capture runs. The saved
+ * bytes are then stale, and writing them back would break that client's program, so they are restored only while the
+ * vector still points at this capture's handler.
+ */
+const vectorStillHooksHandler = async (api: CaptureCpuApi, vectorAddr: number, base: number, operation: string) => {
+  const vector = await api.readMemory(toHexAddress(vectorAddr), 2);
+  const hooked = vector[0] === (base & 0xff) && vector[1] === ((base >> 8) & 0xff);
+  if (!hooked) {
+    addLog("warn", "CPU snapshot interrupt vector was changed by something else; leaving the saved bytes unrestored", {
+      operation,
+      vectorAddr: toHexAddress(vectorAddr),
+      vector: toHexAddress(((vector[1] ?? 0) << 8) | (vector[0] ?? 0)),
+      handler: toHexAddress(base),
+    });
+  }
+  return hooked;
+};
+
+/**
  * Best-effort restoration of a live capture patch: pause, put the original IRQ
  * vector and safe-region bytes back, and resume. Used during error recovery so a
  * transport failure mid-capture does not leave the C64 frozen with the IRQ vector
@@ -113,8 +132,10 @@ type PendingPatch = { vectorAddr: number; irqVector: Uint8Array; savedRegion: Ui
 const restorePatch = async (api: CaptureCpuApi, patch: PendingPatch, cause: string): Promise<void> => {
   try {
     await api.machinePause();
-    await api.writeMemoryBlock(toHexAddress(patch.vectorAddr), patch.irqVector);
-    await api.writeMemoryBlock(toHexAddress(patch.base), patch.savedRegion);
+    if (await vectorStillHooksHandler(api, patch.vectorAddr, patch.base, "capture recovery")) {
+      await api.writeMemoryBlock(toHexAddress(patch.vectorAddr), patch.irqVector);
+      await api.writeMemoryBlock(toHexAddress(patch.base), patch.savedRegion);
+    }
     await api.machineResume();
   } catch (error) {
     addErrorLog("Failed to restore machine state after CPU snapshot capture", {
@@ -197,8 +218,10 @@ export const captureCpuState = async (api: CaptureCpuApi, options: CaptureOption
       if (!captured) {
         // This vector's interrupt never fired. Roll back and stay paused so the
         // next candidate can install cleanly.
-        await api.writeMemoryBlock(toHexAddress(vectorAddr), irqVector);
-        await api.writeMemoryBlock(toHexAddress(base), savedRegion);
+        if (await vectorStillHooksHandler(api, vectorAddr, base, "capture timeout")) {
+          await api.writeMemoryBlock(toHexAddress(vectorAddr), irqVector);
+          await api.writeMemoryBlock(toHexAddress(base), savedRegion);
+        }
         continue;
       }
 
@@ -245,10 +268,11 @@ export const resumeAfterCapture = async (api: CaptureCpuApi, result: CaptureResu
   const irqOverlay = overlays.find((o) => o.start === vectorAddr);
   const regionOverlay = overlays.find((o) => o.start === layout.base);
 
+  const hooked = await vectorStillHooksHandler(api, vectorAddr, layout.base, "resume after capture");
   // 1) Point the vector back at the original handler so $033C is never re-entered.
-  if (irqOverlay) await api.writeMemoryBlock(toHexAddress(vectorAddr), irqOverlay.bytes);
+  if (hooked && irqOverlay) await api.writeMemoryBlock(toHexAddress(vectorAddr), irqOverlay.bytes);
   // 2) Release the spin loop → the handler chains to the original handler and the program resumes.
   await api.writeMemoryBlock(toHexAddress(layout.release), new Uint8Array([0x01]));
   // 3) Restore the safe region (the live handler is no longer referenced).
-  if (regionOverlay) await api.writeMemoryBlock(toHexAddress(layout.base), regionOverlay.bytes);
+  if (hooked && regionOverlay) await api.writeMemoryBlock(toHexAddress(layout.base), regionOverlay.bytes);
 };

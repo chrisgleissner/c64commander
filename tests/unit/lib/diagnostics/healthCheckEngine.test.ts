@@ -42,7 +42,19 @@ const {
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: vi.fn(),
+}));
+
+vi.mock("@/lib/diagnostics/configPulseRevert", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/diagnostics/configPulseRevert")>();
+  return {
+    ...actual,
+    watchForReturnedPulseValue: (...args: Parameters<typeof actual.watchForReturnedPulseValue>) =>
+      actual.watchForReturnedPulseValue(args[0], args[1], args[2], { durationMs: 40, intervalMs: 10 }),
+  };
+});
 
 vi.mock("@/lib/diagnostics/latencyTracker", () => ({
   computeLatencyPercentiles: vi.fn(() => ({ p50: 10, p90: 20, p99: 30 })),
@@ -946,11 +958,11 @@ describe("runHealthCheck — CONFIG probe", () => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // Initial read=5, writeTemp=6, but readback returns 5 → mismatch
+    // Initial read=5, writeTemp=21, but readback returns 5 → mismatch
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp) // initial: 5
-      .mockResolvedValueOnce(ledResp) // readback: still 5, expected 6
-      .mockResolvedValueOnce(ledResp); // verify
+      .mockResolvedValueOnce(ledResp) // readback: still 5, expected 21
+      .mockResolvedValue(ledResp); // pre-revert, overlap watch and verify: still 5, so nothing is reverted
     mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
 
@@ -990,7 +1002,9 @@ describe("runHealthCheck — CONFIG probe", () => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    mockGetConfigItem.mockResolvedValueOnce(ledResp); // initial read: 5 (readback is never reached)
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp) // initial read: 5 (readback is never reached)
+      .mockResolvedValueOnce(ledReadbackResp); // pre-revert read: still the pulse value 21
 
     let cancelled = false;
     mockSetConfigValue.mockImplementationOnce(() =>
@@ -1164,6 +1178,62 @@ describe("runHealthCheck — CONFIG probe", () => {
       21,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
+  });
+
+  describe("another app's probe overlapping this one", () => {
+    // A stateful LED Strip intensity. `otherApp` runs another app's probe steps against the same value, keyed to
+    // this probe's LED reads, the way two phones pressing Run health check at once interleave on one Ultimate.
+    const shareLedWithOtherApp = (initial: number, otherApp: Record<number, (value: number) => number>) => {
+      const device = { value: initial };
+      let ledReads = 0;
+      mockGetConfigItem.mockImplementation((category: string) => {
+        if (category !== "LED Strip Settings") return Promise.resolve({});
+        ledReads += 1;
+        device.value = otherApp[ledReads]?.(device.value) ?? device.value;
+        return Promise.resolve({ "LED Strip Settings": { "Strip Intensity": { selected: device.value } } });
+      });
+      mockSetConfigValue.mockImplementation((_category: string, _item: string, value: number) => {
+        device.value = value;
+        return Promise.resolve(undefined);
+      });
+      mockGetInfo.mockResolvedValue(successfulInfo);
+      mockReadMemory.mockImplementation((addr: string) =>
+        Promise.resolve(addr === "00A2" ? jiffyBytes : new Uint8Array([0x42])),
+      );
+      return device;
+    };
+
+    it("restores the original after the other app took the pulse value as its own original and wrote it back", async () => {
+      // This probe reads 8 and pulses to 24. The other app reads 24, pulses to 8, and later reverts to 24.
+      const device = shareLedWithOtherApp(8, { 2: () => 8, 5: () => 24 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(8);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24, 8]);
+      expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+      expect(result!.probes.CONFIG.reason).toContain("overlapped");
+    });
+
+    it("restores the original when the other app's pulse lands after this probe's readback", async () => {
+      const device = shareLedWithOtherApp(8, { 3: () => 8, 6: () => 24 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(8);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24, 8]);
+      expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+    });
+
+    it("leaves a different value from another writer in place for the whole watch", async () => {
+      const device = shareLedWithOtherApp(8, { 3: () => 13 });
+
+      const result = await runHealthCheck();
+
+      expect(device.value).toBe(13);
+      expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([24]);
+      expect(result!.probes.CONFIG.reason).toContain("concurrent write");
+    });
   });
 
   it("HARD18-021: skips Audio Mixer targets entirely while a playback write burst is active", async () => {
@@ -1350,7 +1420,7 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     expect(result!.probes.CONFIG.reason).toContain("Failed to restore original value");
   });
 
-  it("HARD18-021: still reverts unconditionally when the pre-revert re-read itself throws", async () => {
+  it("reverts to the original when the pre-revert re-read throws, rather than leave the pulse value", async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === "00A2") return Promise.resolve(jiffyBytes);
@@ -1359,28 +1429,46 @@ describe("runHealthCheck — CONFIG probe numeric item format", () => {
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
       .mockResolvedValueOnce(ledReadbackResp)
-      .mockRejectedValueOnce(new Error("re-read failed")) // HARD18-021: pre-revert re-read throws
+      .mockRejectedValueOnce(new Error("re-read failed"))
       .mockResolvedValueOnce(ledResp);
-    mockSetConfigValue.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    mockSetConfigValue.mockResolvedValue(undefined);
     mockPingFtp.mockResolvedValue({ ok: true });
 
     const result = await runHealthCheck();
 
+    expect(mockSetConfigValue.mock.calls.map((call) => call[2])).toEqual([21, 5]);
     expect(result!.probes.CONFIG.outcome).toBe("Success");
     expect(addLog).toHaveBeenCalledWith(
-      "debug",
-      "Health check CONFIG probe: pre-revert re-read failed, reverting unconditionally",
-      expect.objectContaining({
-        category: "LED Strip Settings",
-        item: "Strip Intensity",
-        error: "re-read failed",
-      }),
+      "warn",
+      "Health check CONFIG probe: pre-revert re-read failed, reverting to the original value anyway",
+      expect.objectContaining({ category: "LED Strip Settings", item: "Strip Intensity", tempValue: 21 }),
     );
-    expect(mockSetConfigValue).toHaveBeenNthCalledWith(
-      2,
+  });
+
+  it("does not revert when another client's value replaced the pulse before the readback", async () => {
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    const otherClientResp = { "LED Strip Settings": { "Strip Intensity": { selected: 9 } } };
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(otherClientResp)
+      .mockResolvedValueOnce(otherClientResp)
+      .mockResolvedValueOnce(otherClientResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.CONFIG.outcome).toBe("Skipped");
+    expect(result!.probes.CONFIG.reason).toContain("concurrent write");
+    expect(mockSetConfigValue).toHaveBeenCalledTimes(1);
+    expect(mockSetConfigValue).toHaveBeenCalledWith(
       "LED Strip Settings",
       "Strip Intensity",
-      5,
+      21,
       expect.objectContaining({ timeoutMs: 4000 }),
     );
   });
@@ -1418,13 +1506,25 @@ describe("runHealthCheck — FTP probe", () => {
       .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
-    mockPingFtp.mockRejectedValue(new Error("FTP timed out after 1000ms"));
+    mockPingFtp.mockRejectedValue(new Error("FTP timed out after 3000ms"));
 
     const result = await runHealthCheck();
 
     expect(result!.probes.FTP.outcome).toBe("Fail");
-    expect(result!.probes.FTP.durationMs).toBe(1000);
+    expect(result!.probes.FTP.durationMs).toBe(3000);
     expect(getHealthCheckStateSnapshot().runState).toBe("TIMEOUT");
+  });
+
+  it("lets an FTP login that takes 1.5 s on a slow link succeed, as REST and Telnet would", async () => {
+    setupAllProbesSuccess();
+    mockPingFtp.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 1500)) as Promise<{ ok: boolean }>,
+    );
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Success");
+    expect(mockPingFtp).toHaveBeenCalledWith(expect.objectContaining({ connectTimeoutMs: 3000 }));
   });
 
   it("normalizes an HTTP device host with a port before probing FTP", async () => {

@@ -11,6 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { addLog, addErrorLog } = vi.hoisted(() => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
 vi.mock("@/lib/logging", () => ({ addLog, addErrorLog }));
+const { getCategory } = vi.hoisted(() => ({ getCategory: vi.fn() }));
+vi.mock("@/lib/c64api", () => ({ getC64API: () => ({ getCategory }) }));
 
 import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
@@ -45,6 +47,7 @@ describe("usePauseMute", () => {
   beforeEach(() => {
     addLog.mockReset();
     addErrorLog.mockReset();
+    getCategory.mockReset();
   });
 
   it("skips the pause mute and clears its state when no SID outputs are known", async () => {
@@ -70,30 +73,94 @@ describe("usePauseMute", () => {
     expect(options.dispatchVolume).toHaveBeenCalledWith({ type: "mute", reason: "pause" });
   });
 
-  it("restores the saved volumes for every output when the current outputs are not known on resume", async () => {
-    const snapshotToUpdates = vi.fn((snapshot: SidMuteSnapshot | null | undefined, items?: AudioMixerItem[]) =>
-      items ? {} : { ...(snapshot?.volumes ?? {}) },
+  const deviceReports = (value: string) => ({ "Audio Mixer": { items: { "Vol Master": { selected: value } } } });
+
+  it("mutes and snapshots from the level the device reports, not from the page's stale copy", async () => {
+    getCategory.mockResolvedValue(deviceReports("-6 dB"));
+    const captureSidMuteSnapshot = vi.fn((items: AudioMixerItem[]) => ({
+      volumes: Object.fromEntries(items.map((item) => [item.name, item.value])),
+      enablement: {} as SidMuteSnapshot["enablement"],
+    }));
+    const buildEnabledSidMuteUpdates = vi.fn((items: AudioMixerItem[]) =>
+      Object.fromEntries(items.filter((item) => item.value !== "OFF").map((item) => [item.name, "OFF"])),
     );
-    const { options, mute } = setup({ enabledSidVolumeItems: [], snapshotToUpdates });
+    const { options, mute } = setup({
+      enabledSidVolumeItems: [{ ...SID_ITEM, value: "OFF" }],
+      captureSidMuteSnapshot,
+      buildEnabledSidMuteUpdates,
+    });
+
+    await mute.muteBeforeMachinePause();
+
+    expect(options.applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "OFF" }, "Pause mute");
+    expect(options.pauseMuteSnapshotRef.current?.volumes).toEqual({ "Vol Master": "-6 dB" });
+    expect(captureSidMuteSnapshot.mock.calls[0][0][0].options).toEqual(SID_ITEM.options);
+  });
+
+  it("mutes from the page's copy and logs a warning when the mixer cannot be read on pause", async () => {
+    getCategory.mockRejectedValue(new Error("read timed out"));
+    const { options, mute } = setup();
+
+    await mute.muteBeforeMachinePause();
+
+    expect(options.applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "OFF" }, "Pause mute");
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("pause could not read the SID mixer"),
+      expect.objectContaining({ error: "read timed out", stack: expect.any(String) }),
+    );
+  });
+
+  it("restores the pre-pause level on resume when the device still reports the pause mute", async () => {
+    getCategory.mockResolvedValue(deviceReports("OFF"));
+    const { options, mute } = setup();
     options.pauseMuteSnapshotRef.current = SNAPSHOT;
 
     await mute.unmuteAfterMachineResume();
 
+    expect(getCategory).toHaveBeenCalledWith("Audio Mixer", { __c64uIntent: "user" });
     expect(options.applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
     expect(options.resumingFromPauseRef.current).toBe(true);
   });
 
-  it("falls back to the whole saved snapshot when none of its outputs is among the current ones", async () => {
-    const snapshotToUpdates = vi.fn((snapshot: SidMuteSnapshot | null | undefined, items?: AudioMixerItem[]) =>
-      items ? {} : { ...(snapshot?.volumes ?? {}) },
-    );
-    const { options, mute } = setup({ snapshotToUpdates });
+  it("keeps a level another client set while paused instead of writing the pre-pause level back", async () => {
+    getCategory.mockResolvedValue(deviceReports("-6 dB"));
+    const { options, mute } = setup();
+    options.pauseMuteSnapshotRef.current = SNAPSHOT;
+
+    await mute.unmuteAfterMachineResume();
+
+    expect(options.applyAudioMixerUpdates).not.toHaveBeenCalled();
+    expect(options.ensureUnmuted).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith("info", expect.stringContaining("levels were changed after the pause"), {
+      snapshotItems: ["Vol Master"],
+    });
+    expect(options.dispatchVolume).toHaveBeenCalledWith({ type: "unmute", reason: "pause" });
+  });
+
+  it("restores the pre-pause level and logs a warning when the mixer cannot be read on resume", async () => {
+    getCategory.mockRejectedValue(new Error("read timed out"));
+    const { options, mute } = setup();
     options.pauseMuteSnapshotRef.current = SNAPSHOT;
 
     await mute.unmuteAfterMachineResume();
 
     expect(options.applyAudioMixerUpdates).toHaveBeenCalledWith({ "Vol Master": "0 dB" }, "Resume unmute");
-    expect(options.ensureUnmuted).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not read the SID mixer"),
+      expect.objectContaining({ error: "read timed out", stack: expect.any(String) }),
+    );
+  });
+
+  it("unmutes through the device's own state on resume when the pause stored no snapshot", async () => {
+    const { options, mute } = setup();
+
+    await mute.unmuteAfterMachineResume();
+
+    expect(getCategory).not.toHaveBeenCalled();
+    expect(options.applyAudioMixerUpdates).not.toHaveBeenCalled();
+    expect(options.ensureUnmuted).toHaveBeenCalledWith({ force: true, refreshItems: true });
   });
 
   it("does nothing on a failed pause that never muted", async () => {

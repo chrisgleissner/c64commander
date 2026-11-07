@@ -53,6 +53,28 @@ describe("stopping the old device's tune before a device switch", () => {
     vi.useRealTimers();
   });
 
+  it("leaves the old device alone when it plays a tune another app started", async () => {
+    markRemotePlaybackStarted(false, async () => true);
+
+    await stopActivePlaybackBeforeDeviceSwitch(2000);
+
+    expect(device.oldReset).not.toHaveBeenCalled();
+    expect(device.oldReboot).not.toHaveBeenCalled();
+    expect(isRemotePlaybackActive()).toBe(false);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(device.retryReset).not.toHaveBeenCalled();
+  });
+
+  it("resets the old device while it still plays this phone's tune", async () => {
+    device.oldReset.mockResolvedValue(undefined);
+    markRemotePlaybackStarted(false, async () => false);
+
+    await stopActivePlaybackBeforeDeviceSwitch(2000);
+
+    expect(device.oldReset).toHaveBeenCalledTimes(1);
+    expect(isRemotePlaybackActive()).toBe(false);
+  });
+
   it("reboots the old device for a cartridge or MOD, which a reset leaves running", async () => {
     markRemotePlaybackStarted(true);
 

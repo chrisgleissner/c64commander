@@ -15,12 +15,20 @@ export interface AudioLossGuardConfig {
   lossFraction: number;
   /** Bad windows in a row before the guard trips, so one clump of lost packets does not. */
   consecutiveWindows: number;
+  /**
+   * Loss fraction at or above which a window counts as the audio being absent rather than squeezed.
+   * Another phone that asked the Ultimate for the stream, or a stopped stream, loses every packet;
+   * stopping the video cannot bring that audio back, and stopping it on a shared Ultimate stops it
+   * for the other phone too.
+   */
+  absentFraction: number;
 }
 
 export const DEFAULT_AUDIO_LOSS_GUARD: AudioLossGuardConfig = {
   windowMs: 1000,
   lossFraction: 0.08,
   consecutiveWindows: 2,
+  absentFraction: 0.9,
 };
 
 /**
@@ -65,7 +73,8 @@ export class AudioLossGuard {
     const expected = (AUDIO_PACKETS_PER_SECOND * elapsedMs) / 1000;
     const fraction = (lostPackets - this.windowStartLost) / expected;
     this.startWindow(nowMs, lostPackets);
-    this.badWindows = fraction >= this.config.lossFraction ? this.badWindows + 1 : 0;
+    const squeezed = fraction >= this.config.lossFraction && fraction < this.config.absentFraction;
+    this.badWindows = squeezed ? this.badWindows + 1 : 0;
     if (this.badWindows < this.config.consecutiveWindows) return null;
     this.badWindows = 0;
     return Math.min(1, fraction);

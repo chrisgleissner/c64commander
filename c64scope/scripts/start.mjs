@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ensureRuntimeDependencies } from "../../scripts/mcp-runtime-dependencies.mjs";
 
 const REQUIRED_RUNTIME_PACKAGES = [
     ["node_modules", "@modelcontextprotocol", "sdk", "package.json"],
@@ -17,36 +18,9 @@ export const resolveScopeDir = (env = process.env) => {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 };
 
-export const hasScopeRuntimeDependencies = (scopeDir) =>
-    REQUIRED_RUNTIME_PACKAGES.every((segments) => existsSync(path.join(scopeDir, ...segments)));
-
 const ensureScopePackageExists = (scopeDir) => {
     if (!existsSync(path.join(scopeDir, "package.json"))) {
         throw new Error(`Unable to locate c64scope package at ${scopeDir}`);
-    }
-};
-
-const ensureScopeDependencies = (scopeDir, env) => {
-    if (hasScopeRuntimeDependencies(scopeDir)) {
-        return;
-    }
-
-    const installResult = spawnSync("npm", ["install"], {
-        cwd: scopeDir,
-        env,
-        stdio: "inherit",
-    });
-
-    if (installResult.error) {
-        throw new Error(`Failed to install c64scope dependencies: ${installResult.error.message}`);
-    }
-
-    if (installResult.status !== 0) {
-        throw new Error(`c64scope dependency install exited with status ${installResult.status ?? 1}`);
-    }
-
-    if (!hasScopeRuntimeDependencies(scopeDir)) {
-        throw new Error("c64scope dependencies are still missing after npm install");
     }
 };
 
@@ -54,7 +28,12 @@ export const runC64ScopeMcp = (env = process.env) => {
     const scopeDir = resolveScopeDir(env);
 
     ensureScopePackageExists(scopeDir);
-    ensureScopeDependencies(scopeDir, env);
+    ensureRuntimeDependencies({
+        packageDir: scopeDir,
+        label: "c64scope",
+        requiredPackages: REQUIRED_RUNTIME_PACKAGES,
+        env,
+    });
 
     const child = spawn("npm", ["exec", "tsx", "src/index.ts"], {
         cwd: scopeDir,

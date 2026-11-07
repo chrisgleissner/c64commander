@@ -43,6 +43,7 @@ import { addLog } from "@/lib/logging";
 import {
   buildSoloRecoveryUpdates,
   clearSoloLevels,
+  readUnsoloUpdates,
   recordSoloLevels,
   recoverInterruptedSolo,
 } from "@/lib/config/audioMixerSoloRecovery";
@@ -196,5 +197,22 @@ describe("recovering the SID levels an interrupted Solo left muted", () => {
     await recoverInterruptedSolo();
 
     expect(device.getCategory).not.toHaveBeenCalled();
+  });
+
+  it("ending Solo puts back only the SIDs still at Solo's mute value, read fresh from the device", async () => {
+    recordSoloLevels("c64u", "Vol UltiSid 1", levels);
+    const getCategory = vi.fn().mockResolvedValue({
+      "Audio Mixer": {
+        items: {
+          "Vol UltiSid 1": { selected: " 0 dB" },
+          "Vol UltiSid 2": { selected: "OFF" },
+          "Vol Socket 1": { selected: "-6 dB" },
+          "Vol Socket 2": { selected: "OFF" },
+        },
+      },
+    });
+
+    expect(await readUnsoloUpdates({ getCategory }, levels)).toEqual({ "Vol UltiSid 2": " 0 dB" });
+    expect(getCategory).toHaveBeenCalledWith("Audio Mixer", { __c64uIntent: "user", __c64uBypassCache: true });
   });
 });

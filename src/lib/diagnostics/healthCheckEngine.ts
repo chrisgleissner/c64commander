@@ -18,7 +18,8 @@ import {
 } from "@/lib/diagnostics/healthCheckState";
 import { pingFtp } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
-import { addLog } from "@/lib/logging";
+import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { decideConfigPulseRevert, watchForReturnedPulseValue } from "@/lib/diagnostics/configPulseRevert";
 import { createTelnetClient } from "@/lib/telnet/telnetClient";
 import { buildBaseUrlFromDeviceHost, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
@@ -48,7 +49,7 @@ const CONFIG_ROUNDTRIP_TARGETS = [
 
 const PROBE_TIMEOUT_MS: Record<HealthCheckProbeType, number> = {
   REST: 3000,
-  FTP: 1000,
+  FTP: 3000,
   TELNET: 3000,
   CONFIG: 4000,
   RASTER: 1500,
@@ -770,6 +771,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       let revertErrorMessage: string | null = null;
       let tempValueApplied = false;
       let revertSkippedForExternalWrite = false;
+      let pulseOverlapRestored = false;
       try {
         await runtime.api.setConfigValue(target.category, target.item, tempValue, {
           signal,
@@ -793,17 +795,9 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         readBackValue = parseConfigNumericValue(extractConfigItemData(readBackResp, target.category, target.item));
       } finally {
         if (tempValueApplied) {
-          let shouldRevert = true;
-          // HARD18-021: our own write was confirmed present at readback time -
-          // re-read once more, right before reverting, to catch a user mixer
-          // write (pause-mute/resume-unmute/volume commit) landing in the
-          // remaining pulse window. If readBackValue itself never matched
-          // tempValue, that is a transport failure (handled below via the
-          // existing "Readback mismatch" check), not a signal to preserve
-          // someone else's value - skip this re-read entirely in that case.
-          if (readBackValue === tempValue) {
+          const readPulseItem = async (failureMessage: string) => {
             try {
-              const preRevertResp = await runtime.api.getConfigItem(target.category, target.item, {
+              const resp = await runtime.api.getConfigItem(target.category, target.item, {
                 timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
                 __c64uIntent: runtime.intent,
                 __c64uBypassCache: true,
@@ -811,40 +805,46 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
                 __c64uSuppressCircuitContribution: true,
                 __c64uTransientConfigWrite: true,
               });
-              const preRevertValue = parseConfigNumericValue(
-                extractConfigItemData(preRevertResp, target.category, target.item),
-              );
-              if (preRevertValue !== null && preRevertValue !== tempValue) {
-                shouldRevert = false;
-                revertSkippedForExternalWrite = true;
-                addLog(
-                  "info",
-                  "Health check CONFIG probe: external write detected inside pulse window, skipping revert",
-                  {
-                    category: target.category,
-                    item: target.item,
-                    tempValue,
-                    preRevertValue,
-                  },
-                );
-              }
+              return parseConfigNumericValue(extractConfigItemData(resp, target.category, target.item));
             } catch (error) {
-              addLog("debug", "Health check CONFIG probe: pre-revert re-read failed, reverting unconditionally", {
-                category: target.category,
-                item: target.item,
-                error: error instanceof Error ? error.message : String(error ?? "Unknown error"),
-              });
+              const err = error instanceof Error ? error : new Error(String(error));
+              addLog(
+                "warn",
+                `Health check CONFIG probe: ${failureMessage}`,
+                buildErrorLogDetails(err, { category: target.category, item: target.item, tempValue }),
+              );
+              return null;
             }
+          };
+          const preRevertValue = await readPulseItem(
+            "pre-revert re-read failed, reverting to the original value anyway",
+          );
+          let decision = decideConfigPulseRevert({
+            originalValue: currentValue,
+            tempValue,
+            readBackValue,
+            preRevertValue,
+          });
+          if (
+            (decision === "external-write" || decision === "not-applied") &&
+            (await watchForReturnedPulseValue(tempValue, () => readPulseItem("overlap watch read failed"), waitMs))
+          ) {
+            pulseOverlapRestored = true;
+            decision = "revert";
           }
-          if (shouldRevert) {
+          if (decision === "external-write") {
+            revertSkippedForExternalWrite = true;
+            addLog("info", "Health check CONFIG probe: external write detected inside pulse window, skipping revert", {
+              category: target.category,
+              item: target.item,
+              tempValue,
+              readBackValue,
+              preRevertValue,
+            });
+          } else if (decision === "revert" || decision === "unknown") {
             try {
-              // HARD18-003: never reuse the run's (possibly already-aborted)
-              // signal for the revert - createTimedRequestSignal pre-aborts a
-              // request whose outer signal is already aborted, so an
-              // abort-during-probe run silently skipped the revert entirely,
-              // leaving the user's LED/volume setting durably changed. Detach
-              // the revert onto its own signal-less, timeout-bounded request so
-              // it always reaches the wire regardless of the run's own state.
+              // HARD18-003: the revert uses its own signal-less request, because the run's signal may already be
+              // aborted and an aborted signal would cancel the revert before it reaches the device.
               await runtime.api.setConfigValue(target.category, target.item, currentValue, {
                 timeoutMs: PROBE_TIMEOUT_MS.CONFIG,
                 __c64uIntent: runtime.intent,
@@ -866,14 +866,11 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         }
       }
 
-      if (revertSkippedForExternalWrite) {
-        return makeRecord(
-          "CONFIG",
-          "Skipped",
-          Date.now() - startMs,
-          "Pulse revert skipped: a concurrent write changed the value during the probe window",
-          startMs,
-        );
+      if (revertSkippedForExternalWrite || (pulseOverlapRestored && !revertErrorMessage)) {
+        const reason = pulseOverlapRestored
+          ? "Another app's probe overlapped this one; the original value was restored"
+          : "Pulse revert skipped: a concurrent write changed the value during the probe window";
+        return makeRecord("CONFIG", "Skipped", Date.now() - startMs, reason, startMs);
       }
 
       const verifyResp = await runtime.api.getConfigItem(target.category, target.item, {

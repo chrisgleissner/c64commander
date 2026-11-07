@@ -96,6 +96,18 @@ const readCurrentLevels = (response: unknown): Record<string, unknown> => {
   );
 };
 
+/**
+ * What ending Solo on this phone puts back. Another client sharing the device may have set a SID since Solo muted
+ * it, so, as in crash recovery, only a SID still at Solo's mute value is restored.
+ */
+export const readUnsoloUpdates = async (
+  api: Pick<C64API, "getCategory">,
+  items: AudioMixerVolumeItem[],
+): Promise<Record<string, string | number>> => {
+  const response = await api.getCategory(AUDIO_MIXER, { __c64uIntent: "user", __c64uBypassCache: true });
+  return buildSoloRecoveryUpdates({ soloItem: readSoloLevels()?.soloItem ?? "", items }, readCurrentLevels(response));
+};
+
 /** Put back the SID levels a Solo left muted when the app went away without ending it. */
 export const recoverInterruptedSolo = async (): Promise<void> => {
   const record = readSoloLevels();

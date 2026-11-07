@@ -8,31 +8,45 @@
 
 import { addLog } from "@/lib/logging";
 
-/** Delays before each automatic restart of a lost live stream; its length is the bound on attempts. */
-export const STREAM_RECOVERY_BACKOFF_MS: readonly number[] = [2000, 6000];
+/** How long after a loss the device is asked whether it answers, before a restart or a verdict. */
+export const STREAM_RECOVERY_DELAY_MS = 2000;
 
-/** How long a restarted stream must stay live before its attempts are counted afresh. */
+/** How long a restarted stream must stay live before a later loss counts as a new episode. */
 export const STREAM_RECOVERY_STABLE_MS = 30000;
 
+/** How many restarts one loss episode gets when no other client can take the stream. */
+export const STREAM_RECOVERY_SHARED_GROUP_RESTARTS = 2;
+
+/** Restart the stream, leave it to the other client that asked the device for it, or give up. */
+export type StreamLossStep = "restart" | "yield" | "stop";
+
 /**
- * Decides whether a lost video or audio stream is restarted automatically, and after how long.
+ * Decides what a lost video or audio stream gets.
  *
- * A stream that keeps dying after each restart is not helped by more restarts, so the attempts are
- * bounded and only a stream that then stays live for {@link STREAM_RECOVERY_STABLE_MS} earns a new set.
+ * The Ultimate sends each stream to one address. A stream that is lost again soon after this phone
+ * restarted it, while the device still answers, has been asked for by another client; restarting
+ * it again would take it from that client, whose recovery would take it back in turn. So only the
+ * first loss in an episode is restarted, and an episode ends when a stream stays live for
+ * {@link STREAM_RECOVERY_STABLE_MS}.
+ *
+ * That only holds when the stream goes to one address. In the shared multicast groups another
+ * client's start takes nothing, so a repeated loss there is the network and not a takeover: the
+ * stream is restarted up to {@link STREAM_RECOVERY_SHARED_GROUP_RESTARTS} times and then left lost.
  */
 export class StreamLossRecovery {
-  private attempts = 0;
+  private restarts = 0;
 
-  /** The delay before the next restart, or null when the attempts for this loss episode are used up. */
-  noteLost(liveForMs: number): number | null {
-    if (liveForMs >= STREAM_RECOVERY_STABLE_MS) this.attempts = 0;
-    if (this.attempts >= STREAM_RECOVERY_BACKOFF_MS.length) return null;
-    return STREAM_RECOVERY_BACKOFF_MS[this.attempts++];
+  noteLost(liveForMs: number, otherClientCanTakeStream: boolean): StreamLossStep {
+    if (liveForMs >= STREAM_RECOVERY_STABLE_MS) this.restarts = 0;
+    if (otherClientCanTakeStream && this.restarts >= 1) return "yield";
+    if (this.restarts >= STREAM_RECOVERY_SHARED_GROUP_RESTARTS) return "stop";
+    this.restarts += 1;
+    return "restart";
   }
 
   /** A user-initiated start or stop begins a fresh episode. */
   reset(): void {
-    this.attempts = 0;
+    this.restarts = 0;
   }
 }
 
@@ -48,11 +62,15 @@ export interface StreamLossRestarterHooks {
   restart: () => Promise<void>;
   /** No restart will follow; the lost state stays as the final answer. */
   giveUp: () => void;
+  /** The device answers but keeps streaming elsewhere: say that another client has the stream. */
+  yieldToOtherClient: () => void;
+  /** The device sends this stream to one address, so another client's start takes it from this phone. */
+  otherClientCanTakeStream: () => boolean;
   isPageHidden: () => boolean;
 }
 
 /**
- * Restarts a lost video or audio stream after the {@link StreamLossRecovery} backoff.
+ * Restarts a lost video or audio stream, or leaves it to another client, as {@link StreamLossRecovery} decides.
  *
  * Every wait here ends: the delay is a timer, a hidden page is waited out only until it is shown,
  * and {@link cancel} (called on any stop) clears both.
@@ -67,14 +85,14 @@ export class StreamLossRestarter {
   /** `liveForMs` is how long the stream had been live before it went silent. Returns true when a restart is scheduled. */
   onLost(liveForMs: number): boolean {
     if (!this.hooks.isWanted()) return false;
-    const delayMs = this.recovery.noteLost(liveForMs);
-    if (delayMs === null) return false;
+    const step = this.recovery.noteLost(liveForMs, this.hooks.otherClientCanTakeStream());
+    if (step === "stop") return false;
     this.clearWaits();
     this.timer = setTimeout(() => {
       this.timer = null;
-      void this.attempt();
-    }, delayMs);
-    return true;
+      void this.attempt(step);
+    }, STREAM_RECOVERY_DELAY_MS);
+    return step === "restart";
   }
 
   /** A stop or a user-initiated start: no restart is pending and the next loss starts a fresh episode. */
@@ -90,12 +108,12 @@ export class StreamLossRestarter {
     this.onVisible = null;
   }
 
-  private async attempt(): Promise<void> {
+  private async attempt(step: StreamLossStep): Promise<void> {
     if (!this.hooks.isWanted() || !this.hooks.isLost()) return;
     if (this.hooks.isPageHidden()) {
       this.onVisible = () => {
         this.clearWaits();
-        void this.attempt();
+        void this.attempt(step);
       };
       document.addEventListener("visibilitychange", this.onVisible, { once: true });
       return;
@@ -113,6 +131,13 @@ export class StreamLossRestarter {
         return;
       }
       if (!this.hooks.isWanted() || !this.hooks.isLost()) return;
+      if (step === "yield") {
+        addLog("info", `Live View: the ${this.hooks.stream} stream was lost again while the device answers`, {
+          service: "streams",
+        });
+        this.hooks.yieldToOtherClient();
+        return;
+      }
       addLog("info", `Live View: restarting the lost ${this.hooks.stream} stream`, { service: "streams" });
       await this.hooks.restart();
     } catch (error) {

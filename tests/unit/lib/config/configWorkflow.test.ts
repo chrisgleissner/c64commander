@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as logging from "@/lib/logging";
 import { createConfigWorkflow, detectUpdatedTempConfigFile, waitForTempConfigFile } from "@/lib/config/configWorkflow";
 import type { ConfigSnapshotFileLocation } from "@/lib/config/configSnapshotTypes";
+import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
+import { CURRENT_DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+import { wasConfigStoreReplaced } from "@/lib/config/configWriteLedger";
 
 const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
 const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
 
+const setInstallId = (clientId: string) => localStorage.setItem(DISK_WORK_CLIENT_ID_STORAGE_KEY, clientId);
+
 describe("configWorkflow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setInstallId("0a1b2c3d");
   });
 
   it("detects the newest changed .cfg file in /Temp", () => {
@@ -136,6 +142,23 @@ describe("configWorkflow", () => {
     );
   });
 
+  it("does not take a config file another install staged in /Temp for this install's save", () => {
+    const file = detectUpdatedTempConfigFile(
+      [],
+      [
+        { name: "saved.cfg", path: "/Temp/saved.cfg", modifiedAt: "2026-03-29T10:01:00Z", size: 64 },
+        {
+          name: "c64commander-cfg-9f8e7d6c.cfg",
+          path: "/Temp/c64commander-cfg-9f8e7d6c.cfg",
+          modifiedAt: "2026-03-29T10:02:00Z",
+          size: 64,
+        },
+      ],
+    );
+
+    expect(file?.name).toBe("saved.cfg");
+  });
+
   it("uploads a local config snapshot to /Temp before applying it", async () => {
     const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
     const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
@@ -147,8 +170,8 @@ describe("configWorkflow", () => {
 
     await workflow.applyLocalSnapshot("Saved Setup.cfg", new Uint8Array([1, 2, 3]), onProgress);
 
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/Saved-Setup.cfg", new Uint8Array([1, 2, 3]));
-    expect(runApplyRemoteConfig).toHaveBeenCalledWith("Saved-Setup.cfg");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/c64commander-cfg-0a1b2c3d.cfg", new Uint8Array([1, 2, 3]));
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("c64commander-cfg-0a1b2c3d.cfg");
     expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual([
       "reading-local",
       "uploading",
@@ -177,8 +200,8 @@ describe("configWorkflow", () => {
     await workflow.applyRemoteSnapshot("/USB1/test-data/snapshots/config.cfg", onProgress);
 
     expect(readRemoteFile).toHaveBeenCalledWith("/USB1/test-data/snapshots/config.cfg");
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/config.cfg", new Uint8Array([4, 5, 6]));
-    expect(runApplyRemoteConfig).toHaveBeenCalledWith("config.cfg");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/c64commander-cfg-0a1b2c3d.cfg", new Uint8Array([4, 5, 6]));
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("c64commander-cfg-0a1b2c3d.cfg");
     expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual(["uploading", "restoring", "complete"]);
   });
 
@@ -334,26 +357,27 @@ describe("configWorkflow", () => {
     );
   });
 
-  it("normalizes applyLocalSnapshot filename without .cfg extension", async () => {
+  it("stages the same config file under a different /Temp name on each install", async () => {
     const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
     const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
     const workflow = createConfigWorkflow({ writeRemoteFile, runApplyRemoteConfig });
 
-    await workflow.applyLocalSnapshot("test-config", new Uint8Array([1]));
+    setInstallId("11111111");
+    await workflow.applyLocalSnapshot("Shared Setup.cfg", new Uint8Array([1]));
+    setInstallId("22222222");
+    await workflow.applyLocalSnapshot("Shared Setup.cfg", new Uint8Array([2]));
+    await workflow.applyRemoteSnapshot("/USB1/Shared Setup.cfg");
 
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/test-config.cfg", expect.any(Uint8Array));
-    expect(runApplyRemoteConfig).toHaveBeenCalledWith("test-config.cfg");
-  });
-
-  it("normalizes applyLocalSnapshot with all-whitespace filename to config.cfg", async () => {
-    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
-    const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
-    const workflow = createConfigWorkflow({ writeRemoteFile, runApplyRemoteConfig });
-
-    await workflow.applyLocalSnapshot("   ", new Uint8Array([1]));
-
-    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/config.cfg", expect.any(Uint8Array));
-    expect(runApplyRemoteConfig).toHaveBeenCalledWith("config.cfg");
+    expect(writeRemoteFile.mock.calls.map(([path]) => path)).toEqual([
+      "/Temp/c64commander-cfg-11111111.cfg",
+      "/Temp/c64commander-cfg-22222222.cfg",
+      "/Temp/c64commander-cfg-22222222.cfg",
+    ]);
+    expect(runApplyRemoteConfig.mock.calls.map(([name]) => name)).toEqual([
+      "c64commander-cfg-11111111.cfg",
+      "c64commander-cfg-22222222.cfg",
+      "c64commander-cfg-22222222.cfg",
+    ]);
   });
 
   it("handles null modifiedAt on both entries when sorting multiple changed cfg files", () => {
@@ -376,5 +400,57 @@ describe("configWorkflow", () => {
       ],
     );
     expect(file?.name).toBe("b.cfg");
+  });
+
+  describe("marking the device's config store as replaced by an applied .cfg", () => {
+    const applyOnce = {
+      local: (workflow: ReturnType<typeof createConfigWorkflow>) =>
+        workflow.applyLocalSnapshot("config.cfg", new Uint8Array([1])),
+      remote: (workflow: ReturnType<typeof createConfigWorkflow>) => workflow.applyRemoteSnapshot("/Temp/config.cfg"),
+    };
+
+    beforeEach(() => {
+      localStorage.removeItem("c64u_config_store_replaced:http://c64u");
+      localStorage.removeItem("c64u_config_store_replaced:http://u64");
+    });
+
+    it.each(["local", "remote"] as const)("marks it after a successful %s apply", async (kind) => {
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn().mockResolvedValue(undefined),
+        configStoreBaseUrl: "http://c64u",
+      });
+
+      await applyOnce[kind](workflow);
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+    });
+
+    it.each(["local", "remote"] as const)("does not mark it when the %s apply fails", async (kind) => {
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn().mockRejectedValue(new Error("apply error")),
+        configStoreBaseUrl: "http://c64u",
+      });
+
+      await expect(applyOnce[kind](workflow)).rejects.toThrow("apply error");
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+    });
+
+    it("marks the device the workflow was created for when the selected device changes during the apply", async () => {
+      localStorage.setItem(CURRENT_DEVICE_HOST_KEY, "c64u");
+      let switchDevice: () => void = () => undefined;
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn(async () => switchDevice()),
+      });
+      switchDevice = () => localStorage.setItem(CURRENT_DEVICE_HOST_KEY, "u64");
+
+      await workflow.applyRemoteSnapshot("/Temp/config.cfg");
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+      expect(wasConfigStoreReplaced("http://u64")).toBe(false);
+    });
   });
 });

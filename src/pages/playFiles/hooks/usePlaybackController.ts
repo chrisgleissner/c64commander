@@ -6,11 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createArchiveClient } from "@/lib/archive/client";
 import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
 import { buildArchivePlayPlan } from "@/lib/archive/execution";
-import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
 import type { PlaybackLaunchOrigin } from "@/lib/remoteInput/gameModeLaunch";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -66,15 +65,13 @@ import {
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
-import { playPassingOver, type RomDependencyAsk } from "@/pages/playFiles/resolveLocalRoute";
-import type { RomDialogKind } from "@/pages/playFiles/romDependencyGate";
+import { playPassingOver } from "@/pages/playFiles/resolveLocalRoute";
 import { rejectRefusedLaunch } from "@/pages/playFiles/refusedLaunch";
 import { reportPlaybackStartFailure } from "@/pages/playFiles/reportPlaybackStartFailure";
 import { resolveLaunchRoute } from "@/pages/playFiles/resolveLaunchRoute";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { seekPlaybackClocks } from "@/lib/playback/playbackClock";
-import type { PlaybackTimeStore } from "@/pages/playFiles/playbackTimeStore";
 import { cancelRemoteSidSeek, isRemoteSidSeekBusy } from "@/lib/playback/remoteSeek/activeRemoteSidSeek";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
@@ -109,20 +106,12 @@ import {
 } from "@/lib/config/applyConfigFileReference";
 import { cancelActiveConfigApply, isConfigApplyCancelledError } from "@/lib/config/configApplyCancellation";
 import { buildPlaybackConfigSignature, resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
-import { createPlaylistTraversal, type AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
-import type { VolumeAction } from "@/pages/playFiles/volumeState";
-import type { SidEnablement } from "@/lib/config/sidVolumeControl";
+import { createPlaylistTraversal } from "@/pages/playFiles/playFilesUtils";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
-import { usePauseMute, type SidMuteSnapshot } from "@/pages/playFiles/hooks/usePauseMute";
-
-type AutoAdvanceGuard = {
-  trackInstanceId: number;
-  dueAtMs: number;
-  autoFired: boolean;
-  userCancelled: boolean;
-  deferredToEnd?: boolean;
-};
+import { usePauseMute } from "@/pages/playFiles/hooks/usePauseMute";
+import { isTuneReplacedOnC64, TUNE_REPLACED_ON_C64_MESSAGE } from "@/pages/playFiles/tuneReplacedOnC64";
+import type { UsePlaybackControllerProps } from "@/pages/playFiles/hooks/playbackControllerProps";
 
 type RuntimePlaybackRequest = {
   request: PlayRequest;
@@ -148,130 +137,6 @@ const SCRUB_RELEASE_WAIT_MS = 3000;
 
 /** How long after the last drag movement the bar commits to that position. */
 const DRAG_SETTLE_MS = 220;
-
-interface UsePlaybackControllerProps {
-  playlist: PlaylistItem[];
-  setPlaylist: React.Dispatch<React.SetStateAction<PlaylistItem[]>>;
-  currentIndex: number;
-  setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
-
-  isPlaying: boolean;
-  setIsPlaying: (v: boolean) => void;
-  isPaused: boolean;
-  setIsPaused: (v: boolean) => void;
-  setIsPlaylistLoading: (v: boolean) => void;
-
-  playbackTime: PlaybackTimeStore;
-  durationMs: number | undefined;
-  setDurationMs: (v: number | undefined) => void;
-  setCurrentSubsongCount: (v: number | null) => void;
-  setTrackInstanceId: (v: number) => void;
-
-  repeatOneEnabled?: boolean;
-  stationFinishingRef?: { current: boolean };
-  repeatEnabled: boolean;
-  shuffleEnabled: boolean;
-  /**
-   * Whether a SID Radio station is choosing the tracks, read at the moment a skip is resolved.
-   *
-   * A ref rather than a value because the station hook is created after this one and depends on the
-   * handlers it returns, so the flag cannot be passed in as a prop without reordering the two.
-   */
-  stationActiveRef?: { readonly current: boolean };
-  shuffleSeed: number | null;
-  shuffleAnchorId?: string | null;
-
-  // Dependencies
-  localEntriesBySourceId: Map<
-    string,
-    Map<
-      string,
-      {
-        uri?: string | null;
-        name: string;
-        modifiedAt?: string | null;
-        sizeBytes?: number | null;
-      }
-    >
-  >;
-  localSourceTreeUris: Map<string, string | null>;
-  buildHvscLocalPlayFile?: (path: string, name: string) => LocalPlayFile | null | undefined;
-  deviceProduct?: string | null;
-  ensurePlaybackConnection: () => Promise<void>;
-  resolveUnavailableConfigDecision?: (
-    item: PlaylistItem,
-    context: { configFileName: string | null; reason: string },
-  ) => Promise<"play-without-config" | "cancel">;
-  /** Asks the listener about a chosen song that needs the C64 ROMs. Absent: such a song is not played. */
-  resolveRomDependencyDecision?: (item: PlaylistItem, kind: RomDialogKind) => ReturnType<RomDependencyAsk>;
-  /**
-   * A track the USER asked for has actually launched. Never fires for a playlist
-   * moving on by itself, and never for a launch that failed.
-   */
-  onUserLaunchedItem?: (item: PlaylistItem) => void;
-  resolveSonglengthDurationMsForPath: (
-    path: string,
-    file: LocalPlayFile | null,
-    songNr: number | null,
-  ) => Promise<number | null>;
-  applySonglengthsToItems: (items: PlaylistItem[]) => Promise<PlaylistItem[]>;
-  archiveConfigs?: Record<string, ArchiveClientConfigInput>;
-
-  // Volume Control
-  restoreVolumeOverrides: (reason: string) => Promise<void>;
-  applyAudioMixerUpdates: (updates: Record<string, string | number>, reason: string) => Promise<void>;
-  enabledSidVolumeItems: AudioMixerItem[];
-  buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: SidEnablement) => Record<string, string | number>;
-  captureSidMuteSnapshot: (items: AudioMixerItem[], enablement: SidEnablement) => SidMuteSnapshot;
-  snapshotToUpdates: (
-    snapshot: SidMuteSnapshot | null | undefined,
-    currentItems?: AudioMixerItem[],
-  ) => Record<string, string | number>;
-  resolveEnabledSidVolumeItems: (includeDisabled?: boolean) => Promise<AudioMixerItem[]>;
-  dispatchVolume: React.Dispatch<VolumeAction>;
-  sidEnablement: SidEnablement;
-  pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
-  pausingFromPauseRef: MutableRefObject<boolean>;
-  resumingFromPauseRef: MutableRefObject<boolean>;
-  ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
-  /** Whether the listener's own Mute is on, which a pause must hand back rather than undo. */
-  isManualMuteHeld: () => boolean;
-
-  // Refs
-  // HARD12-007: the second parameter is `reset` (zero the cumulative base), not `playing`.
-  playedClockRef: MutableRefObject<{
-    start: (now: number, reset?: boolean) => void;
-    stop: (now: number, reset?: boolean) => void;
-    pause: (now: number) => void;
-    resume: (now: number) => void;
-    reset: () => void;
-    /** Move the clock to an absolute position; used by seek. */
-    hydrate: (baseMs: number, startedAt: number | null) => void;
-    current: (now: number) => number;
-  }>;
-  trackStartedAtRef: MutableRefObject<number | null>;
-  soundingTuneRef: MutableRefObject<PlaylistItem | null>;
-  soundingTune: PlaylistItem | null;
-  setSoundingTune: (tune: PlaylistItem | null) => void;
-  trackInstanceIdRef: MutableRefObject<number>;
-  autoAdvanceGuardRef: MutableRefObject<AutoAdvanceGuard | null>;
-  playStartInFlightRef: MutableRefObject<boolean>;
-
-  cancelAutoAdvance: () => void;
-  enqueuePlayTransition: (task: () => Promise<void>) => Promise<void>;
-  durationSeconds: number; // for fallback
-
-  setAutoAdvanceDueAtMs: (dueAtMs: number | null) => void;
-
-  trace: any;
-
-  /**
-   * Local SID playback engine (Track B / LE2). Injected in tests; created
-   * lazily in production. Playback routes here for SID items only when
-   * `c64u_local_engine_enabled` is on and the engine is set to `local`.
-   */
-  localSidPlaybackController?: LocalSidPlaybackController;
-}
 
 export function usePlaybackController({
   playlist,
@@ -525,31 +390,6 @@ export function usePlaybackController({
     [withTimeout],
   );
 
-  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
-  const stopTuneOnC64 = useCallback(
-    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
-      // A pause still under way would otherwise freeze the machine after the reset, muted.
-      await machineTransitionCoordinatorRef.current.idle();
-      const wasPaused = isPausedRef.current;
-      const report = (title: string, error: unknown) =>
-        addErrorLog(title, {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          itemId,
-        });
-      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
-      await stopMachineWithGracePeriod(api, shouldReboot);
-      if (endMounts) await endPlayLaunchMounts(api);
-      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
-      if (wasPaused && pauseMuteSnapshotRef.current) {
-        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
-      }
-    },
-    [addErrorLog, resumeMachineWithRetry, stopMachineWithGracePeriod, unmuteAfterMachineResume],
-  );
-
-  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
-
   const resolveSidMetadata = useCallback(
     (file?: LocalPlayFile, songNr?: number | null) =>
       resolveLocalSidMetadata(file, songNr, durationFallbackMs, resolveSonglengthDurationMsForPath),
@@ -617,6 +457,58 @@ export function usePlaybackController({
     },
     [buildHvscLocalPlayFile],
   );
+
+  /** Stops this phone's playlist without a word to the C64, which now plays what somebody else started. */
+  const leaveTuneReplacedOnC64 = useCallback(() => {
+    void restoreVolumeOverrides("tune-replaced-on-c64").catch((error) =>
+      addErrorLog("Volume restore after the C64 changed tune failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+    );
+    markRemotePlaybackStopped();
+    autoAdvanceGuardRef.current = null;
+    setAutoAdvanceDueAtMs(null);
+    setIsPlaying(false);
+    setIsPaused(false);
+    addLog("info", "Playback stopped: the C64 is playing something else", { currentIndex: currentIndexRef.current });
+    toast({ title: "Playback stopped", description: TUNE_REPLACED_ON_C64_MESSAGE });
+  }, [addErrorLog, autoAdvanceGuardRef, restoreVolumeOverrides, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying]);
+
+  /** Stops the tune on the C64. A paused machine ignores a reset, so it is resumed first and Pause's mute restored after. */
+  const stopTuneOnC64 = useCallback(
+    async (api: ReturnType<typeof getC64API>, shouldReboot: boolean, itemId?: string, endMounts = true) => {
+      // A pause still under way would otherwise freeze the machine after the reset, muted.
+      await machineTransitionCoordinatorRef.current.idle();
+      if (await isTuneReplacedOnC64(playlistRef.current[currentIndexRef.current], resolveHvscRuntimeRequest)) {
+        addLog("info", "Stop left the C64 alone: it is playing something else", { itemId });
+        return;
+      }
+      const wasPaused = isPausedRef.current;
+      const report = (title: string, error: unknown) =>
+        addErrorLog(title, {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          itemId,
+        });
+      if (wasPaused) await resumeMachineWithRetry(api).catch((error) => report("Resume before stop failed", error));
+      await stopMachineWithGracePeriod(api, shouldReboot);
+      if (endMounts) await endPlayLaunchMounts(api);
+      // Kept muted until the reset is done, so the resumed program cannot replay a fragment.
+      if (wasPaused && pauseMuteSnapshotRef.current) {
+        await unmuteAfterMachineResume().catch((error) => report("Pause mute restore after stop failed", error));
+      }
+    },
+    [
+      addErrorLog,
+      resolveHvscRuntimeRequest,
+      resumeMachineWithRetry,
+      stopMachineWithGracePeriod,
+      unmuteAfterMachineResume,
+    ],
+  );
+
+  useTuneReleaseOnSidPlayer({ isPausedRef, stopTuneOnC64 });
 
   const finishPlaylistPlayback = useCallback(
     (reason: "auto-end" | "user-next-end") => {
@@ -1129,7 +1021,9 @@ export function usePlaybackController({
           // The tune is now running on the Ultimate. Recorded here, at the real
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
-          markRemotePlaybackStarted(stopRequiresReboot(item.category));
+          markRemotePlaybackStarted(stopRequiresReboot(item.category), () =>
+            isTuneReplacedOnC64(item, resolveHvscRuntimeRequest),
+          );
           // Bring the tune to this device's speakers too, unless the listener chose otherwise: the preference
           // check is what makes "Listen on: <device>" mean anything. Best-effort, as a device that will not
           // stream must not stop the tune from playing.
@@ -2052,6 +1946,14 @@ export function usePlaybackController({
         // independently of the JS timer.
         if (getMachineExecutionSnapshot().state === "paused") return;
         guard.autoFired = true;
+        if (!currentPlaybackIsLocalRef.current) {
+          const replaced = await isTuneReplacedOnC64(
+            activePlaylist[currentIndexRef.current],
+            resolveHvscRuntimeRequest,
+          );
+          if (autoAdvanceGuardRef.current !== guard || guard.userCancelled) return;
+          if (replaced) return leaveTuneReplacedOnC64();
+        }
 
         const activeIndex = currentIndexRef.current;
         const { nextIndex, reachableIndex } = resolveReachableNextIndex(activePlaylist, activeIndex, true);
@@ -2132,6 +2034,8 @@ export function usePlaybackController({
     [
       cancelAutoAdvance,
       finishPlaylistPlayback,
+      leaveTuneReplacedOnC64,
+      resolveHvscRuntimeRequest,
       getLocalSidPlayback,
       setCurrentPlaybackIsLocal,
       playItem,

@@ -8,7 +8,11 @@
 
 import { describe, expect, it, vi } from "vitest";
 import * as logging from "@/lib/logging";
-import { AudioMirrorController, type AudioMirrorSnapshot } from "@/lib/streams/audioMirrorController";
+import {
+  AudioMirrorController,
+  type AudioMirrorDeps,
+  type AudioMirrorSnapshot,
+} from "@/lib/streams/audioMirrorController";
 import type { StreamReceiver, StreamConnectionState } from "@/lib/streams/streamReceiver";
 import { AudioMirrorPlayer } from "@/lib/streams/audioPlayer";
 import type { NativeAudioSink } from "@/lib/streams/audioNativeSink";
@@ -134,6 +138,248 @@ describe("AudioMirrorController", () => {
 
     expect(controller.getSnapshot().state).toBe("live");
     expect(controller.getSnapshot().error).toBeNull();
+  });
+
+  it("leaves a live stream alone when told another app has the audio", async () => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+
+    controller.reportStreamingElsewhere();
+
+    expect(controller.getSnapshot().state).toBe("live");
+    expect(controller.getSnapshot().error).toBeNull();
+  });
+
+  it("says another app has the audio when its owner leaves a lost stream to that app", async () => {
+    vi.useFakeTimers();
+    try {
+      const receiver = new FakeReceiver();
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createPlayer: () => fakePlayer(true),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        networkBufferMs: 0,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await tickSeconds(10);
+
+      controller.reportStreamingElsewhere();
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().error).toBe(
+        "The C64 is sending its sound to another app. Select Listen to take it back.",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const loseAudio = async (stopStream: () => Promise<unknown>) => {
+    const receiver = new FakeReceiver();
+    const sink = fakeNativeSink(true);
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sink.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
+      onChange: vi.fn(),
+      onStreamLost: () => false,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    await tickSeconds(10);
+    expect(controller.getSnapshot().state).toBe("error");
+    return { controller, receiver, sink };
+  };
+
+  it("does not stop the device audio stream after leaving it to another app, but releases its own socket and sink", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller, receiver, sink } = await loseAudio(stopStream);
+      controller.reportStreamingElsewhere();
+
+      await controller.stop();
+
+      expect(stopStream).not.toHaveBeenCalled();
+      expect(receiver.closed).toBe(true);
+      expect(sink.closed).toBe(true);
+      expect(controller.getSnapshot().state).toBe("off");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still stops the device audio stream after a loss it has not left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseAudio(stopStream);
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops the device audio stream again once Listen takes it back from another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller } = await loseAudio(stopStream);
+      controller.reportStreamingElsewhere();
+      await controller.start();
+
+      await controller.stop();
+
+      expect(stopStream).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  const loseAudioViaPlayer = async (stopStream: () => Promise<unknown>, onStreamReclaimed = vi.fn()) => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream,
+      onChange: vi.fn(),
+      onStreamLost: () => false,
+      onStreamReclaimed,
+      networkBufferMs: 0,
+    });
+    await controller.start();
+    receiver.emitState("open");
+    await tickSeconds(10);
+    expect(controller.getSnapshot().state).toBe("error");
+    return { controller, receiver, onStreamReclaimed };
+  };
+
+  it("takes the device audio stream back when packets arrive after it was left to another app, so Stop ends it", async () => {
+    vi.useFakeTimers();
+    try {
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const { controller, receiver, onStreamReclaimed } = await loseAudioViaPlayer(stopStream);
+      controller.reportStreamingElsewhere();
+      expect(controller.getSnapshot().error).not.toBeNull();
+
+      receiver.emit(audioPacket(1));
+
+      expect(controller.getSnapshot().state).toBe("live");
+      expect(controller.getSnapshot().error).toBeNull();
+      expect(onStreamReclaimed).toHaveBeenCalledTimes(1);
+      await controller.stop();
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a lost audio stream lost when packets arrive although it was not left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const { controller, receiver, onStreamReclaimed } = await loseAudioViaPlayer(vi.fn(async () => ({ errors: [] })));
+
+      receiver.emit(audioPacket(1));
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(onStreamReclaimed).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("takes the device audio stream back when the native sink counts packets again after it was left to another app", async () => {
+    vi.useFakeTimers();
+    try {
+      const arrival = { packets: 100, lostPackets: 0 };
+      const receiver = new FakeReceiver();
+      const sink = fakeNativeSink(true, arrival);
+      const stopStream = vi.fn(async () => ({ errors: [] }));
+      const onStreamReclaimed = vi.fn();
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createNativeSink: () => sink.sink,
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream,
+        onChange: vi.fn(),
+        onStreamLost: () => false,
+        onStreamReclaimed,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      await tickSeconds(10);
+      expect(controller.getSnapshot().state).toBe("error");
+      controller.reportStreamingElsewhere();
+
+      await tickSeconds(3);
+      expect(controller.getSnapshot().state).toBe("error");
+      arrival.packets += 50;
+      await tickSeconds(1);
+
+      expect(controller.getSnapshot().state).toBe("live");
+      expect(onStreamReclaimed).toHaveBeenCalledTimes(1);
+      await controller.stop();
+      expect(stopStream).toHaveBeenCalledWith("audio");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops polling the native sink for returned packets when the audio is stopped", async () => {
+    vi.useFakeTimers();
+    try {
+      const { controller } = await loseAudio(vi.fn(async () => ({ errors: [] })));
+      controller.reportStreamingElsewhere();
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      await controller.stop();
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sends no device stop when the receive socket failed before any start was sent", async () => {
+    const stopStream = vi.fn(async () => ({ errors: [] }));
+    const startStream = vi.fn(async () => ({ errors: [] }));
+    const receiver = new FakeReceiver();
+    Object.assign(receiver, {
+      ready: async () => {
+        throw new Error("bind failed");
+      },
+    });
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createPlayer: () => fakePlayer(true),
+      startStream,
+      stopStream,
+      onChange: vi.fn(),
+    });
+
+    await controller.start();
+
+    expect(startStream).not.toHaveBeenCalled();
+    expect(stopStream).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().state).toBe("error");
   });
 
   it("tells its owner how long the audio had been live when it went silent, and shows the reconnecting state", async () => {
@@ -513,47 +759,40 @@ describe("AudioMirrorController foreign-sender notice", () => {
       },
     }) as unknown as NativeAudioSink;
 
-  const startWithForeignSender = async (stop: (host: string, name: "audio" | "video") => Promise<unknown>) => {
-    const stopStreamAt = vi.fn(stop);
+  const NOTICE_ONE =
+    "Another Ultimate at 192.0.2.15 is also streaming into this group. Live View ignores it, but it shares your Wi-Fi.";
+
+  it("names another machine streaming into the group but never asks it to stop", async () => {
+    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const isForeignSender = vi.fn(async () => true);
     const receiver = new FakeReceiver();
-    const controller = new AudioMirrorController({
+    const deps = {
       createReceiver: () => receiver,
       createNativeSink: () => sinkWithSenders(["198.51.100.7", "192.0.2.15"]),
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
       expectedSenderHost: () => "198.51.100.7",
+      isForeignSender,
       stopStreamAt,
       onChange: vi.fn(),
-    });
+    };
+    const controller = new AudioMirrorController(deps as AudioMirrorDeps);
     await controller.start();
     receiver.emitState("open");
+
     controller.getSignals();
-    // The eviction is fire-and-forget from getSignals; wait until it has asked the machine to stop.
-    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalled());
+
+    await vi.waitFor(() => expect(isForeignSender).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 0));
-    return controller;
-  };
-
-  it("names the machine that refused the stop, without touching the error field", async () => {
-    const controller = await startWithForeignSender(async () => {
-      throw new Error("Forbidden");
-    });
-
-    expect(controller.getSnapshot().foreignSenderNotice).toBe(
-      "Another Ultimate at 192.0.2.15 is also streaming into this group; stop it on that machine.",
-    );
+    expect(stopStreamAt).not.toHaveBeenCalled();
+    expect(isForeignSender.mock.calls.map(([host]) => host)).toEqual(["192.0.2.15"]);
+    expect(controller.getSnapshot().foreignSenderNotice).toBe(NOTICE_ONE);
     expect(controller.getSnapshot().error).toBeNull();
     expect(controller.getSnapshot().state).toBe("live");
   });
 
-  it("stays silent when the uninvited machine obeys", async () => {
-    const controller = await startWithForeignSender(async () => ({ errors: [] }));
-    expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
-  });
-
-  it("does not stop a sender whose identity could not be established", async () => {
+  it("does not name a sender whose identity could not be established", async () => {
     const receiver = new FakeReceiver();
-    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
     const isForeignSender = vi.fn(async () => false);
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
@@ -561,7 +800,6 @@ describe("AudioMirrorController foreign-sender notice", () => {
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
       expectedSenderHost: () => "192.0.2.46",
-      stopStreamAt,
       isForeignSender,
       onChange: vi.fn(),
     });
@@ -572,21 +810,19 @@ describe("AudioMirrorController foreign-sender notice", () => {
 
     await vi.waitFor(() => expect(isForeignSender).toHaveBeenCalledTimes(2));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(stopStreamAt).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
   });
 
-  it("does not stop the selected device when it streams from its other address alongside an uninvited machine", async () => {
+  it("names only the uninvited machine when the selected device also streams from its other address", async () => {
     const receiver = new FakeReceiver();
     const ownOtherAddress = "192.0.2.47";
     const uninvited = "198.51.100.13";
-    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
       createNativeSink: () => sinkWithSenders([ownOtherAddress, uninvited]),
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
       expectedSenderHost: () => "192.0.2.46",
-      stopStreamAt,
       isForeignSender: async (host) => host === uninvited,
       onChange: vi.fn(),
     });
@@ -595,34 +831,34 @@ describe("AudioMirrorController foreign-sender notice", () => {
 
     controller.getSignals();
 
-    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledWith(uninvited, "audio"));
-    expect(stopStreamAt).not.toHaveBeenCalledWith(ownOtherAddress, expect.anything());
+    await vi.waitFor(() => expect(controller.getSnapshot().foreignSenderNotice).toContain(uninvited));
+    expect(controller.getSnapshot().foreignSenderNotice).not.toContain(ownOtherAddress);
   });
 
-  it("asks an uninvited machine to stop again in a later Live View session", async () => {
+  it("names an uninvited machine again in a later Live View session", async () => {
     const receiver = new FakeReceiver();
-    const stopStreamAt = vi.fn(async () => ({ errors: [] }));
+    const isForeignSender = vi.fn(async () => true);
     const controller = new AudioMirrorController({
       createReceiver: () => receiver,
       createNativeSink: () => sinkWithSenders(["198.51.100.7", "192.0.2.15"]),
       startStream: vi.fn(async () => ({ errors: [] })),
       stopStream: vi.fn(async () => ({ errors: [] })),
       expectedSenderHost: () => "198.51.100.7",
-      stopStreamAt,
-      isForeignSender: async () => true,
+      isForeignSender,
       onChange: vi.fn(),
     });
     await controller.start();
     receiver.emitState("open");
     controller.getSignals();
-    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(controller.getSnapshot().foreignSenderNotice).toBe(NOTICE_ONE));
     await controller.stop();
 
     await controller.start();
+    expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
     receiver.emitState("open");
     controller.getSignals();
 
-    await vi.waitFor(() => expect(stopStreamAt).toHaveBeenCalledTimes(2));
-    expect(stopStreamAt).toHaveBeenLastCalledWith("192.0.2.15", "audio");
+    await vi.waitFor(() => expect(controller.getSnapshot().foreignSenderNotice).toBe(NOTICE_ONE));
+    expect(isForeignSender).toHaveBeenCalledTimes(2);
   });
 });

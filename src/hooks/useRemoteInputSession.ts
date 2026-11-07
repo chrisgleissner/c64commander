@@ -47,6 +47,15 @@ import { specialKeyToKeyboardInputEvent, specialKeyToPetscii } from "@/lib/remot
 import { hasWaitingMachineInput, runSerializedMachineInput } from "@/lib/remoteInput/machineInputThrottle";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import { registerActiveInputRelease, unregisterActiveInputRelease } from "@/lib/remoteInput/activeInputRelease";
+import {
+  buildOwnReleaseEvents,
+  holdsInput,
+  NO_UNRELEASED_INPUTS,
+  unreleasedPressEvents,
+  withoutReleasedInputs,
+  withPressedInputs,
+} from "@/lib/remoteInput/ownInputRelease";
+import type { UnreleasedInputs } from "@/lib/remoteInput/ownInputRelease";
 
 export type RemoteInputOutputMode = "joystick" | "type";
 export type RemoteInputConnectionStatus = "idle" | "sending" | "error";
@@ -107,9 +116,12 @@ export type RemoteInputSession = {
   sendKeyboardInputs: (inputs: KeyboardInputName[]) => void;
   sendCursor: (direction: CursorDirection) => void;
   sendSpecialKey: (key: SpecialKeyboardKey) => void;
+  /** Releases everything on the device, including another client's inputs: the user's own Release all. */
   releaseAll: () => void;
+  /** Releases what this phone holds and nothing else, so another client's held inputs stay held. */
+  releaseHeldInputs: () => void;
   // HARD21-006: a monotonically increasing counter bumped on every releaseAll
-  // (panic, backgrounding, mode switch, sheet close, unmount, tier downgrade).
+  // (panic) and releaseHeldInputs (backgrounding, mode switch, sheet close, tier downgrade).
   // Child input surfaces (VirtualDPad, physical-key tracking, the keyboard
   // hold hook) reset their own contribution/pressed-cell refs when THIS changes
   // — an EXPLICIT release-all signal, not the imprecise "shared set reads empty"
@@ -180,6 +192,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const lastSentHeldSetRef = useRef<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   const pendingHeldSetRef = useRef<HeldJoystickInputs>(EMPTY_HELD_JOYSTICK_INPUTS);
   const lastSentKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
+
+  const ownHeldInputs = () => ({
+    joystick: lastSentHeldSetRef.current,
+    port: portRef.current,
+    keyboard: lastSentKeyboardHeldSetRef.current,
+  });
+  /** Every input this phone pressed, in any batch sent or still queued, until a confirmed release covers it. */
+  const unreleasedInputsRef = useRef<UnreleasedInputs>(NO_UNRELEASED_INPUTS);
+  const inputSequenceRef = useRef(0);
+  const ownReleaseEvents = (unconfirmed: readonly MachineInputEvent[] = []) =>
+    buildOwnReleaseEvents(ownHeldInputs(), [...unreleasedPressEvents(unreleasedInputsRef.current), ...unconfirmed]);
   const pendingKeyboardHeldSetRef = useRef<HeldKeyboardInputs>(EMPTY_HELD_KEYBOARD_INPUTS);
   /**
    * Queued press/release events, computed against the PREVIOUS pending set at
@@ -217,6 +240,11 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // reflect it. Each coalesced dispatch captures the generation at schedule time
   // and drops itself if an immediate send has since superseded it.
   const sendGenerationRef = useRef(0);
+  /**
+   * Bumped by a failed batch. Queued batches that carry held state drop themselves when it changes (HARD18-001);
+   * queued key taps still go, since a tap cannot leave anything held and dropping it loses what the user typed.
+   */
+  const sendFailureEpochRef = useRef(0);
   /** Cleared on unmount, which releases only what was held, so a retry decided later sees that Remote Input closed. */
   const sessionOpenRef = useRef(true);
 
@@ -230,6 +258,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       const { immediate = false, gestureAtMs } = options;
       if (immediate) sendGenerationRef.current += 1;
       const generation = sendGenerationRef.current;
+      const failureEpoch = sendFailureEpochRef.current;
+      const sequence = ++inputSequenceRef.current;
+      unreleasedInputsRef.current = withPressedInputs(unreleasedInputsRef.current, events, sequence);
       setConnectionStatus("sending");
       const batches = chunkMachineInputEvents(events);
       batches.forEach((batch, batchIndex) => {
@@ -242,10 +273,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             recordInputLatencySample(performance.now() - batchGestureAtMs, performance.now());
           }
           const send = () => getC64API().sendMachineInputBatch({ events: batch });
+          // Forgotten once the release is sent, not once it is answered: a release that fails is released again by the
+          // recovery below, which covers its own inputs. A release that is dropped before it is sent stays recorded.
+          unreleasedInputsRef.current = withoutReleasedInputs(unreleasedInputsRef.current, batch, sequence);
           // Not after an immediate send (a release-all, a port swap) or another failure has superseded this one, not after
           // Remote Input closed, and never while newer input waits behind it.
           const retryStillWanted = () =>
             generation === sendGenerationRef.current &&
+            failureEpoch === sendFailureEpochRef.current &&
             sessionOpenRef.current &&
             flushTimerRef.current === null &&
             !hasWaitingMachineInput();
@@ -281,18 +316,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
               const owedRelease =
                 lastSentHeldSetRef.current.size > 0 ||
                 lastSentKeyboardHeldSetRef.current.size > 0 ||
-                batch.some(
-                  (event) => event.kind === "joystick" || (event.kind === "keyboard" && event.transition !== "tap"),
-                );
+                batch.some(holdsInput);
               const wasReleaseAll = batch.length === 1 && batch[0].kind === "release_all";
+              const recoveryReleaseEvents = ownReleaseEvents(batch);
+              const recoverySequence = ++inputSequenceRef.current;
               // HARD18-001: a queued coalesced batch computed against the
               // now-abandoned held-set model must never dispatch after this
-              // reset - bump the generation (the same supersede mechanism an
-              // immediate send already uses) so every batch still waiting on
-              // runSerializedMachineInput drops itself at its generation
-              // check instead of re-asserting a stale press once the device
-              // recovers from this failure.
-              sendGenerationRef.current += 1;
+              // reset, or it re-asserts a stale press once the device recovers.
+              sendFailureEpochRef.current += 1;
               // Held state is not retried: forget what we thought was held so the
               // next real change re-syncs cleanly instead of compounding drift.
               lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
@@ -301,14 +332,21 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
               pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
               pendingKeyboardEventsRef.current = [];
               setConnectionStatus("error");
-              if (owedRelease && !wasReleaseAll) {
+              if (owedRelease && !wasReleaseAll && recoveryReleaseEvents.length) {
                 // Direct API call, not routed through sendEventsNow: idempotent
                 // and single-shot, so it cannot recurse into this same catch.
                 void getC64API()
-                  .sendMachineInputBatch({ events: buildReleaseAllEvent() })
+                  .sendMachineInputBatch({ events: recoveryReleaseEvents })
+                  .then(() => {
+                    unreleasedInputsRef.current = withoutReleasedInputs(
+                      unreleasedInputsRef.current,
+                      recoveryReleaseEvents,
+                      recoverySequence,
+                    );
+                  })
                   .catch((releaseError) => {
                     addErrorLog(
-                      "Remote input recovery release-all after send failure failed",
+                      "Remote input recovery release after send failure failed",
                       buildErrorLogDetails(
                         releaseError instanceof Error ? releaseError : new Error(String(releaseError)),
                         {},
@@ -328,6 +366,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
             // Superseded by a later immediate release/port-swap while we waited:
             // drop this stale press so it can't land after the release (HARD13-002).
             if (generation !== sendGenerationRef.current) return;
+            if (failureEpoch !== sendFailureEpochRef.current && batch.some(holdsInput)) return;
             return dispatch();
           });
         }
@@ -435,50 +474,58 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   );
   const scheduleKeyboardFlush = useCallback(() => scheduleFlush({ fastPath: true }), [scheduleFlush]);
 
-  const releaseAll = useCallback(() => {
-    if (flushTimerRef.current !== null) {
-      window.clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    // HARD13-001: whether we still owe the device a release depends on what we
-    // actually relayed, NOT on the current tier. A capability downgrade (full →
-    // kernal-fallback via a device switch, connection blip, or transient probe
-    // failure) updates `tierRef` to the new tier BEFORE this runs, so gating the
-    // network release on `tierRef.current === "full"` made the downgrade safety
-    // net inert - it cleared local state but never released the inputs still
-    // held on the device. A non-empty last-sent set is only ever populated by
-    // the full-tier relay path, so it is a reliable "we owe a release" signal
-    // independent of the now-current tier.
-    const hadRelayedInputs = lastSentHeldSetRef.current.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0;
-    pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
-    lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
-    pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
-    lastSentKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
-    pendingKeyboardEventsRef.current = [];
-    // Lead F5 (accepted, won't-fix): a typed char still sitting in the 40ms
-    // coalesce window when a mode switch calls releaseAll (via setOutputMode)
-    // is dropped here rather than flushed first. Confirmed by inspection;
-    // requires two taps on different controls within 40ms, so real-world
-    // impact is negligible against the risk of touching this safety-critical
-    // clearing path for a flush-before-clear fix.
-    pendingTypedEventsRef.current = [];
-    setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
-    setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
-    // HARD21-006: signal the explicit release-all to child input surfaces so
-    // they reset their own contribution/pressed-cell refs (which the parent
-    // cannot reach) — see releaseAllEpoch's doc on the interface.
-    setReleaseAllEpoch((epoch) => epoch + 1);
-    // Issue 3e: leaving the joystick overlay - sheet close, output-mode/tab
-    // switch (setOutputMode calls this), unmount, tier downgrade, panic button -
-    // must also STOP autofire, not merely release the held inputs. Without this
-    // its dedicated ticking interval keeps running for the life of the page and
-    // reopening the sheet silently resumes firing the user never re-enabled.
-    setAutofireEnabled(false);
-    autofirePhaseOnRef.current = true;
-    if (hadRelayedInputs || tierRef.current === "full") {
-      sendEventsNow(buildReleaseAllEvent(), { immediate: true });
-    }
-  }, [sendEventsNow]);
+  const clearHeldInputs = useCallback(
+    (scope: "own" | "device") => {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      // HARD13-001: whether we still owe the device a release depends on what we
+      // actually relayed, NOT on the current tier. A capability downgrade (full →
+      // kernal-fallback via a device switch, connection blip, or transient probe
+      // failure) updates `tierRef` to the new tier BEFORE this runs, so gating the
+      // network release on `tierRef.current === "full"` made the downgrade safety
+      // net inert - it cleared local state but never released the inputs still
+      // held on the device. A non-empty last-sent set is only ever populated by
+      // the full-tier relay path, so it is a reliable "we owe a release" signal
+      // independent of the now-current tier.
+      const releaseEvents = ownReleaseEvents();
+      const hadRelayedInputs = releaseEvents.length > 0;
+      pendingHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+      lastSentHeldSetRef.current = EMPTY_HELD_JOYSTICK_INPUTS;
+      pendingKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+      lastSentKeyboardHeldSetRef.current = EMPTY_HELD_KEYBOARD_INPUTS;
+      pendingKeyboardEventsRef.current = [];
+      // Lead F5 (accepted, won't-fix): a typed char still sitting in the 40ms
+      // coalesce window when a mode switch calls releaseAll (via setOutputMode)
+      // is dropped here rather than flushed first. Confirmed by inspection;
+      // requires two taps on different controls within 40ms, so real-world
+      // impact is negligible against the risk of touching this safety-critical
+      // clearing path for a flush-before-clear fix.
+      pendingTypedEventsRef.current = [];
+      setHeldJoystickInputsState(EMPTY_HELD_JOYSTICK_INPUTS);
+      setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
+      // HARD21-006: signal the explicit release-all to child input surfaces so
+      // they reset their own contribution/pressed-cell refs (which the parent
+      // cannot reach) — see releaseAllEpoch's doc on the interface.
+      setReleaseAllEpoch((epoch) => epoch + 1);
+      // Issue 3e: leaving the joystick overlay - sheet close, output-mode/tab
+      // switch (setOutputMode calls this), unmount, tier downgrade, panic button -
+      // must also STOP autofire, not merely release the held inputs. Without this
+      // its dedicated ticking interval keeps running for the life of the page and
+      // reopening the sheet silently resumes firing the user never re-enabled.
+      setAutofireEnabled(false);
+      autofirePhaseOnRef.current = true;
+      if (scope === "own") {
+        if (hadRelayedInputs) sendEventsNow(releaseEvents, { immediate: true });
+      } else if (hadRelayedInputs || tierRef.current === "full") {
+        sendEventsNow(buildReleaseAllEvent(), { immediate: true });
+      }
+    },
+    [sendEventsNow],
+  );
+  const releaseAll = useCallback(() => clearHeldInputs("device"), [clearHeldInputs]);
+  const releaseHeldInputs = useCallback(() => clearHeldInputs("own"), [clearHeldInputs]);
 
   const setHeldJoystickInputs = useCallback(
     (next: HeldJoystickInputs) => {
@@ -532,10 +579,10 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   const setOutputMode = useCallback(
     (mode: RemoteInputOutputMode) => {
       if (mode === outputMode) return;
-      releaseAll();
+      releaseHeldInputs();
       setOutputModeState(mode);
     },
-    [outputMode, releaseAll],
+    [outputMode, releaseHeldInputs],
   );
 
   const setAutofireEnabledSafe = useCallback(
@@ -700,21 +747,21 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       !remoteInputSupportsJoystick(tier) && (heldJoystickInputs.size > 0 || lastSentHeldSetRef.current.size > 0);
     const keyboardNeedsRelease =
       tier !== "full" && (heldKeyboardInputs.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0);
-    if (joystickNeedsRelease || keyboardNeedsRelease) releaseAll();
+    if (joystickNeedsRelease || keyboardNeedsRelease) releaseHeldInputs();
   }, [tier]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") releaseAll();
+      if (document.visibilityState !== "visible") releaseHeldInputs();
     };
-    const handleWindowBlur = () => releaseAll();
+    const handleWindowBlur = () => releaseHeldInputs();
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [releaseAll]);
+  }, [releaseHeldInputs]);
 
   useEffect(() => {
     sessionOpenRef.current = true;
@@ -725,13 +772,14 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       // full-tier relay, so it alone signals "we owe the device a release" -
       // don't additionally gate on the current tier, which may already have
       // been downgraded (unmount triggered by a device switch / disconnect).
-      if (lastSentHeldSetRef.current.size > 0 || lastSentKeyboardHeldSetRef.current.size > 0) {
+      const releaseEvents = ownReleaseEvents();
+      if (releaseEvents.length) {
         sendGenerationRef.current += 1;
         void getC64API()
-          .sendMachineInputBatch({ events: buildReleaseAllEvent() })
+          .sendMachineInputBatch({ events: releaseEvents })
           .catch((error) => {
             addErrorLog(
-              "Remote input release-all on unmount failed",
+              "Remote input release on unmount failed",
               buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {}),
             );
           });
@@ -747,7 +795,9 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
   // (empty deps) is safe - the callback always sees the latest values.
   useEffect(() => {
     const releaseNow = async (): Promise<void> => {
-      if (lastSentHeldSetRef.current.size === 0 && lastSentKeyboardHeldSetRef.current.size === 0) return;
+      const releaseEvents = ownReleaseEvents();
+      if (!releaseEvents.length) return;
+      const releaseSequence = ++inputSequenceRef.current;
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
@@ -762,10 +812,17 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
       setHeldKeyboardInputsState(EMPTY_HELD_KEYBOARD_INPUTS);
       sendGenerationRef.current += 1;
       await getC64API()
-        .sendMachineInputBatch({ events: buildReleaseAllEvent() })
+        .sendMachineInputBatch({ events: releaseEvents })
+        .then(() => {
+          unreleasedInputsRef.current = withoutReleasedInputs(
+            unreleasedInputsRef.current,
+            releaseEvents,
+            releaseSequence,
+          );
+        })
         .catch((error) => {
           addErrorLog(
-            "Remote input pre-switch release-all failed",
+            "Remote input pre-switch release failed",
             buildErrorLogDetails(error instanceof Error ? error : new Error(String(error)), {}),
           );
         });
@@ -793,6 +850,7 @@ export const useRemoteInputSession = ({ tier }: UseRemoteInputSessionOptions): R
     sendCursor,
     sendSpecialKey,
     releaseAll,
+    releaseHeldInputs,
     releaseAllEpoch,
   };
 };

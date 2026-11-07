@@ -77,6 +77,10 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
         setHeldJoystickInputsState(new Set());
         setReleaseAllEpoch((epoch) => epoch + 1);
       },
+      releaseHeldInputs: () => {
+        setHeldJoystickInputsState(new Set());
+        setReleaseAllEpoch((epoch) => epoch + 1);
+      },
       releaseAllEpoch,
     };
   },

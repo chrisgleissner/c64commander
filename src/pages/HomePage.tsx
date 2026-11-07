@@ -81,16 +81,13 @@ import { createReuWorkflow } from "@/lib/reu/reuWorkflow";
 import { deleteReuSnapshotFile } from "@/lib/reu/reuSnapshotStorage";
 import { saveRemoteReuFromTemp, restoreRemoteReu } from "@/lib/reu/reuTelnetWorkflow";
 import type { ReuProgressState, ReuRestoreMode } from "@/lib/reu/reuSnapshotTypes";
-import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
-import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
-import { listPopulatedStorageRoots } from "@/lib/ftp/storageRoots";
-import { getPassword } from "@/lib/secureStorage";
-import { resolveDeviceHostFromStorage } from "@/lib/c64api";
-import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
-import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import { createTelnetSession } from "@/lib/telnet/telnetSession";
 import { createTelnetClient } from "@/lib/telnet/telnetClient";
-import { getStoredTelnetPort } from "@/lib/telnet/telnetConfig";
+import {
+  bindHomeWorkflowDevice,
+  buildHomeWorkflowFtpFiles,
+  type HomeWorkflowDevice,
+} from "@/pages/home/utils/homeWorkflowDevice";
 import { resolveTelnetMenuKey } from "@/lib/telnet/telnetTypes";
 import { ensureRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { isNativePlatform, getPlatform } from "@/lib/native/platform";
@@ -139,6 +136,7 @@ import { hasStreamTransport } from "@/lib/streams/streamReceiver";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useDeviceHasConfigCategory } from "@/hooks/useDeviceHasConfigCategory";
 
 // HARD18-012b: the Ultimate's entire network stack is down for the whole
 // boot duration after a real power cycle - long enough that, unsuppressed,
@@ -166,7 +164,7 @@ function HomePageContent() {
   const arrangementPinned = useArrangementPin();
   const offlineArrangement = useOfflineArrangement(arrangementPinned);
   const isActive = status.isConnected;
-  const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
+  const keyboardLightingRequested = useDeviceHasConfigCategory("Keyboard Lighting");
 
   const { data: u64SettingsCategory, isFetched: u64SettingsLoaded } = useC64ConfigItems(
     "U64 Specific Settings",
@@ -294,14 +292,8 @@ function HomePageContent() {
     markManualLightingChange,
     isActiveProfileModified,
   } = useLightingStudio();
-  const handleOpenStudio = () => {
-    setKeyboardLightingRequested(true);
-    openStudio();
-  };
-  const handleOpenContextLens = () => {
-    setKeyboardLightingRequested(true);
-    openContextLens();
-  };
+  const handleOpenStudio = openStudio;
+  const handleOpenContextLens = openContextLens;
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const { value: reuSnapshotEnabled } = useFeatureFlag("home_telnet_reu_snapshot_enabled");
@@ -345,37 +337,20 @@ function HomePageContent() {
   const saveConfigDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("saveConfigToFile") : null;
   const clearFlashDisabledReason = telnet.isAvailable ? getTelnetDisabledReason("clearFlashConfig") : null;
 
-  const uint8ToBase64 = (value: Uint8Array) => {
-    let binary = "";
-    value.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-    return btoa(binary);
-  };
-
-  const resolveFtpOptions = async () => {
-    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
-    const password = await getPassword();
-    return {
-      host,
-      port: getStoredFtpPort(),
-      username: "user",
-      password: password ?? "",
-    };
-  };
-
-  const withConnectedReuTelnetSession = async <T,>(
+  const withConnectedHomeTelnetSession = async <T,>(
+    device: HomeWorkflowDevice,
+    workflow: "reu" | "config-file",
     callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
   ) => {
     if (!telnet.isAvailable) {
-      throw new Error("Telnet is unavailable for REU actions on this device.");
+      const subject = workflow === "reu" ? "REU actions" : "config file actions";
+      throw new Error(`Telnet is unavailable for ${subject} on this device.`);
     }
-    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
-    const port = getStoredTelnetPort();
-    const password = await getPassword();
-    const transport = createTelnetClient();
-    const session = createTelnetSession(transport);
+    const { host, telnetPort: port } = device;
+    const password = await device.password;
+    const session = createTelnetSession(createTelnetClient());
     const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
+    const actionId = `home-${workflow}-workflow`;
 
     const runSession = async () => {
       await session.connect(host, port, password ?? undefined);
@@ -387,18 +362,16 @@ function HomePageContent() {
     };
     const activeAction = getActiveAction();
     if (activeAction) {
-      return withTelnetInteraction(
-        { action: activeAction, actionId: "home-reu-workflow", intent: "user", host, port },
-        runSession,
-      );
+      return withTelnetInteraction({ action: activeAction, actionId, intent: "user", host, port }, runSession);
     }
-    return runWithImplicitAction("home.reu.telnet", (action) =>
-      withTelnetInteraction({ action, actionId: "home-reu-workflow", intent: "user", host, port }, runSession),
+    return runWithImplicitAction(`home.${workflow}.telnet`, (action) =>
+      withTelnetInteraction({ action, actionId, intent: "user", host, port }, runSession),
     );
   };
 
-  const createHomeReuWorkflow = () =>
-    createReuWorkflow({
+  const createHomeReuWorkflow = () => {
+    const device = bindHomeWorkflowDevice();
+    return createReuWorkflow({
       ensureLocalSnapshotStorage: async () => {
         if (!isNativePlatform()) {
           throw new Error("REU snapshots are only supported on native builds.");
@@ -407,78 +380,22 @@ function HomePageContent() {
           await ensureRamDumpFolder();
         }
       },
-      listRemoteTempFiles: async () => {
-        const ftpOptions = await resolveFtpOptions();
-        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
-        return result.entries
-          .filter((entry) => entry.type === "file")
-          .map((entry) => ({
-            name: entry.name,
-            path: entry.path,
-            size: entry.size,
-            modifiedAt: entry.modifiedAt,
-          }));
-      },
-      listRemoteStorageRoots: async () => {
-        const ftpOptions = await resolveFtpOptions();
-        return listPopulatedStorageRoots((path) => listFtpDirectory({ ...ftpOptions, path }));
-      },
-      readRemoteFile: async (path) => {
-        const ftpOptions = await resolveFtpOptions();
-        const result = await readFtpFile({ ...ftpOptions, path });
-        return base64ToUint8(result.data);
-      },
-      writeRemoteFile: async (path, bytes) => {
-        const ftpOptions = await resolveFtpOptions();
-        await writeFtpFile({
-          ...ftpOptions,
-          path,
-          data: uint8ToBase64(bytes),
-        });
-      },
+      ...buildHomeWorkflowFtpFiles(device),
       runSaveRemoteReu: () =>
-        withConnectedReuTelnetSession((session, menuKey) =>
+        withConnectedHomeTelnetSession(device, "reu", (session, menuKey) =>
           saveRemoteReuFromTemp(session, menuKey, getRequiredTelnetTarget("saveReuMemory")),
         ),
       runRestoreRemoteReu: (fileName, mode, folderName) =>
-        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReu(session, fileName, mode, folderName)),
+        withConnectedHomeTelnetSession(device, "reu", (session) =>
+          restoreRemoteReu(session, fileName, mode, folderName),
+        ),
     });
-
-  const withConnectedConfigTelnetSession = async <T,>(
-    callback: (session: ReturnType<typeof createTelnetSession>, menuKey: "F5" | "F1") => Promise<T>,
-  ) => {
-    if (!telnet.isAvailable) {
-      throw new Error("Telnet is unavailable for config file actions on this device.");
-    }
-    const host = stripPortFromDeviceHost(resolveDeviceHostFromStorage());
-    const port = getStoredTelnetPort();
-    const password = await getPassword();
-    const transport = createTelnetClient();
-    const session = createTelnetSession(transport);
-    const menuKey = resolveTelnetMenuKey(status.deviceInfo?.product) ?? "F5";
-
-    const runSession = async () => {
-      await session.connect(host, port, password ?? undefined);
-      try {
-        return await callback(session, menuKey);
-      } finally {
-        await session.disconnect();
-      }
-    };
-    const activeAction = getActiveAction();
-    if (activeAction) {
-      return withTelnetInteraction(
-        { action: activeAction, actionId: "home-config-file-workflow", intent: "user", host, port },
-        runSession,
-      );
-    }
-    return runWithImplicitAction("home.config-file.telnet", (action) =>
-      withTelnetInteraction({ action, actionId: "home-config-file-workflow", intent: "user", host, port }, runSession),
-    );
   };
 
-  const createHomeConfigFileWorkflow = () =>
-    createConfigWorkflow({
+  const createHomeConfigFileWorkflow = () => {
+    const device = bindHomeWorkflowDevice();
+    const { listRemoteTempFiles, readRemoteFile, writeRemoteFile } = buildHomeWorkflowFtpFiles(device);
+    return createConfigWorkflow({
       ensureLocalSnapshotStorage: async () => {
         if (!isNativePlatform()) {
           throw new Error("Config snapshots are only supported on native builds.");
@@ -487,39 +404,20 @@ function HomePageContent() {
           await ensureRamDumpFolder();
         }
       },
-      listRemoteTempFiles: async () => {
-        const ftpOptions = await resolveFtpOptions();
-        const result = await listFtpDirectory({ ...ftpOptions, path: "/Temp" });
-        return result.entries
-          .filter((entry) => entry.type === "file")
-          .map((entry) => ({
-            name: entry.name,
-            path: entry.path,
-            size: entry.size,
-            modifiedAt: entry.modifiedAt,
-          }));
-      },
-      readRemoteFile: async (path) => {
-        const ftpOptions = await resolveFtpOptions();
-        const result = await readFtpFile({ ...ftpOptions, path });
-        return base64ToUint8(result.data);
-      },
-      writeRemoteFile: async (path, bytes) => {
-        const ftpOptions = await resolveFtpOptions();
-        await writeFtpFile({
-          ...ftpOptions,
-          path,
-          data: uint8ToBase64(bytes),
-        });
-      },
+      listRemoteTempFiles,
+      readRemoteFile,
+      writeRemoteFile,
       persistLocalSnapshot: persistConfigSnapshotFile,
       runSaveRemoteConfig: () =>
-        withConnectedConfigTelnetSession((session, menuKey) =>
+        withConnectedHomeTelnetSession(device, "config-file", (session, menuKey) =>
           saveRemoteConfigFromTemp(session, menuKey, getRequiredTelnetTarget("saveConfigToFile")),
         ),
       runApplyRemoteConfig: (fileName) =>
-        withConnectedConfigTelnetSession((session) => applyRemoteConfigFromTemp(session, fileName)),
+        withConnectedHomeTelnetSession(device, "config-file", (session) =>
+          applyRemoteConfigFromTemp(session, fileName),
+        ),
     });
+  };
 
   const runReuWorkflow = async <T,>(
     operation: string,

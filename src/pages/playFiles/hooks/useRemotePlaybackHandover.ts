@@ -12,6 +12,7 @@ import { addLog } from "@/lib/logging";
 import { isRemotePlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob, type PlayRequest } from "@/lib/playback/playbackRouter";
+import { readSidBytes } from "@/pages/playFiles/readSidBytes";
 import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { probeSidRenderers } from "@/lib/playback/sidRenderer/sidRendererAvailability";
 import {
@@ -33,17 +34,6 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 /** How many of the tracks coming up are read from the Ultimate ahead of time. */
 export const TRACKS_READ_AHEAD = 4;
-
-const readSidBytes = async (
-  item: PlaylistItem,
-  resolveHvscRuntimeRequest: (item: PlaylistItem) => Promise<{ request: PlayRequest } | null>,
-): Promise<ArrayBuffer | null> => {
-  if (item.request.source === "ultimate") {
-    return (await tryFetchUltimateSidBlob(item.path, item.request.origin))?.arrayBuffer() ?? null;
-  }
-  const file = item.request.file ?? (await resolveHvscRuntimeRequest(item))?.request.file;
-  return file ? file.arrayBuffer() : null;
-};
 
 type RemotePlaybackHandoverOptions = {
   playlistRef: MutableRefObject<PlaylistItem[]>;

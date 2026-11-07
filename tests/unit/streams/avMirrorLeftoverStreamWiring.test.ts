@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 interface CapturedDeps {
+  onStreamReclaimed: () => void;
   startStream: (name: "audio" | "video", destination: string) => Promise<unknown>;
   stopStream: (name: "audio" | "video") => Promise<unknown>;
 }
@@ -58,7 +59,7 @@ vi.mock("@/lib/c64api", async () => {
 });
 
 import { AvMirrorSession } from "@/lib/streams/avMirrorSession";
-import { getLeftoverDeviceStreamsForTests } from "@/lib/streams/leftoverDeviceStreams";
+import { forgetDeviceStream, getLeftoverDeviceStreamsForTests } from "@/lib/streams/leftoverDeviceStreams";
 
 describe("A/V mirror records what the device is streaming (HARD27-021)", () => {
   beforeEach(() => {
@@ -124,6 +125,28 @@ describe("A/V mirror records what the device is streaming (HARD27-021)", () => {
     await audio.startStream("audio", "239.0.1.65:11001");
 
     expect(startStream).toHaveBeenCalledTimes(1);
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+  });
+
+  it("records the stream again when packets return after it was forgotten for another client", async () => {
+    const { audio, video } = build();
+    await audio.startStream("audio", "239.0.1.65:11001");
+    await video.startStream("video", "239.0.1.64:11000");
+    forgetDeviceStream("audio");
+    forgetDeviceStream("video");
+
+    audio.onStreamReclaimed();
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.10" });
+    video.onStreamReclaimed();
+
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ audio: "192.0.2.10", video: "192.0.2.10" });
+  });
+
+  it("records nothing on reclaim for an injected transport", () => {
+    new AvMirrorSession({ startStream: vi.fn(async () => ({})), stopStream: vi.fn(async () => ({})) });
+
+    audioDeps.at(-1)!.onStreamReclaimed();
+
     expect(getLeftoverDeviceStreamsForTests()).toEqual({});
   });
 });
