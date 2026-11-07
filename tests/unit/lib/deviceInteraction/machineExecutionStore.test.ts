@@ -16,7 +16,13 @@ import {
   setMachineExecutionRunning,
   subscribeMachineExecution,
 } from "@/lib/deviceInteraction/machineExecutionStore";
+import { keepRestoresOfOwnWrites } from "@/lib/config/sidVolumeControl";
 import { hydratePlaybackSnapshot, persistPlaybackSnapshot } from "@/lib/playback/playbackSessionPersistence";
+import {
+  noteVolumeSessionWrites,
+  readVolumeSessionWrites,
+  startVolumeSessionWrites,
+} from "@/lib/playback/volumeSessionWrites";
 
 describe("machineExecutionStore", () => {
   beforeEach(() => {
@@ -130,6 +136,65 @@ describe("machineExecutionStore", () => {
     );
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteEnablement).toBeNull();
+  });
+
+  describe("the record of this phone's mixer writes during a Play volume session", () => {
+    const persistSocketPauseMute = () =>
+      persistPlaybackSnapshot({
+        deviceId: "device-1",
+        volumeSnapshot: {},
+        volumeActive: true,
+        manualMuteSnapshot: null,
+        manualMuteEnablement: null,
+        pauseMuteSnapshot: { "Vol Socket 1": "-6 dB" },
+        pauseMuteEnablement: { socket1: true },
+      });
+
+    it("notes the levels a Home resume writes, so Stop still restores the user's level", async () => {
+      persistSocketPauseMute();
+      startVolumeSessionWrites("device-1");
+      noteVolumeSessionWrites({ "Vol Socket 1": "-42 dB" });
+      const updateConfigBatch = vi.fn().mockResolvedValue({ errors: [] });
+
+      await restorePauseMuteFromPersistedSnapshot(
+        { getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }), updateConfigBatch },
+        "device-1",
+      );
+
+      const liveAfterResume = [{ name: "Vol Socket 1", value: "-6 dB", options: [] }];
+      expect(
+        keepRestoresOfOwnWrites({ "Vol Socket 1": "0 dB" }, liveAfterResume, readVolumeSessionWrites("device-1")),
+      ).toEqual({ "Vol Socket 1": "0 dB" });
+    });
+
+    it("does not create a record when no volume session is active", async () => {
+      persistSocketPauseMute();
+
+      await restorePauseMuteFromPersistedSnapshot(
+        {
+          getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }),
+          updateConfigBatch: vi.fn().mockResolvedValue({ errors: [] }),
+        },
+        "device-1",
+      );
+
+      expect(readVolumeSessionWrites("device-1")).toBeNull();
+    });
+
+    it("does not add the levels of one device to the session record of another", async () => {
+      persistSocketPauseMute();
+      startVolumeSessionWrites("device-2");
+
+      await restorePauseMuteFromPersistedSnapshot(
+        {
+          getCategory: mixerReports({ "Vol Socket 1": "-42 dB" }),
+          updateConfigBatch: vi.fn().mockResolvedValue({ errors: [] }),
+        },
+        "device-1",
+      );
+
+      expect(readVolumeSessionWrites("device-2")).toEqual({});
+    });
   });
 
   it("keeps the persisted pause-mute snapshot when the restore write fails", async () => {

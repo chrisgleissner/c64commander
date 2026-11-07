@@ -19,6 +19,7 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 import { capturePauseMuteToPersistedSnapshot } from "@/lib/deviceInteraction/pauseMuteCapture";
+import { readVolumeSessionWrites, startVolumeSessionWrites } from "@/lib/playback/volumeSessionWrites";
 
 // A minimal Audio Mixer category with one enabled SID volume at a non-muted value.
 const audioMixerCategory = {
@@ -52,6 +53,32 @@ const makeApi = (overrides: Record<string, unknown> = {}) => ({
 describe("capturePauseMuteToPersistedSnapshot (HARD19-010)", () => {
   beforeEach(() => {
     persistPauseMuteSnapshotMock.mockClear();
+    localStorage.clear();
+  });
+
+  it("notes the mute it writes in the record of an active Play volume session, so Stop can tell it is this phone's", async () => {
+    const api = makeApi();
+    startVolumeSessionWrites("device-a");
+
+    await capturePauseMuteToPersistedSnapshot(api, "device-a");
+
+    const [payload] = api.updateConfigBatch.mock.calls[0];
+    expect(Object.keys(payload["Audio Mixer"])).toEqual(["Vol UltiSID 1"]);
+    expect(readVolumeSessionWrites("device-a")).toEqual(payload["Audio Mixer"]);
+  });
+
+  it("does not create a volume session record when no session is active", async () => {
+    await capturePauseMuteToPersistedSnapshot(makeApi(), "device-a");
+
+    expect(readVolumeSessionWrites("device-a")).toBeNull();
+  });
+
+  it("does not add its mute to the volume session record of another device", async () => {
+    startVolumeSessionWrites("device-b");
+
+    await capturePauseMuteToPersistedSnapshot(makeApi(), "device-a");
+
+    expect(readVolumeSessionWrites("device-b")).toEqual({});
   });
 
   it("returns false with no deviceId", async () => {

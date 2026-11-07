@@ -16,6 +16,7 @@ import {
   filterEnabledSidVolumeItems,
 } from "@/lib/config/sidVolumeControl";
 import { persistPauseMuteSnapshot } from "@/lib/playback/playbackSessionPersistence";
+import { noteVolumeSessionWrites } from "@/lib/playback/volumeSessionWrites";
 
 type PauseMuteCaptureApi = {
   getCategories: (options?: { __c64uIntent?: "user" }) => Promise<{ categories?: string[] }>;
@@ -72,6 +73,7 @@ export const capturePauseMuteToPersistedSnapshot = async (
     // Multi-item write MUST stay a single updateConfigBatch POST (never decomposed).
     // HARD27-011: the pause mute is undone on resume, so it must not be written
     // to the device's flash by the "Keep device settings after a restart" policy.
+    noteVolumeSessionWrites(muteUpdates, deviceId);
     const result = await api.updateConfigBatch({ "Audio Mixer": muteUpdates }, { __c64uTransientConfigWrite: true });
     const firmwareErrors = Array.isArray(result?.errors)
       ? result.errors.filter((entry) => entry.trim().length > 0)

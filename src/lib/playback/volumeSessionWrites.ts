@@ -32,10 +32,11 @@ export const startVolumeSessionWrites = (deviceId: string | null | undefined) =>
 export const endVolumeSessionWrites = () => store(null);
 
 /** Called before each write, so a write whose reply is lost still counts; a write that never landed fails the
- *  restore's comparison with the live value instead. */
-export const noteVolumeSessionWrites = (updates: VolumeWrites) => {
+ *  restore's comparison with the live value instead. A write to another device than the session's is not noted. */
+export const noteVolumeSessionWrites = (updates: VolumeWrites, deviceId?: string) => {
   const record = readRecord();
-  if (record) store({ deviceId: record.deviceId, writes: { ...record.writes, ...updates } });
+  if (record && (deviceId === undefined || record.deviceId === deviceId))
+    store({ deviceId: record.deviceId, writes: { ...record.writes, ...updates } });
 };
 
 const readRecord = (): WritesRecord | null => {
