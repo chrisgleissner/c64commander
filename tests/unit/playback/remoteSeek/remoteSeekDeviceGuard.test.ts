@@ -479,6 +479,26 @@ describe("remote seek device guard", () => {
     expect(readRemoteSeekJournal(DEVICE_KEY)?.keyHeld).toBe(false);
   });
 
+  it("records a key release made before the restore in the stored journal", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    await session.pressKey();
+    expect(readRemoteSeekJournal(DEVICE_KEY)?.keyHeld).toBe(true);
+    await session.releaseKey();
+    expect(readRemoteSeekJournal(DEVICE_KEY)?.keyHeld).toBe(false);
+  });
+
+  it("a key release that lands after the restore does not write the journal back", async () => {
+    const device = createFakeRemoteSeekDevice();
+    const session = await RemoteSeekDeviceSession.open(device.api, { playerOnScreen: ON_SCREEN });
+    await session.pressKey();
+    expect(await session.restore("pause or resume")).toBe(true);
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    await session.releaseKey();
+    expect(readRemoteSeekJournal(DEVICE_KEY)).toBeNull();
+    expect(localStorage.length).toBe(0);
+  });
+
   describe("with another client sharing the device", () => {
     const killApp = async () => {
       vi.resetModules();

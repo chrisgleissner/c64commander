@@ -144,6 +144,11 @@ const clearJournalIfOwn = (journal: RemoteSeekJournal) => {
   if (readRemoteSeekJournal(journal.deviceKey)?.sessionId === journal.sessionId) writeJournal(journal.deviceKey, null);
 };
 
+const writeJournalIfOwn = (journal: RemoteSeekJournal) => {
+  if (readRemoteSeekJournal(journal.deviceKey)?.sessionId === journal.sessionId)
+    writeJournal(journal.deviceKey, journal);
+};
+
 /** Sessions open in this process, by device. Their journals are theirs to restore, not recovery's. */
 const liveSessions = new Map<string, RemoteSeekDeviceSession>();
 let sessionCounter = 0;
@@ -530,7 +535,7 @@ export class RemoteSeekDeviceSession {
   private noteKeyReleased() {
     this.journal = { ...this.journal, keyHeld: false };
     try {
-      writeJournal(this.journal.deviceKey, this.journal);
+      writeJournalIfOwn(this.journal);
     } catch (error) {
       addLog("warn", "Remote seek could not record a key release; the restore will release the keys", {
         ...errorDetails(error),
