@@ -65,7 +65,12 @@ vi.mock("@/lib/config/appConfigStore", () => ({
   createAppConfigEntry,
 }));
 
-import { loadConfigWriteLedger, recordConfigWrite } from "@/lib/config/configWriteLedger";
+import {
+  loadConfigWriteLedger,
+  markConfigStoreReplaced,
+  recordConfigWrite,
+  wasConfigStoreReplaced,
+} from "@/lib/config/configWriteLedger";
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
@@ -427,6 +432,77 @@ describe("useAppConfigState", () => {
     expect(updateConfigBatch).toHaveBeenCalledTimes(1);
     expect(updateConfigBatch).toHaveBeenCalledWith({ Audio: { Mine: "1" } });
     expect(revertResult).toEqual({ status: "reverted" });
+  });
+
+  it("revertToInitial puts back the whole baseline after the device store was loaded or reset as a whole", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" }, Pan: { value: "C" } } } },
+    });
+    markConfigStoreReplaced("http://c64u");
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory
+      .mockResolvedValueOnce({ items: { Vol: { selected: "0" }, Pan: { selected: "L" } } })
+      .mockResolvedValue({ items: { Vol: { selected: "7" }, Pan: { selected: "C" } } });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let revertResult;
+    await act(async () => {
+      revertResult = await result.current.revertToInitial();
+    });
+
+    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+    expect(updateConfigBatch).toHaveBeenCalledWith({ Audio: { Vol: "7", Pan: "C" } });
+    expect(revertResult).toEqual({ status: "reverted" });
+    expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it("revertToInitial reports a whole-store replacement that did not revert instead of calling it reverted", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" } } } },
+    });
+    markConfigStoreReplaced("http://c64u");
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "0" } } });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    let revertResult;
+    await act(async () => {
+      revertResult = await result.current.revertToInitial();
+    });
+
+    expect(revertResult).toMatchObject({ status: "verification-failed", mismatchCount: 1 });
+    expect(updateHasChanges).not.toHaveBeenCalledWith(expect.any(String), false);
+  });
+
+  it("a successful revert forgets a whole-store replacement", async () => {
+    loadInitialSnapshot.mockReturnValue({
+      savedAt: "t",
+      data: { Audio: { items: { Vol: { value: "7" } } } },
+    });
+    markConfigStoreReplaced("http://c64u");
+    getCategories.mockResolvedValue({ categories: ["Audio"] });
+    getCategory.mockResolvedValue({ items: { Vol: { selected: "7" } } });
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.revertToInitial();
+    });
+
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+  });
+
+  it("a captured baseline forgets a whole-store replacement", async () => {
+    markConfigStoreReplaced("http://c64u");
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await act(async () => {
+      await result.current.captureInitialSnapshot();
+    });
+
+    expect(saveInitialSnapshot).toHaveBeenCalled();
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
   });
 
   it("a captured baseline starts a new record of this phone's writes", async () => {

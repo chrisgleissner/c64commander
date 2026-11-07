@@ -25,7 +25,12 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { usePageActivity } from "@/hooks/usePageActivity";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
-import { buildOwnRevertPayload, clearConfigWriteLedger, loadConfigWriteLedger } from "@/lib/config/configWriteLedger";
+import {
+  buildOwnRevertPayload,
+  clearConfigWriteLedger,
+  loadConfigWriteLedger,
+  wasConfigStoreReplaced,
+} from "@/lib/config/configWriteLedger";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
@@ -486,11 +491,14 @@ export function useAppConfigState() {
     setIsApplying(true);
     try {
       const before = await fetchAllConfig({ mode: "user" });
-      const expectedPayload = buildOwnRevertPayload(
-        buildWritableConfigPayload(initialSnapshot.data),
-        buildWritableConfigPayload(before.configs),
-        loadConfigWriteLedger(resolvedBaseUrl),
-      );
+      const baselinePayload = buildWritableConfigPayload(initialSnapshot.data);
+      const expectedPayload = wasConfigStoreReplaced(resolvedBaseUrl)
+        ? baselinePayload
+        : buildOwnRevertPayload(
+            baselinePayload,
+            buildWritableConfigPayload(before.configs),
+            loadConfigWriteLedger(resolvedBaseUrl),
+          );
       if (Object.keys(expectedPayload).length > 0) await applyConfigPayload(expectedPayload);
       const { configs: currentConfig, failedCategories } = await fetchAllConfig({ mode: "user" });
       // HARD19-024: exclude categories that couldn't be re-read from the mismatch

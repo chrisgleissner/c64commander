@@ -24,7 +24,7 @@ import { clearPassword as clearStoredPassword, setPassword as storePassword } fr
 import { completeSavedDeviceVerification, getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
-import { loadConfigWriteLedger } from "@/lib/config/configWriteLedger";
+import { loadConfigWriteLedger, wasConfigStoreReplaced } from "@/lib/config/configWriteLedger";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -1264,6 +1264,61 @@ describe("c64api", () => {
       "Audio Mixer": { "Vol UltiSid 1": "+6 dB" },
       Clock: { Hour: "12" },
     });
+  });
+
+  it.each([
+    ["a single-item write", (api: C64API) => api.setConfigValue("Clock", "Hour", "12")],
+    ["a batch write", (api: C64API) => api.updateConfigBatch({ Clock: { Hour: "12", Minute: "30" } })],
+  ])(
+    "files %s under the device that accepted it when the device is switched before it is recorded",
+    async (_, write) => {
+      localStorage.removeItem("c64u_config_writes:http://c64u");
+      localStorage.removeItem("c64u_config_writes:http://u64");
+      const clock = categoryConfigResponse("Clock", {
+        Hour: { selected: "1", options: ["1", "12"] },
+        Minute: { selected: "0", options: ["0", "30"] },
+      });
+      getFetchMock().mockImplementation((input: RequestInfo | URL) =>
+        Promise.resolve(String(input).endsWith("/v1/configs/Clock") ? clock.clone() : okJsonResponse()),
+      );
+      const api = new C64API("http://c64u");
+      const assertAccepted = (api as unknown as { assertConfigWriteAccepted: (...args: unknown[]) => void })
+        .assertConfigWriteAccepted;
+      vi.spyOn(
+        api as unknown as { assertConfigWriteAccepted: () => void },
+        "assertConfigWriteAccepted",
+      ).mockImplementation(function (this: unknown, ...args: unknown[]) {
+        api.setDeviceHost("u64");
+        return assertAccepted.apply(this, args);
+      });
+
+      await write(api);
+
+      expect(loadConfigWriteLedger("http://u64")).toEqual({});
+      expect(loadConfigWriteLedger("http://c64u").Clock?.Hour).toBe("12");
+    },
+  );
+
+  it.each([
+    ["loading from flash", (api: C64API) => api.loadConfig()],
+    ["resetting to default", (api: C64API) => api.resetConfig()],
+  ])("marks the whole config store of the device as replaced after %s", async (_, replace) => {
+    localStorage.removeItem("c64u_config_store_replaced:http://c64u");
+    getFetchMock().mockResolvedValue(okJsonResponse());
+
+    await replace(new C64API("http://c64u"));
+
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+    expect(wasConfigStoreReplaced("http://u64")).toBe(false);
+  });
+
+  it("does not mark the config store as replaced when the firmware rejects the load", async () => {
+    localStorage.removeItem("c64u_config_store_replaced:http://c64u");
+    getFetchMock().mockResolvedValue(okJsonResponse({ errors: ["flash empty"] }));
+
+    await expect(new C64API("http://c64u").loadConfig()).rejects.toThrow();
+
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
   });
 
   it("does not inspect successful machine-control response bodies", async () => {

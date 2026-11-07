@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/c64api/hostConfig";
+import { markConfigStoreReplaced } from "@/lib/config/configWriteLedger";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { buildInstallStagedFileName, isAppStagedFileName } from "@/lib/remoteFiles/installStagedFile";
 import { formatFileTimestamp } from "@/lib/snapshot/snapshotFilename";
@@ -28,6 +30,7 @@ type ConfigWorkflowDependencies = {
   runApplyRemoteConfig: (fileName: string) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
+  configStoreBaseUrl: string;
 };
 
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
@@ -42,7 +45,7 @@ type ConfigWorkflowLogContext = {
   remotePath?: string;
 };
 
-const defaultDependencies: ConfigWorkflowDependencies = {
+const defaultDependencies: Omit<ConfigWorkflowDependencies, "configStoreBaseUrl"> = {
   ensureLocalSnapshotStorage: async () => undefined,
   listRemoteTempFiles: async () => [],
   readRemoteFile: async () => new Uint8Array(),
@@ -206,7 +209,11 @@ export const waitForTempConfigFile = async (
 };
 
 export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependencies> = {}) => {
-  const deps = { ...defaultDependencies, ...overrides };
+  const deps = {
+    ...defaultDependencies,
+    configStoreBaseUrl: buildBaseUrlFromDeviceHost(resolveDeviceHostFromStorage()),
+    ...overrides,
+  };
 
   const saveSnapshot = async (onProgress?: (state: ConfigProgressState) => void): Promise<SavedConfigSnapshot> => {
     const reporter = createProgressReporter("save", onProgress);
@@ -354,6 +361,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         progress: 90,
       });
       await deps.runApplyRemoteConfig(remoteFileName);
+      markConfigStoreReplaced(deps.configStoreBaseUrl);
 
       emit({
         step: "complete",
@@ -413,6 +421,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         logContext,
       );
       await deps.runApplyRemoteConfig(remoteFileName);
+      markConfigStoreReplaced(deps.configStoreBaseUrl);
       reporter.emit(
         {
           step: "complete",

@@ -35,7 +35,7 @@ import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { FirmwareConfigWriteError } from "@/lib/config/configWriteErrors";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
-import { recordConfigWrite } from "@/lib/config/configWriteLedger";
+import { markConfigStoreReplaced, recordConfigWrite } from "@/lib/config/configWriteLedger";
 import {
   getConfigCategoryItems,
   validateConfigBatchWrite,
@@ -2373,6 +2373,7 @@ export class C64API {
       value: resolvedValue,
       categoryPayload,
     });
+    const ledgerBaseUrl = buildBaseUrlFromDeviceHost(this.deviceHost);
     const response = await scheduleConfigWrite(
       () =>
         this.request<ConfigResponse>(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
@@ -2384,7 +2385,7 @@ export class C64API {
     );
     this.assertConfigWriteAccepted(response, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);
-    recordConfigWrite(buildBaseUrlFromDeviceHost(this.deviceHost), category, item, resolvedValue);
+    recordConfigWrite(ledgerBaseUrl, category, item, resolvedValue);
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
     // rejected write left nothing to persist.
@@ -2427,18 +2428,22 @@ export class C64API {
   }
 
   async loadConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
+    const ledgerBaseUrl = buildBaseUrlFromDeviceHost(this.deviceHost);
     const response = await scheduleConfigWrite(() =>
       this.request<{ errors: string[] }>("/v1/configs:load_from_flash", { method: "PUT", ...options }),
     );
     this.assertConfigWriteAccepted(response, { category: "flash-load" });
+    markConfigStoreReplaced(ledgerBaseUrl);
     return response;
   }
 
   async resetConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
+    const ledgerBaseUrl = buildBaseUrlFromDeviceHost(this.deviceHost);
     const response = await scheduleConfigWrite(() =>
       this.request<{ errors: string[] }>("/v1/configs:reset_to_default", { method: "PUT", ...options }),
     );
     this.assertConfigWriteAccepted(response, { category: "reset-defaults" });
+    markConfigStoreReplaced(ledgerBaseUrl);
     return response;
   }
 
@@ -2510,12 +2515,13 @@ export class C64API {
               ...options,
               body: JSON.stringify(requestPayload),
             });
+      const ledgerBaseUrl = buildBaseUrlFromDeviceHost(this.deviceHost);
       const response = await scheduleConfigWrite(run);
       this.assertConfigWriteAccepted(response, { payload: requestPayload });
       Object.entries(requestPayload).forEach(([category, updates]) => {
         Object.entries(updates).forEach(([item, value]) => {
           this.setCachedConfigValue(category, item, value);
-          recordConfigWrite(buildBaseUrlFromDeviceHost(this.deviceHost), category, item, value);
+          recordConfigWrite(ledgerBaseUrl, category, item, value);
         });
       });
       errors.push(...(response.errors ?? []));

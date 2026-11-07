@@ -16,8 +16,10 @@ import { isLoopbackAddress, removeOtherLoopbackEntries } from "@/lib/storage/loo
 export type ConfigWritePayload = Record<string, Record<string, string | number>>;
 
 const LEDGER_PREFIX = "c64u_config_writes:";
+const REPLACED_PREFIX = "c64u_config_store_replaced:";
 
 const ledgerKey = (baseUrl: string) => `${LEDGER_PREFIX}${baseUrl}`;
+const replacedKey = (baseUrl: string) => `${REPLACED_PREFIX}${baseUrl}`;
 
 export const loadConfigWriteLedger = (baseUrl: string): ConfigWritePayload => {
   try {
@@ -51,9 +53,41 @@ export const recordConfigWrite = (baseUrl: string, category: string, item: strin
   }
 };
 
+/**
+ * Load from flash and reset to default replace every item at once, so the ledger cannot list what changed.
+ * A revert after either one puts back the whole baseline.
+ */
+export const markConfigStoreReplaced = (baseUrl: string) => {
+  try {
+    const key = replacedKey(baseUrl);
+    if (isLoopbackAddress(baseUrl)) removeOtherLoopbackEntries(REPLACED_PREFIX, key);
+    localStorage.setItem(key, "1");
+  } catch (error) {
+    addLog("warn", "Config store replacement could not be recorded; revert will put back only items written here", {
+      baseUrl,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+  }
+};
+
+export const wasConfigStoreReplaced = (baseUrl: string): boolean => {
+  try {
+    return localStorage.getItem(replacedKey(baseUrl)) === "1";
+  } catch (error) {
+    addLog("warn", "Config store replacement record could not be read; revert will put back only items written here", {
+      baseUrl,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    return false;
+  }
+};
+
 export const clearConfigWriteLedger = (baseUrl: string) => {
   try {
     localStorage.removeItem(ledgerKey(baseUrl));
+    localStorage.removeItem(replacedKey(baseUrl));
   } catch (error) {
     addLog("warn", "Config write ledger could not be cleared", {
       baseUrl,

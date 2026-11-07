@@ -3,6 +3,8 @@ import * as logging from "@/lib/logging";
 import { createConfigWorkflow, detectUpdatedTempConfigFile, waitForTempConfigFile } from "@/lib/config/configWorkflow";
 import type { ConfigSnapshotFileLocation } from "@/lib/config/configSnapshotTypes";
 import { DISK_WORK_CLIENT_ID_STORAGE_KEY } from "@/lib/disks/diskWorkClientId";
+import { CURRENT_DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
+import { wasConfigStoreReplaced } from "@/lib/config/configWriteLedger";
 
 const addLogSpy = vi.spyOn(logging, "addLog").mockImplementation(() => undefined);
 const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
@@ -398,5 +400,57 @@ describe("configWorkflow", () => {
       ],
     );
     expect(file?.name).toBe("b.cfg");
+  });
+
+  describe("marking the device's config store as replaced by an applied .cfg", () => {
+    const applyOnce = {
+      local: (workflow: ReturnType<typeof createConfigWorkflow>) =>
+        workflow.applyLocalSnapshot("config.cfg", new Uint8Array([1])),
+      remote: (workflow: ReturnType<typeof createConfigWorkflow>) => workflow.applyRemoteSnapshot("/Temp/config.cfg"),
+    };
+
+    beforeEach(() => {
+      localStorage.removeItem("c64u_config_store_replaced:http://c64u");
+      localStorage.removeItem("c64u_config_store_replaced:http://u64");
+    });
+
+    it.each(["local", "remote"] as const)("marks it after a successful %s apply", async (kind) => {
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn().mockResolvedValue(undefined),
+        configStoreBaseUrl: "http://c64u",
+      });
+
+      await applyOnce[kind](workflow);
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+    });
+
+    it.each(["local", "remote"] as const)("does not mark it when the %s apply fails", async (kind) => {
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn().mockRejectedValue(new Error("apply error")),
+        configStoreBaseUrl: "http://c64u",
+      });
+
+      await expect(applyOnce[kind](workflow)).rejects.toThrow("apply error");
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+    });
+
+    it("marks the device the workflow was created for when the selected device changes during the apply", async () => {
+      localStorage.setItem(CURRENT_DEVICE_HOST_KEY, "c64u");
+      let switchDevice: () => void = () => undefined;
+      const workflow = createConfigWorkflow({
+        writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+        runApplyRemoteConfig: vi.fn(async () => switchDevice()),
+      });
+      switchDevice = () => localStorage.setItem(CURRENT_DEVICE_HOST_KEY, "u64");
+
+      await workflow.applyRemoteSnapshot("/Temp/config.cfg");
+
+      expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+      expect(wasConfigStoreReplaced("http://u64")).toBe(false);
+    });
   });
 });

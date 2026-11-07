@@ -12,7 +12,9 @@ import {
   buildOwnRevertPayload,
   clearConfigWriteLedger,
   loadConfigWriteLedger,
+  markConfigStoreReplaced,
   recordConfigWrite,
+  wasConfigStoreReplaced,
 } from "@/lib/config/configWriteLedger";
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
@@ -44,6 +46,42 @@ describe("config write ledger", () => {
     recordConfigWrite("http://127.0.0.1:40002", "Clock", "Hour", 2);
     expect(loadConfigWriteLedger("http://127.0.0.1:40001")).toEqual({});
     expect(loadConfigWriteLedger("http://127.0.0.1:40002")).toEqual({ Clock: { Hour: 2 } });
+  });
+
+  it("remembers per device that the whole store was replaced until the ledger is cleared", () => {
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+    markConfigStoreReplaced("http://c64u");
+
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(true);
+    expect(wasConfigStoreReplaced("http://u64")).toBe(false);
+    clearConfigWriteLedger("http://c64u");
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+  });
+
+  it("keeps one replaced-store record for the simulated device's current loopback port only", () => {
+    markConfigStoreReplaced("http://127.0.0.1:40001");
+    markConfigStoreReplaced("http://127.0.0.1:40002");
+
+    expect(wasConfigStoreReplaced("http://127.0.0.1:40001")).toBe(false);
+    expect(wasConfigStoreReplaced("http://127.0.0.1:40002")).toBe(true);
+  });
+
+  it("logs, rather than throws, when the replaced-store record cannot be stored or read", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+
+    markConfigStoreReplaced("http://c64u");
+    expect(wasConfigStoreReplaced("http://c64u")).toBe(false);
+    vi.restoreAllMocks();
+
+    expect(vi.mocked(addLog).mock.calls.map(([level, message]) => `${level} ${message}`)).toEqual([
+      "warn Config store replacement could not be recorded; revert will put back only items written here",
+      "warn Config store replacement record could not be read; revert will put back only items written here",
+    ]);
   });
 
   it("reverts only items this phone wrote that still hold the value it wrote", () => {
