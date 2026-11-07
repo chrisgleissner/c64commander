@@ -11,6 +11,7 @@ import {
   endVolumeSessionWrites,
   noteRestoredVolumeSessionWrites,
   noteVolumeSessionWrites,
+  noteVolumeSessionWritesForContext,
   readVolumeSessionWrites,
   startVolumeSessionWrites,
 } from "@/lib/playback/volumeSessionWrites";
@@ -74,6 +75,40 @@ describe("the record of mixer levels a playback volume session wrote", () => {
     noteVolumeSessionWrites({ "Vol Master": "-6 dB" });
 
     expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB" });
+  });
+
+  it.each(["Resume unmute", "Pause mute rollback"])(
+    "notes the %s write as a restored level, which is this phone's own only if it held it before the mute",
+    (context) => {
+      startVolumeSessionWrites("device-1");
+      noteVolumeSessionWrites({ "Vol Master": "-6 dB" });
+      noteVolumeSessionWritesForContext("Pause mute", { "Vol Master": "OFF", "Vol Socket 1": "OFF" }, "device-1");
+
+      noteVolumeSessionWritesForContext(context, { "Vol Master": "-6 dB", "Vol Socket 1": "-10 dB" }, "device-1");
+
+      expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "-6 dB" });
+    },
+  );
+
+  it("notes any other context as an ordinary write, and only for the session's device", () => {
+    startVolumeSessionWrites("device-1");
+
+    noteVolumeSessionWritesForContext("Pause mute", { "Vol Master": "OFF" }, "device-2");
+    expect(readVolumeSessionWrites("device-1")).toEqual({});
+    noteVolumeSessionWritesForContext("Pause mute", { "Vol Master": "OFF" }, "device-1");
+    noteVolumeSessionWritesForContext("Unmute", { "Vol Socket 1": "-6 dB" }, null);
+
+    expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "OFF", "Vol Socket 1": "-6 dB" });
+  });
+
+  it("does not record a restored level when the device is unknown", () => {
+    startVolumeSessionWrites("device-1");
+    noteVolumeSessionWrites({ "Vol Master": "-6 dB" });
+    noteVolumeSessionWrites({ "Vol Master": "OFF" });
+
+    noteVolumeSessionWritesForContext("Resume unmute", { "Vol Master": "-6 dB" }, null);
+
+    expect(readVolumeSessionWrites("device-1")).toEqual({ "Vol Master": "OFF" });
   });
 
   it("starts empty for each new session", () => {

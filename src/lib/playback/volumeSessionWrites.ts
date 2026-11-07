@@ -87,3 +87,15 @@ export const readVolumeSessionWrites = (deviceId: string | null | undefined): Vo
   const record = readRecord();
   return deviceId && record?.deviceId === deviceId ? record.writes : null;
 };
+
+const PAUSE_RESTORE_CONTEXTS = new Set(["Resume unmute", "Pause mute rollback"]);
+
+/** Notes a playback mixer write by what it is: the unmute after a pause puts back levels read at pause time. */
+export const noteVolumeSessionWritesForContext = (
+  context: string,
+  updates: VolumeWrites,
+  deviceId: string | null | undefined,
+) => {
+  if (!PAUSE_RESTORE_CONTEXTS.has(context)) noteVolumeSessionWrites(updates, deviceId ?? undefined);
+  else if (deviceId) noteRestoredVolumeSessionWrites(updates, deviceId);
+};

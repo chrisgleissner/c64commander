@@ -554,7 +554,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
           AUDIO_MIXER_WRITE_TIMEOUT_MS,
           `${context} audio mixer update`,
         );
-      if (!isRestore) volumeSessionWrites.noteVolumeSessionWrites(updates);
+      if (!isRestore) volumeSessionWrites.noteVolumeSessionWritesForContext(context, updates, resolvedDeviceId);
       let pendingWrite = startAudioMixerWrite();
       try {
         audioMixerWriteInFlightRef.current = pendingWrite;
@@ -596,7 +596,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         }
       }
     },
-    [schedulePlaybackReconciliation, updateConfigBatch, withTimeout],
+    [resolvedDeviceId, schedulePlaybackReconciliation, updateConfigBatch, withTimeout],
   );
 
   const withPollingPause = useCallback(async <T>(operation: () => Promise<T>) => {
