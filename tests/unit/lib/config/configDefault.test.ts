@@ -25,6 +25,16 @@ describe("readConfigItemDefault", () => {
     expect(readConfigItemDefault([1])).toBeUndefined();
     expect(readConfigItemDefault({ default: { nested: true } })).toBeUndefined();
   });
+
+  it("treats the empty default a ROM file item reports as no default", () => {
+    const kernalRom = {
+      current: "kernal.901227-03.bin",
+      presets: ["basic.901226-01.bin", "kernal.901227-03.bin", "uci_kernal.bin"],
+      default: "",
+    };
+    expect(readConfigItemDefault(kernalRom)).toBeUndefined();
+    expect(readConfigItemDefault({ current: "x", default: "  " })).toBeUndefined();
+  });
 });
 
 describe("isModifiedFromDefault", () => {

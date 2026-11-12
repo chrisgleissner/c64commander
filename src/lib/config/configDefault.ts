@@ -8,12 +8,16 @@
 
 const PLAIN_NUMBER = /^[+-]?\d+(\.\d+)?$/;
 
-/** The firmware's default for one item, read from the per-item payload the app already fetches or caches. */
+/**
+ * The firmware's default for one item, read from the per-item payload the app already fetches or caches.
+ * An empty default (file items such as Kernal ROM report "") names no value a user could recognize, so it counts as none.
+ */
 export const readConfigItemDefault = (config: unknown): string | number | undefined => {
   if (typeof config !== "object" || config === null || Array.isArray(config)) return undefined;
   const record = config as Record<string, unknown>;
   const candidate = record.default;
-  return typeof candidate === "string" || typeof candidate === "number" ? candidate : undefined;
+  if (typeof candidate === "number") return candidate;
+  return typeof candidate === "string" && candidate.trim() !== "" ? candidate : undefined;
 };
 
 /** True when a default is known and the item's value differs from it; numbers compare by value, text exactly. */
