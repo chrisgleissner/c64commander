@@ -13,6 +13,7 @@ import { useLatestCallback } from "@/hooks/useLatestCallback";
 import { planPlaylistItemRemoval } from "@/pages/playFiles/playbackGuards";
 import {
   captureRemovedRows,
+  currentPlaylistGeneration,
   describeRemoval,
   restoreRemovedRows,
   type RemovedRow,
@@ -21,6 +22,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 // A keypad user reaches Undo through the quick menu, which takes longer than the notice duration allows.
 export const REMOVAL_UNDO_DURATION_MS = 12_000;
+export const PLAYLIST_CHANGED_TITLE = "Playlist changed; nothing restored";
 
 type PlaylistRemovalOptions = {
   playlist: PlaylistItem[];
@@ -67,7 +69,11 @@ export const usePlaylistRemoval = ({
     [currentIndex, stopPlayback, isPaused, isPlaying, playlist, setPlaylist, setCurrentIndex, setSelectedPlaylistIds],
   );
 
-  const undoRemoval = useLatestCallback((removed: RemovedRow[]) => {
+  const undoRemoval = useLatestCallback((removed: RemovedRow[], generation: number) => {
+    if (generation !== currentPlaylistGeneration()) {
+      toast({ title: PLAYLIST_CHANGED_TITLE, alwaysVisible: true });
+      return;
+    }
     const restored = restoreRemovedRows(playlist, currentIndex, removed);
     setPlaylist(restored.items);
     if (currentIndex >= 0) setCurrentIndex(restored.currentIndex);
@@ -76,13 +82,14 @@ export const usePlaylistRemoval = ({
   const removeWithUndo = useLatestCallback((ids: Set<string>) => {
     const removed = captureRemovedRows(playlist, ids);
     if (!removed.length) return;
+    const generation = currentPlaylistGeneration();
     removePlaylistItemsById(ids);
     toast({
       title: describeRemoval(removed.length),
       alwaysVisible: true,
       duration: REMOVAL_UNDO_DURATION_MS,
       action: (
-        <ToastAction altText="Undo removal" onClick={() => undoRemoval(removed)}>
+        <ToastAction altText="Undo removal" onClick={() => undoRemoval(removed, generation)}>
           Undo
         </ToastAction>
       ),

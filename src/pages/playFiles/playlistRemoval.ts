@@ -10,6 +10,15 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 
 export type RemovedRow = { item: PlaylistItem; index: number };
 
+let playlistGeneration = 0;
+
+export const currentPlaylistGeneration = () => playlistGeneration;
+
+/** Called wherever the queue is swapped for another one, so an Undo that predates the swap can tell. */
+export const markPlaylistReplaced = () => {
+  playlistGeneration += 1;
+};
+
 /** The rows `ids` names, with the positions they held, so that they can be put back where they were. */
 export const captureRemovedRows = (playlist: readonly PlaylistItem[], ids: ReadonlySet<string>): RemovedRow[] =>
   playlist.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : []));

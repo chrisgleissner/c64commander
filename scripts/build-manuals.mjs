@@ -1203,7 +1203,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**, or choose **Remove from playlist** in a row's menu.",
     "",
-    "Every removal, including **Clear playlist**, leaves a notification with **Undo**. Undo puts the items back where they were. It never starts playback again: if the removal stopped the tune that was playing, press **Play** yourself. The same menu has **Move to top** and **Move to bottom**, next to **Move up** and **Move down**; like those, they are unavailable while Shuffle is on or a filter hides rows.",
+    "Every removal, including **Clear playlist**, leaves a notification with **Undo**. Undo puts the items back where they were. It never starts playback again, and it puts nothing back into a playlist that has since been replaced, for example by starting SID Radio or returning to your playlist afterwards: if the removal stopped the tune that was playing, press **Play** yourself. The same menu has **Move to top** and **Move to bottom**, next to **Move up** and **Move down**; like those, they are unavailable while Shuffle is on or a filter hides rows.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,

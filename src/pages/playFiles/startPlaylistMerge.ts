@@ -27,13 +27,15 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
  * never been through the station's admission rules, so tunes well under the configured minimum
  * length played from a station the listener believed was filtering them.
  */
+export const startReplacesQueue = (previous: readonly PlaylistItem[], options?: { replaceQueue?: boolean }): boolean =>
+  options?.replaceQueue === true || previous.length === 0;
+
 export const mergeStartedPlaylist = (
   previous: readonly PlaylistItem[],
   started: readonly PlaylistItem[],
   options?: { replaceQueue?: boolean },
 ): PlaylistItem[] => {
-  if (options?.replaceQueue) return [...started];
-  if (previous.length === 0) return [...started];
+  if (startReplacesQueue(previous, options)) return [...started];
   const startedIds = new Set(started.map((item) => item.id));
   const extras = previous.filter((item) => !startedIds.has(item.id));
   return extras.length ? [...started, ...extras] : [...started];

@@ -11,8 +11,13 @@ import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __clearToastStateForTests } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { markPlaylistReplaced } from "@/pages/playFiles/playlistRemoval";
 import { resolvePlayOrderIndices } from "@/pages/playFiles/playFilesUtils";
-import { REMOVAL_UNDO_DURATION_MS, usePlaylistRemoval } from "@/pages/playFiles/hooks/usePlaylistRemoval";
+import {
+  PLAYLIST_CHANGED_TITLE,
+  REMOVAL_UNDO_DURATION_MS,
+  usePlaylistRemoval,
+} from "@/pages/playFiles/hooks/usePlaylistRemoval";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const buildItem = (name: string): PlaylistItem => ({
@@ -129,6 +134,30 @@ describe("usePlaylistRemoval", () => {
     undo();
 
     expect(names(hook.result.current.playlist)).toEqual(["a", "b", "c", "d", "x"]);
+  });
+
+  it("does not put rows into a playlist that was replaced after the removal, and says so", () => {
+    const { hook } = setup();
+
+    act(() => hook.result.current.removeWithUndo(new Set([idOf("a"), idOf("b"), idOf("c"), idOf("d")])));
+    act(() => {
+      markPlaylistReplaced();
+      hook.result.current.setPlaylist([buildItem("station")]);
+    });
+    undo();
+
+    expect(names(hook.result.current.playlist)).toEqual(["station"]);
+    expect(screen.getByText(PLAYLIST_CHANGED_TITLE)).toBeInTheDocument();
+  });
+
+  it("still restores after the rows were reordered, which keeps the same playlist", () => {
+    const { hook } = setup();
+
+    act(() => hook.result.current.removeWithUndo(new Set([idOf("a")])));
+    act(() => hook.result.current.setPlaylist((previous) => [...previous].reverse()));
+    undo();
+
+    expect(names(hook.result.current.playlist)).toContain("a");
   });
 
   it("drops the removed rows from the selection and does not select them again on Undo", () => {
