@@ -1,6 +1,7 @@
 import { addErrorLog } from "@/lib/logging";
 import type { DiskEntry } from "@/lib/disks/diskTypes";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { openIndexedDb, rejectOnTransactionAbort } from "@/lib/storage/indexedDbSafety";
 
 export type SavedDeviceDependencySummary = {
   diskCount: number;
@@ -86,21 +87,16 @@ const countLocalStoragePlaylistReferences = (deviceId: string) => {
 const countIndexedDbPlaylistReferences = async (deviceId: string) => {
   if (typeof indexedDB === "undefined") return 0;
 
-  const database = await new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(PLAYLIST_REPOSITORY_DB_NAME, PLAYLIST_REPOSITORY_DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(PLAYLIST_REPOSITORY_STORE)) {
-        db.createObjectStore(PLAYLIST_REPOSITORY_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+  const database = await openIndexedDb(PLAYLIST_REPOSITORY_DB_NAME, PLAYLIST_REPOSITORY_DB_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(PLAYLIST_REPOSITORY_STORE)) {
+      db.createObjectStore(PLAYLIST_REPOSITORY_STORE);
+    }
   });
 
   try {
     return await new Promise<number>((resolve, reject) => {
       const transaction = database.transaction(PLAYLIST_REPOSITORY_STORE, "readonly");
+      rejectOnTransactionAbort(transaction, reject, "dependency scan");
       const store = transaction.objectStore(PLAYLIST_REPOSITORY_STORE);
       const request = store.openCursor();
       const matchingTrackIds = new Set<string>();

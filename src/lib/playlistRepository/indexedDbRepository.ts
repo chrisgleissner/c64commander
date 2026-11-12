@@ -18,6 +18,7 @@ import type {
 import type { PlaylistDataRepository } from "./repository";
 import { buildPlaylistQueryIndex, queryPlaylistIndex, type PersistedPlaylistQueryIndex } from "./queryIndex";
 import { addLog } from "@/lib/logging";
+import { openIndexedDb, rejectOnTransactionAbort } from "@/lib/storage/indexedDbSafety";
 
 type Options = {
   preferDurableStorage: boolean;
@@ -131,16 +132,10 @@ const sessionKey = (playlistId: string) => `session:${playlistId}`;
 const randomSessionKey = (playlistId: string) => `random-session:${playlistId}`;
 
 const openDb = (): Promise<IDBDatabase> =>
-  new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed"));
+  openIndexedDb(DB_NAME, DB_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(STORE)) {
+      db.createObjectStore(STORE);
+    }
   });
 
 const readValues = async (keys: string[]): Promise<Map<string, unknown>> => {
@@ -159,6 +154,7 @@ const readValues = async (keys: string[]): Promise<Map<string, unknown>> => {
         settled = true;
         reject(error);
       };
+      rejectOnTransactionAbort(tx, rejectOnce, "read");
 
       keys.forEach((key) => {
         const request = store.get(key);
@@ -198,6 +194,7 @@ const findOrphanTrackKeys = async (): Promise<string[]> => {
     return await new Promise<string[]>((resolve, reject) => {
       const tx = db.transaction(STORE, "readonly");
       const store = tx.objectStore(STORE);
+      rejectOnTransactionAbort(tx, reject, "orphan sweep");
       const keysRequest = store.getAllKeys();
       keysRequest.onerror = () => reject(keysRequest.error ?? new Error("IndexedDB getAllKeys failed"));
       keysRequest.onsuccess = () => {
