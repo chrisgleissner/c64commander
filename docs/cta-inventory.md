@@ -385,8 +385,9 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
     - Tap latency section — expand/collapse — `av-sync-lat-toggle` — R✅ I✅ ; inside: Load — button — `av-sync-key-load` — R✅ I✅ ; Send SPACE — button — `av-sync-press` — R✅ I✅ ; Stop — button — `av-sync-stop` (shared with the A/V Sync section) `[visible when a test program is running]`
     - Tone & colour ladder section — expand/collapse — `av-tone-ladder-toggle` — R✅ I✅ ; inside: Run test — button — `av-tone-ladder-run` — R✅ I✅ `[disabled while listening]` ; Reset — button — `av-tone-ladder-reset` — R✅ I✅ `[disabled: no result yet, or a run in progress]` — plays a known C3→C4→C3 scale on the C64, stepping the screen background through all 16 VIC colours in unison with the notes, and grades the sound and picture that reach this device (pitch Δ in cents, note-length Δ, silence floor in dBFS against the EBU R128 gate, A/V offset graded per ITU-R BT.1359-1, per-note table with colour swatches)
 - **Config actions** (`data-section-label="Config"`)
-  - Save/Load (flash) — button — R✅ I✅
-  - Reset to default — button (danger) — R✅ I✅
+  - Save (flash) — button — focus id `home-config-save-flash` — R✅ I✅
+  - Load (flash) — button — focus id `home-config-load-flash` — R✅ I✅ — opens the machine action confirmation (`machine-action-confirmation`, Cancel focused first, then Load); the flash configuration replaces the current one only after Load
+  - Reset to default — button (danger) — focus id `home-config-reset` — R✅ I✅ — opens the same confirmation (Cancel, then Reset); every setting returns to its firmware default only after Reset
   - Save to app — button — `home-config-save-app` — R✅ I✅
   - Load from app — button — `home-config-load-app` — R✅ I✅ `[disabled: no app configs]`
   - Revert Changes — button — `home-config-revert-changes` — R✅ I✅
