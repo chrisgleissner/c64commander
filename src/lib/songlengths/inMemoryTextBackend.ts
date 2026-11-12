@@ -77,7 +77,7 @@ const parseDurationTokenToSeconds = (value: string): number | null => {
   if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || !Number.isFinite(fractional)) return null;
   if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
   const totalMs = (minutes * 60 + seconds) * 1000 + fractional;
-  return Math.round(totalMs / 1000);
+  return Math.ceil(totalMs / 1000);
 };
 
 const parseDurations = (value: string) => {

@@ -217,6 +217,18 @@ describe("InMemoryTextBackend", () => {
   });
 
   describe("parseDurationTokenToSeconds", () => {
+    it.each([
+      ["1:00.400", 61],
+      ["0:00.400", 1],
+      ["1:30.500", 91],
+      ["1:00.000", 60],
+      ["0:00.000", 0],
+    ])("never shortens %s and keeps a non-zero entry non-zero (%i s)", async (token, expected) => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(`; /DEMOS/Song.sid\nabc=${token}`));
+      expect(backend.resolve({ fileName: "song.sid" }).durationSeconds).toBe(expected);
+    });
+
     it("returns null for seconds >= 60", async () => {
       const backend = new InMemoryTextBackend();
       await backend.load(makeInput("; /DEMOS/Song.sid\nabc=0:61"));

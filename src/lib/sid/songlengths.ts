@@ -88,7 +88,7 @@ const parseTimeToSeconds = (value: string) => {
   const fraction = Number((secondsSplit[1] ?? "").padEnd(3, "0").slice(0, 3));
   if (Number.isNaN(seconds) || Number.isNaN(fraction)) return null;
   const totalMs = (minutes * 60 + seconds) * 1000 + fraction;
-  return Math.round(totalMs / 1000);
+  return Math.ceil(totalMs / 1000);
 };
 
 const parseDurations = (value: string) => {
