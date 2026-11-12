@@ -153,6 +153,25 @@ describe("sidUtils", () => {
     expect(metadata.sidChipCount).toBe(1);
   });
 
+  it("does not count a third SID whose address byte equals the second", () => {
+    const header = createSidHeader();
+    header[122] = 0x42;
+    header[123] = 0x42;
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(2);
+  });
+
+  it("does not count a third SID when the second address byte is invalid", () => {
+    const header = createSidHeader();
+    header[122] = 0x00;
+    header[123] = 0x44;
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Address).toBeNull();
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(1);
+  });
+
   it("counts a SID at the first and last valid address bytes of each range", () => {
     [0x42, 0x7e, 0xe0, 0xfe].forEach((byte) => {
       const header = createSidHeader();
@@ -370,6 +389,7 @@ describe("sidUtils", () => {
     expect(metadata.sid2Adress).toBe(0);
     expect(metadata.sid2Address).toBeNull();
     expect(metadata.sid2Model).toBeNull();
-    expect(metadata.sidChipCount).toBe(2); // sid3Adress still set
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(1);
   });
 });

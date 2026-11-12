@@ -164,7 +164,7 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
 
   const sid2Address = sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
   const hasSid2 = sid2Address !== null;
-  const hasSid3 = sid3Adress !== null && isValidSidAddressByte(sid3Adress);
+  const hasSid3 = hasSid2 && sid3Adress !== null && isValidSidAddressByte(sid3Adress) && sid3Adress !== sid2Adress;
 
   const sid2Model = hasSid2 ? decodeSidModel(sid2ModelBits) : null;
   const sid3Model = hasSid3 ? decodeSidModel(sid3ModelBits) : null;
