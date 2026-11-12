@@ -555,9 +555,9 @@ const deleteFilesystemFullSnapshot = async () => {
       path: STORAGE_PATH,
     });
   } catch (error) {
-    if (!isFileNotFoundError(error)) {
-      addLog("warn", "Failed to delete stale HVSC full snapshot", describeError(error, { storagePath: STORAGE_PATH }));
-    }
+    if (isFileNotFoundError(error)) return;
+    addLog("warn", "Failed to delete stale HVSC full snapshot", describeError(error, { storagePath: STORAGE_PATH }));
+    await writeDataFileText(STORAGE_PATH, "");
   }
 };
 
@@ -646,14 +646,24 @@ const deleteLocalStorageFullSnapshot = () => {
   localStorage.removeItem(STORAGE_KEY);
 };
 
-const writeLocalStorageSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-};
-
-const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, JSON.stringify(buildPersistedMediaIndexSnapshot(snapshot)));
+/** Never throws: on failure the old copies are removed so a later load cannot return them, and the snapshot stays in memory. */
+const persistToLocalStorage = (normalized: HvscBrowseIndexSnapshot, persistFullSnapshot: boolean) => {
+  if (typeof localStorage === "undefined") return { chars: 0 };
+  let chars = 0;
+  try {
+    const mediaIndexText = JSON.stringify(buildPersistedMediaIndexSnapshot(normalized));
+    const fullText = persistFullSnapshot ? JSON.stringify(normalized) : null;
+    chars = mediaIndexText.length + (fullText?.length ?? 0);
+    localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, mediaIndexText);
+    if (fullText) localStorage.setItem(STORAGE_KEY, fullText);
+    else deleteLocalStorageFullSnapshot();
+    return { chars };
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(MEDIA_INDEX_STORAGE_KEY);
+    rememberSnapshot(normalizeSnapshot(normalized));
+    return { chars, error: (error as Error)?.message ?? String(error) };
+  }
 };
 
 /*
@@ -753,38 +763,39 @@ const persistHvscBrowseIndexSnapshot = async (normalized: HvscBrowseIndexSnapsho
       }
       return;
     } catch (error) {
+      const fallback = persistToLocalStorage(normalized, persistFullSnapshot);
       addLog(
         "warn",
-        "HVSC browse snapshot filesystem persistence failed; falling back to localStorage",
+        fallback.error
+          ? "HVSC browse snapshot persistence failed in the filesystem and localStorage; keeping it in memory only"
+          : "HVSC browse snapshot filesystem persistence failed; falling back to localStorage",
         describeError(error, {
           storagePath: STORAGE_PATH,
           mediaIndexPath: MEDIA_INDEX_STORAGE_PATH,
           songCount: Object.keys(normalized.songs).length,
+          localStorageChars: fallback.chars,
+          localStorageError: fallback.error,
         }),
       );
-      writeLocalStorageMediaIndexSnapshot(normalized);
-      if (persistFullSnapshot) {
-        writeLocalStorageSnapshot(normalized);
-        downgradeReported.localStorage = false;
-      } else if (typeof localStorage !== "undefined") {
-        deleteLocalStorageFullSnapshot();
-        if (!downgradeReported.localStorage) {
-          downgradeReported.localStorage = true;
-          addLog("info", "HVSC browse snapshot localStorage persistence downgraded to compact media index", {
-            storageKey: STORAGE_KEY,
-            songCount: Object.keys(normalized.songs).length,
-            maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
-          });
-        }
+      if (persistFullSnapshot) downgradeReported.localStorage = false;
+      else if (!downgradeReported.localStorage) {
+        downgradeReported.localStorage = true;
+        addLog("info", "HVSC browse snapshot localStorage persistence downgraded to compact media index", {
+          storageKey: STORAGE_KEY,
+          songCount: Object.keys(normalized.songs).length,
+          maxFullSnapshotSongs: MAX_PERSISTED_FULL_SNAPSHOT_SONGS,
+        });
       }
       return;
     }
   }
-  writeLocalStorageMediaIndexSnapshot(normalized);
-  if (persistFullSnapshot) {
-    writeLocalStorageSnapshot(normalized);
-  } else {
-    deleteLocalStorageFullSnapshot();
+  const fallback = persistToLocalStorage(normalized, persistFullSnapshot);
+  if (fallback.error) {
+    addLog("warn", "HVSC browse snapshot localStorage persistence failed; keeping it in memory only", {
+      songCount: Object.keys(normalized.songs).length,
+      localStorageChars: fallback.chars,
+      error: fallback.error,
+    });
   }
 };
 
