@@ -9,6 +9,9 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
+import { addLog } from "@/lib/logging";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 
 /**
@@ -123,5 +126,67 @@ describe("useScreenWakeLock (HARD27-021)", () => {
     });
 
     expect(release).toHaveBeenCalled();
+  });
+
+  it("does not start a second request, and so leaks no sentinel, when the page becomes visible while one is pending", async () => {
+    const sentinels = [{ release: vi.fn(async () => {}) }, { release: vi.fn(async () => {}) }];
+    const resolvers: Array<(sentinel: (typeof sentinels)[number]) => void> = [];
+    request.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)));
+
+    const view = render(<Probe active={true} />);
+    await act(async () => {});
+    setVisibility("hidden");
+    setVisibility("visible");
+    expect(request).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolvers[0](sentinels[0]));
+    view.unmount();
+    await act(async () => {});
+    expect(sentinels[0].release).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a new request after a failed one, because the in-progress guard is released", async () => {
+    request.mockRejectedValueOnce(new Error("denied")).mockResolvedValue({ release });
+    render(<Probe active={true} />);
+    await act(async () => {});
+
+    setVisibility("hidden");
+    setVisibility("visible");
+    await act(async () => {});
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("logs a warning with the stack when releasing the sentinel fails on unmount", async () => {
+    release.mockRejectedValue(new Error("release refused"));
+    const view = render(<Probe active={true} />);
+    await act(async () => {});
+
+    view.unmount();
+    await act(async () => {});
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("failed to release the screen wake lock"),
+      expect.objectContaining({ error: "release refused", stack: expect.any(String) }),
+    );
+  });
+
+  it("logs a warning when the sentinel arrives after teardown and cannot be released", async () => {
+    release.mockRejectedValue(new Error("late release refused"));
+    let resolve: (sentinel: { release: typeof release }) => void = () => {};
+    request.mockImplementation(() => new Promise((r) => (resolve = r)));
+    const view = render(<Probe active={true} />);
+    await act(async () => {});
+    view.unmount();
+
+    await act(async () => resolve({ release }));
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("after the hook was torn down"),
+      expect.objectContaining({ error: "late release refused" }),
+    );
   });
 });

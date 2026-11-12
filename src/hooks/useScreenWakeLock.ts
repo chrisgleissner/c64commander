@@ -49,13 +49,24 @@ export const useScreenWakeLock = (active: boolean): void => {
 
     let cancelled = false;
     let sentinel: WakeLockSentinelLike | null = null;
+    let requesting = false;
+
+    const release = (held: WakeLockSentinelLike, when: string) =>
+      held.release().catch((error: unknown) => {
+        addLog("warn", `Live View: failed to release the screen wake lock ${when}`, {
+          service: "streams",
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      });
 
     const acquire = async () => {
-      if (cancelled || sentinel) return;
+      if (cancelled || sentinel || requesting) return;
+      requesting = true;
       try {
         const next = await api.request("screen");
         if (cancelled) {
-          void next.release().catch(() => undefined);
+          void release(next, "after the hook was torn down");
           return;
         }
         sentinel = next;
@@ -66,6 +77,8 @@ export const useScreenWakeLock = (active: boolean): void => {
           service: "streams",
           error: error instanceof Error ? error.message : String(error),
         });
+      } finally {
+        requesting = false;
       }
     };
 
@@ -85,7 +98,7 @@ export const useScreenWakeLock = (active: boolean): void => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       const held = sentinel;
       sentinel = null;
-      void held?.release().catch(() => undefined);
+      if (held) void release(held, "on cleanup");
     };
   }, [active]);
 };
