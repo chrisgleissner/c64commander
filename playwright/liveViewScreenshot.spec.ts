@@ -41,22 +41,26 @@ test.describe("Live View screenshot of the C64 screen @layout", () => {
 
   test("the control row still fits at 320 px with every control at full size", async ({ page }) => {
     const controls = page.getByTestId("av-mirror-immersive-controls");
-    await expect(controls).toBeVisible({ timeout: 15_000 });
-    const row = await controls.boundingBox();
-    expect(row!.x, "row left edge").toBeGreaterThanOrEqual(0);
-    expect(row!.x + row!.width, "row right edge").toBeLessThanOrEqual(320.5);
-
-    const buttons = await controls.locator("button").all();
-    expect(buttons.length).toBe(6);
-    for (const button of buttons) {
-      const box = await button.boundingBox();
-      const name = (await button.getAttribute("aria-label")) ?? "?";
-      expect(box!.width, `${name} width`).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
-      expect(box!.height, `${name} height`).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
+    await page.getByTestId("remote-input-sheet").getByTestId("av-mirror-immersive").hover();
+    const layout = await controls.evaluate((row) => ({
+      row: row.getBoundingClientRect().toJSON() as DOMRect,
+      buttons: Array.from(row.querySelectorAll("button"), (button) => ({
+        name: button.getAttribute("aria-label") ?? "?",
+        box: button.getBoundingClientRect().toJSON() as DOMRect,
+      })),
+    }));
+    expect(layout.row.x, "row left edge").toBeGreaterThanOrEqual(0);
+    expect(layout.row.x + layout.row.width, "row right edge").toBeLessThanOrEqual(320.5);
+    expect(layout.buttons.map((button) => button.name)).toContain("Save screenshot");
+    expect(layout.buttons).toHaveLength(6);
+    for (const { name, box } of layout.buttons) {
+      expect(box.width, `${name} width`).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
+      expect(box.height, `${name} height`).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
     }
   });
 
   test("the keypad saves a PNG of the decoded frame at its native size", async ({ page }) => {
+    await page.getByTestId("remote-input-sheet").getByTestId("av-mirror-immersive").hover();
     await expect(page.getByTestId("av-mirror-immersive-controls")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("F2");
     const item = page.getByTestId("remote-input-controls-menu").getByTestId("remote-input-menu-screenshot");
