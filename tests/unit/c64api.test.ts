@@ -1192,6 +1192,35 @@ describe("c64api", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("writes a numeric value to an enum item by mapping it to the matching declared option", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/configs/Drive%20A%20Settings") && !url.includes("?value=")) {
+        return Promise.resolve(
+          categoryConfigResponse("Drive A Settings", {
+            "Drive Bus ID": { selected: "8", options: ["8", "9", "10", "11"] },
+            Padded: { selected: " 1", options: [" 1", " 2", "16"] },
+          }),
+        );
+      }
+      return Promise.resolve(okJsonResponse());
+    });
+    const api = new C64API("http://c64u");
+
+    await api.setConfigValue("Drive A Settings", "Drive Bus ID", 9);
+    await api.setConfigValue("Drive A Settings", "Padded", 2);
+    await api.updateConfigBatch({ "Drive A Settings": { "Drive Bus ID": 10 } });
+    await expect(api.setConfigValue("Drive A Settings", "Drive Bus ID", 12)).rejects.toThrow(
+      "is not one of the declared options",
+    );
+
+    const writes = fetchMock.mock.calls.map((call) => String(call[0])).filter((url) => url.includes("value="));
+    expect(writes).toContain("http://c64u/v1/configs/Drive%20A%20Settings/Drive%20Bus%20ID?value=9");
+    expect(writes).toContain("http://c64u/v1/configs/Drive%20A%20Settings/Padded?value=%202");
+    expect(writes.some((url) => url.includes("Drive%20Bus%20ID?value=10"))).toBe(true);
+  });
+
   it("builds request urls for config writes and machine actions", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
