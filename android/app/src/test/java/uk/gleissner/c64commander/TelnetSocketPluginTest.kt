@@ -38,6 +38,7 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -395,6 +396,31 @@ class TelnetSocketPluginTest {
     assertTrue("send blocked for ${elapsedMs}ms", elapsedMs < 3_000)
     assertTrue(socket.closed)
     verify(sendCall).reject(org.mockito.ArgumentMatchers.startsWith("Send failed"), any<Exception>())
+  }
+
+  @Test
+  fun sendWhoseWriteReturnsAfterTheWatchdogClosedTheSocketRejectsInsteadOfResolving() {
+    val closed = CountDownLatch(1)
+    val output =
+            object : OutputStream() {
+              override fun write(byteValue: Int) {
+                closed.await(5, TimeUnit.SECONDS)
+              }
+            }
+    val socket = FakeSocket(output = output, onClose = { closed.countDown() })
+    plugin.socketFactory = { socket }
+    plugin.writeTimeoutMs = 100
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
+    plugin.connect(connectCall)
+    val sendCall = mock(PluginCall::class.java)
+    `when`(sendCall.getString("data")).thenReturn(Base64.encodeToString("H".toByteArray(), Base64.NO_WRAP))
+
+    plugin.send(sendCall)
+
+    assertTrue(socket.closed)
+    verify(sendCall, never()).resolve(any(JSObject::class.java))
+    verify(sendCall).reject(org.mockito.ArgumentMatchers.contains("socket was closed"), any<Exception>())
   }
 
   @Test

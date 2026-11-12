@@ -19,10 +19,12 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @CapacitorPlugin(name = "TelnetSocket")
 class TelnetSocketPlugin : Plugin() {
@@ -36,6 +38,7 @@ class TelnetSocketPlugin : Plugin() {
                   .apply {
                     setKeepAliveTime(30, TimeUnit.SECONDS)
                     allowCoreThreadTimeOut(true)
+                    removeOnCancelPolicy = true
                   }
   private val readDrainSliceTimeoutMs = 25
 
@@ -316,9 +319,11 @@ class TelnetSocketPlugin : Plugin() {
 
   private fun writeWithinBound(stream: OutputStream, bytes: ByteArray) {
     val sock = socket
+    val settled = AtomicBoolean(false)
     val watchdog =
             writeWatchdog.schedule(
-                    {
+                    watchdog@{
+                      if (!settled.compareAndSet(false, true)) return@watchdog
                       AppLogger.warn(
                               context,
                               logTag,
@@ -345,6 +350,9 @@ class TelnetSocketPlugin : Plugin() {
       stream.flush()
     } finally {
       watchdog.cancel(false)
+    }
+    if (!settled.compareAndSet(false, true)) {
+      throw SocketException("Telnet write took longer than ${writeTimeoutMs}ms and the socket was closed")
     }
   }
 
