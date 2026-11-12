@@ -238,7 +238,7 @@ function toast({ ...props }: Toast) {
   });
 
   if (props.variant !== "destructive") {
-    setTimeout(dismiss, NOTICE_AUTO_DISMISS_DELAY);
+    setTimeout(dismiss, Math.max(NOTICE_AUTO_DISMISS_DELAY, props.duration ?? 0));
   }
 
   return {

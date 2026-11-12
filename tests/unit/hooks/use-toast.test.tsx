@@ -237,6 +237,25 @@ describe("useToast", () => {
     vi.useRealTimers();
   });
 
+  it("keeps a notice that asks for a longer duration open past 8 s, then dismisses it", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useToast());
+
+    act(() => {
+      result.current.toast({ title: "Removed 1 item", duration: 12_000 });
+    });
+    act(() => {
+      vi.advanceTimersByTime(11_000);
+    });
+    expect(result.current.toasts[0].open).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(result.current.toasts[0].open).toBe(false);
+    vi.useRealTimers();
+  });
+
   it("does not auto-dismiss a destructive error toast (ERROR_POLICY §4)", () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useToast());

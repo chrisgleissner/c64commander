@@ -19,6 +19,9 @@ import {
 } from "@/pages/playFiles/playlistRemoval";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
+// A keypad user reaches Undo through the quick menu, which takes longer than the notice duration allows.
+export const REMOVAL_UNDO_DURATION_MS = 12_000;
+
 type PlaylistRemovalOptions = {
   playlist: PlaylistItem[];
   currentIndex: number;
@@ -77,6 +80,7 @@ export const usePlaylistRemoval = ({
     toast({
       title: describeRemoval(removed.length),
       alwaysVisible: true,
+      duration: REMOVAL_UNDO_DURATION_MS,
       action: (
         <ToastAction altText="Undo removal" onClick={() => undoRemoval(removed)}>
           Undo

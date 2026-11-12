@@ -115,11 +115,10 @@ test.describe("Removing a playlist row can be undone, with the keypad only @layo
     );
     expect(blocked, "Playlist controls covered by the notification strip").toEqual([]);
 
-    await page
-      .getByTestId("app-bar-quick-menu")
-      .first()
-      .evaluate((node) => (node as HTMLButtonElement).click());
-    await page.getByTestId("keypad-quick-menu-toast-action").click();
+    await page.keyboard.press("ContextMenu");
+    await expect(page.getByTestId("keypad-quick-menu")).toBeVisible();
+    expect(await ringFocus(page, page.getByTestId("keypad-quick-menu-toast-action"), 20)).toBe(true);
+    await page.keyboard.press("Enter");
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(TUNES.length);
     expect(await rowTitles(page)).toEqual(before);

@@ -8,11 +8,11 @@
 
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __clearToastStateForTests } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { resolvePlayOrderIndices } from "@/pages/playFiles/playFilesUtils";
-import { usePlaylistRemoval } from "@/pages/playFiles/hooks/usePlaylistRemoval";
+import { REMOVAL_UNDO_DURATION_MS, usePlaylistRemoval } from "@/pages/playFiles/hooks/usePlaylistRemoval";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const buildItem = (name: string): PlaylistItem => ({
@@ -193,6 +193,41 @@ describe("usePlaylistRemoval", () => {
       expect(hook.result.current.current).toBe(-1);
       expect(playOrder(hook.result.current.playlist, idOf("b"))).toEqual(orderBefore);
       expect(stopPlayback).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("how long Undo stays available", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      localStorage.clear();
+    });
+
+    it.each([
+      ["the default", null],
+      ["the longest", "8000"],
+    ])(
+      "keeps Undo for %s notification duration plus the time a keypad needs to reach it through the menu",
+      (_label, setting) => {
+        if (setting) localStorage.setItem("c64u_notification_duration_ms", setting);
+        vi.useFakeTimers();
+        const { hook } = setup();
+
+        act(() => hook.result.current.removeWithUndo(new Set([idOf("b")])));
+        act(() => vi.advanceTimersByTime(REMOVAL_UNDO_DURATION_MS - 500));
+        undo();
+
+        expect(names(hook.result.current.playlist)).toEqual(["a", "b", "c", "d"]);
+      },
+    );
+
+    it("closes the Undo notification once its time is up", () => {
+      vi.useFakeTimers();
+      const { hook } = setup();
+
+      act(() => hook.result.current.removeWithUndo(new Set([idOf("b")])));
+      act(() => vi.advanceTimersByTime(REMOVAL_UNDO_DURATION_MS + 2_000));
+
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });
   });
 });
