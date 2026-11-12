@@ -21,10 +21,10 @@ import java.util.concurrent.ConcurrentHashMap
  * WebView reload while the plugin instance survives, so a reused id would be rejected instantly.
  * See HARD9-073.
  */
-internal class FtpReadCancellationRegistry(private val maxTrackedCompletedReads: Int = 256) {
-  private val cancelledReads = ConcurrentHashMap.newKeySet<String>()
+internal class FtpReadCancellationRegistry(maxTrackedReads: Int = 256) {
+  private val cancelledReads = BoundedIdSet(maxTrackedReads)
   private val activeReadStreams = ConcurrentHashMap<String, InputStream>()
-  private val completedReads = ConcurrentHashMap.newKeySet<String>()
+  private val completedReads = BoundedIdSet(maxTrackedReads)
 
   /** Reclaims the id from the finished set so a new read for a reused id is not blocked by a stale mark. */
   fun begin(requestId: String) {
@@ -45,7 +45,6 @@ internal class FtpReadCancellationRegistry(private val maxTrackedCompletedReads:
     activeReadStreams.remove(requestId)
     cancelledReads.remove(requestId)
     completedReads.add(requestId)
-    if (completedReads.size > maxTrackedCompletedReads) completedReads.clear()
   }
 
   /** Returns false, recording nothing, when the read has already finished. */
@@ -56,4 +55,20 @@ internal class FtpReadCancellationRegistry(private val maxTrackedCompletedReads:
   }
 
   fun activeStream(requestId: String): InputStream? = activeReadStreams[requestId]
+}
+
+/** Insertion-ordered set that drops its oldest id when it grows past [maxSize], so it cannot grow without bound. */
+private class BoundedIdSet(private val maxSize: Int) {
+  private val ids = LinkedHashSet<String>()
+
+  @Synchronized
+  fun add(id: String) {
+    ids.remove(id)
+    ids.add(id)
+    if (ids.size > maxSize) ids.remove(ids.first())
+  }
+
+  @Synchronized fun remove(id: String) = ids.remove(id)
+
+  @Synchronized fun contains(id: String) = ids.contains(id)
 }
