@@ -120,12 +120,11 @@ const decodeClock = (value: number): SidClock => {
   return "unknown";
 };
 
-const decodeSidAddressByte = (byte: number): number | null => {
-  if (!byte) return null;
-  const address = 0xd000 + (byte << 4);
-  if (address < 0xd420 || address > 0xdff0) return null;
-  return address;
-};
+export const isValidSidAddressByte = (byte: number): boolean =>
+  byte % 2 === 0 && ((byte >= 0x42 && byte <= 0x7f) || (byte >= 0xe0 && byte <= 0xfe));
+
+const decodeSidAddressByte = (byte: number): number | null =>
+  isValidSidAddressByte(byte) ? 0xd000 + (byte << 4) : null;
 
 const getBytes = (buffer: Uint8Array | ArrayBuffer) => (buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer));
 
@@ -164,10 +163,12 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   const sid3Adress = version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
 
   const sid2Address = sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
+  const hasSid2 = sid2Address !== null;
+  const hasSid3 = sid3Adress !== null && isValidSidAddressByte(sid3Adress);
 
-  const sid2Model = sid2Adress ? decodeSidModel(sid2ModelBits) : null;
-  const sid3Model = sid3Adress ? decodeSidModel(sid3ModelBits) : null;
-  const sidChipCount = 1 + Number(Boolean(sid2Adress)) + Number(Boolean(sid3Adress));
+  const sid2Model = hasSid2 ? decodeSidModel(sid2ModelBits) : null;
+  const sid3Model = hasSid3 ? decodeSidModel(sid3ModelBits) : null;
+  const sidChipCount = 1 + Number(hasSid2) + Number(hasSid3);
 
   const parserWarnings: string[] = [];
   let rsidValid: boolean | null = null;
