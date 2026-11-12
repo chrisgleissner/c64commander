@@ -1028,7 +1028,7 @@ class StreamUdpPlugin : Plugin() {
       try {
         it.close()
       } catch (error: Exception) {
-        Log.d(logTag, "socket close for $name ignored", error)
+        Log.w(logTag, "socket close for $name failed", error)
       }
     }
     if (sockets.isEmpty()) wifiLocks.release()
@@ -1083,7 +1083,7 @@ class StreamUdpPlugin : Plugin() {
   public override fun handleOnResume() {
     super.handleOnResume()
     if (sockets.isEmpty()) return
-    wifiLocks.acquireForMulticast()
+    if (sockets.values.any { it is MulticastSocket }) wifiLocks.acquireForMulticast() else wifiLocks.acquireLowLatency()
   }
 
   override fun handleOnDestroy() {
@@ -1092,7 +1092,7 @@ class StreamUdpPlugin : Plugin() {
       try {
         it.close()
       } catch (error: Exception) {
-        Log.d(logTag, "socket close on destroy ignored", error)
+        Log.w(logTag, "socket close on destroy failed", error)
       }
     }
     sockets.clear()

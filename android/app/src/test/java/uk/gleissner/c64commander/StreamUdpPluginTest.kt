@@ -554,6 +554,62 @@ class StreamUdpPluginTest {
     plugin.close(closeCall)
   }
 
+  @Test
+  fun resumeWithOnlyUnicastSocketsDoesNotTakeTheMulticastLock() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    doAnswer { null }.`when`(call).resolve(any())
+    plugin.bind(call)
+    plugin.handleOnPause()
+
+    plugin.handleOnResume()
+
+    assertFalse("a unicast stream needs no multicast lock", multicastLockHeld())
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun aFailingSocketCloseIsLoggedAsAWarning() {
+    val socket =
+      object : java.net.MulticastSocket(null as java.net.SocketAddress?) {
+        @Volatile private var closeRequested = false
+
+        override fun receive(packet: DatagramPacket) {
+          Thread.sleep(10)
+          throw java.net.SocketTimeoutException("idle")
+        }
+
+        override fun isClosed(): Boolean = closeRequested
+
+        override fun close() {
+          closeRequested = true
+          throw java.io.IOException("close failed")
+        }
+      }
+    plugin.multicastSocketFactory = { socket }
+    val bindCall = mock(PluginCall::class.java)
+    `when`(bindCall.getString("name")).thenReturn("video")
+    `when`(bindCall.getInt("port")).thenReturn(0)
+    `when`(bindCall.getString("group")).thenReturn("239.0.1.64")
+    doAnswer { null }.`when`(bindCall).resolve(any())
+    plugin.bind(bindCall)
+    org.robolectric.shadows.ShadowLog.clear()
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+
+    val warnings =
+      org.robolectric.shadows.ShadowLog.getLogsForTag("StreamUdpPlugin")
+        .filter { it.type == android.util.Log.WARN && it.msg.contains("socket close for video") }
+    assertEquals(1, warnings.size)
+    assertNotNull(warnings[0].throwable)
+  }
+
   /** With no stream bound there is nothing to receive, so returning must not take a lock back. */
   @Test
   fun resumeDoesNotAcquireLocksWhenNoStreamIsBound() {
