@@ -46,25 +46,7 @@ class FtpClientPlugin : Plugin() {
   private val defaultRecursiveMaxEntries = 5_000
   private val maxNlstMetadataProbes = 64
 
-  // requestIds the JS layer has asked to cancel mid-read, and the live input
-  // streams keyed by requestId. cancelRead() closes the stream so a blocked
-  // read() unblocks immediately — this lets the user abort even a stalled
-  // transfer cleanly, releasing the firmware's FTP data channel.
-  private val cancelledReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-  private val activeReadStreams = java.util.concurrent.ConcurrentHashMap<String, java.io.InputStream>()
-  // requestIds whose readFile() has already fully finished (success,
-  // failure, or cancellation). A cancelRead() that arrives AFTER
-  // completion — routine when it races natural completion on navigate-away
-  // — would otherwise re-add the id to cancelledReads with nothing left to
-  // ever remove it: an unbounded leak, and since the JS-side requestId
-  // counter resets on WebView reload while this plugin instance survives,
-  // a reused id would then instantly (and spuriously) reject a brand-new
-  // read. readFile() reclaims its own id from this set the moment it
-  // starts, so a genuinely new read for a reused id is never blocked by a
-  // stale mark. Capped defensively so a very long session cannot grow this
-  // set without bound. See HARD9-073.
-  private val completedReads = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-  private val maxTrackedCompletedReads = 256
+  private val readCancellations = FtpReadCancellationRegistry()
   private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
@@ -451,13 +433,13 @@ class FtpClientPlugin : Plugin() {
               // Reclaim this id from the "already finished" set before doing
               // anything else, so a reused requestId's new read is never
               // blocked by a stale completion mark from its previous use.
-              if (requestId != null) completedReads.remove(requestId)
+              if (requestId != null) readCancellations.begin(requestId)
               try {
                 // Honor a cancellation requested before this read started (e.g. an
                 // already-aborted AbortSignal fired cancelRead first) instead of
-                // erasing it. The previous `cancelledReads.remove(requestId)` here
+                // erasing it. The previous cancellation removal here
                 // could discard a legitimate pre-abort and let the transfer run.
-                if (requestId != null && cancelledReads.contains(requestId)) {
+                if (requestId != null && readCancellations.isCancelled(requestId)) {
                   call.reject(readAbortedMessage)
                   return@Runnable
                 }
@@ -483,7 +465,7 @@ class FtpClientPlugin : Plugin() {
                   return@Runnable
                 }
                 stream = input
-                if (requestId != null) activeReadStreams[requestId] = input
+                if (requestId != null) readCancellations.attachStream(requestId, input)
 
                 val output =
                         java.io.ByteArrayOutputStream(if (totalBytes > 0) totalBytes else readChunkSize)
@@ -491,14 +473,14 @@ class FtpClientPlugin : Plugin() {
                 var bytesRead = 0L
                 var lastProgressAt = 0L
                 while (true) {
-                  if (requestId != null && cancelledReads.contains(requestId)) {
+                  if (requestId != null && readCancellations.isCancelled(requestId)) {
                     throw java.io.IOException(readAbortedMessage)
                   }
                   val read =
                           try {
                             input.read(buffer)
                           } catch (ioError: java.io.IOException) {
-                            if (requestId != null && cancelledReads.contains(requestId)) {
+                            if (requestId != null && readCancellations.isCancelled(requestId)) {
                               throw java.io.IOException(readAbortedMessage)
                             }
                             throw ioError
@@ -518,7 +500,7 @@ class FtpClientPlugin : Plugin() {
                 }
                 input.close()
                 stream = null
-                if (requestId != null) activeReadStreams.remove(requestId)
+                if (requestId != null) readCancellations.detachStream(requestId)
                 val completed = client.completePendingCommand()
                 if (!completed) {
                   call.reject("FTP file read failed")
@@ -539,7 +521,7 @@ class FtpClientPlugin : Plugin() {
                 call.resolve(result)
               } catch (error: Exception) {
                 if (requestId != null &&
-                                (cancelledReads.contains(requestId) ||
+                                (readCancellations.isCancelled(requestId) ||
                                         error.message == readAbortedMessage)
                 ) {
                   call.reject(readAbortedMessage)
@@ -557,10 +539,7 @@ class FtpClientPlugin : Plugin() {
                 }
               } finally {
                 if (requestId != null) {
-                  activeReadStreams.remove(requestId)
-                  cancelledReads.remove(requestId)
-                  completedReads.add(requestId)
-                  if (completedReads.size > maxTrackedCompletedReads) completedReads.clear()
+                  readCancellations.finish(requestId)
                 }
                 try {
                   stream?.close()
@@ -596,18 +575,14 @@ class FtpClientPlugin : Plugin() {
       call.reject("requestId is required")
       return
     }
-    if (completedReads.contains(requestId)) {
-      // The corresponding readFile() already finished (success, failure, or
-      // a prior cancel) - there is nothing left to cancel. No-op instead of
-      // leaving a permanent cancelledReads entry. See HARD9-073.
+    if (!readCancellations.markCancelled(requestId)) {
       call.resolve()
       return
     }
-    cancelledReads.add(requestId)
     // Close the in-flight stream so a blocked read() unblocks immediately, even
     // if the transfer has stalled.
     try {
-      activeReadStreams[requestId]?.close()
+      readCancellations.activeStream(requestId)?.close()
     } catch (error: Exception) {
       AppLogger.warn(
               pluginContextOrNull(),
