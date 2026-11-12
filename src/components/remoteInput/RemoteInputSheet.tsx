@@ -427,6 +427,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     optionsFolded: foldJoystickOptions,
     viewAdjustable: showMirrorScreen,
     onAdjustView: () => mirrorRef.current?.toggleMode(),
+    onSaveScreenshot: () => mirrorRef.current?.saveScreenshot(),
     onOutputModeChange: (mode) => {
       keypadTyping.reset();
       handleOutputModeChange(mode);

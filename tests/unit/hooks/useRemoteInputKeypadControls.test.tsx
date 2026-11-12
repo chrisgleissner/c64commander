@@ -29,6 +29,7 @@ const baseOptions: RemoteInputKeypadControlsOptions = {
   optionsFolded: false,
   viewAdjustable: false,
   onAdjustView: vi.fn(),
+  onSaveScreenshot: vi.fn(),
   onOutputModeChange: vi.fn(),
   onOpenOptions: vi.fn(),
   onEnterGameMode: vi.fn(),
@@ -122,5 +123,21 @@ describe("useRemoteInputKeypadControls", () => {
     rerender({ ...baseOptions, viewAdjustable: true, onAdjustView });
     choose(result.current.menu.items, "adjust-view");
     expect(onAdjustView).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Save screenshot beside Adjust view, only while the picture is on, and saves when chosen", () => {
+    const onSaveScreenshot = vi.fn();
+    const { result, rerender } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: baseOptions },
+    );
+    expect(result.current.menu.items.map((item) => item.id)).not.toContain("screenshot");
+
+    rerender({ ...baseOptions, viewAdjustable: true, onSaveScreenshot });
+    const ids = result.current.menu.items.map((item) => item.id);
+    expect(ids.indexOf("screenshot")).toBe(ids.indexOf("adjust-view") + 1);
+    choose(result.current.menu.items, "screenshot");
+
+    expect(onSaveScreenshot).toHaveBeenCalledTimes(1);
   });
 });

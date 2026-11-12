@@ -24,7 +24,7 @@ vi.mock("@capacitor/filesystem", () => ({
 vi.mock("@capacitor/share", () => ({ Share: { share: native.share } }));
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
-import { isShareCancelled, shareSettingsExport } from "@/lib/config/settingsExportShare";
+import { isShareCancelled, shareFile, shareSettingsExport } from "@/lib/config/settingsExportShare";
 
 describe("exporting settings", () => {
   beforeEach(() => {
@@ -65,6 +65,56 @@ describe("exporting settings", () => {
 
     expect(click).toHaveBeenCalledTimes(1);
     expect(native.share).not.toHaveBeenCalled();
+    click.mockRestore();
+  });
+});
+
+describe("sharing a binary file", () => {
+  beforeEach(() => {
+    native.isNative = true;
+    native.writeFile.mockReset().mockResolvedValue(undefined);
+    native.getUri.mockReset().mockResolvedValue({ uri: "file:///cache/shot.png" });
+    native.share.mockReset().mockResolvedValue(undefined);
+  });
+
+  const png = () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" });
+
+  it("writes the bytes as base64, without a text encoding, and shares the file by URI on a phone", async () => {
+    await expect(
+      shareFile({ filename: "shot.png", title: "C64 screenshot", mimeType: "image/png", content: png() }),
+    ).resolves.toBe("shared");
+
+    expect(native.writeFile).toHaveBeenCalledTimes(1);
+    const written = native.writeFile.mock.calls[0][0];
+    expect(written).toEqual({ path: "shot.png", data: "iVBORw==", directory: "CACHE" });
+    expect(native.share).toHaveBeenCalledWith({ title: "C64 screenshot", files: ["file:///cache/shot.png"] });
+  });
+
+  it("reports a dismissed share sheet as cancelled", async () => {
+    native.share.mockRejectedValue(new Error("Share canceled"));
+
+    await expect(shareFile({ filename: "shot.png", title: "t", mimeType: "image/png", content: png() })).resolves.toBe(
+      "cancelled",
+    );
+  });
+
+  it("downloads the blob itself, under its own name, in a browser", async () => {
+    native.isNative = false;
+    const clicked: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.download);
+    });
+    const content = png();
+    URL.createObjectURL = vi.fn(() => "blob:shot");
+    URL.revokeObjectURL = vi.fn();
+
+    await expect(shareFile({ filename: "shot.png", title: "t", mimeType: "image/png", content })).resolves.toBe(
+      "downloaded",
+    );
+
+    expect(URL.createObjectURL).toHaveBeenCalledWith(content);
+    expect(clicked).toEqual(["shot.png"]);
+    expect(native.writeFile).not.toHaveBeenCalled();
     click.mockRestore();
   });
 });

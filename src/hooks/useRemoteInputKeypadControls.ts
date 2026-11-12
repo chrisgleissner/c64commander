@@ -35,6 +35,7 @@ export interface RemoteInputKeypadControlsOptions {
   /** Whether the picture is on screen, so there is a view to pan and zoom. */
   viewAdjustable: boolean;
   onAdjustView: () => void;
+  onSaveScreenshot: () => void;
   onOutputModeChange: (mode: RemoteInputOutputMode) => void;
   onOpenOptions: () => void;
   onEnterGameMode: () => void;
@@ -124,7 +125,10 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
         : { id: "game", label: "Game Mode", onSelect: options.onEnterGameMode },
     );
   }
-  if (viewAdjustable) items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
+  if (viewAdjustable) {
+    items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
+    items.push({ id: "screenshot", label: "Save screenshot", onSelect: options.onSaveScreenshot });
+  }
   items.push({ id: "controls", label: "Other controls", onSelect: () => operateTheSheet("first-control") });
   if (!inGameMode) items.push({ id: "release-all", label: "Release all", onSelect: options.onReleaseAll });
   items.push({ id: "close", label: "Close Remote Input", onSelect: options.onClose });

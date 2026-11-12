@@ -1236,6 +1236,13 @@ throughout.
     video standard and frame rate, so the row reads e.g. `C64 … PAL 50 fps`)
   - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
     `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
+  - Save screenshot — button — `av-immersive-screenshot` — R✅ I✅ — between Fit and Follow motion in the control row;
+    encodes the decoded frame at its native size (384 pixels wide), not the zoomed size it is drawn at, as a PNG named
+    `c64-screen-<date>-<time>.png`. A browser downloads it and toasts "Screenshot saved"; a phone opens the system
+    share sheet. Shown only while a video stream is live, which Remote Input already requires of a device that streams.
+    The row is six 44 px controls and still fits inside 320 px. Keypad: the Remote Input controls menu (soft right or
+    menu key) has a **Save screenshot** entry (`remote-input-menu-screenshot`) directly after **Adjust view**, shown while
+    the picture is on
   - Follow motion — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
   - Lock on — press and hold the picture — no testid of its own (the gesture is on
     `av-mirror-immersive-stage`); while following with nothing locked, the hint
