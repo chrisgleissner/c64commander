@@ -2691,10 +2691,12 @@ export class C64API {
     const hex = Array.from(data)
       .map((value) => value.toString(16).padStart(2, "0"))
       .join("");
-    return this.request(`/v1/machine:writemem?address=${address}&data=${hex}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/machine:writemem?address=${address}&data=${hex}`, {
       method: "PUT",
       ...options,
     });
+    this.assertActionAccepted(response, `memory write at ${address}`);
+    return response;
   }
 
   async writeMemoryBlock(
@@ -2741,9 +2743,11 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response, path, {
+    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+    if (parsed) this.assertActionAccepted(parsed, `memory block write at ${address}`);
+    return parsed;
   }
 
   // Drive endpoints
@@ -2891,21 +2895,29 @@ export class C64API {
   }
 
   async resetDrive(drive: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:reset`, { method: "PUT" });
+    const response = await this.request<{ errors: string[] }>(`/v1/drives/${drive}:reset`, { method: "PUT" });
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} reset`);
+    return response;
   }
 
   async driveOn(drive: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:on`, { method: "PUT" });
+    const response = await this.request<{ errors: string[] }>(`/v1/drives/${drive}:on`, { method: "PUT" });
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} on`);
+    return response;
   }
 
   async driveOff(drive: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:off`, { method: "PUT" });
+    const response = await this.request<{ errors: string[] }>(`/v1/drives/${drive}:off`, { method: "PUT" });
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} off`);
+    return response;
   }
 
   async setDriveMode(drive: string, mode: "1541" | "1571" | "1581"): Promise<{ errors: string[] }> {
-    return this.request(`/v1/drives/${drive}:set_mode?mode=${mode}`, {
+    const response = await this.request<{ errors: string[] }>(`/v1/drives/${drive}:set_mode?mode=${mode}`, {
       method: "PUT",
     });
+    this.assertActionAccepted(response, `drive ${drive.toUpperCase()} set mode ${mode}`);
+    return response;
   }
 
   // Runner endpoints
