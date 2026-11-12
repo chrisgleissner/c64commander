@@ -6,18 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-const DEFAULT_KEYS = ["default", "default_value", "defaultValue"] as const;
 const PLAIN_NUMBER = /^[+-]?\d+(\.\d+)?$/;
 
 /** The firmware's default for one item, read from the per-item payload the app already fetches or caches. */
 export const readConfigItemDefault = (config: unknown): string | number | undefined => {
   if (typeof config !== "object" || config === null || Array.isArray(config)) return undefined;
   const record = config as Record<string, unknown>;
-  for (const key of DEFAULT_KEYS) {
-    const candidate = record[key];
-    if (typeof candidate === "string" || typeof candidate === "number") return candidate;
-  }
-  return undefined;
+  const candidate = record.default;
+  return typeof candidate === "string" || typeof candidate === "number" ? candidate : undefined;
 };
 
 /** True when a default is known and the item's value differs from it; numbers compare by value, text exactly. */

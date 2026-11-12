@@ -18,11 +18,6 @@ describe("readConfigItemDefault", () => {
     expect(readConfigItemDefault({ current: 9, min: 8, max: 11, format: "%d", default: 8 })).toBe(8);
   });
 
-  it("reads the alternative spellings of the key", () => {
-    expect(readConfigItemDefault({ default_value: "A" })).toBe("A");
-    expect(readConfigItemDefault({ defaultValue: 3 })).toBe(3);
-  });
-
   it("returns undefined when the payload has no default or is not an object", () => {
     expect(readConfigItemDefault({ current: "On", values: ["On", "Off"] })).toBeUndefined();
     expect(readConfigItemDefault("Off")).toBeUndefined();
