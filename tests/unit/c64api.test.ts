@@ -1708,30 +1708,6 @@ describe("c64api", () => {
     expect(writeBlockCall?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
   });
 
-  it("throws on firmware-rejected memory and drive writes even when HTTP status is 200", async () => {
-    const fetchMock = getFetchMock();
-    fetchMock.mockImplementation(() =>
-      Promise.resolve(
-        new Response(JSON.stringify({ errors: ["x"] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
-    );
-    const api = new C64API("http://c64u");
-
-    await expect(api.writeMemory("0277", new Uint8Array([1]))).rejects.toThrow(
-      "Firmware rejected memory write at 0277: x",
-    );
-    await expect(api.writeMemoryBlock("1000", new Uint8Array([1]))).rejects.toThrow(
-      "Firmware rejected memory block write at 1000: x",
-    );
-    await expect(api.setDriveMode("b", "1571")).rejects.toThrow("Firmware rejected drive B set mode 1571: x");
-    await expect(api.driveOn("b")).rejects.toThrow("Firmware rejected drive B on: x");
-    await expect(api.driveOff("b")).rejects.toThrow("Firmware rejected drive B off: x");
-    await expect(api.resetDrive("b")).rejects.toThrow("Firmware rejected drive B reset: x");
-  });
-
   it("uploads drives and runner files with auth headers", async () => {
     const fetchMock = getFetchMock();
     const okResponse = () =>
