@@ -92,6 +92,20 @@ export const startGameMode = async (opts?: {
 
 const NOTHING_STARTED: GameModeStartResult = { startedVideo: false, startedAudio: false };
 
+const stopOwnedStreams = (session: AvMirrorSession, owned: GameModeStartResult) => {
+  const stop = (name: string, run: () => Promise<void>) => {
+    run().catch((error: unknown) => {
+      addLog("warn", `Game Mode: failed to stop the ${name} stream of an unclaimed request`, {
+        service: "streams",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  };
+  if (owned.startedVideo) stop("video", () => session.stopVideo());
+  if (owned.startedAudio) stop("audio", () => session.stopAudio());
+};
+
 /** How long an unclaimed request waits for a sheet to mount before it is stale. */
 const PENDING_REQUEST_TTL_MS = 5_000;
 
@@ -108,7 +122,9 @@ const takePendingGameModeRequest = (): GameModeStartResult | null => {
   if (pendingRequest === null) return null;
   const claimed = pendingRequest;
   pendingRequest = null;
-  return Date.now() - claimed.atMs > PENDING_REQUEST_TTL_MS ? null : claimed.started;
+  if (Date.now() - claimed.atMs <= PENDING_REQUEST_TTL_MS) return claimed.started;
+  stopOwnedStreams(avMirrorSession, claimed.started);
+  return null;
 };
 
 /**

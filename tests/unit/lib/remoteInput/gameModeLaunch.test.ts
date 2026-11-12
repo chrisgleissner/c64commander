@@ -14,10 +14,13 @@ const flags: Record<string, boolean> = {
   video_mirror_enabled: true,
 };
 
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
 vi.mock("@/lib/config/featureFlags", () => ({
   featureFlagManager: { getSnapshot: () => ({ flags }) },
 }));
 
+import { addLog } from "@/lib/logging";
 import {
   DEFAULT_GAME_MODE_ON_LAUNCH,
   loadGameModeOnLaunch,
@@ -28,7 +31,7 @@ import {
   subscribeGameModeRequest,
 } from "@/lib/remoteInput/gameModeLaunch";
 import type { GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
-import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
+import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 interface FakeSession {
   audioLive: boolean;
@@ -199,6 +202,60 @@ describe("the request bus", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("an unclaimed request that expires", () => {
+  const claimAfterExpiry = (started: GameModeStartResult) => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode(started);
+      vi.advanceTimersByTime(6_000);
+      const handler = vi.fn();
+      subscribeGameModeRequest(handler)();
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+    return { stopVideo, stopAudio };
+  };
+
+  beforeEach(() => {
+    resetPendingGameModeRequest();
+    vi.restoreAllMocks();
+  });
+
+  it("stops the feeds it owns when it is claimed after the 5 s window", () => {
+    const { stopVideo, stopAudio } = claimAfterExpiry({ startedVideo: true, startedAudio: true });
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a feed the launch did not start alone", () => {
+    const { stopVideo, stopAudio } = claimAfterExpiry({ startedVideo: true, startedAudio: false });
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+    expect(stopAudio).not.toHaveBeenCalled();
+  });
+
+  it("logs a warning with the stack when stopping an owned feed fails", async () => {
+    vi.spyOn(avMirrorSession, "stopVideo").mockRejectedValue(new Error("stop refused"));
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(6_000);
+      subscribeGameModeRequest(vi.fn())();
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("failed to stop the video stream"),
+        expect.objectContaining({ error: "stop refused", stack: expect.any(String) }),
+      ),
+    );
   });
 });
 
