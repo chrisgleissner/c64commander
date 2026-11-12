@@ -112,6 +112,7 @@ class StreamUdpPlugin : Plugin() {
 
   /** Test seam: monotonic clock (nanoseconds) stamped at socket receive. Default: `System.nanoTime`. */
   internal var clockNanos: () -> Long = { System.nanoTime() }
+  internal var multicastSocketFactory: () -> MulticastSocket = { MulticastSocket(null) }
 
   /**
    * Test seam: how a received datagram is delivered to JS (default: a `datagram` event).
@@ -320,6 +321,7 @@ class StreamUdpPlugin : Plugin() {
     }
     val group = call.getString("group") // multicast group, e.g. 239.0.1.64; null = plain unicast
     val assemble = call.getBoolean("assemble", false) == true
+    var openedSocket: DatagramSocket? = null
     try {
       closeSocket(name)
       senderFilter.retarget(name, call.getString("source"))
@@ -327,14 +329,14 @@ class StreamUdpPlugin : Plugin() {
       val socket: DatagramSocket =
         if (group != null) {
           wifiLocks.acquireForMulticast()
-          MulticastSocket(null).apply {
+          multicastSocketFactory().also { openedSocket = it }.apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
             joinGroup(InetSocketAddress(InetAddress.getByName(group), port), joinedInterface)
           }
         } else {
           wifiLocks.acquireLowLatency()
-          DatagramSocket(null).apply {
+          DatagramSocket(null).also { openedSocket = it }.apply {
             reuseAddress = true
             bind(InetSocketAddress(port))
           }
@@ -361,6 +363,7 @@ class StreamUdpPlugin : Plugin() {
     } catch (error: Exception) {
       // Release the multicast lock if we acquired it above but never got a running socket, so a
       // failed multicast bind cannot leak the Wi-Fi MulticastLock (it is not reference-counted).
+      releaseFailedBind(name, openedSocket)
       if (sockets.isEmpty()) wifiLocks.release()
       Log.w(logTag, "bind failed for $name:$port (group=$group, assemble=$assemble)", error)
       call.reject("bind failed: ${error.message}", error)
@@ -1004,6 +1007,17 @@ class StreamUdpPlugin : Plugin() {
         packets = 0
         frames = 0
       }
+    }
+  }
+
+  private fun releaseFailedBind(name: String, socket: DatagramSocket?) {
+    if (socket == null) return
+    membershipRefresher.stop(name)
+    sockets.remove(name, socket)
+    try {
+      socket.close()
+    } catch (error: Exception) {
+      Log.w(logTag, "socket close after failed bind for $name", error)
     }
   }
 

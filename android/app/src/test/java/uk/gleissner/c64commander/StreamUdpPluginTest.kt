@@ -468,6 +468,39 @@ class StreamUdpPluginTest {
   }
 
   @Test
+  fun bindClosesTheSocketWhenJoiningTheMulticastGroupFails() {
+    val socket = mock(java.net.MulticastSocket::class.java)
+    doAnswer { throw java.io.IOException("join refused") }.`when`(socket).joinGroup(any(), any())
+    plugin.multicastSocketFactory = { socket }
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    `when`(call.getString("group")).thenReturn("239.0.1.64")
+
+    plugin.bind(call)
+
+    verify(call).reject(startsWith("bind failed"), any<Exception>())
+    verify(socket).close()
+  }
+
+  @Test
+  fun bindClosesTheSocketWhenSchedulingTheReceiveLoopFails() {
+    val socket = mock(java.net.MulticastSocket::class.java)
+    plugin.multicastSocketFactory = { socket }
+    val executorField = StreamUdpPlugin::class.java.getDeclaredField("executor").apply { isAccessible = true }
+    (executorField.get(plugin) as java.util.concurrent.ExecutorService).shutdown()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    `when`(call.getString("group")).thenReturn("239.0.1.64")
+
+    plugin.bind(call)
+
+    verify(call).reject(startsWith("bind failed"), any<Exception>())
+    verify(socket).close()
+  }
+
+  @Test
   fun bindJoinsAMulticastGroup() {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("name")).thenReturn("video")
