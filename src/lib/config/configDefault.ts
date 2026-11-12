@@ -24,3 +24,23 @@ export const isModifiedFromDefault = (value: string | number, defaultValue: stri
   if (PLAIN_NUMBER.test(current) && PLAIN_NUMBER.test(expected)) return Number(current) !== Number(expected);
   return current !== expected;
 };
+
+const CATEGORIES_WITHOUT_DEFAULT_STATE: ReadonlySet<string> = new Set(["Clock Settings"]);
+
+const ITEMS_WITHOUT_DEFAULT_STATE: ReadonlySet<string> = new Set([
+  "Host Name",
+  "Unique ID",
+  "Network Password",
+  "Static IP",
+  "Static Netmask",
+  "Static Gateway",
+  "Static DNS",
+]);
+
+/**
+ * False for items whose default is not a setting the user would want back: the clock (the firmware reports a
+ * factory date as the default of Year, Day, Hours and so on) and the items that identify the device or its
+ * network, where resetting would rename the device, drop the password or move it off its address.
+ */
+export const hasMeaningfulDefault = (category: string, name: string): boolean =>
+  !CATEGORIES_WITHOUT_DEFAULT_STATE.has(category) && !ITEMS_WITHOUT_DEFAULT_STATE.has(name);

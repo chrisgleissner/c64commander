@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
+import { hasMeaningfulDefault, isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
 
 describe("readConfigItemDefault", () => {
   it("reads the default beside current and values for an enum item", () => {
@@ -46,5 +46,32 @@ describe("isModifiedFromDefault", () => {
 
   it("treats a value that carries a unit as text, not as the number inside it", () => {
     expect(isModifiedFromDefault("8 MHz", 8)).toBe(true);
+  });
+});
+
+describe("hasMeaningfulDefault", () => {
+  it.each(["Year", "Month", "Day", "Hours", "Minutes", "Seconds", "Correction"])(
+    "has none for the clock item %s",
+    (name) => {
+      expect(hasMeaningfulDefault("Clock Settings", name)).toBe(false);
+    },
+  );
+
+  it.each([
+    ["Network Settings", "Host Name"],
+    ["Network Settings", "Unique ID"],
+    ["Network Settings", "Network Password"],
+    ["Ethernet Settings", "Static IP"],
+    ["WiFi settings", "Static Netmask"],
+    ["WiFi settings", "Static Gateway"],
+    ["Ethernet Settings", "Static DNS"],
+  ])("has none for %s > %s, which identify the device or its network", (category, name) => {
+    expect(hasMeaningfulDefault(category, name)).toBe(false);
+  });
+
+  it("keeps ordinary settings, including the other network ones", () => {
+    expect(hasMeaningfulDefault("U64 Specific Settings", "Turbo Control")).toBe(true);
+    expect(hasMeaningfulDefault("Network Settings", "Telnet Remote Menu Service")).toBe(true);
+    expect(hasMeaningfulDefault("Ethernet Settings", "Use DHCP")).toBe(true);
   });
 });

@@ -72,6 +72,22 @@ describe("ConfigItemRow default state", () => {
     expect(onValueChange).toHaveBeenCalledWith(8);
   });
 
+  it.each([
+    ["Clock Settings", "Year", 2024, 2015],
+    ["Network Settings", "Host Name", "mickey", "ultimate"],
+  ])(
+    "shows no marker or reset on %s > %s even when the value differs from the reported default",
+    (category, name, value, def) => {
+      mockConfigItem.mockReturnValue(itemPayload(category, name, { current: value, default: def }) as never);
+      renderRow(
+        <ConfigItemRow category={category} name={name} value={value} onValueChange={vi.fn()} showDefaultState />,
+      );
+
+      expect(screen.queryByTestId("config-item-modified")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("config-item-reset-default")).not.toBeInTheDocument();
+    },
+  );
+
   it("shows no marker when the value equals the default", () => {
     mockConfigItem.mockReturnValue(
       itemPayload("Cat", "Turbo Control", { current: "Off", values: ["Off", "Manual"], default: "Off" }) as never,

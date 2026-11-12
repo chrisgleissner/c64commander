@@ -692,7 +692,7 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   (`config-item-modified`, "Modified. Default: <value>") with a **Reset to default** button
   (`config-item-reset-default`, name "Reset <item> to default", 44x44 minimum, keypad-reachable in DOM order directly after
   the row's control) that writes the default through the same single-item PUT as an edit — not persisted to flash.
-  `[not rendered: the row is read-only, the default is not known from the per-item data the app already holds, or the value equals the default]`;
+  `[not rendered: the row is read-only, the default is not known from the per-item data the app already holds, the value equals the default, or the item is in Clock Settings or identifies the device or network (Host Name, Unique ID, Network Password, Static IP, Static Netmask, Static Gateway, Static DNS)]`;
   every category adds a Refresh icon button (`config-refresh-<slug>`, name "Refresh") in its header while the category is open.
 - Retry — button — `config-retry` `[only when the category list itself failed to load]` — inside
   `config-load-error`, which states the device's own message; re-runs the categories request

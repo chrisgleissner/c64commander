@@ -21,7 +21,7 @@ import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Conne
 import { getC64API } from "@/lib/c64api";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ConfigDefaultState } from "@/components/ConfigDefaultState";
-import { isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
+import { hasMeaningfulDefault, isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
 import { observeElementSize } from "@/lib/ui/sharedResizeObserver";
@@ -258,7 +258,10 @@ export const ConfigItemRow = memo(function ConfigItemRow({
     () => (showDefaultState && category ? getC64API()?.getCachedConfigItem?.(category, name) : undefined),
     [showDefaultState, category, name],
   );
-  const defaultValue = showDefaultState ? readConfigItemDefault(fetchedConfig ?? cachedDefaultSource) : undefined;
+  const defaultValue =
+    showDefaultState && hasMeaningfulDefault(category ?? "", name)
+      ? readConfigItemDefault(fetchedConfig ?? cachedDefaultSource)
+      : undefined;
   const defaultState =
     defaultValue !== undefined && !isReadOnly && isModifiedFromDefault(mergedValue, defaultValue) ? (
       <ConfigDefaultState
