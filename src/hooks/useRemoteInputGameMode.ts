@@ -8,9 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { addLog } from "@/lib/logging";
 import { usePageActivity } from "@/hooks/usePageActivity";
-import { subscribeGameModeRequest, type GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
+import { stopOwnedStreams, subscribeGameModeRequest, type GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 
@@ -101,21 +100,7 @@ export const useRemoteInputGameMode = ({
     const started = launchedStreamsRef.current;
     launchedStreamsRef.current = NOTHING_STARTED;
     setImmersive(false);
-    const stop = (name: string, run: () => Promise<void>) => {
-      run().catch((error: unknown) => {
-        // A failed stop leaves the device streaming to a closed sheet, which is the
-        // exact battery and bandwidth cost this rule exists to avoid.
-        addLog("warn", `Game Mode: failed to stop the ${name} stream it started`, {
-          service: "streams",
-          error: error instanceof Error ? error.message : String(error),
-          // A stream that will not stop is hard to reproduce on a desk, so the diagnostics
-          // report has to carry where it failed, not just what it said.
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      });
-    };
-    if (started.startedVideo) stop("video", () => session.stopVideo());
-    if (started.startedAudio) stop("audio", () => session.stopAudio());
+    stopOwnedStreams(session, started);
   }, [session]);
 
   const exitGameMode = useCallback(() => setImmersive(false), []);

@@ -239,6 +239,55 @@ describe("an unclaimed request that expires", () => {
     expect(stopAudio).not.toHaveBeenCalled();
   });
 
+  it("stops the owned feeds after the window even when no sheet ever claims it", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      vi.advanceTimersByTime(4_000);
+      expect(stopAudio).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
+  it("does not stop feeds that a sheet claimed before the window ended", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(1_000);
+      const handler = vi.fn();
+      subscribeGameModeRequest(handler)();
+      expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
+  it("carries the ownership of an expired-but-unswept record into a replacing request", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const handler = vi.fn();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.setSystemTime(Date.now() + 6_000);
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      subscribeGameModeRequest(handler)();
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: true });
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
   it("logs a warning with the stack when stopping an owned feed fails", async () => {
     vi.spyOn(avMirrorSession, "stopVideo").mockRejectedValue(new Error("stop refused"));
     vi.useFakeTimers();
