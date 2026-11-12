@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { addLog } from "@/lib/logging";
 
 interface WakeLockSentinelLike {
+  released?: boolean;
   release: () => Promise<void>;
 }
 
@@ -50,6 +51,9 @@ export const useScreenWakeLock = (active: boolean): void => {
     let cancelled = false;
     let sentinel: WakeLockSentinelLike | null = null;
     let requesting = false;
+    let retryAfterRequest = false;
+
+    const isHeld = () => sentinel !== null && sentinel.released !== true;
 
     const release = (held: WakeLockSentinelLike, when: string) =>
       held.release().catch((error: unknown) => {
@@ -61,7 +65,11 @@ export const useScreenWakeLock = (active: boolean): void => {
       });
 
     const acquire = async () => {
-      if (cancelled || sentinel || requesting) return;
+      if (cancelled || isHeld()) return;
+      if (requesting) {
+        retryAfterRequest = true;
+        return;
+      }
       requesting = true;
       try {
         const next = await api.request("screen");
@@ -79,6 +87,9 @@ export const useScreenWakeLock = (active: boolean): void => {
         });
       } finally {
         requesting = false;
+        const retry = retryAfterRequest && document.visibilityState === "visible" && !isHeld();
+        retryAfterRequest = false;
+        if (retry && !cancelled) void acquire();
       }
     };
 

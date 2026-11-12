@@ -189,4 +189,67 @@ describe("useScreenWakeLock (HARD27-021)", () => {
       expect.objectContaining({ error: "late release refused" }),
     );
   });
+
+  it("requests again when the page became visible during a request that then rejects", async () => {
+    const rejecters: Array<(error: Error) => void> = [];
+    request
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => rejecters.push(reject)))
+      .mockResolvedValue({ release });
+
+    render(<Probe active={true} />);
+    await act(async () => {});
+    setVisibility("hidden");
+    setVisibility("visible");
+    expect(request).toHaveBeenCalledTimes(1);
+
+    await act(async () => rejecters[0](new Error("denied")));
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("requests again when the pending request resolves with a sentinel that was already released", async () => {
+    const resolvers: Array<(sentinel: { released: boolean; release: typeof release }) => void> = [];
+    request
+      .mockImplementationOnce(() => new Promise((resolve) => resolvers.push(resolve)))
+      .mockResolvedValue({ release });
+
+    render(<Probe active={true} />);
+    await act(async () => {});
+    setVisibility("hidden");
+    setVisibility("visible");
+
+    await act(async () => resolvers[0]({ released: true, release }));
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries at most once per visibility change when the request keeps being rejected", async () => {
+    const rejecters: Array<(error: Error) => void> = [];
+    request.mockImplementation(() => new Promise((_resolve, reject) => rejecters.push(reject)));
+
+    render(<Probe active={true} />);
+    await act(async () => {});
+    setVisibility("hidden");
+    setVisibility("visible");
+    await act(async () => rejecters[0](new Error("denied")));
+    expect(request).toHaveBeenCalledTimes(2);
+
+    await act(async () => rejecters[1](new Error("denied")));
+    await act(async () => {});
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry after the pending request settles while the page is hidden again", async () => {
+    const rejecters: Array<(error: Error) => void> = [];
+    request.mockImplementation(() => new Promise((_resolve, reject) => rejecters.push(reject)));
+
+    render(<Probe active={true} />);
+    await act(async () => {});
+    setVisibility("hidden");
+    setVisibility("visible");
+    setVisibility("hidden");
+    await act(async () => rejecters[0](new Error("denied")));
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 });
