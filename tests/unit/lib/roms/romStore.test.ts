@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { C64_ROM_BYTES, romFingerprint } from "@/lib/roms/c64SystemRoms";
+import { addLog } from "@/lib/logging";
 import { clearStoredRoms, hasCompleteRomSet, loadRomSummaries, loadStoredRoms, saveRom } from "@/lib/roms/romStore";
 
 // Mock only what this suite needs, matching the real module's export shape.
@@ -143,5 +144,34 @@ describe("romStore", () => {
     localStorage.setItem(STORAGE_KEY, "{not json");
     expect(loadStoredRoms()).toEqual({});
     expect(loadRomSummaries()).toEqual([]);
+  });
+});
+
+describe("saving a ROM when browser storage is full", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("rejects with a message naming the ROM and keeps the storage error as the cause, and logs a warning", () => {
+    const quota = Object.assign(new Error("The quota has been exceeded."), { name: "QuotaExceededError" });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw quota;
+    });
+    const bytes = kernal();
+
+    let thrown: unknown;
+    try {
+      saveRom("kernal", bytes, { description: "test", fingerprint: romFingerprint(bytes), capturedFrom: "c64u.local" });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as Error).message).toMatch(/^Could not store the kernal ROM: .*\(\d+ characters\)$/);
+    expect((thrown as Error).cause).toBe(quota);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Could not store a C64 ROM image",
+      expect.objectContaining({ kind: "kernal", stack: expect.any(String) }),
+    );
   });
 });

@@ -149,7 +149,23 @@ export function saveRom(
     capturedAt: new Date().toISOString(),
     capturedFrom: meta.capturedFrom,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  const serialized = JSON.stringify(stored);
+  try {
+    localStorage.setItem(STORAGE_KEY, serialized);
+  } catch (error) {
+    addLog("warn", "Could not store a C64 ROM image", {
+      kind,
+      storedChars: serialized.length,
+      error: String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw new Error(
+      `Could not store the ${kind} ROM: the app's local storage rejected it (${serialized.length} characters)`,
+      {
+        cause: error,
+      },
+    );
+  }
 }
 
 /** Lets the user revoke the images at any time. */
