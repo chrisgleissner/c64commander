@@ -59,6 +59,8 @@ import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
+import { BasicCommandsBar } from "@/components/remoteInput/BasicCommandsBar";
+import { useBasicCommands } from "@/hooks/useBasicCommands";
 import { RemoteInputControlsMenu } from "@/components/remoteInput/RemoteInputControlsMenu";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";
@@ -417,6 +419,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   useEffect(() => {
     if (!open) resetKeypadTyping();
   }, [open, resetKeypadTyping]);
+  const sendBasicCommand = useBasicCommands();
   const keypadControls = useRemoteInputKeypadControls({
     open,
     outputMode: session.outputMode,
@@ -428,6 +431,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     viewAdjustable: showMirrorScreen,
     onAdjustView: () => mirrorRef.current?.toggleMode(),
     onSaveScreenshot: () => mirrorRef.current?.saveScreenshot(),
+    onBasicCommand: sendBasicCommand,
     onOutputModeChange: (mode) => {
       keypadTyping.reset();
       handleOutputModeChange(mode);
@@ -835,17 +839,20 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               </div>
             )
           ) : (
-            <TypeKeyboard
-              className={cn("min-h-0 flex-1", iconOnlyToolbar && "min-h-32")}
-              onChar={session.sendChar}
-              onKey={session.sendKeyboardInputs}
-              onCursor={session.sendCursor}
-              onSpecialKey={session.sendSpecialKey}
-              heldKeyboardInputs={session.heldKeyboardInputs}
-              onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
-              releaseAllEpoch={session.releaseAllEpoch}
-              tier={tier}
-            />
+            <>
+              <BasicCommandsBar onCommand={sendBasicCommand} />
+              <TypeKeyboard
+                className={cn("min-h-0 flex-1", iconOnlyToolbar && "min-h-32")}
+                onChar={session.sendChar}
+                onKey={session.sendKeyboardInputs}
+                onCursor={session.sendCursor}
+                onSpecialKey={session.sendSpecialKey}
+                heldKeyboardInputs={session.heldKeyboardInputs}
+                onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
+                releaseAllEpoch={session.releaseAllEpoch}
+                tier={tier}
+              />
+            </>
           )}
 
           {mirrorEnabled && foldJoystickOptions && !mirrorInToolbar ? (

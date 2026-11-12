@@ -934,6 +934,8 @@ Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap a
 
 **Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.
 
+Above the keyboard, **BASIC commands** opens a short list: `LIST`, `RUN`, `LOAD"$",8` and `LOAD"*",8,1`. One press types the command and RETURN on your C64. They work only at the BASIC prompt, so leave any running program first. With a keypad, the same commands are in the controls menu as **Send LIST** and so on.
+
 While Remote Input is open, the keypad drives your C64. With the joystick, the **Right Soft Key** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, **Adjust view** when the picture is on, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **Left Soft Key** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, `#` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **Right Soft Key** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **Left Soft Key** opens the menu, which is also where you close Remote Input.
 
 ![Remote Input keyboard mode](../../img/app/home/remote-input/03-keyboard-compact.png)

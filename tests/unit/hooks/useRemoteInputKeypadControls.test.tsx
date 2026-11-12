@@ -30,6 +30,7 @@ const baseOptions: RemoteInputKeypadControlsOptions = {
   viewAdjustable: false,
   onAdjustView: vi.fn(),
   onSaveScreenshot: vi.fn(),
+  onBasicCommand: vi.fn(),
   onOutputModeChange: vi.fn(),
   onOpenOptions: vi.fn(),
   onEnterGameMode: vi.fn(),
@@ -139,5 +140,24 @@ describe("useRemoteInputKeypadControls", () => {
     choose(result.current.menu.items, "screenshot");
 
     expect(onSaveScreenshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers each BASIC command in Keys mode, and sends the one chosen", () => {
+    const onBasicCommand = vi.fn();
+    const { result } = renderHook(() =>
+      useRemoteInputKeypadControls({ ...baseOptions, outputMode: "type", onBasicCommand }),
+    );
+
+    const ids = result.current.menu.items.map((item) => item.id).filter((id) => id.startsWith("basic-"));
+    expect(ids).toEqual(["basic-list", "basic-run", "basic-load-directory", "basic-load-first-program"]);
+    choose(result.current.menu.items, "basic-load-directory");
+
+    expect(onBasicCommand).toHaveBeenCalledWith({ id: "load-directory", text: 'LOAD"$",8' });
+  });
+
+  it("leaves the BASIC commands out of the menu in Joystick mode", () => {
+    const { result } = renderHook(() => useRemoteInputKeypadControls(baseOptions));
+
+    expect(result.current.menu.items.some((item) => item.id.startsWith("basic-"))).toBe(false);
   });
 });

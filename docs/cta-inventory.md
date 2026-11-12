@@ -1146,7 +1146,7 @@ throughout.
   in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
   where the options fold behind the Options button; opens them and moves the keypad
   to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
-  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-controls` (Other controls: moves the keypad to the
+  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-basic-list` / `-basic-run` / `-basic-load-directory` / `-basic-load-first-program` (Send LIST, RUN, LOAD"$",8, LOAD"*",8,1; Keys mode only, not in Game Mode), `remote-input-menu-controls` (Other controls: moves the keypad to the
   sheet's first control after Close), `remote-input-menu-release-all` (not in Game
   Mode, where the sheet shows no Release all), `remote-input-menu-close`
 
@@ -1300,6 +1300,14 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
     keymap) → joystick direction; keypad 2/4/6/8 → direction (1/3/7/9 →
     diagonals); keypad 5/0 or D-pad center/select → fire. Held while the
     physical key is held; released on key-up.
+- **BASIC commands** (`remote-input-basic-commands`, Keys mode, above the keyboard) —
+  disclosure button `remote-input-basic-commands-toggle` (`aria-expanded`, 44 px high) —
+  R✅ I✅ _(folded by default; the keypad reaches the same commands through the controls
+  menu while it drives the C64)_. Unfolded it shows the hint
+  `remote-input-basic-commands-hint` ("These work at the BASIC prompt.") and four buttons
+  `remote-input-basic-command-list`, `-run`, `-load-directory`, `-load-first-program` (LIST,
+  RUN, LOAD"$",8, LOAD"*",8,1), each 44 px high. A press types the command and RETURN through the
+  shared keyboard-buffer queue that autostart uses.
 - **Type mode — on-screen C64 keyboard** (`remote-input-type-keyboard`, the
   primary Type surface) — buttons `remote-input-key-<name>` (e.g.
   `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
