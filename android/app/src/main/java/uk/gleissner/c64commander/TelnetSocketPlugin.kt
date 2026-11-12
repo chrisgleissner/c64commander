@@ -35,6 +35,9 @@ class TelnetSocketPlugin : Plugin() {
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
+  private fun runGuarded(call: PluginCall, task: Runnable) =
+          runTask(guardedPluginTask(context, logTag, "TelnetSocketPlugin", call, task))
+
   // Written only on the single-thread executor, but isConnected() (below) reads
   // them synchronously on the Capacitor plugin thread with no other synchronization -
   // @Volatile establishes the happens-before edge so a write on the executor thread
@@ -55,7 +58,7 @@ class TelnetSocketPlugin : Plugin() {
     val port = call.getInt("port") ?: 23
     val timeoutMs = call.getInt("timeoutMs") ?: defaultTimeoutMs
 
-    runTask(
+    runGuarded(call,
             Runnable {
               try {
                 // Close existing connection
@@ -145,7 +148,7 @@ class TelnetSocketPlugin : Plugin() {
 
   @PluginMethod
   fun disconnect(call: PluginCall) {
-    runTask(
+    runGuarded(call,
             Runnable {
               try {
                 closeSocket()
@@ -178,7 +181,7 @@ class TelnetSocketPlugin : Plugin() {
       return
     }
 
-    runTask(
+    runGuarded(call,
             Runnable {
               try {
                 val stream = outputStream
@@ -208,7 +211,7 @@ class TelnetSocketPlugin : Plugin() {
   fun read(call: PluginCall) {
     val timeoutMs = call.getInt("timeoutMs") ?: defaultReadTimeoutMs
 
-    runTask(
+    runGuarded(call,
             Runnable {
               try {
                 val stream = inputStream

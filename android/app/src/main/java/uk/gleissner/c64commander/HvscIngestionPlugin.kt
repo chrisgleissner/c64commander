@@ -102,6 +102,9 @@ open class HvscIngestionPlugin : Plugin() {
     context.registerComponentCallbacks(trimMemoryCallbacks)
   }
 
+  private fun Throwable.asException(): Exception =
+          this as? Exception ?: RuntimeException("${javaClass.simpleName}: $message", this)
+
   private fun buildIngestionFailureMessage(error: Exception): String {
     if (error is InsufficientMemoryException) {
       return error.message
@@ -737,7 +740,7 @@ open class HvscIngestionPlugin : Plugin() {
                 withContext(NonCancellable + Dispatchers.Main) {
                   call.reject("HVSC ingestion cancelled", "HVSC_CANCELLED", cancelled)
                 }
-              } catch (error: Exception) {
+              } catch (error: Throwable) {
                 // Clean up staging artifacts on failure
                 if (resetLibrary) {
                   try {
@@ -783,7 +786,8 @@ open class HvscIngestionPlugin : Plugin() {
                 // error races the cancel, so it needs NonCancellable too. See
                 // HARD9-013.
                 withContext(NonCancellable + Dispatchers.Main) {
-                  call.reject(buildIngestionFailureMessage(error), error)
+                  val failure = error.asException()
+                  call.reject(buildIngestionFailureMessage(failure), failure)
                 }
               } finally {
                 try {
@@ -1015,7 +1019,7 @@ open class HvscIngestionPlugin : Plugin() {
                 throw error
               } catch (error: HvscDownloadCancelledException) {
                 call.reject("HVSC download cancelled", "CANCELLED")
-              } catch (error: Exception) {
+              } catch (error: Throwable) {
                 if (error is IOException && awaitNetworkLoss()) {
                   val message = "HVSC archive download stopped because the phone lost its network"
                   AppLogger.info(pluginContextOrNull(), logTag, message, "HvscIngestionPlugin", traceFields(call))
@@ -1030,7 +1034,7 @@ open class HvscIngestionPlugin : Plugin() {
                         error,
                         traceFields(call),
                 )
-                call.reject(error.message ?: "HVSC archive download failed", error)
+                call.reject(error.message ?: "HVSC archive download failed", error.asException())
               }
             }
   }

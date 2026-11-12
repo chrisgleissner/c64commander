@@ -352,6 +352,24 @@ class TelnetSocketPluginTest {
   }
 
   @Test
+  fun sendHitByAnErrorStillRejectsTheCall() {
+    val output =
+            object : OutputStream() {
+              override fun write(byteValue: Int) = throw OutOfMemoryError("heap exhausted")
+            }
+    plugin.socketFactory = { FakeSocket(output = output) }
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
+    plugin.connect(connectCall)
+    val sendCall = mock(PluginCall::class.java)
+    `when`(sendCall.getString("data")).thenReturn(Base64.encodeToString("HELLO".toByteArray(), Base64.NO_WRAP))
+
+    plugin.send(sendCall)
+
+    verify(sendCall).reject(org.mockito.ArgumentMatchers.contains("OutOfMemoryError"))
+  }
+
+  @Test
   fun sendRejectsOnWriteFailureAndLogsError() {
     val socket =
             FakeSocket(

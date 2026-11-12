@@ -41,6 +41,7 @@ class FtpClientPlugin : Plugin() {
   // firmware image) drives the app into OOM. See HARD9-044.
   // internal var so tests can shrink it instead of generating multi-MB payloads.
   internal var maxReadFileBytes = 32L * 1024L * 1024L
+  internal var maxWriteFileBytes = maxReadFileBytes
   private val defaultRecursiveMaxDepth = 8
   private val defaultRecursiveMaxEntries = 5_000
   private val maxNlstMetadataProbes = 64
@@ -68,6 +69,9 @@ class FtpClientPlugin : Plugin() {
   internal var ftpClientFactory: () -> FTPClient = { SocketClosingFtpClient() }
   internal var hostResolver: HostAddressResolver = systemHostAddressResolver
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
+
+  private fun runGuarded(call: PluginCall, task: Runnable) =
+          runTask(guardedPluginTask(pluginContextOrNull(), logTag, "FtpClientPlugin", call, task))
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
@@ -205,7 +209,7 @@ class FtpClientPlugin : Plugin() {
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
     val refusalExpected = call.getBoolean("refusalExpected", false) == true
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               try {
@@ -289,7 +293,7 @@ class FtpClientPlugin : Plugin() {
     val maxDepth = (call.getInt("maxDepth") ?: defaultRecursiveMaxDepth).coerceIn(0, 32)
     val maxEntries = (call.getInt("maxEntries") ?: defaultRecursiveMaxEntries).coerceIn(1, 50_000)
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               try {
@@ -440,7 +444,7 @@ class FtpClientPlugin : Plugin() {
       return
     }
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               var stream: java.io.InputStream? = null
@@ -653,13 +657,17 @@ class FtpClientPlugin : Plugin() {
       call.reject("data is required")
       return
     }
+    if (data.length / 4L * 3L > maxWriteFileBytes) {
+      call.reject("File exceeds the maximum writable size (${maxWriteFileBytes / (1024 * 1024)}MB)")
+      return
+    }
     val port = call.getInt("port") ?: 21
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
     val timeoutMs = resolveTransferTimeoutMs(call)
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               try {
@@ -729,7 +737,7 @@ class FtpClientPlugin : Plugin() {
     val timeoutMs = resolveTransferTimeoutMs(call)
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               try {
@@ -803,7 +811,7 @@ class FtpClientPlugin : Plugin() {
     val password = call.getString("password") ?: ""
     val connectTimeoutMs = resolveConnectTimeoutMs(call)
 
-    runTask(
+    runGuarded(call,
             Runnable {
               val client = ftpClientFactory()
               try {
