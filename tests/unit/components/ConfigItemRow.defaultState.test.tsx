@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
@@ -156,6 +156,41 @@ describe("ConfigItemRow default state", () => {
 
     expect(screen.getByTestId("config-item-modified")).toHaveTextContent("Default: Off");
     expect(mockConfigItem).toHaveBeenCalledWith("Cat", "Turbo Control", false, expect.anything());
+  });
+
+  it("shows the marker once the config cache fills after the row first rendered", async () => {
+    const category = "Cat";
+    const name = "Late Cache Item";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              [category]: { items: { [name]: { current: "Manual", values: ["Off", "Manual"], default: "Off" } } },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    renderRow(
+      <ConfigItemRow
+        category={category}
+        name={name}
+        value="Manual"
+        options={["Off", "Manual"]}
+        onValueChange={vi.fn()}
+        showDefaultState
+      />,
+    );
+    expect(screen.queryByTestId("config-item-modified")).not.toBeInTheDocument();
+
+    await act(async () => {
+      await getC64API().getConfigItem(category, name);
+    });
+
+    expect(screen.getByTestId("config-item-modified")).toHaveTextContent("Default: Off");
+    vi.unstubAllGlobals();
   });
 
   it("does not say the value is saved to flash", () => {

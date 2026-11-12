@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +21,7 @@ import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Conne
 import { getC64API } from "@/lib/c64api";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { ConfigDefaultState } from "@/components/ConfigDefaultState";
+import { subscribeConfigEnrichmentContent } from "@/lib/c64api/configEnrichmentContentSignal";
 import { hasMeaningfulDefault, isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
@@ -254,13 +255,19 @@ export const ConfigItemRow = memo(function ConfigItemRow({
 
   const isCpuSpeedWriteGuarded = category === "U64 Specific Settings" && name === "CPU Speed";
   const isReadOnly = readOnly || name.startsWith("SID Detected Socket") || isCpuSpeedWriteGuarded;
-  const cachedDefaultSource = useMemo(
-    () => (showDefaultState && category ? getC64API()?.getCachedConfigItem?.(category, name) : undefined),
+  const readCachedDefault = useCallback(
+    () =>
+      showDefaultState && category
+        ? readConfigItemDefault(getC64API()?.getCachedConfigItem?.(category, name))
+        : undefined,
     [showDefaultState, category, name],
   );
+  const cachedDefault = useSyncExternalStore(subscribeConfigEnrichmentContent, readCachedDefault);
   const defaultValue =
     showDefaultState && hasMeaningfulDefault(category ?? "", name)
-      ? readConfigItemDefault(fetchedConfig ?? cachedDefaultSource)
+      ? fetchedConfig
+        ? readConfigItemDefault(fetchedConfig)
+        : cachedDefault
       : undefined;
   const defaultState =
     defaultValue !== undefined && !isReadOnly && isModifiedFromDefault(mergedValue, defaultValue) ? (
