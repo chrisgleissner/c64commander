@@ -914,6 +914,7 @@ const CategorySection = memo(function CategorySection({
                 // row while any one item's write was in flight (HARD9-085).
                 isLoading={Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])}
                 readOnly={isReadOnly}
+                showDefaultState
                 className={rowClassName}
                 rightAccessory={rightAccessory}
                 valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}

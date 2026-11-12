@@ -112,17 +112,20 @@ vi.mock("@/components/ConfigItemRow", () => ({
     rightAccessory,
     onValueChange,
     isLoading,
+    showDefaultState,
   }: {
     name: string;
     value?: string | number;
     rightAccessory?: ReactNode;
     onValueChange?: (value: string) => void;
     isLoading?: boolean;
+    showDefaultState?: boolean;
   }) => (
     <div
       data-testid={`row-${name.toLowerCase().replace(/\s+/g, "-")}`}
       data-value={String(value ?? "")}
       data-loading={String(Boolean(isLoading))}
+      data-show-default-state={String(Boolean(showDefaultState))}
     >
       <span>{name}</span>
       <button type="button" onClick={() => onValueChange?.("updated")}>
@@ -474,6 +477,22 @@ describe("ConfigBrowserPage", () => {
         }),
       );
     });
+  });
+
+  it("asks every row of a category section to mark a value that differs from its default", async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({ data: { categories: ["C64 and Cartridge Settings"] }, isLoading: false });
+    const data = {
+      "C64 and Cartridge Settings": {
+        items: { "Fast Reset": { selected: "Enabled", options: ["Disabled", "Enabled"] } },
+      },
+    };
+    mockUseC64Category.mockImplementation(() => ({ data, isLoading: false, refetch: vi.fn() }));
+
+    renderConfigBrowserPage();
+    ensureCardOpen(screen.getByRole("button", { name: /c64 and cartridge settings/i }));
+
+    expect(await screen.findByTestId("row-fast-reset")).toHaveAttribute("data-show-default-state", "true");
   });
 
   it("rolls back only the failed audio mixer item, keeping a newer change to another SID", async () => {
