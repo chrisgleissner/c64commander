@@ -56,6 +56,40 @@ describe("InMemoryTextBackend", () => {
     });
   });
 
+  describe("a query that carries an md5", () => {
+    const database = "; /DEMOS/Intro.sid\nmd5aaaa=1:00\n; /GAMES/Other.sid\nmd5bbbb=2:00";
+
+    it("resolves to the md5 entry when the file name points at a different entry", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5bbbb" });
+      expect(resolution.strategy).toBe("md5");
+      expect(resolution.durationSeconds).toBe(120);
+    });
+
+    it("rejects a unique file name whose entry has a different md5", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5cccc" });
+      expect(resolution.durationSeconds).toBeNull();
+    });
+
+    it("still accepts a unique file name whose entry has the same md5", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5aaaa" });
+      expect(resolution.durationSeconds).toBe(60);
+    });
+
+    it("keeps accepting a unique file name when no md5 is supplied", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid" });
+      expect(resolution.strategy).toBe("filename-unique");
+      expect(resolution.durationSeconds).toBe(60);
+    });
+  });
+
   describe("resolve", () => {
     it("returns unavailable when no records loaded", async () => {
       const backend = new InMemoryTextBackend();

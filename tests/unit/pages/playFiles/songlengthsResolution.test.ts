@@ -45,6 +45,82 @@ describe("resolveSonglengthDurationMsWithFacade", () => {
     expect(file.arrayBuffer).not.toHaveBeenCalled();
   });
 
+  it("verifies a file-name-only match of a local file by md5 and prefers the md5 result", async () => {
+    const service = {
+      resolveDurationSeconds: vi.fn((query: { md5?: string }) =>
+        query.md5 ? { durationSeconds: 120, strategy: "md5" } : { durationSeconds: 60, strategy: "filename-unique" },
+      ),
+    };
+    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(1)) };
+
+    const result = await resolveSonglengthDurationMsWithFacade({
+      service,
+      path: "/Local/Intro.sid",
+      file: file as never,
+      songNr: 1,
+      computeSidMd5: vi.fn(async () => "md5bbbb"),
+    });
+
+    expect(result).toBe(120000);
+    expect(service.resolveDurationSeconds).toHaveBeenLastCalledWith(expect.objectContaining({ md5: "md5bbbb" }));
+  });
+
+  it("does not accept a file-name-only match when the md5 lookup finds nothing", async () => {
+    const service = {
+      resolveDurationSeconds: vi.fn((query: { md5?: string }) =>
+        query.md5
+          ? { durationSeconds: null, strategy: "not-found" }
+          : { durationSeconds: 60, strategy: "filename-unique" },
+      ),
+    };
+    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(1)) };
+
+    const result = await resolveSonglengthDurationMsWithFacade({
+      service,
+      path: "/Local/Intro.sid",
+      file: file as never,
+      songNr: 1,
+      computeSidMd5: vi.fn(async () => "md5zzzz"),
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("keeps a full-path match without reading the file", async () => {
+    const service = {
+      resolveDurationSeconds: vi.fn(() => ({ durationSeconds: 42, strategy: "full-path" })),
+    };
+    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(0)) };
+
+    const result = await resolveSonglengthDurationMsWithFacade({
+      service,
+      path: "/MUSICIANS/A/Artist/Tune.sid",
+      file: file as never,
+      songNr: 1,
+    });
+
+    expect(result).toBe(42000);
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file-name-only match without reading the file when md5 fallback is disabled", async () => {
+    const service = {
+      resolveDurationSeconds: vi.fn(() => ({ durationSeconds: 60, strategy: "filename-unique" })),
+    };
+    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(0)) };
+
+    const result = await resolveSonglengthDurationMsWithFacade({
+      service,
+      path: "/Local/Intro.sid",
+      file: file as never,
+      songNr: 1,
+      options: { allowMd5Fallback: false },
+    });
+
+    expect(result).toBe(60000);
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
+  });
+
   it("skips MD5 fallback during bulk HVSC imports so songlength lookups stay lazy and throughput does not collapse", async () => {
     const service = {
       resolveDurationSeconds: vi.fn(() => ({ durationSeconds: null })),
