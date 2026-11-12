@@ -370,6 +370,34 @@ class TelnetSocketPluginTest {
   }
 
   @Test
+  fun sendAgainstAPeerThatStopsAcknowledgingClosesTheSocketWithinTheWriteBound() {
+    val release = CountDownLatch(1)
+    val output =
+            object : OutputStream() {
+              override fun write(byteValue: Int) {
+                if (!release.await(5, TimeUnit.SECONDS)) return
+                throw java.io.IOException("socket closed")
+              }
+            }
+    val socket = FakeSocket(output = output, onClose = { release.countDown() })
+    plugin.socketFactory = { socket }
+    plugin.writeTimeoutMs = 200
+    val connectCall = mock(PluginCall::class.java)
+    `when`(connectCall.getString("host")).thenReturn("ultimate.example")
+    plugin.connect(connectCall)
+    val sendCall = mock(PluginCall::class.java)
+    `when`(sendCall.getString("data")).thenReturn(Base64.encodeToString("HELLO".toByteArray(), Base64.NO_WRAP))
+
+    val startedAt = System.nanoTime()
+    plugin.send(sendCall)
+    val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
+
+    assertTrue("send blocked for ${elapsedMs}ms", elapsedMs < 3_000)
+    assertTrue(socket.closed)
+    verify(sendCall).reject(org.mockito.ArgumentMatchers.startsWith("Send failed"), any<Exception>())
+  }
+
+  @Test
   fun sendRejectsOnWriteFailureAndLogsError() {
     val socket =
             FakeSocket(
@@ -666,6 +694,7 @@ private class FakeSocket(
         private val output: OutputStream = TrackingOutputStream(),
         private val connectFailure: Exception? = null,
         private val closeFailure: Exception? = null,
+        private val onClose: () -> Unit = {},
 ) : Socket() {
   var connectedHost: String? = null
   var connectedPort: Int? = null
@@ -702,6 +731,7 @@ private class FakeSocket(
     closeFailure?.let { throw it }
     connected = false
     closed = true
+    onClose()
   }
 }
 

@@ -21,6 +21,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 @CapacitorPlugin(name = "TelnetSocket")
@@ -29,6 +30,13 @@ class TelnetSocketPlugin : Plugin() {
   private val logTag = "TelnetSocketPlugin"
   private val defaultTimeoutMs = 5_000
   private val defaultReadTimeoutMs = 500
+  internal var writeTimeoutMs = 5_000L
+  private val writeWatchdog =
+          ScheduledThreadPoolExecutor(1) { task -> Thread(task, "telnet-write-watchdog").apply { isDaemon = true } }
+                  .apply {
+                    setKeepAliveTime(30, TimeUnit.SECONDS)
+                    allowCoreThreadTimeOut(true)
+                  }
   private val readDrainSliceTimeoutMs = 25
 
   internal var socketFactory: () -> Socket = { Socket() }
@@ -190,8 +198,7 @@ class TelnetSocketPlugin : Plugin() {
                   return@Runnable
                 }
                 val bytes = Base64.decode(dataBase64, Base64.DEFAULT)
-                stream.write(bytes)
-                stream.flush()
+                writeWithinBound(stream, bytes)
                 call.resolve(JSObject())
               } catch (error: Exception) {
                 AppLogger.error(
@@ -307,6 +314,40 @@ class TelnetSocketPlugin : Plugin() {
     }
   }
 
+  private fun writeWithinBound(stream: OutputStream, bytes: ByteArray) {
+    val sock = socket
+    val watchdog =
+            writeWatchdog.schedule(
+                    {
+                      AppLogger.warn(
+                              context,
+                              logTag,
+                              "Telnet write did not finish within ${writeTimeoutMs}ms; closing the socket",
+                              "TelnetSocketPlugin",
+                      )
+                      try {
+                        sock?.close()
+                      } catch (error: Exception) {
+                        AppLogger.warn(
+                                context,
+                                logTag,
+                                "Failed to close Telnet socket after write timeout: ${error.message}",
+                                "TelnetSocketPlugin",
+                                error,
+                        )
+                      }
+                    },
+                    writeTimeoutMs,
+                    TimeUnit.MILLISECONDS,
+            )
+    try {
+      stream.write(bytes)
+      stream.flush()
+    } finally {
+      watchdog.cancel(false)
+    }
+  }
+
   private fun closeSocket() {
     try {
       inputStream?.close()
@@ -360,6 +401,7 @@ class TelnetSocketPlugin : Plugin() {
     } catch (_: InterruptedException) {
       Thread.currentThread().interrupt()
     }
+    writeWatchdog.shutdownNow()
     closeSocket()
     super.handleOnDestroy()
   }
