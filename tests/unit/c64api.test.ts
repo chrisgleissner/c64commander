@@ -2121,6 +2121,24 @@ describe("c64api", () => {
       expect(unreachable).not.toHaveBeenCalled();
     });
 
+    describe("readMemory JSON fallback", () => {
+      it("rejects a malformed base64 payload with the read in the message and the decode error as cause", async () => {
+        getFetchMock().mockResolvedValue(
+          new Response(JSON.stringify({ data: "!!not base64!!" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+
+        const error = await new C64API("http://c64u").readMemory("00A2", 3).catch((rejection: Error) => rejection);
+
+        expect((error as Error).message).toBe(
+          "readMemory 00A2 length 3 returned malformed base64 data (14 characters)",
+        );
+        expect((error as Error).cause).toBeInstanceOf(Error);
+      });
+    });
+
     it("treats a request that fails while the phone has no network as expected", async () => {
       const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
       const traces = await import("@/lib/tracing/traceSession");
