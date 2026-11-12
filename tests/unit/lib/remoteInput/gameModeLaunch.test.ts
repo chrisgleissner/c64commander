@@ -365,3 +365,59 @@ describe("a repeated request keeps the stream ownership of the first", () => {
     expect(claimed).toEqual({ startedVideo: true, startedAudio: true });
   });
 });
+
+describe("an unclaimed request while a launch is still starting its feeds", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetPendingGameModeRequest();
+    vi.restoreAllMocks();
+    flags.live_view_enabled = true;
+    flags.audio_mirror_enabled = true;
+    flags.video_mirror_enabled = true;
+  });
+
+  it("does not stop the feeds mid-launch, and stops audio too once the launch settled and nobody claimed it", async () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    let finishVideo: () => void = () => {};
+    const session = fakeSession({ startVideo: vi.fn(() => new Promise<void>((resolve) => (finishVideo = resolve))) });
+    vi.useFakeTimers();
+    try {
+      const launched = launch(session);
+      vi.advanceTimersByTime(6_000);
+      expect(stopVideo).not.toHaveBeenCalled();
+      expect(stopAudio).not.toHaveBeenCalled();
+
+      finishVideo();
+      await launched;
+      expect(session.startAudio).toHaveBeenCalledTimes(1);
+      expect(stopAudio).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(6_000);
+      expect(stopVideo).toHaveBeenCalledTimes(1);
+      expect(stopAudio).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hands the request to a sheet that mounts after the 5 s window while the launch is still starting", async () => {
+    vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    let finishVideo: () => void = () => {};
+    const session = fakeSession({ startVideo: vi.fn(() => new Promise<void>((resolve) => (finishVideo = resolve))) });
+    vi.useFakeTimers();
+    try {
+      const launched = launch(session);
+      vi.advanceTimersByTime(6_000);
+      const handler = vi.fn();
+      const unsubscribe = subscribeGameModeRequest(handler);
+      expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: true });
+      unsubscribe();
+      finishVideo();
+      await launched;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

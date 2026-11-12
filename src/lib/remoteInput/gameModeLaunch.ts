@@ -67,6 +67,7 @@ export const startGameMode = async (opts?: {
   // to look like it worked at once. A start that then fails leaves the record
   // claiming a stream that never ran, which costs only an idempotent stop later.
   const started: GameModeStartResult = { startedVideo, startedAudio };
+  launchesInFlight += 1;
   requestGameMode(started);
 
   // Every call site fires this and forgets it, because the sheet has already been asked to
@@ -85,8 +86,13 @@ export const startGameMode = async (opts?: {
     }
   };
 
-  if (startedVideo) await start("video", () => session.startVideo());
-  if (startedAudio) await start("audio", () => session.startAudio());
+  try {
+    if (startedVideo) await start("video", () => session.startVideo());
+    if (startedAudio) await start("audio", () => session.startAudio());
+  } finally {
+    launchesInFlight = Math.max(0, launchesInFlight - 1);
+    restartPendingExpiryWindow();
+  }
   return started;
 };
 
@@ -116,6 +122,7 @@ const PENDING_REQUEST_TTL_MS = 5_000;
 type PendingRequest = { started: GameModeStartResult; atMs: number };
 
 let pendingRequest: PendingRequest | null = null;
+let launchesInFlight = 0;
 let pendingExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const clearPendingExpiryTimer = () => {
@@ -124,10 +131,19 @@ const clearPendingExpiryTimer = () => {
 };
 
 const expirePendingRequest = (record: PendingRequest) => {
-  if (pendingRequest !== record) return;
+  if (pendingRequest !== record || launchesInFlight > 0) return;
   pendingRequest = null;
   pendingExpiryTimer = null;
   stopOwnedStreams(avMirrorSession, record.started);
+};
+
+/** A launch still starting feeds owns its request, so the wait for a sheet to claim it starts when the launch settles. */
+const restartPendingExpiryWindow = () => {
+  if (launchesInFlight > 0 || pendingRequest === null) return;
+  const record = pendingRequest;
+  record.atMs = Date.now();
+  clearPendingExpiryTimer();
+  pendingExpiryTimer = setTimeout(() => expirePendingRequest(record), PENDING_REQUEST_TTL_MS);
 };
 
 /**
@@ -141,7 +157,7 @@ const takePendingGameModeRequest = (): GameModeStartResult | null => {
   if (pendingRequest === null) return null;
   const claimed = pendingRequest;
   clearPendingExpiryTimer();
-  if (Date.now() - claimed.atMs <= PENDING_REQUEST_TTL_MS) {
+  if (launchesInFlight > 0 || Date.now() - claimed.atMs <= PENDING_REQUEST_TTL_MS) {
     pendingRequest = null;
     return claimed.started;
   }
@@ -192,6 +208,7 @@ export const subscribeGameModeRequest = (handler: (started: GameModeStartResult)
 export const resetPendingGameModeRequest = (): void => {
   clearPendingExpiryTimer();
   pendingRequest = null;
+  launchesInFlight = 0;
 };
 
 /** Pages that mount a Remote Input sheet, and can therefore answer a request in place. */
