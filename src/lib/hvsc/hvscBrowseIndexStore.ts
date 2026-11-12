@@ -557,7 +557,9 @@ const deleteFilesystemFullSnapshot = async () => {
   } catch (error) {
     if (isFileNotFoundError(error)) return;
     addLog("warn", "Failed to delete stale HVSC full snapshot", describeError(error, { storagePath: STORAGE_PATH }));
-    await writeDataFileText(STORAGE_PATH, "");
+    await writeDataFileText(STORAGE_PATH, "").catch((blankError) => {
+      throw new Error(`Failed to blank stale HVSC full snapshot at ${STORAGE_PATH}`, { cause: blankError });
+    });
   }
 };
 
@@ -662,7 +664,7 @@ const persistToLocalStorage = (normalized: HvscBrowseIndexSnapshot, persistFullS
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(MEDIA_INDEX_STORAGE_KEY);
     rememberSnapshot(normalizeSnapshot(normalized));
-    return { chars, error: (error as Error)?.message ?? String(error) };
+    return { chars, error };
   }
 };
 
@@ -774,7 +776,7 @@ const persistHvscBrowseIndexSnapshot = async (normalized: HvscBrowseIndexSnapsho
           mediaIndexPath: MEDIA_INDEX_STORAGE_PATH,
           songCount: Object.keys(normalized.songs).length,
           localStorageChars: fallback.chars,
-          localStorageError: fallback.error,
+          localStorageError: fallback.error && describeError(fallback.error),
         }),
       );
       if (persistFullSnapshot) downgradeReported.localStorage = false;
@@ -794,7 +796,7 @@ const persistHvscBrowseIndexSnapshot = async (normalized: HvscBrowseIndexSnapsho
     addLog("warn", "HVSC browse snapshot localStorage persistence failed; keeping it in memory only", {
       songCount: Object.keys(normalized.songs).length,
       localStorageChars: fallback.chars,
-      error: fallback.error,
+      ...describeError(fallback.error),
     });
   }
 };

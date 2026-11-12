@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const files = new Map<string, string>();
-const failures = { write: false, deletePaths: new Set<string>() };
+const failures = { write: false, blankWrites: false, deletePaths: new Set<string>() };
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
@@ -29,7 +29,7 @@ vi.mock("@capacitor/filesystem", () => ({
       return { data: files.get(path) };
     }),
     writeFile: vi.fn(async ({ path, data }: { path: string; data: string }) => {
-      if (failures.write) throw new Error("ENOSPC: no space left on device");
+      if (failures.write || (failures.blankWrites && data === "")) throw new Error("ENOSPC: no space left on device");
       files.set(path, data);
     }),
   },
@@ -70,6 +70,7 @@ afterEach(() => {
 beforeEach(() => {
   files.clear();
   failures.write = false;
+  failures.blankWrites = false;
   failures.deletePaths.clear();
   localStorage.clear();
   vi.mocked(addLog).mockClear();
@@ -85,7 +86,10 @@ describe("HVSC browse index - persistence failures", () => {
 
     const warnings = vi.mocked(addLog).mock.calls.filter(([level]) => level === "warn");
     expect(warnings).toHaveLength(1);
-    expect(warnings[0][2]).toMatchObject({ songCount: 3, localStorageError: expect.stringContaining("quota") });
+    expect(warnings[0][2]).toMatchObject({
+      songCount: 3,
+      localStorageError: { errorName: "QuotaExceededError", error: expect.stringContaining("quota") },
+    });
     expect(warnings[0][2]).toHaveProperty("localStorageChars");
   });
 
@@ -126,5 +130,20 @@ describe("HVSC browse index - persistence failures", () => {
     const paths = Object.keys(loaded?.songs ?? {});
     expect(paths).toContain("/HVSC/New_0.sid");
     expect(paths).not.toContain("/HVSC/Old_0.sid");
+  });
+
+  it("logs a contextual warning with the cause when the stale full snapshot can be neither deleted nor blanked", async () => {
+    await saveHvscBrowseIndexSnapshot(library(2, "Old"));
+    failures.deletePaths.add("hvsc/index/hvsc-browse-index-v1.json");
+    failures.blankWrites = true;
+
+    await expect(saveHvscBrowseIndexSnapshot(library(10_001, "New"))).resolves.toBeUndefined();
+
+    const warning = vi
+      .mocked(addLog)
+      .mock.calls.find(([level, , details]) => level === "warn" && String((details as any)?.error).includes("blank"));
+    expect(warning?.[2]).toMatchObject({
+      error: "Failed to blank stale HVSC full snapshot at hvsc/index/hvsc-browse-index-v1.json",
+    });
   });
 });
