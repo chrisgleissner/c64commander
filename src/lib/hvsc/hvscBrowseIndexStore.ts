@@ -21,6 +21,12 @@ export { buildFoldersFromSongs, normalizePath };
 import { withoutUnknownPlaceholder } from "@/lib/sid/unknownPlaceholder";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
+import {
+  clearFilesystemSnapshotStale,
+  isFilesystemSnapshotStale,
+  markFilesystemSnapshotStale,
+  removeLocalStorageKeys,
+} from "./hvscBrowseIndexFallbackMarker";
 import { readDataFileText, resolveLibraryPath, writeDataFileText } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
 
@@ -526,8 +532,6 @@ const readFilesystemMediaIndexSnapshot = async () => {
       readMs: Math.round(parseAt - readAt),
     });
     const snapshot = await parseMediaIndexSnapshotSliced(text, createTimeSlicer());
-    // The two halves are paid on completely different budgets — one is I/O, the other is main-thread
-    // CPU over sixty thousand songs — so a single figure cannot say which one to go and reduce.
     addLog("info", "HVSC media index snapshot read", {
       storagePath: MEDIA_INDEX_STORAGE_PATH,
       bytes: text?.length ?? 0,
@@ -594,10 +598,8 @@ export const clearHvscBrowseIndexSnapshot = async () => {
       }
     }
   }
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(MEDIA_INDEX_STORAGE_KEY);
-  }
+  clearFilesystemSnapshotStale();
+  removeLocalStorageKeys([STORAGE_KEY, MEDIA_INDEX_STORAGE_KEY]);
 };
 
 const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
@@ -625,6 +627,10 @@ const ensureFilesystemIndexDirectory = async () => {
 
 const readStoredBrowseIndexSnapshot = async () => {
   if (typeof window !== "undefined") {
+    if (isFilesystemSnapshotStale()) {
+      const fallbackSnapshot = readLocalStorageSnapshot() ?? readLocalStorageMediaIndexSnapshot();
+      if (fallbackSnapshot) return fallbackSnapshot;
+    }
     const filesystemSnapshot = await readFilesystemSnapshot();
     if (filesystemSnapshot) return filesystemSnapshot;
     const filesystemMediaIndexSnapshot = await readFilesystemMediaIndexSnapshot();
@@ -648,32 +654,32 @@ const deleteLocalStorageFullSnapshot = () => {
   localStorage.removeItem(STORAGE_KEY);
 };
 
-/** Never throws: on failure the old copies are removed so a later load cannot return them, and the snapshot stays in memory. */
+/** Never throws. The marker makes loads prefer these copies; a failed full snapshot keeps the stored media index. */
 const persistToLocalStorage = (normalized: HvscBrowseIndexSnapshot, persistFullSnapshot: boolean) => {
   if (typeof localStorage === "undefined") return { chars: 0 };
   let chars = 0;
+  let mediaIndexStored = false;
   try {
     const mediaIndexText = JSON.stringify(buildPersistedMediaIndexSnapshot(normalized));
     const fullText = persistFullSnapshot ? JSON.stringify(normalized) : null;
     chars = mediaIndexText.length + (fullText?.length ?? 0);
     localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, mediaIndexText);
+    markFilesystemSnapshotStale();
+    mediaIndexStored = true;
     if (fullText) localStorage.setItem(STORAGE_KEY, fullText);
     else deleteLocalStorageFullSnapshot();
     return { chars };
   } catch (error) {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(MEDIA_INDEX_STORAGE_KEY);
-    rememberSnapshot(normalizeSnapshot(normalized));
+    removeLocalStorageKeys(mediaIndexStored ? [STORAGE_KEY] : [STORAGE_KEY, MEDIA_INDEX_STORAGE_KEY]);
     return { chars, error };
+  } finally {
+    rememberSnapshot(normalizeSnapshot(normalized));
   }
 };
 
 /*
- * The snapshot last read from storage, until the next write or clear. Startup read and parsed the
- * 13 MB media index twice, once for the media index and once for the Songlengths projection: about
- * 1.3 s of main-thread parsing each on a Pixel 4. Callers get their own songs and folders maps, so one
- * caller's replacements, such as an ingestion canceled half way, never show in what another loads; the
- * song objects are shared, and nothing outside parsing changes one in place.
+ * The snapshot last read from storage, until the next write or clear. Startup parsed the 13 MB media index
+ * twice, about 1.3 s each on a Pixel 4. Callers get their own songs and folders maps; song objects are shared.
  */
 let lastStoredSnapshot: HvscBrowseIndexSnapshot | null = null;
 let snapshotEpoch = 0;
@@ -723,14 +729,7 @@ export const saveHvscBrowseIndexSnapshot = async (
   snapshot: HvscBrowseIndexSnapshot,
   options: { foldersUnchanged?: boolean } = {},
 ) => {
-  // Rebuilding the folder tree is O(song count) and metadata hydration calls
-  // this after every small chunk - for a real ~60k-song HVSC library that is
-  // an O(songs^2) rebuild that starves the JS main thread for minutes (the
-  // observed cause of Remote Input's "Reconnecting" and other UI hangs during
-  // a library scan). Hydration only ever edits metadata on existing entries,
-  // never adds/removes/moves a song, so its virtualPaths - and therefore the
-  // derived folder tree - never change; callers on that path may skip the
-  // rebuild and reuse the snapshot's existing folders.
+  // Metadata hydration only edits existing songs, so it reuses the folder tree: rebuilding it per chunk is O(songs^2).
   const reuseFolders = options.foldersUnchanged && snapshot.folders && Object.keys(snapshot.folders).length > 0;
   const normalized: HvscBrowseIndexSnapshot = {
     schemaVersion: SCHEMA_VERSION,
@@ -763,6 +762,7 @@ const persistHvscBrowseIndexSnapshot = async (normalized: HvscBrowseIndexSnapsho
           });
         }
       }
+      clearFilesystemSnapshotStale();
       return;
     } catch (error) {
       const fallback = persistToLocalStorage(normalized, persistFullSnapshot);

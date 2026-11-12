@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const files = new Map<string, string>();
-const failures = { write: false, blankWrites: false, deletePaths: new Set<string>() };
+const failures = { write: false, blankWrites: false, deletePaths: new Set<string>(), writePaths: new Set<string>() };
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
@@ -29,7 +29,8 @@ vi.mock("@capacitor/filesystem", () => ({
       return { data: files.get(path) };
     }),
     writeFile: vi.fn(async ({ path, data }: { path: string; data: string }) => {
-      if (failures.write || (failures.blankWrites && data === "")) throw new Error("ENOSPC: no space left on device");
+      if (failures.write || failures.writePaths.has(path) || (failures.blankWrites && data === ""))
+        throw new Error("ENOSPC: no space left on device");
       files.set(path, data);
     }),
   },
@@ -65,6 +66,7 @@ const failLocalStorageWrites = () =>
 
 afterEach(() => {
   vi.mocked(Storage.prototype.setItem).mockRestore?.();
+  vi.mocked(Storage.prototype.removeItem).mockRestore?.();
 });
 
 beforeEach(() => {
@@ -72,6 +74,7 @@ beforeEach(() => {
   failures.write = false;
   failures.blankWrites = false;
   failures.deletePaths.clear();
+  failures.writePaths.clear();
   localStorage.clear();
   vi.mocked(addLog).mockClear();
   forgetHvscBrowseIndexSnapshot();
@@ -145,5 +148,76 @@ describe("HVSC browse index - persistence failures", () => {
     expect(warning?.[2]).toMatchObject({
       error: "Failed to blank stale HVSC full snapshot at hvsc/index/hvsc-browse-index-v1.json",
     });
+  });
+
+  const FULL_PATH = "hvsc/index/hvsc-browse-index-v1.json";
+  const loadInFreshSession = async () => {
+    vi.resetModules();
+    const fresh = await import("@/lib/hvsc/hvscBrowseIndexStore");
+    return Object.keys((await fresh.loadHvscBrowseIndexSnapshot())?.songs ?? {});
+  };
+
+  it("serves the new snapshot, in this session and the next, when the stale full file can be neither deleted nor blanked", async () => {
+    await saveHvscBrowseIndexSnapshot(library(2, "Old"));
+    failures.deletePaths.add(FULL_PATH);
+    failures.blankWrites = true;
+
+    await saveHvscBrowseIndexSnapshot(library(10_001, "New"));
+
+    expect(Object.keys((await loadHvscBrowseIndexSnapshot())?.songs ?? {})).toContain("/HVSC/New_0.sid");
+    const nextSession = await loadInFreshSession();
+    expect(nextSession).toContain("/HVSC/New_0.sid");
+    expect(nextSession).not.toContain("/HVSC/Old_0.sid");
+  });
+
+  it("serves the new snapshot in the next session when the media index write fails and the old files remain", async () => {
+    await saveHvscBrowseIndexSnapshot(library(2, "Old"));
+    failures.writePaths.add("hvsc/index/media-index-v2.json");
+    expect([...files.keys()].some((path) => path.includes("media-index-v2"))).toBe(true);
+
+    await saveHvscBrowseIndexSnapshot(library(3, "New"));
+
+    expect(Object.keys((await loadHvscBrowseIndexSnapshot())?.songs ?? {})).toContain("/HVSC/New_0.sid");
+    const nextSession = await loadInFreshSession();
+    expect(nextSession).toContain("/HVSC/New_0.sid");
+    expect(nextSession).not.toContain("/HVSC/Old_0.sid");
+  });
+
+  it("prefers the filesystem again once a later save succeeds there", async () => {
+    await saveHvscBrowseIndexSnapshot(library(2, "Old"));
+    failures.writePaths.add("hvsc/index/media-index-v2.json");
+    await saveHvscBrowseIndexSnapshot(library(3, "Mid"));
+    failures.writePaths.clear();
+    await saveHvscBrowseIndexSnapshot(library(4, "Last"));
+
+    expect(await loadInFreshSession()).toContain("/HVSC/Last_0.sid");
+  });
+
+  it("keeps the stored media index when only the full snapshot hits the localStorage quota", async () => {
+    failures.write = true;
+    const realSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === "c64u_hvsc_browse_index:v1") throw quotaError();
+      realSetItem.call(this, key, value);
+    });
+
+    await saveHvscBrowseIndexSnapshot(library(3, "New"));
+
+    expect(localStorage.getItem("c64u_media_index:v1")).not.toBeNull();
+    expect(await loadInFreshSession()).toContain("/HVSC/New_0.sid");
+  });
+
+  it("does not throw and logs when removing a localStorage key throws after a failed write", async () => {
+    failures.write = true;
+    failLocalStorageWrites();
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("denied", "SecurityError");
+    });
+
+    await expect(saveHvscBrowseIndexSnapshot(library(3))).resolves.toBeUndefined();
+
+    expect(
+      vi.mocked(addLog).mock.calls.some(([level, message]) => level === "warn" && String(message).includes("remove")),
+    ).toBe(true);
   });
 });

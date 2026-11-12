@@ -1178,7 +1178,7 @@ describe("hvscBrowseIndexStore remembered snapshot", () => {
   it("reads storage again after a save", async () => {
     await seedMediaIndex();
     const first = await loadHvscBrowseIndexSnapshot();
-    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error("disk full") as never);
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as never);
     vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as never);
     await saveHvscBrowseIndexSnapshot(first!);
     const getItem = vi.spyOn(Storage.prototype, "getItem");
