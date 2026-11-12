@@ -56,10 +56,10 @@ describe("InMemoryTextBackend", () => {
     });
   });
 
-  describe("a query that carries an md5", () => {
+  describe("strategy precedence", () => {
     const database = "; /DEMOS/Intro.sid\nmd5aaaa=1:00\n; /GAMES/Other.sid\nmd5bbbb=2:00";
 
-    it("resolves to the md5 entry when the file name points at a different entry", async () => {
+    it("prefers an md5 hit over a file-name match", async () => {
       const backend = new InMemoryTextBackend();
       await backend.load(makeInput(database));
       const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5bbbb" });
@@ -67,26 +67,27 @@ describe("InMemoryTextBackend", () => {
       expect(resolution.durationSeconds).toBe(120);
     });
 
-    it("rejects a unique file name whose entry has a different md5", async () => {
+    it("falls back to the file name when the md5 misses", async () => {
       const backend = new InMemoryTextBackend();
       await backend.load(makeInput(database));
       const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5cccc" });
-      expect(resolution.durationSeconds).toBeNull();
-    });
-
-    it("still accepts a unique file name whose entry has the same md5", async () => {
-      const backend = new InMemoryTextBackend();
-      await backend.load(makeInput(database));
-      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5aaaa" });
-      expect(resolution.durationSeconds).toBe(60);
-    });
-
-    it("keeps accepting a unique file name when no md5 is supplied", async () => {
-      const backend = new InMemoryTextBackend();
-      await backend.load(makeInput(database));
-      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid" });
       expect(resolution.strategy).toBe("filename-unique");
       expect(resolution.durationSeconds).toBe(60);
+    });
+
+    it("prefers a full-path match over a unique file name", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/DEMOS/Intro.sid", fileName: "Intro.sid" });
+      expect(resolution.strategy).toBe("full-path");
+    });
+
+    it("prefers a full-path match over a partial-path file-name match among duplicates", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput("; /A/Dup.sid\nmd5aaaa=1:00\n; /B/Dup.sid\nmd5bbbb=2:00"));
+      const resolution = backend.resolve({ virtualPath: "/B/Dup.sid", fileName: "Dup.sid", partialPath: "/B" });
+      expect(resolution.strategy).toBe("full-path");
+      expect(resolution.durationSeconds).toBe(120);
     });
   });
 
@@ -100,7 +101,7 @@ describe("InMemoryTextBackend", () => {
 
     it("derives fileName from virtualPath when fileName is not provided", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/Song.sid\nabc123=1:30"));
+      await backend.load(makeInput("; /HVSC/DEMOS/Song.sid\nabc123=1:30"));
       const result = backend.resolve({ virtualPath: "/DEMOS/Song.sid" });
       expect(result.strategy).toBe("filename-unique");
       expect(result.durationSeconds).toBe(90);
@@ -108,7 +109,7 @@ describe("InMemoryTextBackend", () => {
 
     it("derives partialPath from virtualPath when partialPath is not provided", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00"));
+      await backend.load(makeInput("; /HVSC/DEMOS/A/Song.sid\naaa=1:00\n; /HVSC/DEMOS/B/Song.sid\nbbb=2:00"));
       const result = backend.resolve({ virtualPath: "/DEMOS/A/Song.sid" });
       expect(result.strategy).toBe("filename-partial-path");
       expect(result.durationSeconds).toBe(60);
@@ -351,7 +352,7 @@ describe("InMemoryTextBackend", () => {
 
     it("resolve with virtualPath only derives fileName from it", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/Song.sid\nabc=1:00"));
+      await backend.load(makeInput("; /HVSC/DEMOS/Song.sid\nabc=1:00"));
       // No fileName - derive from virtualPath
       const result = backend.resolve({ virtualPath: "/DEMOS/Song.sid" });
       expect(result.strategy).toBe("filename-unique");

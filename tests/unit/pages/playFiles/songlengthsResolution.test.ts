@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from "vitest";
+import { InMemoryTextBackend } from "@/lib/songlengths/inMemoryTextBackend";
 import { resolveSonglengthDurationMsWithFacade } from "@/pages/playFiles/songlengthsResolution";
 
 vi.mock("@/lib/logging", () => ({
@@ -45,80 +46,82 @@ describe("resolveSonglengthDurationMsWithFacade", () => {
     expect(file.arrayBuffer).not.toHaveBeenCalled();
   });
 
-  it("verifies a file-name-only match of a local file by md5 and prefers the md5 result", async () => {
-    const service = {
-      resolveDurationSeconds: vi.fn((query: { md5?: string }) =>
-        query.md5 ? { durationSeconds: 120, strategy: "md5" } : { durationSeconds: 60, strategy: "filename-unique" },
-      ),
-    };
-    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(1)) };
+  describe("with the real in-memory backend", () => {
+    const database =
+      "; /DEMOS/Intro.sid\nmd5aaaa=1:00\n; /GAMES/Other.sid\nmd5bbbb=2:00\n; /MUSICIANS/A/Artist/Tune.sid\nmd5cccc=0:42";
 
-    const result = await resolveSonglengthDurationMsWithFacade({
-      service,
-      path: "/Local/Intro.sid",
-      file: file as never,
-      songNr: 1,
-      computeSidMd5: vi.fn(async () => "md5bbbb"),
+    const makeService = async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load({ sourceLabel: "test", files: [{ path: "Songlengths.md5", content: database }] } as never);
+      return {
+        resolveDurationSeconds: (query: Parameters<InMemoryTextBackend["resolve"]>[0]) => backend.resolve(query),
+      };
+    };
+    const makeFile = () => ({ arrayBuffer: vi.fn(async () => new ArrayBuffer(1)) });
+
+    it("reads no file when the virtual path is a full-path match", async () => {
+      const file = makeFile();
+      const result = await resolveSonglengthDurationMsWithFacade({
+        service: await makeService(),
+        path: "/MUSICIANS/A/Artist/Tune.sid",
+        file: file as never,
+        songNr: 1,
+      });
+      expect(result).toBe(42000);
+      expect(file.arrayBuffer).not.toHaveBeenCalled();
     });
 
-    expect(result).toBe(120000);
-    expect(service.resolveDurationSeconds).toHaveBeenLastCalledWith(expect.objectContaining({ md5: "md5bbbb" }));
-  });
-
-  it("does not accept a file-name-only match when the md5 lookup finds nothing", async () => {
-    const service = {
-      resolveDurationSeconds: vi.fn((query: { md5?: string }) =>
-        query.md5
-          ? { durationSeconds: null, strategy: "not-found" }
-          : { durationSeconds: 60, strategy: "filename-unique" },
-      ),
-    };
-    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(1)) };
-
-    const result = await resolveSonglengthDurationMsWithFacade({
-      service,
-      path: "/Local/Intro.sid",
-      file: file as never,
-      songNr: 1,
-      computeSidMd5: vi.fn(async () => "md5zzzz"),
+    it("uses the md5 entry when a name-only match is hashed to a different entry", async () => {
+      const result = await resolveSonglengthDurationMsWithFacade({
+        service: await makeService(),
+        path: "/Local/Intro.sid",
+        file: makeFile() as never,
+        songNr: 1,
+        computeSidMd5: vi.fn(async () => "md5bbbb"),
+      });
+      expect(result).toBe(120000);
     });
 
-    expect(result).toBeNull();
-  });
-
-  it("keeps a full-path match without reading the file", async () => {
-    const service = {
-      resolveDurationSeconds: vi.fn(() => ({ durationSeconds: 42, strategy: "full-path" })),
-    };
-    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(0)) };
-
-    const result = await resolveSonglengthDurationMsWithFacade({
-      service,
-      path: "/MUSICIANS/A/Artist/Tune.sid",
-      file: file as never,
-      songNr: 1,
+    it("keeps the file-name length when the md5 lookup misses", async () => {
+      const result = await resolveSonglengthDurationMsWithFacade({
+        service: await makeService(),
+        path: "/Local/Intro.sid",
+        file: makeFile() as never,
+        songNr: 1,
+        computeSidMd5: vi.fn(async () => "md5zzzz"),
+      });
+      expect(result).toBe(60000);
     });
 
-    expect(result).toBe(42000);
-    expect(file.arrayBuffer).not.toHaveBeenCalled();
-  });
-
-  it("accepts a file-name-only match without reading the file when md5 fallback is disabled", async () => {
-    const service = {
-      resolveDurationSeconds: vi.fn(() => ({ durationSeconds: 60, strategy: "filename-unique" })),
-    };
-    const file = { arrayBuffer: vi.fn(async () => new ArrayBuffer(0)) };
-
-    const result = await resolveSonglengthDurationMsWithFacade({
-      service,
-      path: "/Local/Intro.sid",
-      file: file as never,
-      songNr: 1,
-      options: { allowMd5Fallback: false },
+    it("keeps the file-name length and logs when hashing fails", async () => {
+      const result = await resolveSonglengthDurationMsWithFacade({
+        service: await makeService(),
+        path: "/Local/Intro.sid",
+        file: makeFile() as never,
+        songNr: 1,
+        computeSidMd5: vi.fn(async () => {
+          throw new Error("hash failed");
+        }),
+      });
+      expect(result).toBe(60000);
+      expect(addErrorLogMock).toHaveBeenCalledWith(
+        expect.stringContaining("md5"),
+        expect.objectContaining({ path: "/Local/Intro.sid", error: "hash failed" }),
+      );
     });
 
-    expect(result).toBe(60000);
-    expect(file.arrayBuffer).not.toHaveBeenCalled();
+    it("accepts a file-name match without reading the file when md5 fallback is disabled", async () => {
+      const file = makeFile();
+      const result = await resolveSonglengthDurationMsWithFacade({
+        service: await makeService(),
+        path: "/Local/Intro.sid",
+        file: file as never,
+        songNr: 1,
+        options: { allowMd5Fallback: false },
+      });
+      expect(result).toBe(60000);
+      expect(file.arrayBuffer).not.toHaveBeenCalled();
+    });
   });
 
   it("skips MD5 fallback during bulk HVSC imports so songlength lookups stay lazy and throughput does not collapse", async () => {

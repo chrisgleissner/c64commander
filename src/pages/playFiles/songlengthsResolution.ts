@@ -52,6 +52,7 @@ export const resolveSonglengthDurationMsWithFacade = async ({
   if (resolvedByPath.durationSeconds !== null && !(canVerifyByMd5 && matchedByNameOnly)) {
     return resolvedByPath.durationSeconds * 1000;
   }
+  const nameBasedDurationMs = resolvedByPath.durationSeconds !== null ? resolvedByPath.durationSeconds * 1000 : null;
   if (!file || !canVerifyByMd5) return null;
   try {
     const buffer = await file.arrayBuffer();
@@ -68,13 +69,13 @@ export const resolveSonglengthDurationMsWithFacade = async ({
       md5,
       songNr: songNr ?? null,
     });
-    return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : null;
+    return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : nameBasedDurationMs;
   } catch (error) {
     addErrorLog("Failed to resolve songlength via facade md5 fallback", {
       path: normalizedPath,
       songNr: songNr ?? null,
       error: (error as Error).message,
     });
-    return null;
+    return nameBasedDurationMs;
   }
 };

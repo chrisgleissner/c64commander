@@ -374,11 +374,6 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
     };
   }
 
-  private recordContradictsMd5(recordId: number, md5: string | null) {
-    const recordMd5 = this.records[recordId]?.md5;
-    return md5 !== null && Boolean(recordMd5) && recordMd5 !== md5;
-  }
-
   resolve(query: SongLengthResolveQuery): SongLengthResolution {
     if (!this.records.length) {
       return { durationSeconds: null, strategy: "unavailable" };
@@ -408,16 +403,22 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
       }
     }
 
+    if (normalizedVirtualPath) {
+      const fullPathEntryId = this.fullPathToEntryId.get(normalizedVirtualPath);
+      if (typeof fullPathEntryId === "number") {
+        return this.toResolution(fullPathEntryId, "full-path", query);
+      }
+    }
+
     if (normalizedFileName) {
       const uniqueEntryId = this.uniqueFileNameToEntryId.get(normalizedFileName);
-      if (typeof uniqueEntryId === "number" && !this.recordContradictsMd5(uniqueEntryId, normalizedMd5)) {
+      if (typeof uniqueEntryId === "number") {
         return this.toResolution(uniqueEntryId, "filename-unique", query);
       }
 
       const duplicateEntryIds = this.duplicateFileNameToEntryIds.get(normalizedFileName);
       if (duplicateEntryIds?.length && normalizedPartialPath) {
         const candidates = duplicateEntryIds.filter((entryId) => {
-          if (this.recordContradictsMd5(entryId, normalizedMd5)) return false;
           const path = (this.fullPaths[this.records[entryId]?.fullPathId ?? -1] ?? "").toLowerCase();
           return path.includes(normalizedPartialPath);
         });
@@ -431,13 +432,6 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
             candidateEntryIds: candidates,
           };
         }
-      }
-    }
-
-    if (normalizedVirtualPath) {
-      const fullPathEntryId = this.fullPathToEntryId.get(normalizedVirtualPath);
-      if (typeof fullPathEntryId === "number") {
-        return this.toResolution(fullPathEntryId, "full-path", query);
       }
     }
 
