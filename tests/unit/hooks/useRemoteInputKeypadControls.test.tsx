@@ -28,6 +28,7 @@ const baseOptions: RemoteInputKeypadControlsOptions = {
   immersive: false,
   optionsFolded: false,
   viewAdjustable: false,
+  screenshotAvailable: false,
   onAdjustView: vi.fn(),
   onSaveScreenshot: vi.fn(),
   onBasicCommand: vi.fn(),
@@ -134,12 +135,23 @@ describe("useRemoteInputKeypadControls", () => {
     );
     expect(result.current.menu.items.map((item) => item.id)).not.toContain("screenshot");
 
-    rerender({ ...baseOptions, viewAdjustable: true, onSaveScreenshot });
+    rerender({ ...baseOptions, viewAdjustable: true, screenshotAvailable: true, onSaveScreenshot });
     const ids = result.current.menu.items.map((item) => item.id);
     expect(ids.indexOf("screenshot")).toBe(ids.indexOf("adjust-view") + 1);
     choose(result.current.menu.items, "screenshot");
 
     expect(onSaveScreenshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer Save screenshot while the picture can be adjusted but no frame is live yet", () => {
+    const { result } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: { ...baseOptions, viewAdjustable: true, screenshotAvailable: false } },
+    );
+
+    const ids = result.current.menu.items.map((item) => item.id);
+    expect(ids).toContain("adjust-view");
+    expect(ids).not.toContain("screenshot");
   });
 
   it("offers each BASIC command in Keys mode, and sends the one chosen", () => {

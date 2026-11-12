@@ -35,6 +35,8 @@ export interface RemoteInputKeypadControlsOptions {
   optionsFolded: boolean;
   /** Whether the picture is on screen, so there is a view to pan and zoom. */
   viewAdjustable: boolean;
+  /** Whether a live frame is on screen to save, which is stricter than a view that can be adjusted. */
+  screenshotAvailable: boolean;
   onAdjustView: () => void;
   onSaveScreenshot: () => void;
   onBasicCommand: (command: BasicCommand) => void;
@@ -68,6 +70,7 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
     immersive,
     optionsFolded,
     viewAdjustable,
+    screenshotAvailable,
   } = options;
   const [driving, setDriving] = useState(true);
   const keysGoToTheC64 = driving && keypadDrivesTheC64;
@@ -129,6 +132,8 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
   }
   if (viewAdjustable) {
     items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
+  }
+  if (screenshotAvailable) {
     items.push({ id: "screenshot", label: "Save screenshot", onSelect: options.onSaveScreenshot });
   }
   if (outputMode === "type" && !inGameMode) {

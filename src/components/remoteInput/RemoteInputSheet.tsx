@@ -429,6 +429,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     immersive,
     optionsFolded: foldJoystickOptions,
     viewAdjustable: showMirrorScreen,
+    screenshotAvailable: videoMirrorEnabled && mirror.videoLive,
     onAdjustView: () => mirrorRef.current?.toggleMode(),
     onSaveScreenshot: () => mirrorRef.current?.saveScreenshot(),
     onBasicCommand: sendBasicCommand,

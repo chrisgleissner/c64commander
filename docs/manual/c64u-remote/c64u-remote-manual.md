@@ -820,7 +820,7 @@ On a touchscreen, **pinch** to zoom, **drag** to move the picture about, and **d
 
 A small map in the corner shows which part you are looking at; drag its rectangle to jump elsewhere. Switch on **Follow**, and the view drifts by itself to wherever the action is. That keeps the cursor in sight as you type.
 
-The camera button saves a picture of your C64's screen. It is the whole screen at its own size, however far you have zoomed in. On a phone the picture goes to the share sheet, and in a browser it downloads as a PNG file. With a keypad, open the controls menu with the right soft key or the menu key and choose **Save screenshot**.
+The camera button saves a picture of your C64's screen. It is the whole screen at its own size, however far you have zoomed in. On a phone the picture goes to the share sheet, and in a browser it downloads as a PNG file. With a keypad, open the controls menu with the right soft key or the menu key and choose **Save screenshot**. The entry appears once the picture is live.
 
 You can also lock the view onto your character. Press and hold the character on the screen. With no touchscreen, use the direction keys to line up the crosshair in the middle of the view, then press **OK**.
 

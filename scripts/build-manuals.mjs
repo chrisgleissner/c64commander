@@ -1795,7 +1795,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 `The camera button saves a picture of your C64's screen. It is the whole screen at its own size, however far you have zoomed in. On a ${appDeviceName(
                   variant,
-                )} the picture goes to the share sheet, and in a browser it downloads as a PNG file. With a keypad, open the controls menu with the right soft key or the menu key and choose **Save screenshot**.`,
+                )} the picture goes to the share sheet, and in a browser it downloads as a PNG file. With a keypad, open the controls menu with the right soft key or the menu key and choose **Save screenshot**. The entry appears once the picture is live.`,
                 "",
                 "You can also lock the view onto your character. Press and hold the character on the screen. With no touchscreen, use the direction keys to line up the crosshair in the middle of the view, then press **OK**.",
                 "",

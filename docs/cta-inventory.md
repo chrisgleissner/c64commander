@@ -1241,8 +1241,8 @@ throughout.
     `c64-screen-<date>-<time>.png`. A browser downloads it and toasts "Screenshot saved"; a phone opens the system
     share sheet. Shown only while a video stream is live, which Remote Input already requires of a device that streams.
     The row is six 44 px controls and still fits inside 320 px. Keypad: the Remote Input controls menu (soft right or
-    menu key) has a **Save screenshot** entry (`remote-input-menu-screenshot`) directly after **Adjust view**, shown while
-    the picture is on
+    menu key) has a **Save screenshot** entry (`remote-input-menu-screenshot`) after **Adjust view**, shown only while
+    a live picture is on screen (not while the stream is connecting or has failed), like the on-screen button
   - Follow motion — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
   - Lock on — press and hold the picture — no testid of its own (the gesture is on
     `av-mirror-immersive-stage`); while following with nothing locked, the hint
