@@ -632,7 +632,7 @@ class FtpClientPlugin : Plugin() {
       call.reject("data is required")
       return
     }
-    if (data.length / 4L * 3L > maxWriteFileBytes) {
+    if (data.length / 4L * 3L - data.takeLast(2).count { it == '=' } > maxWriteFileBytes) {
       call.reject("File exceeds the maximum writable size (${maxWriteFileBytes / (1024 * 1024)}MB)")
       return
     }

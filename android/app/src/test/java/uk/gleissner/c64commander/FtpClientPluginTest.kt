@@ -221,6 +221,24 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun writeFileAcceptsAPaddedPayloadThatDecodesToExactlyTheCap() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    plugin.maxWriteFileBytes = 100L
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/demo.reu")
+    `when`(call.getString("data")).thenReturn(Base64.encodeToString(ByteArray(100), Base64.NO_WRAP))
+
+    plugin.writeFile(call)
+
+    verify(call, never()).reject(org.mockito.ArgumentMatchers.contains("maximum writable size"))
+    verify(ftpClient).connect(any<String>(), org.mockito.ArgumentMatchers.anyInt())
+  }
+
+  @Test
   fun listDirectoryRejectsBlankHost() {
     val plugin = FtpClientPlugin()
     val call = mock(PluginCall::class.java)
