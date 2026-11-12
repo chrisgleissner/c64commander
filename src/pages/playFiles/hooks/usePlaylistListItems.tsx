@@ -60,7 +60,13 @@ type CachedPlaylistRow = {
 
 type PlaylistRowCache = { shared: readonly unknown[]; rows: Map<string, CachedPlaylistRow | ActionListItem> };
 
-type QueueAvailability = { playNext: boolean; moveUp: boolean; moveDown: boolean; note: string | null };
+type QueueAvailability = {
+  playNext: boolean;
+  moveUp: boolean;
+  moveDown: boolean;
+  remove: boolean;
+  note: string | null;
+};
 
 const SHUFFLE_NOTE = "Turn off Shuffle to change the order";
 const FILTER_NOTE = "Clear the filter to change the order";
@@ -69,18 +75,21 @@ const resolveQueueAvailability = (
   queueActions: PlaylistQueueActions,
   { index, count, playingIndex, loading }: { index: number; count: number; playingIndex: number; loading: boolean },
 ): QueueAvailability => {
-  if (queueActions.shuffleEnabled) return { playNext: false, moveUp: false, moveDown: false, note: SHUFFLE_NOTE };
+  if (queueActions.shuffleEnabled) {
+    return { playNext: false, moveUp: false, moveDown: false, remove: !loading, note: SHUFFLE_NOTE };
+  }
   const orderLocked = loading || queueActions.filterHidesRows;
   return {
     playNext: !loading && index !== playingIndex && index !== playingIndex + 1,
     moveUp: !orderLocked && index > 0,
     moveDown: !orderLocked && index < count - 1,
+    remove: !loading,
     note: queueActions.filterHidesRows ? FILTER_NOTE : null,
   };
 };
 
 const describeQueueAvailability = (availability: QueueAvailability) =>
-  `${availability.playNext}${availability.moveUp}${availability.moveDown}${availability.note}`;
+  `${availability.playNext}${availability.moveUp}${availability.moveDown}${availability.remove}${availability.note}`;
 
 /** The row menu's reorder actions, with the note that says why they are unavailable. */
 const buildQueueMenuItems = (
@@ -95,12 +104,31 @@ const buildQueueMenuItems = (
     onSelect: () => queueActions.playNext(itemId),
     disabled: !availability.playNext,
   },
+  {
+    type: "action",
+    label: "Move to top",
+    onSelect: () => queueActions.moveToTop(itemId),
+    disabled: !availability.moveUp,
+  },
   { type: "action", label: "Move up", onSelect: () => queueActions.moveUp(itemId), disabled: !availability.moveUp },
   {
     type: "action",
     label: "Move down",
     onSelect: () => queueActions.moveDown(itemId),
     disabled: !availability.moveDown,
+  },
+  {
+    type: "action",
+    label: "Move to bottom",
+    onSelect: () => queueActions.moveToBottom(itemId),
+    disabled: !availability.moveDown,
+  },
+  {
+    type: "action",
+    label: "Remove from playlist",
+    onSelect: () => queueActions.remove(itemId),
+    disabled: !availability.remove,
+    destructive: true,
   },
 ];
 

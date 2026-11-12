@@ -460,18 +460,28 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
   - Play next — action — code-verified — moves the row directly after the playing tune, or to the top when nothing plays.
     `[disabled: Shuffle on, playlist loading, the row is the playing tune, the row is already directly after it,
     or nothing plays and the row is already first]`
+  - Move to top — action — code-verified — moves the row to the first place; the playing row stays current wherever it ends up.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
   - Move up — action — code-verified — moves the row one place up.
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
   - Move down — action — code-verified — moves the row one place down.
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
-  - Share — action — code-verified — directly after Move down, for a tune whose HVSC path is known (found, recent or
+  - Move to bottom — action — code-verified — moves the row to the last place.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
+  - Remove from playlist — action (destructive) — code-verified — removes the row and raises a notification
+    "Removed 1 item" with an **Undo** button that puts the row back at its position. Undo restores rows only and
+    never resumes playback that the removal stopped. Removing the playing row stops it. The same notification
+    and Undo follow **Remove selected items** and **Clear playlist**. Keypad: notifications are outside the focus
+    ring, so Undo is reached through the Quick menu entry "Notification: Undo" (`keypad-quick-menu-toast-action`).
+    `[disabled: playlist loading; available while Shuffle is on and while a filter is active]`
+  - Share — action — code-verified — directly after Move to bottom, for a tune whose HVSC path is known (found, recent or
     played from the archive); not rendered for a file from the phone, the Ultimate or CommoServe, so no private path
     can leave the app. OK opens the system share sheet on a phone (a browser uses `navigator.share`, else copies
     the text and DeepSID link and toasts **Link copied**). The text is the tune's name and, for a multi-tune file,
     `Tune N of M`; the row has no composer or year to add. Not disabled while the playlist loads,
     while Shuffle is on or while a filter is active: it reads the row and changes nothing. The separator after the
     action block is kept, and is also present when Share is the only action.
-  - Above the three reorder actions, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
+  - Above the queue actions, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
     menu; not a keypad stop) gives the reason: "Turn off Shuffle to change the order" while Shuffle is on, otherwise
     "Clear the filter to change the order" while a filter is active. After a move the ring stays on the moved
     row's ⋮ and the row is scrolled into view.

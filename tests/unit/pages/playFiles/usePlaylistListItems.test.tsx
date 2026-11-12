@@ -406,6 +406,9 @@ describe("usePlaylistListItems queue actions", () => {
     playNext: vi.fn(),
     moveUp: vi.fn(),
     moveDown: vi.fn(),
+    moveToTop: vi.fn(),
+    moveToBottom: vi.fn(),
+    remove: vi.fn(),
     ...overrides,
   });
 
@@ -441,24 +444,28 @@ describe("usePlaylistListItems queue actions", () => {
   };
 
   const queueEntries = (menu: ActionListMenuItem[]) =>
-    menu.filter((entry) => entry.type === "action").slice(0, 3) as Extract<ActionListMenuItem, { type: "action" }>[];
+    menu.filter((entry) => entry.type === "action").slice(0, 6) as Extract<ActionListMenuItem, { type: "action" }>[];
 
   const disabledLabels = (menu: ActionListMenuItem[]) =>
     queueEntries(menu)
       .filter((entry) => entry.disabled)
       .map((entry) => entry.label);
 
-  it("opens the menu with Play next, Move up and Move down, then a separator, then the details", () => {
+  it("opens the menu with the queue actions, then a separator, then the details", () => {
     const menu = menuOf(buildQueueActions(), 1);
 
-    expect(menu.slice(0, 5).map((entry) => (entry.type === "action" ? entry.label : entry.type))).toEqual([
+    expect(menu.slice(0, 8).map((entry) => (entry.type === "action" ? entry.label : entry.type))).toEqual([
       "Play next",
+      "Move to top",
       "Move up",
       "Move down",
+      "Move to bottom",
+      "Remove from playlist",
       "separator",
       "label",
     ]);
-    expect(menu[4]).toEqual({ type: "label", label: "Details" });
+    expect(menu[7]).toEqual({ type: "label", label: "Details" });
+    expect(menu[5]).toMatchObject({ destructive: true });
   });
 
   it("adds nothing to the menu when the page supplies no queue actions", () => {
@@ -499,15 +506,18 @@ describe("usePlaylistListItems queue actions", () => {
     expect(queueActions.playNext).toHaveBeenCalledWith(playlist[2].id);
     expect(queueActions.moveUp).toHaveBeenCalledWith(playlist[2].id);
     expect(queueActions.moveDown).toHaveBeenCalledWith(playlist[2].id);
+    expect(queueActions.moveToTop).toHaveBeenCalledWith(playlist[2].id);
+    expect(queueActions.moveToBottom).toHaveBeenCalledWith(playlist[2].id);
+    expect(queueActions.remove).toHaveBeenCalledWith(playlist[2].id);
   });
 
-  it("enables all three actions on a middle row when nothing plays", () => {
+  it("enables all actions on a middle row when nothing plays", () => {
     expect(disabledLabels(menuOf(buildQueueActions(), 2))).toEqual([]);
   });
 
   it("disables Move up on the first row and Move down on the last row", () => {
-    expect(disabledLabels(menuOf(buildQueueActions(), 0))).toEqual(["Play next", "Move up"]);
-    expect(disabledLabels(menuOf(buildQueueActions(), 3))).toEqual(["Move down"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 0))).toEqual(["Play next", "Move to top", "Move up"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 3))).toEqual(["Move down", "Move to bottom"]);
   });
 
   it("disables Play next on the playing row and on the row directly after it", () => {
@@ -515,23 +525,23 @@ describe("usePlaylistListItems queue actions", () => {
 
     expect(disabledLabels(menuOf(buildQueueActions(), 1, playing))).toEqual(["Play next"]);
     expect(disabledLabels(menuOf(buildQueueActions(), 2, playing))).toEqual(["Play next"]);
-    expect(disabledLabels(menuOf(buildQueueActions(), 3, playing))).toEqual(["Move down"]);
-    expect(disabledLabels(menuOf(buildQueueActions(), 0, playing))).toEqual(["Move up"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 3, playing))).toEqual(["Move down", "Move to bottom"]);
+    expect(disabledLabels(menuOf(buildQueueActions(), 0, playing))).toEqual(["Move to top", "Move up"]);
   });
 
-  it("disables all three actions and says why while Shuffle is on", () => {
+  it("disables the ordering actions but not Remove, and says why, while Shuffle is on", () => {
     const menu = menuOf(buildQueueActions({ shuffleEnabled: true }), 2);
 
-    expect(disabledLabels(menu)).toEqual(["Play next", "Move up", "Move down"]);
+    expect(disabledLabels(menu)).toEqual(["Play next", "Move to top", "Move up", "Move down", "Move to bottom"]);
     expect(menu.filter((entry) => entry.type === "note")).toEqual([
       { type: "note", text: "Turn off Shuffle to change the order" },
     ]);
   });
 
-  it("disables Move up and Move down but not Play next while a filter hides rows, and says why", () => {
+  it("disables the move actions but not Play next or Remove while a filter hides rows, and says why", () => {
     const menu = menuOf(buildQueueActions({ filterHidesRows: true }), 2);
 
-    expect(disabledLabels(menu)).toEqual(["Move up", "Move down"]);
+    expect(disabledLabels(menu)).toEqual(["Move to top", "Move up", "Move down", "Move to bottom"]);
     expect(menu.filter((entry) => entry.type === "note")).toEqual([
       { type: "note", text: "Clear the filter to change the order" },
     ]);
@@ -549,17 +559,24 @@ describe("usePlaylistListItems queue actions", () => {
     expect(menuOf(buildQueueActions(), 2).some((entry) => entry.type === "note")).toBe(false);
   });
 
-  it("disables all three actions while the playlist loads", () => {
+  it("disables every action while the playlist loads", () => {
     const menu = menuOf(buildQueueActions(), 2, { isPlaylistLoading: true });
 
-    expect(disabledLabels(menu)).toEqual(["Play next", "Move up", "Move down"]);
+    expect(disabledLabels(menu)).toEqual([
+      "Play next",
+      "Move to top",
+      "Move up",
+      "Move down",
+      "Move to bottom",
+      "Remove from playlist",
+    ]);
   });
 
   it("treats a playing tune that is no longer in the playlist as nothing playing", () => {
     const menu = menuOf(buildQueueActions(), 1, { currentPlayingItemId: "removed:/Music/gone.sid" });
     expect(disabledLabels(menu)).toEqual([]);
     expect(disabledLabels(menuOf(buildQueueActions(), 0, { currentPlayingItemId: "removed:/Music/gone.sid" }))).toEqual(
-      ["Play next", "Move up"],
+      ["Play next", "Move to top", "Move up"],
     );
   });
 
@@ -622,6 +639,9 @@ describe("usePlaylistListItems share", () => {
     playNext: vi.fn(),
     moveUp: vi.fn(),
     moveDown: vi.fn(),
+    moveToTop: vi.fn(),
+    moveToBottom: vi.fn(),
+    remove: vi.fn(),
     ...overrides,
   });
 
@@ -663,15 +683,34 @@ describe("usePlaylistListItems share", () => {
 
   beforeEach(() => shareTune.mockReset());
 
-  it("puts Share after the three queue actions and keeps one separator before the details", () => {
-    expect(kinds(menuOf(1), 6)).toEqual(["Play next", "Move up", "Move down", "Share", "separator", "label"]);
-    expect(menuOf(1)[5]).toEqual({ type: "label", label: "Details" });
+  it("puts Share after the queue actions and keeps one separator before the details", () => {
+    expect(kinds(menuOf(1), 9)).toEqual([
+      "Play next",
+      "Move to top",
+      "Move up",
+      "Move down",
+      "Move to bottom",
+      "Remove from playlist",
+      "Share",
+      "separator",
+      "label",
+    ]);
+    expect(menuOf(1)[8]).toEqual({ type: "label", label: "Details" });
   });
 
   it("offers Share only for a tune whose archive path is known", () => {
     expect(shareEntry(menuOf(0))).toBeUndefined();
     expect(shareEntry(menuOf(2))).toBeUndefined();
-    expect(kinds(menuOf(0), 5)).toEqual(["Play next", "Move up", "Move down", "separator", "label"]);
+    expect(kinds(menuOf(0), 8)).toEqual([
+      "Play next",
+      "Move to top",
+      "Move up",
+      "Move down",
+      "Move to bottom",
+      "Remove from playlist",
+      "separator",
+      "label",
+    ]);
     expect(shareEntry(menuOf(1))).toBeDefined();
   });
 

@@ -158,6 +158,7 @@ import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import { usePlaylistQueueActions } from "@/pages/playFiles/hooks/usePlaylistQueueActions";
+import { usePlaylistRemoval } from "@/pages/playFiles/hooks/usePlaylistRemoval";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
 import { useC64MuteFollowsRoute } from "@/pages/playFiles/hooks/useC64MuteFollowsRoute";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
@@ -191,7 +192,6 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import {
   deferSleepTimerToTuneEnd,
-  planPlaylistItemRemoval,
   resolveAutoAdvanceDueAtMsOnDurationChange,
   runClaimedLaunch,
 } from "@/pages/playFiles/playbackGuards";
@@ -2170,33 +2170,23 @@ export default function PlayFilesPage() {
     };
   }, [applySonglengthsToItems, playlist, songlengthsFiles]);
 
-  const removePlaylistItemsById = useCallback(
-    (ids: Set<string>) => {
-      if (!ids.size) return;
-      const plan = planPlaylistItemRemoval(playlist, currentIndex, ids, isPlaying, isPaused);
-      if (plan.shouldStopDevice) {
-        // HARD9-030: the full teardown, so the C64 stops a track the playlist no longer has and the
-        // native auto-advance due-time is cleared.
-        stopPlayback();
-      }
-      setPlaylist(plan.next);
-      if (currentIndex >= 0) {
-        setCurrentIndex(plan.nextCurrentIndex);
-      }
-      setSelectedPlaylistIds((prev) => {
-        if (!prev.size) return prev;
-        return new Set(Array.from(prev).filter((id) => !ids.has(id)));
-      });
-    },
-    [currentIndex, stopPlayback, isPaused, isPlaying, playlist],
-  );
+  const { removePlaylistItemsById, removeWithUndo } = usePlaylistRemoval({
+    playlist,
+    currentIndex,
+    isPlaying,
+    isPaused,
+    stopPlayback,
+    setPlaylist,
+    setCurrentIndex,
+    setSelectedPlaylistIds,
+  });
 
   useDemoPlaylistCleanup(playlist, removePlaylistItemsById);
 
   const handleRemoveSelectedPlaylist = useCallback(() => {
     if (!selectedPlaylistIds.size) return;
-    removePlaylistItemsById(new Set(selectedPlaylistIds));
-  }, [removePlaylistItemsById, selectedPlaylistIds]);
+    removeWithUndo(new Set(selectedPlaylistIds));
+  }, [removeWithUndo, selectedPlaylistIds]);
 
   const { readRepositoryPlaylist, playlistHydrated } = usePlaybackPersistence({
     playlist,
@@ -2387,7 +2377,12 @@ export default function PlayFilesPage() {
   );
   const handleOpenConfig = useCallback((item: PlaylistItem) => setActiveConfigItemId(item.id), []);
 
-  const queueActions = usePlaylistQueueActions(playlistManager, playlistFilterText, currentPlayingItemId);
+  const queueActions = usePlaylistQueueActions(
+    playlistManager,
+    playlistFilterText,
+    currentPlayingItemId,
+    removeWithUndo,
+  );
   const playlistPreviewListItems = usePlaylistListItems({
     filteredPlaylist: previewFilteredPlaylist,
     playlist,
@@ -2798,7 +2793,7 @@ export default function PlayFilesPage() {
                 // A running station tops the playlist up as it empties, so clearing it would
                 // be undone at once: clearing the playlist ends the station too.
                 sidRadio.stop();
-                removePlaylistItemsById(new Set(playlistIds));
+                removeWithUndo(new Set(playlistIds));
               }}
               playlistFilterText={playlistFilterInputText}
               onPlaylistFilterTextChange={handlePlaylistFilterTextChange}

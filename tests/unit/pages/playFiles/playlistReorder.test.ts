@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { moveAfterCurrent, moveItem } from "@/pages/playFiles/playlistReorder";
+import { moveAfterCurrent, moveItem, moveToEdge } from "@/pages/playFiles/playlistReorder";
 
 type Row = { id: string };
 
@@ -164,5 +164,33 @@ describe("moveAfterCurrent", () => {
     const playlist = rows("a", "b", "c");
 
     expect(moveAfterCurrent(playlist, 0, "missing").items).toBe(playlist);
+  });
+});
+
+describe("moveToEdge", () => {
+  it("moves a middle row to the top and follows the playing row that it passes", () => {
+    const result = moveToEdge(rows("a", "b", "c", "d"), "c", "top", 1);
+
+    expect(result.items.map((row) => row.id)).toEqual(["c", "a", "b", "d"]);
+    expect(result.currentIndex).toBe(2);
+  });
+
+  it("moves the playing row to the bottom and keeps the current index on it", () => {
+    const result = moveToEdge(rows("a", "b", "c", "d"), "b", "bottom", 1);
+
+    expect(result.items.map((row) => row.id)).toEqual(["a", "c", "d", "b"]);
+    expect(result.currentIndex).toBe(3);
+  });
+
+  it("leaves a stopped selection at none", () => {
+    expect(moveToEdge(rows("a", "b", "c"), "c", "top", -1).currentIndex).toBe(-1);
+  });
+
+  it("returns the input array for the row that is already at that edge and for an unknown id", () => {
+    const playlist = rows("a", "b", "c");
+
+    expect(moveToEdge(playlist, "a", "top", 0).items).toBe(playlist);
+    expect(moveToEdge(playlist, "c", "bottom", 0).items).toBe(playlist);
+    expect(moveToEdge(playlist, "zzz", "top", 0).items).toBe(playlist);
   });
 });
