@@ -794,6 +794,43 @@ describe("playbackRouter", () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    ["g64", "1581", "1541"],
+    ["g71", "1541", "1571"],
+  ])(
+    "prepares a disabled drive B for a .%s image and injects a load on its real bus ID",
+    async (ext, wrongMode, mode) => {
+      vi.useFakeTimers();
+      const api = {
+        ...createApiMock(),
+        getDrives: vi
+          .fn()
+          .mockResolvedValueOnce({ drives: [{ b: { enabled: false, type: wrongMode } }], errors: [] })
+          .mockResolvedValueOnce({ drives: [{ b: { enabled: true, type: wrongMode, bus_id: 9 } }], errors: [] })
+          .mockResolvedValueOnce({ drives: [{ b: { enabled: true, type: mode, bus_id: 9 } }], errors: [] }),
+        driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+        setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+      };
+      const file = new File(["disk"], `demo.${ext}`);
+      const plan = buildPlayPlan({ source: "local", path: `/demo.${ext}`, file });
+      const task = executePlayPlan(api as any, plan, {
+        drive: "b",
+        rebootBeforeMount: true,
+        diskAutostartMode: "kernal",
+      });
+      await vi.runAllTimersAsync();
+      await task;
+
+      expect(api.driveOn).toHaveBeenCalledWith("b");
+      expect(api.setDriveMode).toHaveBeenCalledWith("b", mode);
+      expect(vi.mocked(enqueueKeyboardBufferInjection)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+        pollIntervalMs: 140,
+        maxAttempts: 20,
+      });
+      vi.useRealTimers();
+    },
+  );
+
   it("uses DMA loader when disk autostart is set to DMA", async () => {
     vi.useFakeTimers();
     const api = createApiMock();
