@@ -30,6 +30,7 @@ const harness = vi.hoisted(() => ({
 const ftp = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn(), write: vi.fn() }));
 const telnet = vi.hoisted(() => ({ save: vi.fn(), apply: vi.fn() }));
 const logs = vi.hoisted(() => ({ addLog: vi.fn(), addErrorLog: vi.fn() }));
+const localFiles = vi.hoisted(() => ({ failure: new Error("SAF read denied") }));
 const secrets = vi.hoisted(() => ({ password: "pw" as string | null }));
 
 vi.mock("@/lib/c64api", () => ({
@@ -57,6 +58,14 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
   writeFtpFile: (...args: unknown[]) => ftp.write(...args),
 }));
 vi.mock("@/lib/logging", () => logs);
+vi.mock("@/lib/playback/fileLibraryUtils", () => {
+  const unreadable = () => ({
+    arrayBuffer: async () => {
+      throw localFiles.failure;
+    },
+  });
+  return { buildLocalPlayFileFromUri: unreadable, buildLocalPlayFileFromTree: unreadable };
+});
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
   withTelnetInteraction: vi.fn(async (_options: unknown, run: () => Promise<void>) => run()),
 }));
@@ -89,6 +98,10 @@ vi.mock("@/lib/tracing/actionTrace", () => ({
   runWithImplicitAction: vi.fn(async (_id: string, run: (action: unknown) => Promise<void>) => run(null)),
 }));
 
+import {
+  ConfigReferenceUnavailableError,
+  ensureConfigFileReferenceAccessible,
+} from "@/lib/config/applyConfigFileReference";
 import { applyConfigFileReference } from "@/lib/config/applyConfigFileReference";
 import { cancelActiveConfigApply, ConfigApplyCancelledError } from "@/lib/config/configApplyCancellation";
 
@@ -301,5 +314,69 @@ describe("applyConfigFileReference against the device's FTP and Telnet", () => {
     expect(logs.addLog).toHaveBeenCalledWith("info", "Playback config application canceled by Stop", {
       fileName: null,
     });
+  });
+});
+
+describe("ensureConfigFileReferenceAccessible with an unreadable local file", () => {
+  const localRef = {
+    kind: "local" as const,
+    fileName: "Local.cfg",
+    path: "/cfg/Local.cfg",
+    sourceId: "src-1",
+    uri: undefined as string | undefined,
+    modifiedAt: null,
+    sizeBytes: null,
+  };
+
+  beforeEach(() => {
+    logs.addLog.mockReset();
+    localFiles.failure = new Error("SAF read denied");
+  });
+
+  const cases: Array<[string, Parameters<typeof ensureConfigFileReferenceAccessible>[0]]> = [
+    [
+      "the reference's own URI",
+      {
+        configRef: { ...localRef, uri: "content://cfg" },
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      },
+    ],
+    [
+      "a remembered local entry",
+      {
+        configRef: localRef,
+        localEntriesBySourceId: new Map([["src-1", new Map([["/cfg/Local.cfg", { uri: "content://entry" }]])]]),
+        localSourceTreeUris: new Map(),
+      },
+    ],
+    [
+      "the source tree",
+      {
+        configRef: localRef,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map([["src-1", "content://tree"]]),
+      },
+    ],
+  ] as never;
+
+  it.each(cases)("keeps the read failure as the cause and logs a warning when %s fails", async (_name, options) => {
+    const error = await ensureConfigFileReferenceAccessible(options).then(
+      () => null,
+      (rejection: unknown) => rejection,
+    );
+
+    expect(error).toBeInstanceOf(ConfigReferenceUnavailableError);
+    expect((error as Error).cause).toBe(localFiles.failure);
+    expect(logs.addLog).toHaveBeenCalledWith(
+      "warn",
+      "Local config file could not be read",
+      expect.objectContaining({
+        fileName: "Local.cfg",
+        path: "/cfg/Local.cfg",
+        error: "SAF read denied",
+        stack: expect.any(String),
+      }),
+    );
   });
 });

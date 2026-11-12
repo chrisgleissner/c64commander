@@ -54,8 +54,8 @@ type ApplyConfigFileReferenceOptions = {
 export class ConfigReferenceUnavailableError extends Error {
   readonly c64uConfigUnavailable = true;
 
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ConfigReferenceUnavailableError";
   }
 }
@@ -128,6 +128,19 @@ const uint8ToBase64 = (value: Uint8Array) => {
   return btoa(binary);
 };
 
+const localConfigUnavailable = (fileName: string, path: string | null | undefined, error: unknown) => {
+  addLog("warn", "Local config file could not be read", {
+    fileName,
+    path: path ?? null,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+  return new ConfigReferenceUnavailableError(
+    `Local config file ${fileName} is unavailable. Re-select the associated .cfg file.`,
+    { cause: error },
+  );
+};
+
 const resolveLocalConfigBytes = async (
   configRef: Extract<ConfigFileReference, { kind: "local" }>,
   localEntriesBySourceId: Map<string, Map<string, LocalEntry>>,
@@ -138,9 +151,7 @@ const resolveLocalConfigBytes = async (
       const file = buildLocalPlayFileFromUri(configRef.fileName, configRef.path ?? configRef.fileName, configRef.uri);
       return new Uint8Array(await file.arrayBuffer());
     } catch (error) {
-      throw new ConfigReferenceUnavailableError(
-        `Local config file ${configRef.fileName} is unavailable. Re-select the associated .cfg file.`,
-      );
+      throw localConfigUnavailable(configRef.fileName, configRef.path, error);
     }
   }
 
@@ -156,9 +167,7 @@ const resolveLocalConfigBytes = async (
         const file = buildLocalPlayFileFromUri(configRef.fileName, normalizedPath, localEntry.uri);
         return new Uint8Array(await file.arrayBuffer());
       } catch (error) {
-        throw new ConfigReferenceUnavailableError(
-          `Local config file ${configRef.fileName} is unavailable. Re-select the associated .cfg file.`,
-        );
+        throw localConfigUnavailable(configRef.fileName, configRef.path, error);
       }
     }
     const treeUri = localSourceTreeUris.get(configRef.sourceId);
@@ -167,9 +176,7 @@ const resolveLocalConfigBytes = async (
         const file = buildLocalPlayFileFromTree(configRef.fileName, normalizedPath, treeUri);
         return new Uint8Array(await file.arrayBuffer());
       } catch (error) {
-        throw new ConfigReferenceUnavailableError(
-          `Local config file ${configRef.fileName} is unavailable. Re-select the associated .cfg file.`,
-        );
+        throw localConfigUnavailable(configRef.fileName, configRef.path, error);
       }
     }
   }
