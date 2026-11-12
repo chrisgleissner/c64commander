@@ -11,6 +11,7 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __clearToastStateForTests } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { resolvePlayOrderIndices } from "@/pages/playFiles/playFilesUtils";
 import { usePlaylistRemoval } from "@/pages/playFiles/hooks/usePlaylistRemoval";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
@@ -157,5 +158,41 @@ describe("usePlaylistRemoval", () => {
 
     expect(names(hook.result.current.playlist)).toEqual(["a", "b", "d"]);
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  describe("with Shuffle on", () => {
+    const SEED = 12345;
+    const playOrder = (playlist: PlaylistItem[], anchorId: string | null) =>
+      resolvePlayOrderIndices(playlist, true, SEED, anchorId);
+
+    it("restores the same array, so the shuffled order and the next track are what they were", () => {
+      const { hook } = setup({ playing: true, currentIndex: 2 });
+      const original = hook.result.current.playlist;
+      const orderBefore = playOrder(original, idOf("c"));
+
+      act(() => hook.result.current.removeWithUndo(new Set([idOf("a"), idOf("d")])));
+      const orderWhileRemoved = playOrder(hook.result.current.playlist, idOf("c"));
+      expect([...orderWhileRemoved].sort()).toEqual([0, 1]);
+      undo();
+
+      expect(hook.result.current.playlist).toEqual(original);
+      expect(hook.result.current.current).toBe(2);
+      expect(playOrder(hook.result.current.playlist, idOf("c"))).toEqual(orderBefore);
+    });
+
+    it("restores the playing row without making it current again, leaving the shuffled order as it was", () => {
+      const { hook, stopPlayback } = setup({ playing: true, currentIndex: 1 });
+      const original = hook.result.current.playlist;
+      const orderBefore = playOrder(original, idOf("b"));
+
+      act(() => hook.result.current.removeWithUndo(new Set([idOf("b")])));
+      expect(stopPlayback).toHaveBeenCalledTimes(1);
+      undo();
+
+      expect(hook.result.current.playlist).toEqual(original);
+      expect(hook.result.current.current).toBe(-1);
+      expect(playOrder(hook.result.current.playlist, idOf("b"))).toEqual(orderBefore);
+      expect(stopPlayback).toHaveBeenCalledTimes(1);
+    });
   });
 });
