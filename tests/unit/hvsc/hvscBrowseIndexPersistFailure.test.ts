@@ -220,4 +220,22 @@ describe("HVSC browse index - persistence failures", () => {
       vi.mocked(addLog).mock.calls.some(([level, message]) => level === "warn" && String(message).includes("remove")),
     ).toBe(true);
   });
+
+  it("logs a warning with the sizes and keeps the snapshot in memory when there is no window and localStorage is full", async () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      failLocalStorageWrites();
+
+      await expect(saveHvscBrowseIndexSnapshot(library(3))).resolves.toBeUndefined();
+
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "HVSC browse snapshot localStorage persistence failed; keeping it in memory only",
+        expect.objectContaining({ songCount: 3, localStorageChars: expect.any(Number) }),
+      );
+      expect(Object.keys((await loadHvscBrowseIndexSnapshot())!.songs)).toHaveLength(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

@@ -233,6 +233,21 @@ describe("an unclaimed request that expires", () => {
     expect(stopAudio).toHaveBeenCalledTimes(1);
   });
 
+  it("stops the owned feeds and hands nothing over when a sheet mounts after the window but before the timer ran", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const handler = vi.fn();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.setSystemTime(Date.now() + 6_000);
+      subscribeGameModeRequest(handler)();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(handler).not.toHaveBeenCalled();
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+  });
+
   it("leaves a feed the launch did not start alone", () => {
     const { stopVideo, stopAudio } = claimAfterExpiry({ startedVideo: true, startedAudio: false });
     expect(stopVideo).toHaveBeenCalledTimes(1);
