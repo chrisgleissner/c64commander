@@ -123,7 +123,7 @@ class HvscIngestionPluginTest {
     verify(call, never()).resolve(any(JSObject::class.java))
   }
 
-  private fun downloadCallCutBy(error: Exception, networkRoutable: Boolean): PluginCall {
+  private fun downloadCallCutBy(error: Throwable, networkRoutable: Boolean): PluginCall {
     plugin.fakeResumableDownload = HvscResumableDownload { throw error }
     plugin.fakeNetworkRoutable = networkRoutable
     val call = mock(PluginCall::class.java)
@@ -153,6 +153,57 @@ class HvscIngestionPluginTest {
 
     verify(call, timeout(5000)).reject(eq("Connection reset"), any(Exception::class.java))
     verify(call, never()).reject(anyString(), eq("NETWORK_LOST"), any(Exception::class.java))
+  }
+
+  @Test
+  fun downloadArchiveHitByAnErrorStillRejectsTheCall() {
+    val call = downloadCallCutBy(OutOfMemoryError("heap exhausted"), networkRoutable = true)
+
+    verify(call, timeout(5000)).reject(eq("heap exhausted"), any(Exception::class.java))
+  }
+
+  @Test
+  fun ingestHvscHitByAnErrorStillRejectsTheCall() {
+    plugin.fakeExtractor =
+      object : HvscArchiveExtractor {
+        override fun probe(archiveFile: File, mode: HvscArchiveMode, cancellationToken: AtomicBoolean): ArchiveProfile =
+          throw OutOfMemoryError("heap exhausted")
+
+        override fun extract(
+          archiveFile: File,
+          outputDir: File,
+          mode: HvscArchiveMode,
+          cancellationToken: AtomicBoolean,
+          memoryBudget: MemoryBudget,
+          onProgress: (ExtractionProgress) -> Unit,
+        ): ExtractionResult = throw OutOfMemoryError("heap exhausted")
+      }
+    val archiveFile = File(context.filesDir, "hvsc-cache/oom-archive.7z")
+    archiveFile.parentFile?.mkdirs()
+    archiveFile.writeText("not-a-real-archive-body")
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc-cache/oom-archive.7z")
+    `when`(call.getString("mode")).thenReturn("baseline")
+    val rejected = CountDownLatch(1)
+    doAnswer {
+              rejected.countDown()
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    try {
+      plugin.ingestHvsc(call)
+      val deadline = System.currentTimeMillis() + 10_000
+      while (rejected.count > 0 && System.currentTimeMillis() < deadline) {
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        Thread.sleep(10)
+      }
+      assertTrue("an Error during ingestion must still reject the call", rejected.await(0, TimeUnit.SECONDS))
+    } finally {
+      File(context.filesDir, "hvsc").deleteRecursively()
+      File(context.filesDir, "hvsc-cache").deleteRecursively()
+    }
   }
 
   @Test
