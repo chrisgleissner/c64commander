@@ -137,6 +137,52 @@ describe("sidUtils", () => {
     expect(metadata.sidChipCount).toBe(3);
   });
 
+  it.each([
+    [0x41, 0x90],
+    [0x90, 0x41],
+    [0x7f, 0xdf],
+    [0xff, 0x00],
+  ])("ignores second and third SID address bytes %i and %i that decode to no valid address", (sid2, sid3) => {
+    const header = createSidHeader();
+    header[122] = sid2;
+    header[123] = sid3;
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Address).toBeNull();
+    expect(metadata.sid2Model).toBeNull();
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(1);
+  });
+
+  it("does not count a third SID whose address byte equals the second", () => {
+    const header = createSidHeader();
+    header[122] = 0x42;
+    header[123] = 0x42;
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(2);
+  });
+
+  it("does not count a third SID when the second address byte is invalid", () => {
+    const header = createSidHeader();
+    header[122] = 0x00;
+    header[123] = 0x44;
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Address).toBeNull();
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(1);
+  });
+
+  it("counts a SID at the first and last valid address bytes of each range", () => {
+    [0x42, 0x7e, 0xe0, 0xfe].forEach((byte) => {
+      const header = createSidHeader();
+      header[122] = byte;
+      header[123] = 0;
+      const metadata = parseSidHeaderMetadata(header);
+      expect(metadata.sid2Address).toBe(0xd000 + (byte << 4));
+      expect(metadata.sidChipCount).toBe(2);
+    });
+  });
+
   it("drops HVSC's <?> unknown placeholder from the header's name, author and release", () => {
     const header = createSidHeader({ nameBytes: [0x3c, 0x3f, 0x3e, 0x00] });
     header.set([0x3c, 0x3f, 0x3e, 0x00, 0x00, 0x00, 0x00], 54);
@@ -343,6 +389,7 @@ describe("sidUtils", () => {
     expect(metadata.sid2Adress).toBe(0);
     expect(metadata.sid2Address).toBeNull();
     expect(metadata.sid2Model).toBeNull();
-    expect(metadata.sidChipCount).toBe(2); // sid3Adress still set
+    expect(metadata.sid3Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(1);
   });
 });

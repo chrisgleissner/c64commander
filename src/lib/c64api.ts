@@ -341,12 +341,13 @@ const resolveDeclaredConfigWriteValue = (
   value: string | number,
   categoryPayload: unknown,
 ) => {
-  if (typeof value !== "string") return value;
   const itemConfig = getConfigCategoryItems(categoryPayload, category)[item];
   if (itemConfig === undefined) return value;
   const options = normalizeConfigItem(itemConfig).options;
-  if (!Array.isArray(options) || options.length === 0 || options.includes(value)) return value;
-  const normalizedValue = normalizeConfigWriteToken(value);
+  if (!Array.isArray(options) || options.length === 0) return value;
+  const token = String(value);
+  if (options.includes(token)) return token;
+  const normalizedValue = normalizeConfigWriteToken(token);
   const matches = options.filter((option) => normalizeConfigWriteToken(option) === normalizedValue);
   return matches.length === 1 ? matches[0] : value;
 };

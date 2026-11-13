@@ -188,6 +188,16 @@ describe("parseSonglengths", () => {
     expect(resolveSonglengthsSeconds(data, "/demo.sid", null, 1)).toBe(91);
   });
 
+  it.each([
+    ["1:00.400", 61],
+    ["0:00.400", 1],
+    ["1:00.000", 60],
+    ["0:00.000", 0],
+  ])("never shortens %s and keeps a non-zero entry non-zero (%i s)", (token, expected) => {
+    const data = parseSonglengths(`; /demo.sid\nabc=${token}`);
+    expect(resolveSonglengthsSeconds(data, "/demo.sid", null, 1)).toBe(expected);
+  });
+
   it("handles md5 lookup with whitespace padding", () => {
     const data = parseSonglengths("; /demo.sid\nabc=0:30");
     expect(resolveSonglengthsSeconds(data, "/nope.sid", "  ABC  ", 1)).toBe(30);

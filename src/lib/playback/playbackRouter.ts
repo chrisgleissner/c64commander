@@ -93,7 +93,9 @@ type PlaybackNotice = Readonly<{
 
 const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriveMode>> = {
   d64: "1541",
+  g64: "1541",
   d71: "1571",
+  g71: "1571",
   d81: "1581",
 };
 
@@ -105,7 +107,9 @@ const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriv
 // alone; only an incompatible (or unknown) mode triggers a switch.
 const DISK_AUTOPLAY_COMPATIBLE_MODES_BY_EXTENSION: Partial<Record<string, PhysicalDriveMode[]>> = {
   d64: ["1541", "1571"],
+  g64: ["1541", "1571"],
   d71: ["1571"],
+  g71: ["1571"],
   d81: ["1581"],
 };
 const SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS = 1200;

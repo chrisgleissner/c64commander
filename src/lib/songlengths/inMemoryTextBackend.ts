@@ -77,7 +77,7 @@ const parseDurationTokenToSeconds = (value: string): number | null => {
   if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || !Number.isFinite(fractional)) return null;
   if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
   const totalMs = (minutes * 60 + seconds) * 1000 + fractional;
-  return Math.round(totalMs / 1000);
+  return Math.ceil(totalMs / 1000);
 };
 
 const parseDurations = (value: string) => {
@@ -396,6 +396,20 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
       candidateEntryIds: number[];
     } | null = null;
 
+    if (normalizedMd5) {
+      const md5EntryId = this.md5ToEntryId.get(normalizedMd5);
+      if (typeof md5EntryId === "number") {
+        return this.toResolution(md5EntryId, "md5", query);
+      }
+    }
+
+    if (normalizedVirtualPath) {
+      const fullPathEntryId = this.fullPathToEntryId.get(normalizedVirtualPath);
+      if (typeof fullPathEntryId === "number") {
+        return this.toResolution(fullPathEntryId, "full-path", query);
+      }
+    }
+
     if (normalizedFileName) {
       const uniqueEntryId = this.uniqueFileNameToEntryId.get(normalizedFileName);
       if (typeof uniqueEntryId === "number") {
@@ -418,20 +432,6 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
             candidateEntryIds: candidates,
           };
         }
-      }
-    }
-
-    if (normalizedVirtualPath) {
-      const fullPathEntryId = this.fullPathToEntryId.get(normalizedVirtualPath);
-      if (typeof fullPathEntryId === "number") {
-        return this.toResolution(fullPathEntryId, "full-path", query);
-      }
-    }
-
-    if (normalizedMd5) {
-      const md5EntryId = this.md5ToEntryId.get(normalizedMd5);
-      if (typeof md5EntryId === "number") {
-        return this.toResolution(md5EntryId, "md5", query);
       }
     }
 

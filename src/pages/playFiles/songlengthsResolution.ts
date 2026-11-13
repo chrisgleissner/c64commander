@@ -16,8 +16,10 @@ export type SonglengthResolverService = {
     fileName: string | null;
     md5?: string;
     songNr: number | null;
-  }) => { durationSeconds: number | null };
+  }) => { durationSeconds: number | null; strategy?: string };
 };
+
+const NAME_BASED_STRATEGIES = new Set(["filename-unique", "filename-partial-path"]);
 
 export type SonglengthResolutionOptions = {
   allowMd5Fallback?: boolean;
@@ -45,10 +47,13 @@ export const resolveSonglengthDurationMsWithFacade = async ({
     fileName,
     songNr: songNr ?? null,
   });
-  if (resolvedByPath.durationSeconds !== null) {
+  const canVerifyByMd5 = Boolean(file) && options?.allowMd5Fallback !== false;
+  const matchedByNameOnly = resolvedByPath.strategy !== undefined && NAME_BASED_STRATEGIES.has(resolvedByPath.strategy);
+  if (resolvedByPath.durationSeconds !== null && !(canVerifyByMd5 && matchedByNameOnly)) {
     return resolvedByPath.durationSeconds * 1000;
   }
-  if (!file || options?.allowMd5Fallback === false) return null;
+  const nameBasedDurationMs = resolvedByPath.durationSeconds !== null ? resolvedByPath.durationSeconds * 1000 : null;
+  if (!file || !canVerifyByMd5) return null;
   try {
     const buffer = await file.arrayBuffer();
     const resolveMd5 =
@@ -64,13 +69,13 @@ export const resolveSonglengthDurationMsWithFacade = async ({
       md5,
       songNr: songNr ?? null,
     });
-    return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : null;
+    return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : nameBasedDurationMs;
   } catch (error) {
     addErrorLog("Failed to resolve songlength via facade md5 fallback", {
       path: normalizedPath,
       songNr: songNr ?? null,
       error: (error as Error).message,
     });
-    return null;
+    return nameBasedDurationMs;
   }
 };

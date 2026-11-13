@@ -56,6 +56,41 @@ describe("InMemoryTextBackend", () => {
     });
   });
 
+  describe("strategy precedence", () => {
+    const database = "; /DEMOS/Intro.sid\nmd5aaaa=1:00\n; /GAMES/Other.sid\nmd5bbbb=2:00";
+
+    it("prefers an md5 hit over a file-name match", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5bbbb" });
+      expect(resolution.strategy).toBe("md5");
+      expect(resolution.durationSeconds).toBe(120);
+    });
+
+    it("falls back to the file name when the md5 misses", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/Local/Intro.sid", fileName: "Intro.sid", md5: "md5cccc" });
+      expect(resolution.strategy).toBe("filename-unique");
+      expect(resolution.durationSeconds).toBe(60);
+    });
+
+    it("prefers a full-path match over a unique file name", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(database));
+      const resolution = backend.resolve({ virtualPath: "/DEMOS/Intro.sid", fileName: "Intro.sid" });
+      expect(resolution.strategy).toBe("full-path");
+    });
+
+    it("prefers a full-path match over a partial-path file-name match among duplicates", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput("; /A/Dup.sid\nmd5aaaa=1:00\n; /B/Dup.sid\nmd5bbbb=2:00"));
+      const resolution = backend.resolve({ virtualPath: "/B/Dup.sid", fileName: "Dup.sid", partialPath: "/B" });
+      expect(resolution.strategy).toBe("full-path");
+      expect(resolution.durationSeconds).toBe(120);
+    });
+  });
+
   describe("resolve", () => {
     it("returns unavailable when no records loaded", async () => {
       const backend = new InMemoryTextBackend();
@@ -66,7 +101,7 @@ describe("InMemoryTextBackend", () => {
 
     it("derives fileName from virtualPath when fileName is not provided", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/Song.sid\nabc123=1:30"));
+      await backend.load(makeInput("; /HVSC/DEMOS/Song.sid\nabc123=1:30"));
       const result = backend.resolve({ virtualPath: "/DEMOS/Song.sid" });
       expect(result.strategy).toBe("filename-unique");
       expect(result.durationSeconds).toBe(90);
@@ -74,7 +109,7 @@ describe("InMemoryTextBackend", () => {
 
     it("derives partialPath from virtualPath when partialPath is not provided", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00"));
+      await backend.load(makeInput("; /HVSC/DEMOS/A/Song.sid\naaa=1:00\n; /HVSC/DEMOS/B/Song.sid\nbbb=2:00"));
       const result = backend.resolve({ virtualPath: "/DEMOS/A/Song.sid" });
       expect(result.strategy).toBe("filename-partial-path");
       expect(result.durationSeconds).toBe(60);
@@ -183,6 +218,18 @@ describe("InMemoryTextBackend", () => {
   });
 
   describe("parseDurationTokenToSeconds", () => {
+    it.each([
+      ["1:00.400", 61],
+      ["0:00.400", 1],
+      ["1:30.500", 91],
+      ["1:00.000", 60],
+      ["0:00.000", 0],
+    ])("never shortens %s and keeps a non-zero entry non-zero (%i s)", async (token, expected) => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput(`; /DEMOS/Song.sid\nabc=${token}`));
+      expect(backend.resolve({ fileName: "song.sid" }).durationSeconds).toBe(expected);
+    });
+
     it("returns null for seconds >= 60", async () => {
       const backend = new InMemoryTextBackend();
       await backend.load(makeInput("; /DEMOS/Song.sid\nabc=0:61"));
@@ -305,7 +352,7 @@ describe("InMemoryTextBackend", () => {
 
     it("resolve with virtualPath only derives fileName from it", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(makeInput("; /DEMOS/Song.sid\nabc=1:00"));
+      await backend.load(makeInput("; /HVSC/DEMOS/Song.sid\nabc=1:00"));
       // No fileName - derive from virtualPath
       const result = backend.resolve({ virtualPath: "/DEMOS/Song.sid" });
       expect(result.strategy).toBe("filename-unique");
