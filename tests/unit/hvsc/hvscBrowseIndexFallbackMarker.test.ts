@@ -52,4 +52,10 @@ describe("the filesystem snapshot stale marker", () => {
     vi.stubGlobal("localStorage", undefined);
     expect(isFilesystemSnapshotStale()).toBe(false);
   });
+
+  it("clears nothing and does not throw when there is no localStorage", () => {
+    vi.stubGlobal("localStorage", undefined);
+    expect(() => clearFilesystemSnapshotStale()).not.toThrow();
+    expect(addLog).not.toHaveBeenCalled();
+  });
 });

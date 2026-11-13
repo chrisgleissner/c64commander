@@ -129,4 +129,30 @@ describe("rejectOnTransactionAbort", () => {
       expect.objectContaining({ message: "IndexedDB orphan sweep transaction aborted" }),
     );
   });
+
+  it("rejects with a described error when the failed open carries no request error", async () => {
+    const request = stubOpen();
+    const pending = openIndexedDb("playlist-db", 3, () => undefined);
+    request.error = null;
+    request.onerror?.();
+
+    const outcome = await settles(pending);
+
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toBe("IndexedDB open failed");
+  });
+
+  it("logs the text of a request error that is not an Error, without a stack", async () => {
+    const request = stubOpen();
+    const pending = openIndexedDb("playlist-db", 3, () => undefined);
+    request.error = "plain failure" as unknown as Error;
+    request.onerror?.();
+    await settles(pending);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "IndexedDB open failed",
+      expect.objectContaining({ error: "plain failure", stack: undefined }),
+    );
+  });
 });

@@ -174,4 +174,20 @@ describe("saving a ROM when browser storage is full", () => {
       expect.objectContaining({ kind: "kernal", stack: expect.any(String) }),
     );
   });
+
+  it("logs the text of a storage rejection that is not an Error, without a stack", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw "storage refused";
+    });
+    const bytes = kernal();
+
+    expect(() =>
+      saveRom("kernal", bytes, { description: "test", fingerprint: romFingerprint(bytes), capturedFrom: "c64u.local" }),
+    ).toThrow(/Could not store the kernal ROM/);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Could not store a C64 ROM image",
+      expect.objectContaining({ error: "storage refused", stack: undefined }),
+    );
+  });
 });

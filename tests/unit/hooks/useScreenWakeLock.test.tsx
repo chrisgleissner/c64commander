@@ -252,4 +252,42 @@ describe("useScreenWakeLock (HARD27-021)", () => {
 
     expect(request).toHaveBeenCalledTimes(1);
   });
+
+  it("logs the text of a release failure that is not an Error, without a stack", async () => {
+    release.mockRejectedValue("release refused as text");
+    const view = render(<Probe active={true} />);
+    await act(async () => {});
+
+    view.unmount();
+    await act(async () => {});
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("failed to release the screen wake lock"),
+      expect.objectContaining({ error: "release refused as text", stack: undefined }),
+    );
+  });
+
+  it("keeps the held lock when the page becomes visible again without having been revoked", async () => {
+    render(<Probe active={true} />);
+    await act(async () => {});
+
+    setVisibility("visible");
+    await act(async () => {});
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests a new lock when the platform marked the held sentinel as released", async () => {
+    const sentinels = [{ release, released: false }, { release }];
+    request.mockResolvedValueOnce(sentinels[0]).mockResolvedValueOnce(sentinels[1]);
+    render(<Probe active={true} />);
+    await act(async () => {});
+
+    sentinels[0].released = true;
+    setVisibility("visible");
+    await act(async () => {});
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
 });

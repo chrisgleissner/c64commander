@@ -379,4 +379,24 @@ describe("ensureConfigFileReferenceAccessible with an unreadable local file", ()
       }),
     );
   });
+
+  it("logs a null path and the text of a read failure that is not an Error, without a stack", async () => {
+    localFiles.failure = "plain read failure" as unknown as Error;
+
+    const error = await ensureConfigFileReferenceAccessible({
+      configRef: { ...localRef, path: undefined, uri: "content://cfg" },
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    } as never).then(
+      () => null,
+      (rejection: unknown) => rejection,
+    );
+
+    expect(error).toBeInstanceOf(ConfigReferenceUnavailableError);
+    expect(logs.addLog).toHaveBeenCalledWith(
+      "warn",
+      "Local config file could not be read",
+      expect.objectContaining({ path: null, error: "plain read failure", stack: undefined }),
+    );
+  });
 });

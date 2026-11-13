@@ -129,6 +129,19 @@ describe("startGameMode", () => {
    * audio." under the toggles and reported the device unhealthy — on a device with nothing wrong
    * with it. The sheet still has to open: driving the machine works there, only the feeds do not.
    */
+  it("logs the text of a start failure that is not an Error, without a stack, and still starts the audio", async () => {
+    const session = fakeSession({ startVideo: vi.fn(async () => Promise.reject("start refused as text")) });
+
+    await launch(session);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("failed to start the video stream"),
+      expect.objectContaining({ error: "start refused as text", stack: undefined }),
+    );
+    expect(session.startAudio).toHaveBeenCalledTimes(1);
+  });
+
   it("starts no feed on a device that cannot stream, and still opens the sheet", async () => {
     const handler = vi.fn();
     const unsubscribe = subscribeGameModeRequest(handler);
@@ -246,6 +259,24 @@ describe("an unclaimed request that expires", () => {
     }
     expect(handler).not.toHaveBeenCalled();
     expect(stopVideo).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the text of a stop failure that is not an Error, without a stack", async () => {
+    vi.spyOn(avMirrorSession, "stopAudio").mockRejectedValue("stop refused as text");
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      vi.advanceTimersByTime(6_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("failed to stop the audio stream"),
+        expect.objectContaining({ error: "stop refused as text", stack: undefined }),
+      ),
+    );
   });
 
   it("leaves a feed the launch did not start alone", () => {
