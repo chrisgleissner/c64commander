@@ -32,10 +32,9 @@ test.describe("Sleep timer badge beside the Play title", () => {
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-bar-sleep-timer")).toHaveCount(0);
 
-    const sessionToggle = page.locator("#play-section-toggle-playback-settings");
-    if ((await sessionToggle.count()) > 0 && (await sessionToggle.getAttribute("aria-expanded")) !== "true") {
-      await sessionToggle.click();
-    }
+    const sessionToggle = page.getByTestId("play-section-toggle-playback-settings");
+    await sessionToggle.click();
+    await expect(sessionToggle).toHaveAttribute("aria-expanded", "true");
     await page.getByTestId("sleep-timer-m15").click();
 
     const badge = page.getByTestId("app-bar-sleep-timer");
@@ -58,11 +57,9 @@ test.describe("Sleep timer badge beside the Play title", () => {
     expect(geometry.labelPx).toBeGreaterThanOrEqual(14);
     expect(geometry.pageOverflow).toBeLessThanOrEqual(0);
 
-    if ((await sessionToggle.count()) > 0) {
-      await sessionToggle.click();
-      await expect(sessionToggle).toHaveAttribute("aria-expanded", "false");
-      await expect(page.getByTestId("sleep-timer")).toHaveCount(0);
-    }
+    await sessionToggle.click();
+    await expect(sessionToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("sleep-timer")).toHaveCount(0);
     await page.evaluate(() => window.scrollTo(0, 0));
     await badge.click();
     await expect(page.getByTestId("sleep-timer")).toBeInViewport();
