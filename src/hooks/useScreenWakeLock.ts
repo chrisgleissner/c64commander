@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { addLog } from "@/lib/logging";
 
 interface WakeLockSentinelLike {
+  released?: boolean;
   release: () => Promise<void>;
 }
 
@@ -49,13 +50,31 @@ export const useScreenWakeLock = (active: boolean): void => {
 
     let cancelled = false;
     let sentinel: WakeLockSentinelLike | null = null;
+    let requesting = false;
+    let retryAfterRequest = false;
+
+    const isHeld = () => sentinel !== null && sentinel.released !== true;
+
+    const release = (held: WakeLockSentinelLike, when: string) =>
+      held.release().catch((error: unknown) => {
+        addLog("warn", `Live View: failed to release the screen wake lock ${when}`, {
+          service: "streams",
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      });
 
     const acquire = async () => {
-      if (cancelled || sentinel) return;
+      if (cancelled || isHeld()) return;
+      if (requesting) {
+        retryAfterRequest = true;
+        return;
+      }
+      requesting = true;
       try {
         const next = await api.request("screen");
         if (cancelled) {
-          void next.release().catch(() => undefined);
+          void release(next, "after the hook was torn down");
           return;
         }
         sentinel = next;
@@ -66,6 +85,11 @@ export const useScreenWakeLock = (active: boolean): void => {
           service: "streams",
           error: error instanceof Error ? error.message : String(error),
         });
+      } finally {
+        requesting = false;
+        const retry = retryAfterRequest && document.visibilityState === "visible" && !isHeld();
+        retryAfterRequest = false;
+        if (retry && !cancelled) void acquire();
       }
     };
 
@@ -85,7 +109,7 @@ export const useScreenWakeLock = (active: boolean): void => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       const held = sentinel;
       sentinel = null;
-      void held?.release().catch(() => undefined);
+      if (held) void release(held, "on cleanup");
     };
   }, [active]);
 };

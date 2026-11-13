@@ -14,10 +14,13 @@ const flags: Record<string, boolean> = {
   video_mirror_enabled: true,
 };
 
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
 vi.mock("@/lib/config/featureFlags", () => ({
   featureFlagManager: { getSnapshot: () => ({ flags }) },
 }));
 
+import { addLog } from "@/lib/logging";
 import {
   DEFAULT_GAME_MODE_ON_LAUNCH,
   loadGameModeOnLaunch,
@@ -28,7 +31,7 @@ import {
   subscribeGameModeRequest,
 } from "@/lib/remoteInput/gameModeLaunch";
 import type { GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
-import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
+import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 interface FakeSession {
   audioLive: boolean;
@@ -126,6 +129,19 @@ describe("startGameMode", () => {
    * audio." under the toggles and reported the device unhealthy — on a device with nothing wrong
    * with it. The sheet still has to open: driving the machine works there, only the feeds do not.
    */
+  it("logs the text of a start failure that is not an Error, without a stack, and still starts the audio", async () => {
+    const session = fakeSession({ startVideo: vi.fn(async () => Promise.reject("start refused as text")) });
+
+    await launch(session);
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("failed to start the video stream"),
+      expect.objectContaining({ error: "start refused as text", stack: undefined }),
+    );
+    expect(session.startAudio).toHaveBeenCalledTimes(1);
+  });
+
   it("starts no feed on a device that cannot stream, and still opens the sheet", async () => {
     const handler = vi.fn();
     const unsubscribe = subscribeGameModeRequest(handler);
@@ -202,6 +218,142 @@ describe("the request bus", () => {
   });
 });
 
+describe("an unclaimed request that expires", () => {
+  const claimAfterExpiry = (started: GameModeStartResult) => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode(started);
+      vi.advanceTimersByTime(6_000);
+      const handler = vi.fn();
+      subscribeGameModeRequest(handler)();
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+    return { stopVideo, stopAudio };
+  };
+
+  beforeEach(() => {
+    resetPendingGameModeRequest();
+    vi.restoreAllMocks();
+  });
+
+  it("stops the feeds it owns when it is claimed after the 5 s window", () => {
+    const { stopVideo, stopAudio } = claimAfterExpiry({ startedVideo: true, startedAudio: true });
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the owned feeds and hands nothing over when a sheet mounts after the window but before the timer ran", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const handler = vi.fn();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.setSystemTime(Date.now() + 6_000);
+      subscribeGameModeRequest(handler)();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(handler).not.toHaveBeenCalled();
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the text of a stop failure that is not an Error, without a stack", async () => {
+    vi.spyOn(avMirrorSession, "stopAudio").mockRejectedValue("stop refused as text");
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      vi.advanceTimersByTime(6_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("failed to stop the audio stream"),
+        expect.objectContaining({ error: "stop refused as text", stack: undefined }),
+      ),
+    );
+  });
+
+  it("leaves a feed the launch did not start alone", () => {
+    const { stopVideo, stopAudio } = claimAfterExpiry({ startedVideo: true, startedAudio: false });
+    expect(stopVideo).toHaveBeenCalledTimes(1);
+    expect(stopAudio).not.toHaveBeenCalled();
+  });
+
+  it("stops the owned feeds after the window even when no sheet ever claims it", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      vi.advanceTimersByTime(4_000);
+      expect(stopAudio).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(stopAudio).toHaveBeenCalledTimes(1);
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
+  it("does not stop feeds that a sheet claimed before the window ended", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(1_000);
+      const handler = vi.fn();
+      subscribeGameModeRequest(handler)();
+      expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
+  it("carries the ownership of an expired-but-unswept record into a replacing request", () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const handler = vi.fn();
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.setSystemTime(Date.now() + 6_000);
+      requestGameMode({ startedVideo: false, startedAudio: true });
+      subscribeGameModeRequest(handler)();
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: true });
+    expect(stopVideo).not.toHaveBeenCalled();
+  });
+
+  it("logs a warning with the stack when stopping an owned feed fails", async () => {
+    vi.spyOn(avMirrorSession, "stopVideo").mockRejectedValue(new Error("stop refused"));
+    vi.useFakeTimers();
+    try {
+      requestGameMode({ startedVideo: true, startedAudio: false });
+      vi.advanceTimersByTime(6_000);
+      subscribeGameModeRequest(vi.fn())();
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("failed to stop the video stream"),
+        expect.objectContaining({ error: "stop refused", stack: expect.any(String) }),
+      ),
+    );
+  });
+});
+
 describe("the auto-enter preference", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -257,5 +409,61 @@ describe("a repeated request keeps the stream ownership of the first", () => {
     stop();
 
     expect(claimed).toEqual({ startedVideo: true, startedAudio: true });
+  });
+});
+
+describe("an unclaimed request while a launch is still starting its feeds", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetPendingGameModeRequest();
+    vi.restoreAllMocks();
+    flags.live_view_enabled = true;
+    flags.audio_mirror_enabled = true;
+    flags.video_mirror_enabled = true;
+  });
+
+  it("does not stop the feeds mid-launch, and stops audio too once the launch settled and nobody claimed it", async () => {
+    const stopVideo = vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    const stopAudio = vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    let finishVideo: () => void = () => {};
+    const session = fakeSession({ startVideo: vi.fn(() => new Promise<void>((resolve) => (finishVideo = resolve))) });
+    vi.useFakeTimers();
+    try {
+      const launched = launch(session);
+      vi.advanceTimersByTime(6_000);
+      expect(stopVideo).not.toHaveBeenCalled();
+      expect(stopAudio).not.toHaveBeenCalled();
+
+      finishVideo();
+      await launched;
+      expect(session.startAudio).toHaveBeenCalledTimes(1);
+      expect(stopAudio).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(6_000);
+      expect(stopVideo).toHaveBeenCalledTimes(1);
+      expect(stopAudio).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hands the request to a sheet that mounts after the 5 s window while the launch is still starting", async () => {
+    vi.spyOn(avMirrorSession, "stopVideo").mockResolvedValue();
+    vi.spyOn(avMirrorSession, "stopAudio").mockResolvedValue();
+    let finishVideo: () => void = () => {};
+    const session = fakeSession({ startVideo: vi.fn(() => new Promise<void>((resolve) => (finishVideo = resolve))) });
+    vi.useFakeTimers();
+    try {
+      const launched = launch(session);
+      vi.advanceTimersByTime(6_000);
+      const handler = vi.fn();
+      const unsubscribe = subscribeGameModeRequest(handler);
+      expect(handler).toHaveBeenCalledWith({ startedVideo: true, startedAudio: true });
+      unsubscribe();
+      finishVideo();
+      await launched;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

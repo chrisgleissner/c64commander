@@ -67,6 +67,7 @@ export const startGameMode = async (opts?: {
   // to look like it worked at once. A start that then fails leaves the record
   // claiming a stream that never ran, which costs only an idempotent stop later.
   const started: GameModeStartResult = { startedVideo, startedAudio };
+  launchesInFlight += 1;
   requestGameMode(started);
 
   // Every call site fires this and forgets it, because the sheet has already been asked to
@@ -85,17 +86,65 @@ export const startGameMode = async (opts?: {
     }
   };
 
-  if (startedVideo) await start("video", () => session.startVideo());
-  if (startedAudio) await start("audio", () => session.startAudio());
+  try {
+    if (startedVideo) await start("video", () => session.startVideo());
+    if (startedAudio) await start("audio", () => session.startAudio());
+  } finally {
+    launchesInFlight = Math.max(0, launchesInFlight - 1);
+    restartPendingExpiryWindow();
+  }
   return started;
 };
 
 const NOTHING_STARTED: GameModeStartResult = { startedVideo: false, startedAudio: false };
 
+/**
+ * Stops exactly the feeds a launch started. A failed stop leaves the device streaming to nobody, the battery and
+ * bandwidth cost this rule exists to avoid, so it is logged with its stack.
+ */
+export const stopOwnedStreams = (session: AvMirrorSession, owned: GameModeStartResult) => {
+  const stop = (name: string, run: () => Promise<void>) => {
+    run().catch((error: unknown) => {
+      addLog("warn", `Game Mode: failed to stop the ${name} stream it started`, {
+        service: "streams",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  };
+  if (owned.startedVideo) stop("video", () => session.stopVideo());
+  if (owned.startedAudio) stop("audio", () => session.stopAudio());
+};
+
 /** How long an unclaimed request waits for a sheet to mount before it is stale. */
 const PENDING_REQUEST_TTL_MS = 5_000;
 
-let pendingRequest: { started: GameModeStartResult; atMs: number } | null = null;
+type PendingRequest = { started: GameModeStartResult; atMs: number };
+
+let pendingRequest: PendingRequest | null = null;
+let launchesInFlight = 0;
+let pendingExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const clearPendingExpiryTimer = () => {
+  if (pendingExpiryTimer !== null) clearTimeout(pendingExpiryTimer);
+  pendingExpiryTimer = null;
+};
+
+const expirePendingRequest = (record: PendingRequest) => {
+  if (pendingRequest !== record || launchesInFlight > 0) return;
+  pendingRequest = null;
+  pendingExpiryTimer = null;
+  stopOwnedStreams(avMirrorSession, record.started);
+};
+
+/** A launch still starting feeds owns its request, so the wait for a sheet to claim it starts when the launch settles. */
+const restartPendingExpiryWindow = () => {
+  if (launchesInFlight > 0 || pendingRequest === null) return;
+  const record = pendingRequest;
+  record.atMs = Date.now();
+  clearPendingExpiryTimer();
+  pendingExpiryTimer = setTimeout(() => expirePendingRequest(record), PENDING_REQUEST_TTL_MS);
+};
 
 /**
  * Take the outstanding request, if there is one and it is still fresh.
@@ -107,8 +156,13 @@ let pendingRequest: { started: GameModeStartResult; atMs: number } | null = null
 const takePendingGameModeRequest = (): GameModeStartResult | null => {
   if (pendingRequest === null) return null;
   const claimed = pendingRequest;
-  pendingRequest = null;
-  return Date.now() - claimed.atMs > PENDING_REQUEST_TTL_MS ? null : claimed.started;
+  clearPendingExpiryTimer();
+  if (launchesInFlight > 0 || Date.now() - claimed.atMs <= PENDING_REQUEST_TTL_MS) {
+    pendingRequest = null;
+    return claimed.started;
+  }
+  expirePendingRequest(claimed);
+  return null;
 };
 
 /**
@@ -120,21 +174,18 @@ const takePendingGameModeRequest = (): GameModeStartResult | null => {
  */
 export const requestGameMode = (started: GameModeStartResult = NOTHING_STARTED): void => {
   if (typeof window === "undefined") return;
-  // Stream ownership from an unclaimed request is CARRIED OVER, not replaced. Pressing `0`
-  // twice in quick succession (or a key repeat) calls this twice: the first launch starts the
-  // feeds and records owning them, and by the time the second runs they are already live, so it
-  // starts nothing and reports owning nothing. Overwriting the record with that second result
-  // would discard the ownership of feeds this launch really did start, and the sheet would
-  // leave them running after it closed — the device keeps streaming to nobody.
-  const outstanding =
-    pendingRequest !== null && Date.now() - pendingRequest.atMs <= PENDING_REQUEST_TTL_MS ? pendingRequest : null;
-  const owned: GameModeStartResult = outstanding
+  // Ownership of an unclaimed record is carried over, not replaced: a second launch finds the feeds
+  // already live and owns nothing, and overwriting would leave the first launch's feeds streaming to nobody.
+  const owned: GameModeStartResult = pendingRequest
     ? {
-        startedVideo: started.startedVideo || outstanding.started.startedVideo,
-        startedAudio: started.startedAudio || outstanding.started.startedAudio,
+        startedVideo: started.startedVideo || pendingRequest.started.startedVideo,
+        startedAudio: started.startedAudio || pendingRequest.started.startedAudio,
       }
     : started;
-  pendingRequest = { started: owned, atMs: Date.now() };
+  clearPendingExpiryTimer();
+  const record: PendingRequest = { started: owned, atMs: Date.now() };
+  pendingRequest = record;
+  pendingExpiryTimer = setTimeout(() => expirePendingRequest(record), PENDING_REQUEST_TTL_MS);
   window.dispatchEvent(new CustomEvent(GAME_MODE_REQUEST_EVENT));
 };
 
@@ -155,7 +206,9 @@ export const subscribeGameModeRequest = (handler: (started: GameModeStartResult)
 
 /** Test-only: drop an unclaimed request so it cannot leak into the next case. */
 export const resetPendingGameModeRequest = (): void => {
+  clearPendingExpiryTimer();
   pendingRequest = null;
+  launchesInFlight = 0;
 };
 
 /** Pages that mount a Remote Input sheet, and can therefore answer a request in place. */

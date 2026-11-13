@@ -19,6 +19,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
+import { openIndexedDb, rejectOnTransactionAbort } from "@/lib/storage/indexedDbSafety";
 
 export type RankingSignal = "like" | "notForMe";
 
@@ -54,21 +55,17 @@ type RankingMap = Record<string, RankingSignal>;
 const canUseIndexedDb = () => typeof indexedDB !== "undefined";
 
 const openDb = (): Promise<IDBDatabase> =>
-  new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  openIndexedDb(DB_NAME, 1, (db) => {
+    if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
   });
 
 const idbLoad = async (): Promise<RankingMap> => {
   const db = await openDb();
   try {
     return await new Promise<RankingMap>((resolve, reject) => {
-      const request = db.transaction(STORE, "readonly").objectStore(STORE).get(RECORD_KEY);
+      const tx = db.transaction(STORE, "readonly");
+      rejectOnTransactionAbort(tx, reject, "ranking read");
+      const request = tx.objectStore(STORE).get(RECORD_KEY);
       request.onsuccess = () => resolve((request.result as RankingMap) ?? {});
       request.onerror = () => reject(request.error);
     });

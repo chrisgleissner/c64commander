@@ -2674,7 +2674,17 @@ export class C64API {
     const data = payload.data;
     if (!data) return new Uint8Array();
     if (typeof data === "string") {
-      const binary = atob(data);
+      let binary: string;
+      try {
+        binary = atob(data);
+      } catch (error) {
+        throw new Error(
+          `readMemory ${address} length ${length} returned malformed base64 data (${data.length} characters)`,
+          {
+            cause: error,
+          },
+        );
+      }
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i += 1) {
         bytes[i] = binary.charCodeAt(i);
