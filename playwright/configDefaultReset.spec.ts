@@ -13,9 +13,9 @@ import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { enableKeypad, ringFocus } from "./focusRing";
 
-const CATEGORY = "Clock Settings";
-const ITEM = "Time Zone";
-const DEFAULT_VALUE = "UTC";
+const CATEGORY = "Audio Output Settings";
+const ITEM = "Speaker Output";
+const DEFAULT_VALUE = "Enabled";
 
 test.describe("Config shows what differs from the default and resets one item, by keypad only @layout", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -23,12 +23,12 @@ test.describe("Config shows what differs from the default and resets one item, b
   test.beforeEach(async ({ page }, testInfo) => {
     disableTraceAssertions(testInfo, "Config default coverage; trace assertions disabled.");
     server = await createMockC64Server({
-      [CATEGORY]: { [ITEM]: { value: "UTC+1", options: ["UTC", "UTC+1", "UTC+2"] } },
+      [CATEGORY]: { [ITEM]: { value: "Disabled", options: ["Enabled", "Disabled"] } },
     });
     await seedUiMocks(page, server.baseUrl);
     await enableKeypad(page);
     await page.addInitScript(() => localStorage.setItem("c64u_display_profile_override", "compact"));
-    await page.route(/\/v1\/configs\/Clock(%20| )Settings(\/Time(%20| )Zone)?$/, async (route) => {
+    await page.route(/\/v1\/configs\/Audio(%20| )Output(%20| )Settings(\/Speaker(%20| )Output)?$/, async (route) => {
       if (route.request().method() !== "GET") return route.continue();
       const response = await route.fetch();
       const body = await response.json();
@@ -47,7 +47,7 @@ test.describe("Config shows what differs from the default and resets one item, b
   test("a modified item is marked, and Reset to default writes the default over a single-item PUT", async ({
     page,
   }) => {
-    const toggle = page.getByTestId("config-unrouted-toggle-clock-settings");
+    const toggle = page.getByTestId("config-unrouted-toggle-audio-output-settings");
     expect(await ringFocus(page, toggle, 120)).toBe(true);
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
@@ -73,7 +73,7 @@ test.describe("Config shows what differs from the default and resets one item, b
           server.requests.filter(
             (request) =>
               request.method === "PUT" &&
-              request.url.includes("/v1/configs/Clock%20Settings/Time%20Zone") &&
+              request.url.includes("/v1/configs/Audio%20Output%20Settings/Speaker%20Output") &&
               request.url.includes(`value=${DEFAULT_VALUE}`),
           ).length,
       )

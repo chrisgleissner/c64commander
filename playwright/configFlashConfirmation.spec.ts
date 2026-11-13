@@ -57,6 +57,9 @@ test.describe("Config Load and Reset ask before running, operated by keys alone 
     expect(configWrites("load_from_flash")).toHaveLength(0);
 
     const confirm = dialog.getByRole("button", { name: "Load" });
+    await dialog.evaluate((element) =>
+      Promise.allSettled(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+    );
     const box = await confirm.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(MIN_TARGET_PX - 0.5);
     expect(await ringFocus(page, confirm, 12)).toBe(true);
