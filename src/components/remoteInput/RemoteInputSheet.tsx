@@ -840,20 +840,18 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               </div>
             )
           ) : (
-            <>
-              <BasicCommandsBar onCommand={sendBasicCommand} />
-              <TypeKeyboard
-                className={cn("min-h-0 flex-1", iconOnlyToolbar && "min-h-32")}
-                onChar={session.sendChar}
-                onKey={session.sendKeyboardInputs}
-                onCursor={session.sendCursor}
-                onSpecialKey={session.sendSpecialKey}
-                heldKeyboardInputs={session.heldKeyboardInputs}
-                onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
-                releaseAllEpoch={session.releaseAllEpoch}
-                tier={tier}
-              />
-            </>
+            <TypeKeyboard
+              className={cn("min-h-0 flex-1", iconOnlyToolbar && "min-h-32")}
+              leading={<BasicCommandsBar onCommand={sendBasicCommand} />}
+              onChar={session.sendChar}
+              onKey={session.sendKeyboardInputs}
+              onCursor={session.sendCursor}
+              onSpecialKey={session.sendSpecialKey}
+              heldKeyboardInputs={session.heldKeyboardInputs}
+              onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
+              releaseAllEpoch={session.releaseAllEpoch}
+              tier={tier}
+            />
           )}
 
           {mirrorEnabled && foldJoystickOptions && !mirrorInToolbar ? (

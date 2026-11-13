@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { CursorPad } from "@/components/remoteInput/CursorPad";
@@ -57,6 +57,8 @@ export type TypeKeyboardProps = {
   releaseAllEpoch?: number;
   /** Test/preview seam: force a profile instead of measuring the content box. */
   profile?: KeyboardProfile;
+  /** Rendered first inside the keyboard's scroll area, so it scrolls with the keys instead of shrinking them. */
+  leading?: ReactNode;
   className?: string;
 };
 
@@ -307,6 +309,7 @@ export const TypeKeyboard = ({
   onHeldKeyboardInputsChange,
   releaseAllEpoch,
   profile: profileOverride,
+  leading,
   className,
 }: TypeKeyboardProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -629,6 +632,7 @@ export const TypeKeyboard = ({
           className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pb-6 pr-0.5"
           data-testid="remote-input-keyboard-scroll"
         >
+          {leading}
           {/* Scroll order for the keypad handset: cursor pad + immediate RETURN/SPACE, then
               the function keys, then the high-value special keys (edit + system)
               directly below them, then the character grid, and finally a second
@@ -713,6 +717,7 @@ export const TypeKeyboard = ({
           className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-6"
           data-testid="remote-input-keyboard-grid"
         >
+          {leading}
           <div className="min-h-0 flex-1" aria-hidden="true" />
           <div className="flex shrink-0 items-start" style={{ gap: functionGapPx }}>
             <div className="min-w-0 flex-1 space-y-1">
