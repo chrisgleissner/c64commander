@@ -13,6 +13,7 @@ import { resolveInputProfile } from "@/lib/input/profiles";
 import { OWNS_KEYS_ATTR, SKIP_ATTR } from "@/lib/input/discovery";
 import { SOFT_KEY_MENU_ATTR, type SoftKeyMenuKey } from "@/lib/input/guidance";
 import { stepFocusWithinOverlay } from "@/lib/input/ringDom";
+import { BASIC_COMMANDS, type BasicCommand } from "@/lib/remoteInput/basicCommands";
 import type { RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
 import type { RemoteInputControlsMenuItem } from "@/components/remoteInput/RemoteInputControlsMenu";
 
@@ -34,7 +35,11 @@ export interface RemoteInputKeypadControlsOptions {
   optionsFolded: boolean;
   /** Whether the picture is on screen, so there is a view to pan and zoom. */
   viewAdjustable: boolean;
+  /** Whether a live frame is on screen to save, which is stricter than a view that can be adjusted. */
+  screenshotAvailable: boolean;
   onAdjustView: () => void;
+  onSaveScreenshot: () => void;
+  onBasicCommand: (command: BasicCommand) => void;
   onOutputModeChange: (mode: RemoteInputOutputMode) => void;
   onOpenOptions: () => void;
   onEnterGameMode: () => void;
@@ -65,6 +70,7 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
     immersive,
     optionsFolded,
     viewAdjustable,
+    screenshotAvailable,
   } = options;
   const [driving, setDriving] = useState(true);
   const keysGoToTheC64 = driving && keypadDrivesTheC64;
@@ -124,7 +130,21 @@ export const useRemoteInputKeypadControls = (options: RemoteInputKeypadControlsO
         : { id: "game", label: "Game Mode", onSelect: options.onEnterGameMode },
     );
   }
-  if (viewAdjustable) items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
+  if (viewAdjustable) {
+    items.push({ id: "adjust-view", label: "Adjust view", onSelect: options.onAdjustView });
+  }
+  if (screenshotAvailable) {
+    items.push({ id: "screenshot", label: "Save screenshot", onSelect: options.onSaveScreenshot });
+  }
+  if (outputMode === "type" && !inGameMode) {
+    for (const command of BASIC_COMMANDS) {
+      items.push({
+        id: `basic-${command.id}`,
+        label: `Send ${command.text}`,
+        onSelect: () => options.onBasicCommand(command),
+      });
+    }
+  }
   items.push({ id: "controls", label: "Other controls", onSelect: () => operateTheSheet("first-control") });
   if (!inGameMode) items.push({ id: "release-all", label: "Release all", onSelect: options.onReleaseAll });
   items.push({ id: "close", label: "Close Remote Input", onSelect: options.onClose });

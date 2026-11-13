@@ -81,7 +81,8 @@ import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { ENGINE_FALLBACK_MESSAGES, type EngineFallbackNotice } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolvePendingSkipIndices, type PendingUserSkip } from "@/pages/playFiles/pendingUserSkip";
-import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { mergeStartedPlaylist, startReplacesQueue } from "@/pages/playFiles/startPlaylistMerge";
+import { markPlaylistReplaced } from "@/pages/playFiles/playlistRemoval";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { usePlaybackEngineSwitch } from "@/pages/playFiles/hooks/usePlaybackEngineSwitch";
 import { useTuneReleaseOnSidPlayer } from "@/pages/playFiles/hooks/useTuneReleaseOnSidPlayer";
@@ -1261,6 +1262,7 @@ export function usePlaybackController({
         cancelAutoAdvance();
         setPlaylistEnded(false);
         const resolvedItems = await applySonglengthsToItems(items);
+        if (startReplacesQueue(playlistRef.current, options)) markPlaylistReplaced();
         setPlaylist((prev) => mergeStartedPlaylist(prev, resolvedItems, options));
         // Not before: a song that needs the C64 ROMs is asked about first, and Cancel leaves what plays as it was.
         const commitStart = () => {

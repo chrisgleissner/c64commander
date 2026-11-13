@@ -13,7 +13,7 @@ import { getInputModality } from "@/lib/input/inputModality";
 import { focusRingElement, revealRingElementAfterLayout } from "@/lib/input/ringDom";
 import type { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import { CATEGORY_OPTIONS } from "@/pages/playFiles/playFilesUtils";
-import { moveAfterCurrent, moveItem, type ReorderResult } from "@/pages/playFiles/playlistReorder";
+import { moveAfterCurrent, moveItem, moveToEdge, type ReorderResult } from "@/pages/playFiles/playlistReorder";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 type PlaylistManagerState = ReturnType<typeof usePlaylistManager>;
@@ -29,6 +29,9 @@ export type PlaylistQueueActions = {
   playNext: (id: string) => void;
   moveUp: (id: string) => void;
   moveDown: (id: string) => void;
+  moveToTop: (id: string) => void;
+  moveToBottom: (id: string) => void;
+  remove: (id: string) => void;
 };
 
 /**
@@ -39,6 +42,7 @@ export const usePlaylistQueueActions = (
   { playlist, setPlaylist, currentIndex, setCurrentIndex, shuffleEnabled, playlistTypeFilters }: PlaylistQueueState,
   filterText: string,
   currentPlayingItemId: string | null,
+  removeItems: (ids: Set<string>) => void,
 ): PlaylistQueueActions => {
   const filterHidesRows = filterText.trim() !== "" || playlistTypeFilters.length < CATEGORY_OPTIONS.length;
   const movedRowIdRef = useRef<string | null>(null);
@@ -77,8 +81,16 @@ export const usePlaylistQueueActions = (
   const moveUp = useLatestCallback((id: string) => move(id, -1));
   const moveDown = useLatestCallback((id: string) => move(id, 1));
 
+  const moveTo = (id: string, edge: "top" | "bottom") => {
+    if (shuffleEnabled || filterHidesRows) return;
+    apply(id, moveToEdge(playlist, id, edge, currentIndex));
+  };
+  const moveToTop = useLatestCallback((id: string) => moveTo(id, "top"));
+  const moveToBottom = useLatestCallback((id: string) => moveTo(id, "bottom"));
+  const remove = useLatestCallback((id: string) => removeItems(new Set([id])));
+
   return useMemo(
-    () => ({ shuffleEnabled, filterHidesRows, playNext, moveUp, moveDown }),
-    [shuffleEnabled, filterHidesRows, playNext, moveUp, moveDown],
+    () => ({ shuffleEnabled, filterHidesRows, playNext, moveUp, moveDown, moveToTop, moveToBottom, remove }),
+    [shuffleEnabled, filterHidesRows, playNext, moveUp, moveDown, moveToTop, moveToBottom, remove],
   );
 };

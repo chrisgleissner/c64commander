@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { mergeStartedPlaylist, startReplacesQueue } from "@/pages/playFiles/startPlaylistMerge";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const item = (id: string) => ({ id, path: `/${id}.sid` }) as unknown as PlaylistItem;
@@ -70,5 +70,15 @@ describe("mergeStartedPlaylist", () => {
 
     expect(mergeStartedPlaylist(previous, started)).not.toBe(started);
     expect(mergeStartedPlaylist(previous, started, { replaceQueue: true })).not.toBe(started);
+  });
+});
+
+describe("startReplacesQueue", () => {
+  it.each([
+    ["a caller that owns the queue", [item("a")], { replaceQueue: true }, true],
+    ["an empty queue", [], undefined, true],
+    ["a started set merged into a queue that has tunes", [item("a")], undefined, false],
+  ])("is decided for %s", (_label, previous, options, expected) => {
+    expect(startReplacesQueue(previous as PlaylistItem[], options)).toBe(expected);
   });
 });

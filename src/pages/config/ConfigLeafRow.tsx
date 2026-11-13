@@ -66,6 +66,7 @@ export const ConfigLeafRow = memo(function ConfigLeafRow({
       details={details}
       formatOptionLabel={formatOptionLabel}
       readOnly={readOnly}
+      showDefaultState
       isLoading={Boolean(isWriting) || Boolean(authoritativeValues.pending[key])}
       onValueChange={onValueChange}
     />

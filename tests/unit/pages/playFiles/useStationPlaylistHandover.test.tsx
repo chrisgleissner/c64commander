@@ -22,6 +22,7 @@ vi.mock("@/pages/playFiles/playlistRepositorySync", () => ({
 vi.mock("@/hooks/use-toast", () => ({ toast: repo.toast }));
 
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { currentPlaylistGeneration } from "@/pages/playFiles/playlistRemoval";
 import {
   readHandoverRecord,
   rememberHandover,
@@ -289,6 +290,20 @@ describe("useStationPlaylistHandover", () => {
     expect(stopPlayback).toHaveBeenCalledTimes(1);
     expect(repo.toast).toHaveBeenLastCalledWith({ title: PLAYLIST_RESTORED_TOAST });
     expect(harness.result.current.stationActiveRef.current).toBe(false);
+  });
+
+  it("marks the queue as replaced when the station keeps only its last tune and when the playlist comes back", async () => {
+    const harness = renderHarness({ stationActive: false, isPlaying: true });
+    await startStation(harness, stationA);
+    act(() => harness.result.current.setCurrentIndex(1));
+    const beforeLastTune = currentPlaylistGeneration();
+
+    harness.rerender({ stationActive: false, isPlaying: true });
+    const afterLastTune = currentPlaylistGeneration();
+    harness.rerender({ stationActive: false, isPlaying: true, playlistEnded: true });
+
+    expect(afterLastTune).toBeGreaterThan(beforeLastTune);
+    expect(currentPlaylistGeneration()).toBeGreaterThan(afterLastTune);
   });
 
   it("keeps the station's last tune through a pause, and brings the playlist back on Stop", async () => {

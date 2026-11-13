@@ -100,6 +100,7 @@ import {
   saveConfigEnrichmentAbsentDomains,
   saveConfigEnrichmentCategory,
 } from "@/lib/c64api/configEnrichmentCache";
+import { notifyConfigEnrichmentContent } from "@/lib/c64api/configEnrichmentContentSignal";
 import { notifyConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrichmentNamespaceSignal";
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
@@ -1242,6 +1243,7 @@ export class C64API {
     // controls to re-resolve, since a same-host flip does not bump the routing epoch.
     this.configCategoryItemsCache.clear();
     notifyConfigEnrichmentNamespaceChange();
+    notifyConfigEnrichmentContent();
   }
 
   private getCachedConfigCategoryItems(category: string) {
@@ -1278,6 +1280,7 @@ export class C64API {
     if (areConfigEnrichmentItemsEqual(previousItems, mergedItems)) return;
     this.configCategoryItemsCache.set(category, mergedItems);
     saveConfigEnrichmentCategory(this.activeConfigEnrichmentNamespaceKey, category, mergedItems);
+    notifyConfigEnrichmentContent();
   }
 
   private setCachedConfigValue(category: string, item: string, value: string | number) {

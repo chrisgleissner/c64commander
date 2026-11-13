@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -20,6 +20,9 @@ import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
 import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { getC64API } from "@/lib/c64api";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { ConfigDefaultState } from "@/components/ConfigDefaultState";
+import { subscribeConfigEnrichmentContent } from "@/lib/c64api/configEnrichmentContentSignal";
+import { hasMeaningfulDefault, isModifiedFromDefault, readConfigItemDefault } from "@/lib/config/configDefault";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
 import { observeElementSize } from "@/lib/ui/sharedResizeObserver";
@@ -46,6 +49,8 @@ interface ConfigItemRowProps {
   sliderTestId?: string;
   formatOptionLabel?: (value: string) => string;
   valueClassName?: string;
+  /** Config page only: mark a value that differs from the firmware default and offer to reset it. */
+  showDefaultState?: boolean;
 }
 
 type ConfigItemLayoutMode = "horizontal" | "vertical";
@@ -112,6 +117,7 @@ export const ConfigItemRow = memo(function ConfigItemRow({
   labelClassName,
   formatOptionLabel,
   valueClassName,
+  showDefaultState = false,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
   const [isTextEditing, setIsTextEditing] = useState(false);
@@ -247,9 +253,35 @@ export const ConfigItemRow = memo(function ConfigItemRow({
   const { profile } = useDisplayProfile();
   const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(displayLabel, widgetMinWidth, profile);
 
+  const isCpuSpeedWriteGuarded = category === "U64 Specific Settings" && name === "CPU Speed";
+  const isReadOnly = readOnly || name.startsWith("SID Detected Socket") || isCpuSpeedWriteGuarded;
+  const readCachedDefault = useCallback(
+    () =>
+      showDefaultState && category
+        ? readConfigItemDefault(getC64API()?.getCachedConfigItem?.(category, name))
+        : undefined,
+    [showDefaultState, category, name],
+  );
+  const cachedDefault = useSyncExternalStore(subscribeConfigEnrichmentContent, readCachedDefault);
+  const defaultValue =
+    showDefaultState && hasMeaningfulDefault(category ?? "", name)
+      ? fetchedConfig
+        ? readConfigItemDefault(fetchedConfig)
+        : cachedDefault
+      : undefined;
+  const defaultState =
+    defaultValue !== undefined && !isReadOnly && isModifiedFromDefault(mergedValue, defaultValue) ? (
+      <ConfigDefaultState
+        label={displayLabel}
+        defaultValue={defaultValue}
+        onReset={() => onValueChange(defaultValue)}
+      />
+    ) : null;
+
   const rowClassName = cn(
     "settings-row w-full",
     layout === "horizontal" ? "flex items-center justify-between gap-3" : "flex flex-col items-stretch gap-2",
+    defaultState && layout === "horizontal" && "flex-wrap",
     className,
   );
 
@@ -266,8 +298,6 @@ export const ConfigItemRow = memo(function ConfigItemRow({
   );
 
   const displayValue = inputValue;
-  const isCpuSpeedWriteGuarded = category === "U64 Specific Settings" && name === "CPU Speed";
-  const isReadOnly = readOnly || name.startsWith("SID Detected Socket") || isCpuSpeedWriteGuarded;
   // A write in flight shows a spinner but keeps the control enabled: disabling it moved focus to the page body,
   // so a keypad user stepping a slider or toggling a checkbox was thrown to the top of the page after one step.
   const controlDisabled = isItemLoading || isReadOnly;
@@ -461,6 +491,7 @@ export const ConfigItemRow = memo(function ConfigItemRow({
           aria-label={displayLabel}
           className={cn(layout !== "horizontal" && "self-start")}
         />
+        {defaultState}
       </div>
     );
   }
@@ -516,6 +547,7 @@ export const ConfigItemRow = memo(function ConfigItemRow({
             </SelectContent>
           </Select>
         </div>
+        {defaultState}
       </div>
     );
   }
@@ -581,6 +613,7 @@ export const ConfigItemRow = memo(function ConfigItemRow({
           </div>
           {rightAccessory ? <div className="flex items-center gap-2">{rightAccessory}</div> : null}
         </div>
+        {defaultState}
       </div>
     );
   }
@@ -659,6 +692,7 @@ export const ConfigItemRow = memo(function ConfigItemRow({
         />
         {(isLoading || isItemLoading) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
+      {defaultState}
     </div>
   );
 });

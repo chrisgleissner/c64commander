@@ -554,6 +554,40 @@ describe("TypeKeyboard", () => {
       expect(screen.queryByTestId("remote-input-key-a")).not.toBeInTheDocument();
       expect(screen.queryByTestId("remote-input-keyboard-deck")).not.toBeInTheDocument();
     });
+
+    it.each([
+      ["deck", "medium", "remote-input-keyboard-scroll"],
+      ["expanded", "expanded", "remote-input-keyboard-grid"],
+    ] as const)(
+      "renders the leading content as the first item inside the key scroller in the %s layout",
+      (_n, profile, scrollerId) => {
+        render(
+          <TypeKeyboardHarness
+            {...makeHandlers()}
+            tier="full"
+            profile={profile}
+            leading={<div data-testid="leading-probe" />}
+          />,
+        );
+
+        const scroller = screen.getByTestId(scrollerId);
+        const probe = within(scroller).getByTestId("leading-probe");
+        expect(scroller.firstElementChild).toBe(probe);
+      },
+    );
+
+    it("does not render the leading content when the device needs a password", () => {
+      render(
+        <TypeKeyboardHarness
+          {...makeHandlers()}
+          tier="auth-required"
+          profile="medium"
+          leading={<div data-testid="leading-probe" />}
+        />,
+      );
+
+      expect(screen.queryByTestId("leading-probe")).not.toBeInTheDocument();
+    });
   });
 });
 

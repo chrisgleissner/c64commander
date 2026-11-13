@@ -33,6 +33,7 @@ import {
   clearHandoverRecord,
   type StationHandover,
 } from "@/pages/playFiles/stationPlaylistHandover";
+import { markPlaylistReplaced } from "@/pages/playFiles/playlistRemoval";
 import { loadSidRadioQueueLimit } from "@/lib/config/appSettings";
 import { retainStationQueue } from "@/pages/playFiles/stationQueueRetention";
 import { SHARED_PLAYLIST_STORAGE_KEY } from "@/pages/playFiles/playFilesUtils";
@@ -230,6 +231,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     const lastTune = lastTuneQueue(queue.playlist, queue.currentIndex);
     const playsOutLastTune = playback.isPlaying && !playback.isPaused && lastTune.length > 0;
     if (playsOutLastTune) {
+      markPlaylistReplaced();
       queue.setPlaylist(lastTune);
       queue.setCurrentIndex(0);
       toast({ title: "SID Radio stopped", description: LAST_TUNE_TOAST });
@@ -306,6 +308,7 @@ export const useStationPlaylistHandover = (params: UseStationPlaylistHandoverPar
     const { queue, playback } = latestRef.current;
     const restored = restoredPlaylistState({ ...handover, items: handover.items }, queue.playlist);
     if (isPlaying || isPaused) playback.stopPlayback();
+    markPlaylistReplaced();
     queue.setPlaylist(restored.playlist);
     queue.setCurrentIndex(restored.currentIndex);
     queue.setSelectedPlaylistIds(restored.selectedIds);

@@ -28,7 +28,10 @@ const baseOptions: RemoteInputKeypadControlsOptions = {
   immersive: false,
   optionsFolded: false,
   viewAdjustable: false,
+  screenshotAvailable: false,
   onAdjustView: vi.fn(),
+  onSaveScreenshot: vi.fn(),
+  onBasicCommand: vi.fn(),
   onOutputModeChange: vi.fn(),
   onOpenOptions: vi.fn(),
   onEnterGameMode: vi.fn(),
@@ -122,5 +125,51 @@ describe("useRemoteInputKeypadControls", () => {
     rerender({ ...baseOptions, viewAdjustable: true, onAdjustView });
     choose(result.current.menu.items, "adjust-view");
     expect(onAdjustView).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Save screenshot beside Adjust view, only while the picture is on, and saves when chosen", () => {
+    const onSaveScreenshot = vi.fn();
+    const { result, rerender } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: baseOptions },
+    );
+    expect(result.current.menu.items.map((item) => item.id)).not.toContain("screenshot");
+
+    rerender({ ...baseOptions, viewAdjustable: true, screenshotAvailable: true, onSaveScreenshot });
+    const ids = result.current.menu.items.map((item) => item.id);
+    expect(ids.indexOf("screenshot")).toBe(ids.indexOf("adjust-view") + 1);
+    choose(result.current.menu.items, "screenshot");
+
+    expect(onSaveScreenshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer Save screenshot while the picture can be adjusted but no frame is live yet", () => {
+    const { result } = renderHook(
+      (options: RemoteInputKeypadControlsOptions) => useRemoteInputKeypadControls(options),
+      { initialProps: { ...baseOptions, viewAdjustable: true, screenshotAvailable: false } },
+    );
+
+    const ids = result.current.menu.items.map((item) => item.id);
+    expect(ids).toContain("adjust-view");
+    expect(ids).not.toContain("screenshot");
+  });
+
+  it("offers each BASIC command in Keys mode, and sends the one chosen", () => {
+    const onBasicCommand = vi.fn();
+    const { result } = renderHook(() =>
+      useRemoteInputKeypadControls({ ...baseOptions, outputMode: "type", onBasicCommand }),
+    );
+
+    const ids = result.current.menu.items.map((item) => item.id).filter((id) => id.startsWith("basic-"));
+    expect(ids).toEqual(["basic-list", "basic-run", "basic-load-directory", "basic-load-first-program"]);
+    choose(result.current.menu.items, "basic-load-directory");
+
+    expect(onBasicCommand).toHaveBeenCalledWith({ id: "load-directory", text: 'LOAD"$",8' });
+  });
+
+  it("leaves the BASIC commands out of the menu in Joystick mode", () => {
+    const { result } = renderHook(() => useRemoteInputKeypadControls(baseOptions));
+
+    expect(result.current.menu.items.some((item) => item.id.startsWith("basic-"))).toBe(false);
   });
 });

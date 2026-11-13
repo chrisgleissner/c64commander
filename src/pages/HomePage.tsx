@@ -63,8 +63,8 @@ import { reportUserError } from "@/lib/uiErrors";
 import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useHomeConfigRefresh } from "./home/hooks/useHomeConfigRefresh";
-import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
-import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
+import { useConfigResetLoadConfirmation } from "./home/hooks/useConfigResetLoadConfirmation";
+import { ConfigActionsProvider, useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import { applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
 import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/configSnapshotStorage";
@@ -261,6 +261,7 @@ function HomePageContent() {
     captureInitialSnapshot,
   } = useAppConfigState();
   const trace = useActionTrace("HomePage");
+  const configConfirmation = useConfigResetLoadConfirmation({ handleAction, controls });
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -1805,15 +1806,10 @@ function HomePageContent() {
             <StreamStatus forceClosed={offlineArrangement} isConnected={isActive} />
           ) : null}
 
-          {/* Config Actions */}
           {/*
-           * Keypad focus ring (C64U Remote) reads top→bottom, so order bands
-           * follow DOM order: MachineControls 100–190, Drives 300–390 (Reset 300,
-           * per-drive ON/OFF toggles 310/320/330; mount/status/selects reserved
-           * for M2.2/M2.5), Printers 400–490 (Reset 400, ON/OFF toggle 410;
-           * bus/config selects reserved for M2.5), and these Config actions
-           * 600–690 (they render last). The persistent TabBar sits above all page
-           * content at 1000+.
+           * The keypad focus ring reads top to bottom, so order bands follow DOM order: MachineControls 100-190,
+           * Drives 300-390, Printers 400-490, these Config actions 600-690 (they render last). The persistent
+           * TabBar sits above all page content at 1000+.
            */}
           <CollapsibleSection
             scope="home"
@@ -1844,7 +1840,7 @@ function HomePageContent() {
                 focusId="home-config-load-flash"
                 accessibleLabel="Load config from flash"
                 focusOrder={610}
-                onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
+                onClick={configConfirmation.requestLoad}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.loadConfig.isPending}
               />
@@ -1856,7 +1852,7 @@ function HomePageContent() {
                 focusId="home-config-reset"
                 accessibleLabel="Reset config to default"
                 focusOrder={620}
-                onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
+                onClick={configConfirmation.requestReset}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.resetConfig.isPending}
               />
@@ -1988,6 +1984,7 @@ function HomePageContent() {
         </PageStack>
       </PageContainer>
 
+      {configConfirmation.confirmationDialog}
       <PowerOffDialog
         open={powerOffDialogOpen}
         onOpenChange={setPowerOffDialogOpen}

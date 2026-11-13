@@ -64,3 +64,16 @@ export const moveAfterCurrent = <T extends Identified>(
   if (to === from) return unchanged(playlist, currentIndex);
   return placeRow(playlist, currentIndex, from, to);
 };
+
+/** Moves the row with `id` to the first or last place. */
+export const moveToEdge = <T extends Identified>(
+  playlist: T[],
+  id: string,
+  edge: "top" | "bottom",
+  currentIndex: number,
+): ReorderResult<T> => {
+  const from = playlist.findIndex((item) => item.id === id);
+  const to = edge === "top" ? 0 : playlist.length - 1;
+  if (from < 0 || from === to) return unchanged(playlist, currentIndex);
+  return placeRow(playlist, currentIndex, from, to);
+};

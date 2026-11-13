@@ -1201,7 +1201,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Stop** ends what Play started. If Play put a disk in a drive to start it, Stop takes that disk out again and puts back the disk that was in the drive before; a disk you mounted yourself on Home or Disks stays where it is. Stop also cuts short a playback config that is still being applied. Until your C64 has answered, the button says **Stopping…**.",
     "",
-    "Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**.",
+    "Each row's **menu** button (three dots) opens the item's details and its **playback config**: settings the app applies to the machine just before that item runs. On the smallest screens these open in a sheet from the bottom of the screen, with a **Play** button at the top. To take items out, tick them and choose **Remove selected items**, or choose **Remove from playlist** in a row's menu.",
+    "",
+    "Every removal, including **Clear playlist**, leaves a notification with **Undo**. Undo puts the items back where they were. It never starts playback again, and it puts nothing back into a playlist that has since been replaced, for example by starting SID Radio or returning to your playlist afterwards: if the removal stopped the tune that was playing, press **Play** yourself. The same menu has **Move to top** and **Move to bottom**, next to **Move up** and **Move down**; like those, they are unavailable while Shuffle is on or a filter hides rows.",
     "",
     `Playback carries on when you leave the app or lock your ${appDeviceName(
       variant,
@@ -1241,6 +1243,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
       " Open one and edit its rows directly. Each item gets the control that suits it: a slider, a select, a checkbox, a text field, or a password field that hides what you type. The app remembers which cards you left open.",
     "",
     "Config edits the live machine, not a draft, and has no Save button of its own: saving to flash is on Home's **Config** card. A change goes to the device the moment you make it. Most take effect at once; a few, such as the cartridge choice, wait for the next reset. To make a change survive a power cycle, see [Configuration and Saving](#configuration-and-saving).",
+    "",
+    "A row whose value differs from the machine's default is marked **Modified** and names that default. Choose **Reset to default** on the row to write the default back. This changes the live machine only, like any other edit here; it does not save anything to flash. Reset to default is not offered on a row that is read-only, when the machine does not report a default for that setting, or on the clock and on the items that identify your machine or its network (host name, unique ID, network password and the static address, netmask, gateway and DNS entries).",
     "",
     "Come here when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the cards whose page, group or setting names match, so a setting can be found by its own name. After changing a value, let the write finish before you change a related one. For everyday settings, the cards on Home are quicker.",
     "",
@@ -1789,6 +1793,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "A small map in the corner shows which part you are looking at; drag its rectangle to jump elsewhere. Switch on **Follow**, and the view drifts by itself to wherever the action is. That keeps the cursor in sight as you type.",
                 "",
+                `The camera button saves a picture of your C64's screen. It is the whole screen at its own size, however far you have zoomed in. On a ${appDeviceName(
+                  variant,
+                )} the picture goes to the share sheet, and in a browser it downloads as a PNG file. With a keypad, open the controls menu with the right soft key or the menu key and choose **Save screenshot**. The entry appears once the picture is live.`,
+                "",
                 "You can also lock the view onto your character. Press and hold the character on the screen. With no touchscreen, use the direction keys to line up the crosshair in the middle of the view, then press **OK**.",
                 "",
                 "The view now travels with that one character while enemies move around it. It hangs on through flashing, color changes, animation, fast movement, a wrap around the screen edge, and a moment out of sight.",
@@ -1920,6 +1928,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "Beside the joystick, a quick-keys bar keeps the keys you need mid-game one tap away: RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C= and SHIFT modifiers. Answer a prompt without letting go of the stick.",
           "",
           "**Keys** shows a full Commodore 64 keyboard, with the SHIFT, CTRL and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to apply it to the next key, or hold it down while you press another.",
+          "",
+          "Above the keyboard, **BASIC commands** opens a short list: `LIST`, `RUN`, `LOAD\"$\",8` and `LOAD\"*\",8,1`. One press types the command and RETURN on your C64. They work only at the BASIC prompt, so leave any running program first. With a keypad, the same commands are in the controls menu as **Send LIST** and so on.",
           "",
           variant.runtime.defaultT9InputEnabled
             ? `While Remote Input is open, the keypad drives your C64. With the joystick, the **${variant.runtime.keyLabels.rightSoft}** opens a menu of the controls on the screen: switch between **Joystick** and **Keys**, open **Options** on a small screen, start or leave **Game Mode**, **Adjust view** when the picture is on, move to the other controls, **Release all**, or close Remote Input. Press it again to close the menu. While you use the other controls, the keypad moves between them instead of reaching your C64, and the **${variant.runtime.keyLabels.leftSoft}** gives the keypad back to your C64. In **Keys**, the keypad types on your C64 the way it types in the app's text fields: letters by multi-tap, \`#\` to switch between letters and digits, OK for RETURN, the D-pad for the cursor keys, and the **${variant.runtime.keyLabels.rightSoft}** to delete. Letters arrive as your C64's ordinary unshifted letters. While you type, the **${variant.runtime.keyLabels.leftSoft}** opens the menu, which is also where you close Remote Input.`

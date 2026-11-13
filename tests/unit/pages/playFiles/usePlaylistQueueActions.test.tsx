@@ -53,14 +53,16 @@ const setup = ({
 }: Overrides = {}) => {
   const setPlaylist = vi.fn();
   const setCurrentIndex = vi.fn();
+  const removeItems = vi.fn();
   const hook = renderHook(() =>
     usePlaylistQueueActions(
       { playlist, setPlaylist, currentIndex, setCurrentIndex, shuffleEnabled, playlistTypeFilters },
       filterText,
       currentPlayingItemId,
+      removeItems,
     ),
   );
-  return { hook, setPlaylist, setCurrentIndex };
+  return { hook, setPlaylist, setCurrentIndex, removeItems };
 };
 
 beforeEach(() => {
@@ -108,6 +110,71 @@ describe("usePlaylistQueueActions", () => {
 
     expect(idsOf(setPlaylist.mock.calls[0][0])).toEqual(["d", "a", "b", "c"]);
     expect(setCurrentIndex).toHaveBeenCalledWith(3);
+  });
+
+  it("moves the playing row to the top and keeps the current index on it", () => {
+    const { hook, setPlaylist, setCurrentIndex } = setup({ currentIndex: 2, currentPlayingItemId: playlist[2].id });
+
+    act(() => hook.result.current.moveToTop(playlist[2].id));
+
+    expect(idsOf(setPlaylist.mock.calls[0][0])).toEqual(["c", "a", "b", "d"]);
+    expect(setCurrentIndex).toHaveBeenCalledWith(0);
+  });
+
+  it("moves a row to the bottom and shifts the current index of the playing row above it", () => {
+    const { hook, setPlaylist, setCurrentIndex } = setup({ currentIndex: 2, currentPlayingItemId: playlist[2].id });
+
+    act(() => hook.result.current.moveToBottom(playlist[0].id));
+
+    expect(idsOf(setPlaylist.mock.calls[0][0])).toEqual(["b", "c", "d", "a"]);
+    expect(setCurrentIndex).toHaveBeenCalledWith(1);
+  });
+
+  it("moves the playing row to the bottom and keeps the current index on it", () => {
+    const { hook, setPlaylist, setCurrentIndex } = setup({ currentIndex: 0, currentPlayingItemId: playlist[0].id });
+
+    act(() => hook.result.current.moveToBottom(playlist[0].id));
+
+    expect(idsOf(setPlaylist.mock.calls[0][0])).toEqual(["b", "c", "d", "a"]);
+    expect(setCurrentIndex).toHaveBeenCalledWith(3);
+  });
+
+  it("changes no state for Move to top on the first row or Move to bottom on the last row", () => {
+    const { hook, setPlaylist, setCurrentIndex } = setup({ currentIndex: 0 });
+
+    act(() => {
+      hook.result.current.moveToTop(playlist[0].id);
+      hook.result.current.moveToBottom(playlist[3].id);
+    });
+
+    expect(setPlaylist).not.toHaveBeenCalled();
+    expect(setCurrentIndex).not.toHaveBeenCalled();
+  });
+
+  it("does not move to an edge while Shuffle is on or a filter hides rows", () => {
+    const shuffled = setup({ shuffleEnabled: true });
+    const filtered = setup({ filterText: "a" });
+
+    act(() => {
+      shuffled.hook.result.current.moveToTop(playlist[2].id);
+      filtered.hook.result.current.moveToBottom(playlist[1].id);
+    });
+
+    expect(shuffled.setPlaylist).not.toHaveBeenCalled();
+    expect(filtered.setPlaylist).not.toHaveBeenCalled();
+  });
+
+  it("removes one row by id, also while Shuffle is on and while a filter hides rows", () => {
+    const shuffled = setup({ shuffleEnabled: true });
+    const filtered = setup({ filterText: "a" });
+
+    act(() => {
+      shuffled.hook.result.current.remove(playlist[1].id);
+      filtered.hook.result.current.remove(playlist[2].id);
+    });
+
+    expect(shuffled.removeItems).toHaveBeenCalledWith(new Set([playlist[1].id]));
+    expect(filtered.removeItems).toHaveBeenCalledWith(new Set([playlist[2].id]));
   });
 
   it("changes no state for a move that changes nothing", () => {

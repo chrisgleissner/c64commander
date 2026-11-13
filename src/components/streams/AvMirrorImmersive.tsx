@@ -15,11 +15,12 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Crosshair, Joystick, Maximize, Minus, Plus, ScanEye } from "lucide-react";
+import { Camera, Crosshair, Joystick, Maximize, Minus, Plus, ScanEye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { useMirrorViewport } from "@/hooks/useMirrorViewport";
+import { useFrameScreenshot } from "@/hooks/useFrameScreenshot";
 import { useStreamVideoBadges } from "@/hooks/useStreamVideoBadges";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 import { viewportRect, type Viewport } from "@/lib/streams/mirrorViewport";
@@ -54,6 +55,8 @@ export interface AvMirrorImmersiveHandle {
    * one key rather than two.
    */
   toggleLock: () => void;
+  /** Saves the frame on screen as a PNG at its native size: a download in a browser, the share sheet on a phone. */
+  saveScreenshot: () => void;
 }
 
 const KEY_PAN_STEP = 0.35; // fraction of the visible region per key press
@@ -174,6 +177,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   const stageRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   useAvMirrorCanvas(canvasRef, session);
+  const saveScreenshot = useFrameScreenshot(canvasRef);
 
   const viewportStateRef = useRef(viewport);
   viewportStateRef.current = viewport;
@@ -276,6 +280,10 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       },
       toggleMode,
       getMode: () => modeRef.current,
+      saveScreenshot: () => {
+        bumpIdle();
+        void saveScreenshot();
+      },
       toggleLock: () => {
         bumpIdle();
         haptic();
@@ -288,7 +296,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
         lockOn(centre.cx, centre.cy);
       },
     }),
-    [zoomBy, panBy, reset, toggleMode, bumpIdle, rotation, lockOn, releaseLock],
+    [zoomBy, panBy, reset, toggleMode, bumpIdle, rotation, lockOn, releaseLock, saveScreenshot],
   );
 
   // --- Touch gestures on the picture (always view-control, per §7.1) ---
@@ -654,6 +662,16 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
             data-testid="av-immersive-fit"
           >
             <Maximize className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="text-media-on-scrim hover:bg-media-on-scrim/15"
+            aria-label="Save screenshot"
+            onClick={() => withIdleReset(() => void saveScreenshot())}
+            data-testid="av-immersive-screenshot"
+          >
+            <Camera className="h-4 w-4" />
           </Button>
           <Button
             size="icon"

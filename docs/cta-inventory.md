@@ -385,8 +385,9 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
     - Tap latency section — expand/collapse — `av-sync-lat-toggle` — R✅ I✅ ; inside: Load — button — `av-sync-key-load` — R✅ I✅ ; Send SPACE — button — `av-sync-press` — R✅ I✅ ; Stop — button — `av-sync-stop` (shared with the A/V Sync section) `[visible when a test program is running]`
     - Tone & colour ladder section — expand/collapse — `av-tone-ladder-toggle` — R✅ I✅ ; inside: Run test — button — `av-tone-ladder-run` — R✅ I✅ `[disabled while listening]` ; Reset — button — `av-tone-ladder-reset` — R✅ I✅ `[disabled: no result yet, or a run in progress]` — plays a known C3→C4→C3 scale on the C64, stepping the screen background through all 16 VIC colours in unison with the notes, and grades the sound and picture that reach this device (pitch Δ in cents, note-length Δ, silence floor in dBFS against the EBU R128 gate, A/V offset graded per ITU-R BT.1359-1, per-note table with colour swatches)
 - **Config actions** (`data-section-label="Config"`)
-  - Save/Load (flash) — button — R✅ I✅
-  - Reset to default — button (danger) — R✅ I✅
+  - Save (flash) — button — focus id `home-config-save-flash` — R✅ I✅
+  - Load (flash) — button — focus id `home-config-load-flash` — R✅ I✅ — opens the machine action confirmation (`machine-action-confirmation`, Cancel focused first, then Load); the flash configuration replaces the current one only after Load
+  - Reset to default — button (danger) — focus id `home-config-reset` — R✅ I✅ — opens the same confirmation (Cancel, then Reset); every setting returns to its firmware default only after Reset
   - Save to app — button — `home-config-save-app` — R✅ I✅
   - Load from app — button — `home-config-load-app` — R✅ I✅ `[disabled: no app configs]`
   - Revert Changes — button — `home-config-revert-changes` — R✅ I✅
@@ -459,18 +460,28 @@ sender the session is filtering out]` — the mirror pins one sender, so a secon
   - Play next — action — code-verified — moves the row directly after the playing tune, or to the top when nothing plays.
     `[disabled: Shuffle on, playlist loading, the row is the playing tune, the row is already directly after it,
     or nothing plays and the row is already first]`
+  - Move to top — action — code-verified — moves the row to the first place; the playing row stays current wherever it ends up.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
   - Move up — action — code-verified — moves the row one place up.
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is first]`
   - Move down — action — code-verified — moves the row one place down.
     `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
-  - Share — action — code-verified — directly after Move down, for a tune whose HVSC path is known (found, recent or
+  - Move to bottom — action — code-verified — moves the row to the last place.
+    `[disabled: Shuffle on, playlist loading, a text or type filter is active, or the row is last]`
+  - Remove from playlist — action (destructive) — code-verified — removes the row and raises a notification
+    "Removed 1 item" with an **Undo** button that puts the row back at its position. Undo restores rows only and
+    never resumes playback that the removal stopped. Removing the playing row stops it. The same notification
+    and Undo follow **Remove selected items** and **Clear playlist**. Keypad: notifications are outside the focus
+    ring, so Undo is reached through the Quick menu entry "Notification: Undo" (`keypad-quick-menu-toast-action`).
+    `[disabled: playlist loading; available while Shuffle is on and while a filter is active]`
+  - Share — action — code-verified — directly after Move to bottom, for a tune whose HVSC path is known (found, recent or
     played from the archive); not rendered for a file from the phone, the Ultimate or CommoServe, so no private path
     can leave the app. OK opens the system share sheet on a phone (a browser uses `navigator.share`, else copies
     the text and DeepSID link and toasts **Link copied**). The text is the tune's name and, for a multi-tune file,
     `Tune N of M`; the row has no composer or year to add. Not disabled while the playlist loads,
     while Shuffle is on or while a filter is active: it reads the row and changes nothing. The separator after the
     action block is kept, and is also present when Share is the only action.
-  - Above the three reorder actions, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
+  - Above the queue actions, one text line (`action-list-item-sheet-note` in the sheet, `action-list-item-menu-note` in the
     menu; not a keypad stop) gives the reason: "Turn off Shuffle to change the order" while Shuffle is on, otherwise
     "Clear the filter to change the order" while a filter is active. After a move the ring stays on the moved
     row's ⋮ and the row is scrolled into view.
@@ -677,7 +688,12 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   WiFi, Tape, LED Strip, Keyboard Lighting, Drive A/B, Data Streams, Modem, User
   Interface). Each expands to `ConfigItemRow`s whose control is a select / slider
   / checkbox / text per item; Audio Mixer adds Reset + per-SID Solo; Clock adds
-  Sync Clock; every category adds a Refresh icon button (`config-refresh-<slug>`, name "Refresh") in its header while the category is open.
+  Sync Clock; a row whose value differs from the firmware default adds a **Modified** line
+  (`config-item-modified`, "Modified. Default: <value>") with a **Reset to default** button
+  (`config-item-reset-default`, name "Reset <item> to default", 44x44 minimum, keypad-reachable in DOM order directly after
+  the row's control) that writes the default through the same single-item PUT as an edit — not persisted to flash.
+  `[not rendered: the row is read-only, the default is not known from the per-item data the app already holds, the value equals the default, or the item is in Clock Settings or identifies the device or network (Host Name, Unique ID, Network Password, Static IP, Static Netmask, Static Gateway, Static DNS)]`;
+  every category adds a Refresh icon button (`config-refresh-<slug>`, name "Refresh") in its header while the category is open.
 - Retry — button — `config-retry` `[only when the category list itself failed to load]` — inside
   `config-load-error`, which states the device's own message; re-runs the categories request
 
@@ -1130,7 +1146,7 @@ throughout.
   in Game Mode), `remote-input-menu-options` (Joystick mode on the compact profile,
   where the options fold behind the Options button; opens them and moves the keypad
   to that button), `remote-input-menu-game` (Game Mode / Exit Game Mode, when
-  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-controls` (Other controls: moves the keypad to the
+  available), `remote-input-menu-adjust-view` (Adjust view: pan and zoom the picture; only while it is on), `remote-input-menu-basic-list` / `-basic-run` / `-basic-load-directory` / `-basic-load-first-program` (Send LIST, RUN, LOAD"$",8, LOAD"*",8,1; Keys mode only, not in Game Mode), `remote-input-menu-controls` (Other controls: moves the keypad to the
   sheet's first control after Close), `remote-input-menu-release-all` (not in Game
   Mode, where the sheet shows no Release all), `remote-input-menu-close`
 
@@ -1220,6 +1236,13 @@ throughout.
     video standard and frame rate, so the row reads e.g. `C64 … PAL 50 fps`)
   - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
     `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
+  - Save screenshot — button — `av-immersive-screenshot` — R✅ I✅ — between Fit and Follow motion in the control row;
+    encodes the decoded frame at its native size (384 pixels wide), not the zoomed size it is drawn at, as a PNG named
+    `c64-screen-<date>-<time>.png`. A browser downloads it and toasts "Screenshot saved"; a phone opens the system
+    share sheet. Shown only while a video stream is live, which Remote Input already requires of a device that streams.
+    The row is six 44 px controls and still fits inside 320 px. Keypad: the Remote Input controls menu (soft right or
+    menu key) has a **Save screenshot** entry (`remote-input-menu-screenshot`) after **Adjust view**, shown only while
+    a live picture is on screen (not while the stream is connecting or has failed), like the on-screen button
   - Follow motion — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
   - Lock on — press and hold the picture — no testid of its own (the gesture is on
     `av-mirror-immersive-stage`); while following with nothing locked, the hint
@@ -1277,6 +1300,14 @@ up-right,down-left,down-right}` — R✅ I✅ (touch only)
     keymap) → joystick direction; keypad 2/4/6/8 → direction (1/3/7/9 →
     diagonals); keypad 5/0 or D-pad center/select → fire. Held while the
     physical key is held; released on key-up.
+- **BASIC commands** (`remote-input-basic-commands`, Keys mode, above the keyboard) —
+  disclosure button `remote-input-basic-commands-toggle` (`aria-expanded`, 44 px high) —
+  R✅ I✅ _(folded by default; the keypad reaches the same commands through the controls
+  menu while it drives the C64)_. Unfolded it shows the hint
+  `remote-input-basic-commands-hint` ("These work at the BASIC prompt.") and four buttons
+  `remote-input-basic-command-list`, `-run`, `-load-directory`, `-load-first-program` (LIST,
+  RUN, LOAD"$",8, LOAD"*",8,1), each 44 px high. A press types the command and RETURN through the
+  shared keyboard-buffer queue that autostart uses.
 - **Type mode — on-screen C64 keyboard** (`remote-input-type-keyboard`, the
   primary Type surface) — buttons `remote-input-key-<name>` (e.g.
   `remote-input-key-a`, `remote-input-key-return`) — R✅ I✅ for every key.
