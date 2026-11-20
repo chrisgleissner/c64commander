@@ -67,5 +67,5 @@ tasks.named("preBuild") { dependsOn copyAppIcon }
 
 dependencies {
     testImplementation "junit:junit:$junitVersion"
-    testImplementation "org.robolectric:robolectric:4.17"
+    testImplementation "org.robolectric:robolectric:4.18"
 }
