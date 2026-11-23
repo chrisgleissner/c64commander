@@ -13,16 +13,16 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 
 - **Cross-platform**: Android and iOS apps, plus a self-hosted Docker web app for Windows, macOS, and Linux.
 - **Device support**: Works with the C64 Ultimate, Ultimate 64 Elite I/II, and Ultimate-II+(L) cartridges.
-- **Search**: Find any page, setting, action, tune or disk by name. Three ways in — the field at the top of Home, the Quick menu, or the `7` key. A result you cannot use yet is still listed, with the reason.
-- **Guided tour**: A first-run walk through every part of the app.
+- **Multiple devices**: Save several devices, check their health, and switch between them.
 - **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
+- **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **SID Player**: A music-player mode for phones without a C64 Ultimate. It plays SID tunes on the phone, with playlists, HVSC and SID Radio.
-- **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
 - **Disk tools**: Mount images, manage multi-disk collections, inspect image contents, and create blank disks.
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
 - **Diagnostics**: Review connection health, activity, traces, and latency.
-- **Multiple devices**: Save several devices, check their health, and switch between them.
+- **Search**: Find any page, setting, action, tune or disk by name.
+- **Guided tour**: A first-run walk through every part of the app.
 - **Appearance styles**: Seven color styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 
 ## Getting Started
